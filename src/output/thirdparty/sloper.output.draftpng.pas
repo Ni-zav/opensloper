@@ -35,9 +35,12 @@ const
   PNG_MIN_WIDTH = 16;
   PNG_MAX_WIDTH = 4096;
   PNG_DEFAULT_WIDTH = 1600;
+  // A taller drawing is made narrower to keep its shape
+  PNG_MAX_HEIGHT = 4 * PNG_MAX_WIDTH;
 
 // The draft as PNG file bytes, Width pixels across and as high as the drawing
-// needs; False with a message when it cannot be drawn
+// needs, or PNG_MAX_HEIGHT high and narrower when it would be taller; False
+// with a message when it cannot be drawn
 function DraftToPNG(Pattern: TPattern; const Options: TDraftSVGOptions; Width: integer; out Png: rawbytestring;
   out ErrorMessage: string): boolean;
 // The font families text is drawn with, best first; empty when no font loads
@@ -46,6 +49,7 @@ function DrawingFontFamilies: string;
 resourcestring
   rsPngWidth = 'The width must be from %d to %d pixels';
   rsPngNoFonts = 'No fonts to draw text with were found in data/fonts';
+  rsPngEmptyArea = 'The area to draw has no width or no height';
 
 implementation
 
@@ -134,7 +138,19 @@ begin
     try
       Source := TStringStream.Create(DrawingSVG(Pattern, Options));
       Svg := TBGRASVG.Create(Source);
-      Height := Max(1, Round(Width * Svg.ViewBox.size.y / Svg.ViewBox.size.x));
+      if (Svg.ViewBox.size.x <= 0) or (Svg.ViewBox.size.y <= 0) then
+      begin
+        ErrorMessage := rsPngEmptyArea;
+        Exit(False);
+      end;
+      // As the drawing's shape needs, unless that is too tall to hold
+      if Width * Svg.ViewBox.size.y / Svg.ViewBox.size.x > PNG_MAX_HEIGHT then
+      begin
+        Height := PNG_MAX_HEIGHT;
+        Width := Max(1, Round(Height * Svg.ViewBox.size.x / Svg.ViewBox.size.y));
+      end
+      else
+        Height := Max(1, Round(Width * Svg.ViewBox.size.y / Svg.ViewBox.size.x));
       Image := TBGRABitmap.Create(Width, Height, BGRAWhite);
       // The bundled fonts in the design window too, where the LCL would draw
       // with the system's

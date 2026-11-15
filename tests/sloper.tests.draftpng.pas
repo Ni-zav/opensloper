@@ -39,6 +39,8 @@ type
     procedure TestImageSize;
     procedure TestLabelsAreDrawn;
     procedure TestWidthLimits;
+    procedure TestTallRegionCapped;
+    procedure TestEmptyRegionRefused;
   end;
 
 implementation
@@ -112,6 +114,40 @@ begin
   AssertTrue('says why', Err <> '');
   AssertFalse(DraftToPNG(FPattern, DefaultDraftSVGOptions, PNG_MAX_WIDTH + 1, Png, Err));
   AssertTrue(Err, DraftToPNG(FPattern, DefaultDraftSVGOptions, PNG_MIN_WIDTH, Png, Err));
+end;
+
+// A narrow, tall area keeps its shape within PNG_MAX_HEIGHT
+procedure TTestDraftPNG.TestTallRegionCapped;
+var
+  Options: TDraftSVGOptions;
+  Png: rawbytestring;
+  Err: string;
+begin
+  Options := DefaultDraftSVGOptions;
+  Options.HasRegion := True;
+  Options.Region.MinX := 0;
+  Options.Region.MinY := 0;
+  Options.Region.MaxX := 1;
+  Options.Region.MaxY := 2000;
+  AssertTrue(Err, DraftToPNG(FPattern, Options, 100, Png, Err));
+  AssertEquals('height', PNG_MAX_HEIGHT, PngSize(Png, PNG_HEIGHT_OFFSET));
+  AssertEquals('width keeps the shape', 8, PngSize(Png, PNG_WIDTH_OFFSET));
+end;
+
+procedure TTestDraftPNG.TestEmptyRegionRefused;
+var
+  Options: TDraftSVGOptions;
+  Png: rawbytestring;
+  Err: string;
+begin
+  Options := DefaultDraftSVGOptions;
+  Options.HasRegion := True;
+  Options.Region.MinX := 50;
+  Options.Region.MinY := 0;
+  Options.Region.MaxX := 50;
+  Options.Region.MaxY := 100;
+  AssertFalse(DraftToPNG(FPattern, Options, 400, Png, Err));
+  AssertEquals(rsPngEmptyArea, Err);
 end;
 
 initialization

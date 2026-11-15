@@ -84,7 +84,7 @@ resourcestring
 implementation
 
 uses
-  Classes, Math, Generics.Collections, DOM, XMLRead, Sloper.Core.JSON, Sloper.Core.Names;
+  Classes, Math, Generics.Collections, DOM, XMLRead, Sloper.Core.JSON, Sloper.Core.Names, Sloper.Core.Formula;
 
 const
   // How many sizes either side of a multi-size file's base become columns
@@ -269,7 +269,7 @@ end;
 // such as a function, or a name with no value yet.
 function CalculateFormula(const Text: string; Values: TValueMap; out Value: double): boolean;
 var
-  Position: integer;
+  Position, Depth: integer;
 
   procedure SkipSpaces;
   begin
@@ -286,6 +286,7 @@ var
   end;
 
   function ParseSum(out Sum: double): boolean; forward;
+  function ParseInnerFactor(out Factor: double): boolean; forward;
 
   function ParseAtom(out Atom: double): boolean;
   var
@@ -306,7 +307,21 @@ var
     Result := (word <> '') and (ParseNumber(word, Atom) or Values.TryGetValue(word, Atom));
   end;
 
+  // Each sign or bracket goes one level deeper, as far as a formula may
   function ParseFactor(out Factor: double): boolean;
+  begin
+    Factor := 0;
+    if Depth >= MAX_FORMULA_DEPTH then
+      Exit(False);
+    Inc(Depth);
+    try
+      Result := ParseInnerFactor(Factor);
+    finally
+      Dec(Depth);
+    end;
+  end;
+
+  function ParseInnerFactor(out Factor: double): boolean;
   begin
     if Accept('-') then
     begin
@@ -368,6 +383,7 @@ var
 
 begin
   Position := 1;
+  Depth := 0;
   Result := ParseSum(Value);
   SkipSpaces;
   Result := Result and (Position > Length(Text));

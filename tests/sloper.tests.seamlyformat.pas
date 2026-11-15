@@ -64,6 +64,9 @@ type
     // left at 0, never raised or kept as NaN or infinity
     procedure TestNumbersPastRange;
     procedure TestMultiSizeNumbersPastRange;
+    // Brackets or signs nested past MAX_FORMULA_DEPTH are left at 0, not
+    // worked out until the stack runs out
+    procedure TestFormulaTooDeep;
     procedure TestMultiSizeValues;
     procedure TestMultiSizeInCentimetres;
     procedure TestMultiSizeStaysInRange;
@@ -92,7 +95,7 @@ type
 implementation
 
 uses
-  Sloper.Core.AppPaths, Sloper.Core.JSON;
+  Sloper.Core.AppPaths, Sloper.Core.JSON, Sloper.Core.Formula;
 
 function TTestSeamlyFormat.Individual(const AUnit, Items: string): string;
 begin
@@ -331,6 +334,19 @@ begin
   AssertTrue(HasLine(FReport.Notes, Format(rsSeamlyBadNumber, ['a'])));
   for Index := 0 to FSet.SizeCount - 1 do
     AssertEquals(FSet.Sizes[Index], 0, FSet.Find('a').ValueFor(Index));
+end;
+
+procedure TTestSeamlyFormat.TestFormulaTooDeep;
+var
+  Brackets, Signs, Fits: string;
+begin
+  Brackets := StringOfChar('(', 1000000) + '1' + StringOfChar(')', 1000000);
+  Signs := StringOfChar('-', 1000000) + '1';
+  Fits := StringOfChar('(', MAX_FORMULA_DEPTH - 1) + '2' + StringOfChar(')', MAX_FORMULA_DEPTH - 1);
+  Import(Individual('mm', '<m name="@a" value="' + Brackets + '"/><m name="@b" value="' + Signs + '"/><m name="@c" value="' + Fits + '"/>'));
+  AssertTrue('brackets', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['a', Brackets])));
+  AssertTrue('signs', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['b', Signs])));
+  AssertNear('as deep as a formula may be', 2, FSet.Find('c').Value);
 end;
 
 procedure TTestSeamlyFormat.TestMultiSizeValues;

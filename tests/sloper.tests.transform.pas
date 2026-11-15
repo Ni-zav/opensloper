@@ -49,6 +49,8 @@ type
     procedure TestMirrorPointAndAngle;
     procedure TestMirrorRefusesCurve;
     procedure TestMirrorSamePlaceInvalid;
+    procedure TestMirrorRefusesEdgeAsSecondPoint;
+    procedure TestMirrorRefusesOnePointTwice;
     procedure TestMoveCartesian;
     procedure TestMovePolar;
     procedure TestMoveAndTurn;
@@ -215,6 +217,34 @@ begin
   AssertNotNull(FPattern.LastError, FPattern.AddTransform(Spec));
   FPattern.Evaluate;
   AssertPointsNear('across the diagonal', Vec2(3, -2), Copied('A_m1'));
+end;
+
+procedure TTestTransform.TestMirrorRefusesEdgeAsSecondPoint;
+var
+  Spec: TTransformSpec;
+  Line: TLineObject;
+begin
+  Line := FPattern.AddLine(Pt('Q', 0, 100).Key, Pt('R', 50, 100).Key);
+  Spec := Default(TTransformSpec);
+  Spec.Kind := tkMirror;
+  Spec.Sources := [Pt('A', 10, 5).Key];
+  Spec.AxisA := Pt('P', 0, 0).Key;
+  Spec.AxisB := Line.Key;
+  AssertNull(FPattern.AddTransform(Spec));
+  AssertEquals(Format(rsDraftNotAPoint, [Line.Key]), FPattern.LastError);
+end;
+
+procedure TTestTransform.TestMirrorRefusesOnePointTwice;
+var
+  Spec: TTransformSpec;
+begin
+  Spec := Default(TTransformSpec);
+  Spec.Kind := tkMirror;
+  Spec.Sources := [Pt('A', 10, 5).Key];
+  Spec.AxisA := Pt('P', 0, 0).Key;
+  Spec.AxisB := Spec.AxisA;
+  AssertNull(FPattern.AddTransform(Spec));
+  AssertEquals(Format(rsTransformSameAxisPoint, ['P']), FPattern.LastError);
 end;
 
 procedure TTestTransform.TestMirrorRefusesCurve;

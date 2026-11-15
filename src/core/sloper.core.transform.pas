@@ -121,6 +121,7 @@ resourcestring
   rsTransformNotATransform = '%s is not a transform';
   rsTransformCurvedAxis = 'A mirror needs a straight edge, and %s is not';
   rsTransformNoAxis = 'The mirror''s two points are at the same place';
+  rsTransformSameAxisPoint = 'A mirror needs two different points, and %s was given twice';
 
 implementation
 

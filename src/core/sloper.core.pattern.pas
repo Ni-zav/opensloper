@@ -1238,6 +1238,19 @@ begin
     SetError(Format(rsDraftNotAPoint, [Spec.AxisA]));
     Exit;
   end;
+  if (Spec.Kind = tkMirror) and (Spec.AxisEdge = '') and (Spec.AxisB <> '') then
+  begin
+    if not (FindNode(Spec.AxisB) is TPointObject) then
+    begin
+      SetError(Format(rsDraftNotAPoint, [Spec.AxisB]));
+      Exit;
+    end;
+    if FindNode(Spec.AxisB) = FindNode(Spec.AxisA) then
+    begin
+      SetError(Format(rsTransformSameAxisPoint, [FindNode(Spec.AxisA).DisplayName]));
+      Exit;
+    end;
+  end;
   Result := BuildTransform(Spec, Expanded);
   if not Assigned(Result) then
     Exit;

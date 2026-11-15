@@ -207,7 +207,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Sloper.Core.Names;
+  SysUtils, Math, Generics.Collections, Sloper.Core.Names;
 
 type
   TFormulaFunction = (ffSin, ffCos, ffTan, ffAsin, ffAcos, ffAtan2, ffSqrt,
@@ -316,11 +316,6 @@ begin
     rkVariable: Result := '{' + Ref.Id + '}';
     rkObject: Result := '{' + Ref.Id + '}.' + Ref.Prop;
   end;
-end;
-
-function SameReference(const First, Second: TFormulaReference): boolean;
-begin
-  Result := (First.Kind = Second.Kind) and SameText(First.Id, Second.Id) and SameText(First.Prop, Second.Prop);
 end;
 
 { EFormulaError }
@@ -744,10 +739,12 @@ function TFormula.DoParse(const Text: string; Form: TFormulaTextForm; Resolver: 
 var
   Tokens: TFormulaTokenArray;
   Msg, Key, Id, Prop, Name, Stored: string;
-  ErrPos, TokenIndex, StoredPos, Last: integer;
+  ErrPos, TokenIndex, StoredPos, Last, ReferenceCount: integer;
   Ref: TFormulaReference;
   Func: TFormulaFunction;
   Parser: TFormulaParser;
+  // Each reference's index, by its kind, ID and property, ignoring case
+  Seen: specialize TDictionary<string, integer>;
 
   function Fail(const AMsg: string; APos: integer): boolean;
   begin
@@ -756,16 +753,91 @@ var
     Result := False;
   end;
 
+  // Looked up, as a formula may have thousands; FReferences grows by doubling
+  // and is cut to ReferenceCount once all are read
   function AddReference(const NewRef: TFormulaReference): integer;
   var
-    ExistingIndex: integer;
+    SeenKey: string;
   begin
-    for ExistingIndex := 0 to High(FReferences) do
-      if SameReference(FReferences[ExistingIndex], NewRef) then
-        Exit(ExistingIndex);
-    Result := Length(FReferences);
-    SetLength(FReferences, Result + 1);
+    SeenKey := IntToStr(Ord(NewRef.Kind)) + #0 + LowerCase(NewRef.Id) + #0 + LowerCase(NewRef.Prop);
+    if Seen.TryGetValue(SeenKey, Result) then
+      Exit;
+    Result := ReferenceCount;
+    if Result = Length(FReferences) then
+      SetLength(FReferences, Max(8, 2 * Result));
     FReferences[Result] := NewRef;
+    Inc(ReferenceCount);
+    Seen.Add(SeenKey, Result);
+  end;
+
+  // Resolves names; False with the error set when one is unknown
+  function CollectReferences: boolean;
+  var
+    TokenIndex: integer;
+  begin
+    for TokenIndex := 0 to High(Tokens) do
+    begin
+      FTokenRefs[TokenIndex] := -1;
+      Ref := Default(TFormulaReference);
+      case Tokens[TokenIndex].Kind of
+        ftMeasurement:
+        begin
+          Ref.Kind := rkMeasurement;
+          if Form = ffStored then
+            Ref.Id := Tokens[TokenIndex].Name
+          else if Resolver.ResolveMeasurement(Tokens[TokenIndex].Name, Key) then
+            Ref.Id := Key
+          else
+            Exit(Fail(Format(rsFormulaUnknownMeasurement, [Tokens[TokenIndex].Name]), Tokens[TokenIndex].Pos));
+          FTokenRefs[TokenIndex] := AddReference(Ref);
+        end;
+        ftVariable:
+        begin
+          if not Resolver.ResolveVariable(Tokens[TokenIndex].Name, Id) then
+            Exit(Fail(Format(rsFormulaUnknownVariable, [Tokens[TokenIndex].Name]), Tokens[TokenIndex].Pos));
+          Ref.Kind := rkVariable;
+          Ref.Id := Id;
+          FTokenRefs[TokenIndex] := AddReference(Ref);
+        end;
+        ftObjectRef:
+        begin
+          if Form = ffStored then
+            Exit(Fail(rsFormulaNamesNotIds, Tokens[TokenIndex].Pos));
+          if not Resolver.ResolveObject(Tokens[TokenIndex].Name, Id) then
+            Exit(Fail(Format(rsFormulaUnknownName, [Tokens[TokenIndex].Name]), Tokens[TokenIndex].Pos));
+          if not Resolver.ResolveProperty(Id, Tokens[TokenIndex].Prop, Prop) then
+            Exit(Fail(Format(rsFormulaUnknownProperty, [Tokens[TokenIndex].Name, Tokens[TokenIndex].Prop]), Tokens[TokenIndex].Pos +
+              Length(Tokens[TokenIndex].Name) + 1));
+          Ref.Kind := rkObject;
+          Ref.Id := Id;
+          Ref.Prop := Prop;
+          FTokenRefs[TokenIndex] := AddReference(Ref);
+        end;
+        ftIdRef:
+        begin
+          if Tokens[TokenIndex].Prop = '' then
+            Ref.Kind := rkVariable
+          else
+            Ref.Kind := rkObject;
+          Ref.Id := Tokens[TokenIndex].Name;
+          Ref.Prop := LowerCase(Tokens[TokenIndex].Prop);
+          FTokenRefs[TokenIndex] := AddReference(Ref);
+        end;
+        ftName:
+          if not FindFunction(Tokens[TokenIndex].Name, Func) then
+          begin
+            Name := Tokens[TokenIndex].Name;
+            if Form = ffStored then
+              Exit(Fail(rsFormulaNamesNotIds, Tokens[TokenIndex].Pos));
+            if Resolver.ResolveObject(Name, Id) then
+              Exit(Fail(Format(rsFormulaNeedsProperty, [Name, Name, Name]), Tokens[TokenIndex].Pos));
+            if Resolver.ResolveVariable(Name, Id) then
+              Exit(Fail(Format(rsFormulaMissingHash, [Name, Name]), Tokens[TokenIndex].Pos));
+            Exit(Fail(Format(rsFormulaUnknownName, [Name]), Tokens[TokenIndex].Pos));
+          end;
+      end;
+    end;
+    Result := True;
   end;
 
 begin
@@ -777,67 +849,14 @@ begin
 
   // Resolve names and collect references
   SetLength(FTokenRefs, Length(Tokens));
-  for TokenIndex := 0 to High(Tokens) do
-  begin
-    FTokenRefs[TokenIndex] := -1;
-    Ref := Default(TFormulaReference);
-    case Tokens[TokenIndex].Kind of
-      ftMeasurement:
-      begin
-        Ref.Kind := rkMeasurement;
-        if Form = ffStored then
-          Ref.Id := Tokens[TokenIndex].Name
-        else if Resolver.ResolveMeasurement(Tokens[TokenIndex].Name, Key) then
-          Ref.Id := Key
-        else
-          Exit(Fail(Format(rsFormulaUnknownMeasurement, [Tokens[TokenIndex].Name]), Tokens[TokenIndex].Pos));
-        FTokenRefs[TokenIndex] := AddReference(Ref);
-      end;
-      ftVariable:
-      begin
-        if not Resolver.ResolveVariable(Tokens[TokenIndex].Name, Id) then
-          Exit(Fail(Format(rsFormulaUnknownVariable, [Tokens[TokenIndex].Name]), Tokens[TokenIndex].Pos));
-        Ref.Kind := rkVariable;
-        Ref.Id := Id;
-        FTokenRefs[TokenIndex] := AddReference(Ref);
-      end;
-      ftObjectRef:
-      begin
-        if Form = ffStored then
-          Exit(Fail(rsFormulaNamesNotIds, Tokens[TokenIndex].Pos));
-        if not Resolver.ResolveObject(Tokens[TokenIndex].Name, Id) then
-          Exit(Fail(Format(rsFormulaUnknownName, [Tokens[TokenIndex].Name]), Tokens[TokenIndex].Pos));
-        if not Resolver.ResolveProperty(Id, Tokens[TokenIndex].Prop, Prop) then
-          Exit(Fail(Format(rsFormulaUnknownProperty, [Tokens[TokenIndex].Name, Tokens[TokenIndex].Prop]), Tokens[TokenIndex].Pos +
-            Length(Tokens[TokenIndex].Name) + 1));
-        Ref.Kind := rkObject;
-        Ref.Id := Id;
-        Ref.Prop := Prop;
-        FTokenRefs[TokenIndex] := AddReference(Ref);
-      end;
-      ftIdRef:
-      begin
-        if Tokens[TokenIndex].Prop = '' then
-          Ref.Kind := rkVariable
-        else
-          Ref.Kind := rkObject;
-        Ref.Id := Tokens[TokenIndex].Name;
-        Ref.Prop := LowerCase(Tokens[TokenIndex].Prop);
-        FTokenRefs[TokenIndex] := AddReference(Ref);
-      end;
-      ftName:
-        if not FindFunction(Tokens[TokenIndex].Name, Func) then
-        begin
-          Name := Tokens[TokenIndex].Name;
-          if Form = ffStored then
-            Exit(Fail(rsFormulaNamesNotIds, Tokens[TokenIndex].Pos));
-          if Resolver.ResolveObject(Name, Id) then
-            Exit(Fail(Format(rsFormulaNeedsProperty, [Name, Name, Name]), Tokens[TokenIndex].Pos));
-          if Resolver.ResolveVariable(Name, Id) then
-            Exit(Fail(Format(rsFormulaMissingHash, [Name, Name]), Tokens[TokenIndex].Pos));
-          Exit(Fail(Format(rsFormulaUnknownName, [Name]), Tokens[TokenIndex].Pos));
-        end;
-    end;
+  ReferenceCount := 0;
+  Seen := specialize TDictionary<string, integer>.Create;
+  try
+    if not CollectReferences then
+      Exit(False);
+  finally
+    FreeAndNil(Seen);
+    SetLength(FReferences, ReferenceCount);
   end;
 
   // Parse into an expression tree

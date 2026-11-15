@@ -89,6 +89,8 @@ type
     procedure TestNamesIgnoreCase;
     procedure TestSpacingIsKept;
     procedure TestReferencesAreUnique;
+    // Each reference is looked up, not compared with every one before it
+    procedure TestManyReferences;
     procedure TestRenameKeepsFormula;
     procedure TestStoredRoundTrip;
     procedure TestDanglingId;
@@ -512,6 +514,27 @@ procedure TTestFormula.TestReferencesAreUnique;
 begin
   AssertTrue(FFormula.Parse('#ease_waist + #EASE_WAIST * A.x + A.x + A.y', FResolver));
   AssertEquals(3, Length(FFormula.References));
+end;
+
+procedure TTestFormula.TestManyReferences;
+var
+  Text: string;
+  Index: integer;
+  Builder: TStringBuilder;
+begin
+  Builder := TStringBuilder.Create;
+  try
+    Builder.Append('max({1}.X');
+    for Index := 1 to 20000 do
+      Builder.Append(', {').Append(Index).Append('}.x');
+    Builder.Append(')');
+    Text := Builder.ToString;
+  finally
+    FreeAndNil(Builder);
+  end;
+  AssertTrue(FFormula.ErrorMessage, FFormula.ParseStored(Text));
+  AssertEquals('the same, whatever the case of its property', 20000, Length(FFormula.References));
+  AssertEquals('{1}', '{' + FFormula.References[0].Id + '}');
 end;
 
 procedure TTestFormula.TestRenameKeepsFormula;

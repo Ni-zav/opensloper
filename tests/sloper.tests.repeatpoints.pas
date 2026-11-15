@@ -43,6 +43,8 @@ type
     procedure TestOnePointGoesInTheMiddle;
     procedure TestAlongACurveByArcLength;
     procedure TestCountIsAFormula;
+    // Each segment of the edge is measured once, not once for every point
+    procedure TestManyPointsOnALongPathAreQuick;
     procedure TestCountChangesWithItsFormula;
     procedure TestBadCounts;
     procedure TestSamePointRefused;
@@ -177,6 +179,48 @@ begin
   FPattern.Evaluate;
   Middle := Edge.PointAtLength(Edge.Length / 2);
   AssertItem(Done.Item(2), Middle.X, Middle.Y);
+end;
+
+procedure TTestRepeat.TestManyPointsOnALongPathAreQuick;
+const
+  NODE_COUNT = 20;
+var
+  Nodes, Angles, LengthsIn, LengthsOut: array of string;
+  Index: integer;
+  Path: TEdgeObject;
+  Done: TRepeatObject;
+  Started: QWord;
+begin
+  Nodes := nil;
+  SetLength(Nodes, NODE_COUNT);
+  Angles := nil;
+  SetLength(Angles, NODE_COUNT);
+  LengthsIn := nil;
+  SetLength(LengthsIn, NODE_COUNT);
+  LengthsOut := nil;
+  SetLength(LengthsOut, NODE_COUNT);
+  for Index := 0 to NODE_COUNT - 1 do
+  begin
+    Nodes[Index] := FPattern.AddFreePoint('N' + IntToStr(Index), IntToStr(Index * 30), IntToStr((Index mod 2) * 40)).Key;
+    Angles[Index] := '0';
+    LengthsIn[Index] := '10';
+    LengthsOut[Index] := '10';
+  end;
+  Path := FPattern.AddCurvePath(Nodes, Angles, LengthsIn, LengthsOut);
+  AssertNotNull(FPattern.LastError, Path);
+  Done := FPattern.AddRepeatOnEdge('Btn', Path.Key, '500', True);
+  AssertNotNull(FPattern.LastError, Done);
+  // As in a drag: the same evaluation many times over
+  Started := GetTickCount64;
+  for Index := 1 to 20 do
+  begin
+    AssertTrue(FPattern.SetFormula(FPattern.FindObject('N0') as TEvalNode, 'x', IntToStr(Index mod 2)));
+    FPattern.Evaluate;
+  end;
+  AssertTrue('seconds, not tens of seconds', GetTickCount64 - Started < 5000);
+  AssertTrue(Done.Message, Done.State = esValid);
+  for Index := 1 to 500 do
+    AssertPointsNear('point ' + IntToStr(Index), Path.PointAtLength(Path.Length * (Index - 1) / 499), Done.Item(Index).Position, 1e-6);
 end;
 
 procedure TTestRepeat.TestCountIsAFormula;

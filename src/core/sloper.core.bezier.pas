@@ -169,7 +169,7 @@ end;
 
 function TCubicBezier.ParamAtLength(S: double): double;
 var
-  Total, Lo, Hi, T, F, D, Next: double;
+  Total, Lo, Hi, T, F, D, Next, KnownT, KnownLength: double;
   I: integer;
 begin
   Total := Length;
@@ -180,9 +180,18 @@ begin
   Lo := 0;
   Hi := 1;
   T := S / Total;
+  // The length to the last guess is kept, so each step integrates only from
+  // there to the next guess, not from the start
+  KnownT := 0;
+  KnownLength := 0;
   for I := 1 to NEWTON_ITERATIONS do
   begin
-    F := LengthBetween(0, T) - S;
+    if T >= KnownT then
+      KnownLength := KnownLength + LengthBetween(KnownT, T)
+    else
+      KnownLength := KnownLength - LengthBetween(T, KnownT);
+    KnownT := T;
+    F := KnownLength - S;
     if Abs(F) <= LENGTH_TOLERANCE * 10 then
       Break;
     if F > 0 then

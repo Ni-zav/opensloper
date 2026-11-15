@@ -301,6 +301,9 @@ type
     function IsClosed: boolean;
     function Length: double;
     function PointAtLength(ADistance: double): TVec2;
+    // PointAtLength for each of Distances, which must not decrease, in one
+    // walk along the edge that measures each segment once
+    function PointsAtLengths(const Distances: array of double): TVec2Array;
     // The edge as a polyline from start to end, within Tolerance of it
     function Flatten(Tolerance: double): TVec2Array;
     // Direction of travel at Position (mm along the edge), measured across a
@@ -1202,7 +1205,8 @@ var
   Node: TEvalNode;
   Target: TEdgeObject;
   Index, Steps: integer;
-  Ratio: double;
+  Total: double;
+  Ratios: array of double;
 
   function EndPoint(const AKey: string; out APosition: TVec2): boolean;
   var
@@ -1234,19 +1238,28 @@ begin
     Steps := ACount - 1
   else
     Steps := ACount + 1;
-  SetLength(FPositions, ACount);
+  Ratios := nil;
+  SetLength(Ratios, ACount);
   for Index := 1 to ACount do
-  begin
     if Steps = 0 then
-      Ratio := 0.5
+      Ratios[Index - 1] := 0.5
     else if FIncludeEnds then
-      Ratio := (Index - 1) / Steps
+      Ratios[Index - 1] := (Index - 1) / Steps
     else
-      Ratio := Index / Steps;
-    if Assigned(Target) then
-      FPositions[Index - 1] := Target.PointAtLength(Ratio * Target.Length)
-    else
-      FPositions[Index - 1] := First + (Last - First) * Ratio;
+      Ratios[Index - 1] := Index / Steps;
+  if Assigned(Target) then
+  begin
+    // Measured once, and walked once: a curve's length is an integral
+    Total := Target.Length;
+    for Index := 0 to High(Ratios) do
+      Ratios[Index] := Ratios[Index] * Total;
+    FPositions := Target.PointsAtLengths(Ratios);
+  end
+  else
+  begin
+    SetLength(FPositions, ACount);
+    for Index := 0 to High(Ratios) do
+      FPositions[Index] := First + (Last - First) * Ratios[Index];
   end;
   Result := esValid;
 end;
@@ -1435,6 +1448,30 @@ begin
     Remaining := Remaining - SegLength;
   end;
   Result := SegmentPointAtLength(FSegments[High(FSegments)], Remaining);
+end;
+
+function TEdgeObject.PointsAtLengths(const Distances: array of double): TVec2Array;
+var
+  Index, Segment: integer;
+  Start, SegLength: double;
+begin
+  Result := nil;
+  SetLength(Result, System.Length(Distances));
+  if System.Length(FSegments) = 0 then
+    Exit;
+  Segment := 0;
+  Start := 0;
+  SegLength := SegmentLength(FSegments[0]);
+  for Index := 0 to High(Distances) do
+  begin
+    while (Segment < High(FSegments)) and (Distances[Index] - Start > SegLength) do
+    begin
+      Start := Start + SegLength;
+      Inc(Segment);
+      SegLength := SegmentLength(FSegments[Segment]);
+    end;
+    Result[Index] := SegmentPointAtLength(FSegments[Segment], Distances[Index] - Start);
+  end;
 end;
 
 function TEdgeObject.Flatten(Tolerance: double): TVec2Array;

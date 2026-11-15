@@ -1754,7 +1754,10 @@ function TMainForm.SaveAs: boolean;
 var
   Err: string;
 begin
+  // Beside the pattern when it has a file; a new one starts in the Documents folder
   SaveDialog.FileName := ExtractFileName(FDocument.FileName);
+  if FDocument.FileName <> '' then
+    SaveDialog.InitialDir := ExtractFileDir(FDocument.FileName);
   if not SaveDialog.Execute then
     Exit(False);
   Result := FDocument.SaveToFile(SaveDialog.FileName, Err);

@@ -476,23 +476,28 @@ begin
   FSamePattern := (Identity <> '') and (Identity = FPattern.Identity);
   Needs := FRoot.Find('needs');
   if not FSamePattern and Assigned(Needs) and (Needs.JSONType = jtArray) and (Needs.Count > 0) then
+  begin
+    if Needs.Items[0].JSONType <> jtString then
+      Exit(Fail(rsFragmentNotFragment));
     Exit(Fail(Format(rsFragmentNeeds, [Needs.Items[0].AsString])));
+  end;
   Result := True;
 end;
 
 function TFragmentPaster.ReadSelection: boolean;
 var
   List: TJSONData;
-  Index: integer;
+  Index, Id: integer;
 begin
   List := FRoot.Find('selection');
   if not Assigned(List) or (List.JSONType <> jtArray) or (List.Count = 0) then
     Exit(Fail(rsFragmentNotFragment));
   for Index := 0 to List.Count - 1 do
   begin
-    if List.Items[Index].JSONType <> jtNumber then
+    // Paste reads the list again, so only IDs it can read as they are
+    if not JSONItemId(List.Items[Index], Id) then
       Exit(Fail(rsFragmentNotFragment));
-    FSelection.Add(IntToStr(List.Items[Index].AsInteger));
+    FSelection.Add(IntToStr(Id));
   end;
   Result := True;
 end;

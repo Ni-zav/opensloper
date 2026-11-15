@@ -49,6 +49,8 @@ type
     procedure TestTransformCopyAsPlainEdge;
     procedure TestOtherUnitsRefused;
     procedure TestNotAFragment;
+    // Odd values in the selection or the needs are refused, not raised
+    procedure TestOddSelectionAndNeedsRefused;
     procedure TestPastedStitchLineJoinsPiece;
     procedure TestSurvivesSaveAndLoad;
   end;
@@ -56,7 +58,8 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.EvalTypes, Sloper.Core.Units, Sloper.Core.Transform, Sloper.Core.Variables, Sloper.Core.Piece, Sloper.Core.PatternFile;
+  SysUtils, fpjson, Sloper.Core.JSON, Sloper.Core.EvalTypes, Sloper.Core.Units, Sloper.Core.Transform, Sloper.Core.Variables,
+  Sloper.Core.Piece, Sloper.Core.PatternFile;
 
 procedure TTestFragment.SetUp;
 begin
@@ -301,6 +304,45 @@ begin
   AssertFalse(PasteFragment(FPattern, '{"format": "pattern", "version": 1}', Pasted, Reason));
   AssertEquals(rsFragmentNotFragment, Reason);
   AssertTrue(IsFragmentText(CopyFragment(FPattern, [Pt(FPattern, 'A', 0, 0)]).Text));
+end;
+
+procedure TTestFragment.TestOddSelectionAndNeedsRefused;
+var
+  Text: string;
+
+// The copied fragment with Name set to the JSON in Value
+  function Changed(const Name, Value: string): string;
+  var
+    Root: TJSONObject;
+    Reason: string;
+  begin
+    AssertTrue(ParseJSONObject(Text, Root, Reason));
+    try
+      Root.Delete(Name);
+      Root.Add(Name, GetJSON(Value));
+      Result := JSONToText(Root);
+    finally
+      FreeAndNil(Root);
+    end;
+  end;
+
+  procedure Refused(const What, Fragment: string);
+  var
+    Reason: string;
+    Pasted: TFragmentPaste;
+  begin
+    AssertFalse(What, PasteFragment(FOther, Fragment, Pasted, Reason));
+    AssertTrue(What + ': says why', Reason <> '');
+    AssertEquals(What + ': nothing added', 0, FOther.ObjectCount);
+  end;
+
+begin
+  Text := CopyFragment(FPattern, [Pt(FPattern, 'A', 0, 0)]).Text;
+  Refused('huge', Changed('selection', '[1e300]'));
+  Refused('fraction', Changed('selection', '[1.5]'));
+  Refused('past 32 bits', Changed('selection', '[4294967297]'));
+  Refused('a list as a need', Changed('needs', '[[1]]'));
+  Refused('an object as a need', Changed('needs', '[{"a": 1}]'));
 end;
 
 procedure TTestFragment.TestPastedStitchLineJoinsPiece;

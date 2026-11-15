@@ -3436,6 +3436,10 @@ begin
         SetError(NewPoint.Field(Names[FieldIndex]).ErrorMessage, Names[FieldIndex], NewPoint.Field(Names[FieldIndex]).ErrorPos);
         Exit;
       end;
+    // The marker goes with the point, so its pieces still print it
+    NewPoint.SetMarker(Point.Marker);
+    if Point.Marker <> pmPlain then
+      NewPoint.Field(MARKER_SIZE_FIELD).ParseStored(Point.Field(MARKER_SIZE_FIELD).StoredText);
     for Key in NewPoint.InputKeys do
       if not CheckNotInCircle(Point, Key) then
         Exit;

@@ -49,6 +49,7 @@ type
     procedure TestBetweenNeedsPoints;
     procedure TestConvertKeepsIdAndName;
     procedure TestConvertKeepsUsers;
+    procedure TestConvertKeepsMarker;
     procedure TestConvertRefusesACircle;
     procedure TestConvertRefusesAFormulaCircle;
     procedure TestConvertFailureLeavesPoint;
@@ -248,6 +249,22 @@ begin
   AssertTrue('findable', FPattern.FindNode(Key) = Done);
   FPattern.Evaluate;
   AssertAt('C', 50, 0);
+end;
+
+// A button stays a button, with its size, when a point is converted
+procedure TTestArrange.TestConvertKeepsMarker;
+var
+  A, B, C: TFreePoint;
+  Done: TBetweenPoint;
+begin
+  A := Free('A', 0, 0);
+  B := Free('B', 100, 0);
+  C := Free('C', 10, 10);
+  AssertTrue(FPattern.LastError, FPattern.SetMarker(C.Key, pmButton, '11'));
+  Done := FPattern.ConvertToBetween(C, A.Key, B.Key, amRatio, '0.5');
+  AssertNotNull(FPattern.LastError, Done);
+  AssertTrue('marker', Done.Marker = pmButton);
+  AssertEquals('size', '11', FPattern.FormulaText(Done, MARKER_SIZE_FIELD));
 end;
 
 procedure TTestArrange.TestConvertKeepsUsers;

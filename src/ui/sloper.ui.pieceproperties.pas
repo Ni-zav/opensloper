@@ -307,7 +307,10 @@ begin
     ChangePieceFill('', Piece.FillStyle)
   else if FFillColorBox.ItemIndex = FFillColorBox.Items.Count - 1 then
   begin
+    // Start on the colour it is drawn in: its own, else its material's
     Chosen := Piece.FillColor;
+    if (Chosen = '') and Assigned(Panel.Document.Pattern.MaterialOf(Piece)) then
+      Chosen := Panel.Document.Pattern.MaterialOf(Piece).Color;
     if Chosen = '' then
       Chosen := Panel.Document.Pattern.Materials[0].Color;
     if ChooseMaterialColor(Panel, Chosen) then

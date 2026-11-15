@@ -27,7 +27,7 @@ unit Sloper.UI.PanelEdits;
 interface
 
 uses
-  SysUtils, StrUtils, Sloper.Core.Measurements, Sloper.Document.PatternDocument;
+  SysUtils, StrUtils, Sloper.Core.Measurements, Sloper.Core.Arrange, Sloper.Document.PatternDocument;
 
 type
   // The Variables tab's columns, in order
@@ -73,6 +73,11 @@ type
     property Items[Index: integer]: TPendingMeasurement read GetItem; default;
   end;
 
+// Aligns or distributes as one undo step, replacing the points in Replace
+// that would need a yes; False with the reason when it fails or is refused,
+// as when it would move a locked point
+function ArrangeStep(Document: TPatternDocument; const Description: string; const Request: TArrangeRequest;
+  const Replace: TStringArray; out Reason: string): boolean;
 // A value as typed in the panel: a plain number with a point for decimals
 function ParseMeasurementValue(const Text: string; out Value: double): boolean;
 // What Save did, for the status bar
@@ -286,6 +291,16 @@ begin
   if not Result then
     Reason := Document.Pattern.LastError;
   Document.Commit(Result);
+end;
+
+function ArrangeStep(Document: TPatternDocument; const Description: string; const Request: TArrangeRequest;
+  const Replace: TStringArray; out Reason: string): boolean;
+begin
+  Reason := '';
+  Document.BeginChange(Description);
+  Result := Document.Commit(ApplyArrange(Document.Pattern, Request, Replace, Reason));
+  if not Result and (Reason = '') then
+    Reason := Document.Pattern.LastError;
 end;
 
 function AddMaterialStep(Document: TPatternDocument): integer;

@@ -97,7 +97,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.UI.Spacing;
+  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.UI.PanelEdits, Sloper.UI.Spacing;
 
 const
   DEFAULT_REPEAT_COUNT = '3';
@@ -276,8 +276,7 @@ begin
     Exit;
   end;
   Replace := AskToReplace(Items);
-  FDocument.BeginChange(ARRANGE_DESCRIPTIONS[AAction in [aaAlignVertical, aaAlignHorizontal]]);
-  if FDocument.Commit(ApplyArrange(FDocument.Pattern, Request, Replace, Err)) or (Err = '') then
+  if ArrangeStep(FDocument, ARRANGE_DESCRIPTIONS[AAction in [aaAlignVertical, aaAlignHorizontal]], Request, Replace, Err) then
     ShowResult(Items, Replace)
   else
     Say(Err);

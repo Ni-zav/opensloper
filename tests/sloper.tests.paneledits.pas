@@ -64,12 +64,15 @@ type
     procedure TestMaterialUnchangedMakesNoStep;
     procedure TestMaterialRefusals;
     procedure TestMaterialAddAndDelete;
+    procedure TestArrangeStep;
+    procedure TestArrangeRefusedForLockedPoint;
   end;
 
 implementation
 
 uses
-  SysUtils, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.JSON, Sloper.Core.PatternMaterials;
+  SysUtils, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.JSON, Sloper.Core.PatternMaterials, Sloper.Core.Arrange,
+  Sloper.Core.Pattern;
 
 procedure TTestPanelEdits.SetUp;
 begin
@@ -499,6 +502,48 @@ begin
   AssertEquals('one left', 1, FDocument.Pattern.MaterialCount);
   AssertFalse('the last cannot go', DeleteMaterialStep(FDocument, 0, Reason));
   AssertTrue('says why', Reason <> '');
+end;
+
+function AlignRequest(Document: TPatternDocument; out Middle: TPointObject): TArrangeRequest;
+var
+  A, B: TPointObject;
+begin
+  Document.BeginChange('Add points');
+  A := Document.Pattern.AddFreePoint('A', '0', '0');
+  Middle := Document.Pattern.AddFreePoint('M', '30', '50');
+  B := Document.Pattern.AddFreePoint('B', '0', '100');
+  Document.EndChange;
+  Result := Default(TArrangeRequest);
+  Result.Action := aaAlignVertical;
+  Result.Points := [A.Key, Middle.Key, B.Key];
+  Result.Reference := A.Key;
+end;
+
+procedure TTestPanelEdits.TestArrangeStep;
+var
+  Middle: TPointObject;
+  Reason: string;
+begin
+  AssertTrue(Reason, ArrangeStep(FDocument, 'Align', AlignRequest(FDocument, Middle), nil, Reason));
+  FDocument.Pattern.Evaluate;
+  AssertEquals('lined up', 0, TPointObject(FDocument.Pattern.FindObject('M')).Position.X, 1e-9);
+  AssertEquals('one step', 'Align', FDocument.UndoDescription);
+end;
+
+// The document refuses the change, so it is not reported as done
+procedure TTestPanelEdits.TestArrangeRefusedForLockedPoint;
+var
+  Middle: TPointObject;
+  Request: TArrangeRequest;
+  Reason: string;
+begin
+  Request := AlignRequest(FDocument, Middle);
+  FDocument.BeginChange('Lock');
+  AssertTrue(FDocument.Pattern.SetLocked(Middle, True));
+  FDocument.EndChange;
+  AssertFalse('refused', ArrangeStep(FDocument, 'Align', Request, nil, Reason));
+  AssertEquals(Format(rsPatternLocked, ['M']), Reason);
+  AssertEquals('no step', 'Lock', FDocument.UndoDescription);
 end;
 
 initialization

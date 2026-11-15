@@ -1530,9 +1530,13 @@ var
   Piece: TPieceObject;
   Placement: TPlacement;
   Shape: TPlacedPiece;
-  RowX, RowY, RowHeight: double;
+  RowX, RowY, RowHeight, RowLimit: double;
 begin
   Result := 0;
+  // A roll or a material is narrower than a shelf can be
+  RowLimit := SHELF_WIDTH;
+  if Output.Kind in [okLarge, okMaterial] then
+    RowLimit := Min(RowLimit, UsableWidth);
   RowX := 0;
   RowY := 0;
   RowHeight := 0;
@@ -1543,7 +1547,7 @@ begin
     if not NewPlacement(Item, Placement, Piece) then
       Continue;
     Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile);
-    if (RowX > 0) and (RowX + Shape.Bounds.MaxX - Shape.Bounds.MinX > SHELF_WIDTH) then
+    if (RowX > 0) and (RowX + Shape.Bounds.MaxX - Shape.Bounds.MinX > RowLimit) then
     begin
       RowX := 0;
       RowY := RowY + RowHeight + SHELF_GAP;

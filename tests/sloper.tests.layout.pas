@@ -161,6 +161,7 @@ type
     procedure TestPlaceCopyAtStaysOnSheet;
     procedure TestPlaceCopyAtFlipsEvenCopies;
     procedure TestPlaceGoneCopyRefused;
+    procedure TestNewPiecesWrapAtTheRoll;
     procedure TestRemovePlacementReturnsToUnplaced;
     procedure TestFailingPieceWaitsUnplaced;
     procedure TestExtraCopyWarns;
@@ -1899,6 +1900,21 @@ begin
   // 120 mm wide, centred, then on the 0.5 mm grid
   AssertNear('left', 240, Shapes[0].Bounds.MinX);
   AssertNear('top', 340, Shapes[0].Bounds.MinY);
+end;
+
+// Rows of new pieces stay on a roll narrower than the usual shelf
+procedure TTestLayout.TestNewPiecesWrapAtTheRoll;
+var
+  Shape: TPlacedPiece;
+begin
+  WritePattern(6);
+  Prepare;
+  FLayout.Output.Kind := okLarge;
+  FLayout.Output.RollWidth := 300;
+  FLayout.PlaceNewPieces;
+  AssertEquals(6, Length(FLayout.Placements));
+  for Shape in FLayout.PlacedPieces do
+    AssertTrue('on the roll', Shape.Bounds.MaxX <= FLayout.UsableWidth + 1e-6);
 end;
 
 // A tray item from before its pattern lost the piece places nothing

@@ -105,6 +105,8 @@ const
   SIZE_STEP = 2;
   MIN_SIZE = 22;
   MAX_SIZE = 72;
+  // The base height, in cm, is only reported; past this it is not a height
+  MAX_BASE_HEIGHT = 1000;
   // Written when a set has no height to go by
   DEFAULT_HEIGHT = 176;
   // How far a value may stray from the line before it is reported
@@ -144,13 +146,17 @@ begin
   end;
 end;
 
+// Only finite numbers: never NaN or infinity, or one past a double's range
 function ParseNumber(const Text: string; out Value: double): boolean;
-var
-  Settings: TFormatSettings;
 begin
-  Settings := DefaultFormatSettings;
-  Settings.DecimalSeparator := '.';
-  Result := TryStrToFloat(Trim(Text), Value, Settings);
+  Result := TextToFiniteFloat(Trim(Text), Value);
+end;
+
+// The import runs with floating point exceptions masked, so a step past a
+// double's range gives infinity or NaN, which this catches
+function Finite(Value: double): boolean;
+begin
+  Result := not IsNan(Value) and not IsInfinite(Value);
 end;
 
 function FormatNumber(Value: double): string;
@@ -325,12 +331,14 @@ var
       begin
         Result := ParseFactor(Next);
         Product := Product * Next;
+        Result := Result and Finite(Product);
       end
       else if Accept('/') then
       begin
         Result := ParseFactor(Next) and (Next <> 0);
         if Result then
           Product := Product / Next;
+        Result := Result and Finite(Product);
       end
       else
         Break;
@@ -346,11 +354,13 @@ var
       begin
         Result := ParseProduct(Next);
         Sum := Sum + Next;
+        Result := Result and Finite(Sum);
       end
       else if Accept('-') then
       begin
         Result := ParseProduct(Next);
         Sum := Sum - Next;
+        Result := Result and Finite(Sum);
       end
       else
         Break;
@@ -361,6 +371,18 @@ begin
   Result := ParseSum(Value);
   SkipSpaces;
   Result := Result and (Position > Length(Text));
+end;
+
+// Sets Measurement to Value, in the file's unit, unless it is past a double's
+// range in mm
+function SetMillimetres(Measurement: TMeasurement; Value: double; const AUnit: string): boolean;
+var
+  Millimetres: double;
+begin
+  Millimetres := ToMillimetres(Value, AUnit);
+  Result := Finite(Millimetres);
+  if Result then
+    Measurement.Value := Millimetres;
 end;
 
 // Formulas may use each other in any order, so this goes round until a pass
@@ -379,11 +401,13 @@ begin
     for Index := 0 to High(Pending) do
       if not Done[Index] and CalculateFormula(Pending[Index].Text, Values, Value) then
       begin
-        Pending[Index].Measurement.Value := ToMillimetres(Value, AUnit);
         Values.AddOrSetValue(Pending[Index].Name, Value);
         Done[Index] := True;
         Progress := True;
-        AddLine(Report.Notes, Format(rsSeamlyCalculated, [Pending[Index].Measurement.Key, Pending[Index].Text]));
+        if SetMillimetres(Pending[Index].Measurement, Value, AUnit) then
+          AddLine(Report.Notes, Format(rsSeamlyCalculated, [Pending[Index].Measurement.Key, Pending[Index].Text]))
+        else
+          AddLine(Report.Notes, Format(rsSeamlyBadNumber, [Pending[Index].Measurement.Key]));
       end;
   until not Progress;
   for Index := 0 to High(Pending) do
@@ -426,8 +450,10 @@ begin
         Text := AttributeOf(TDOMElement(Item), 'value');
         if ParseNumber(Text, Value) then
         begin
-          Measurement.Value := ToMillimetres(Value, AUnit);
+          // Others may use it in the file's unit, even if it is too big in mm
           Values.AddOrSetValue(Name, Value);
+          if not SetMillimetres(Measurement, Value, AUnit) then
+            AddLine(Report.Notes, Format(rsSeamlyBadNumber, [Measurement.Key]));
         end
         else if Trim(Text) = '' then
           AddLine(Report.Notes, Format(rsSeamlyBadNumber, [Measurement.Key]))
@@ -454,6 +480,8 @@ var
   Measurement: TMeasurement;
   BaseSize, BaseHeight, UnitsPerCentimetre, Base, Increase, Steps: double;
   First, Last, Size, Index: integer;
+  Values: array of double;
+  Valid: boolean;
 begin
   ErrorMessage := '';
   Result := False;
@@ -470,6 +498,12 @@ begin
   end;
   BaseSize := BaseSize / UnitsPerCentimetre;
   BaseHeight := BaseHeight / UnitsPerCentimetre;
+  // At least one size is taken, and Round never meets a number past Int64
+  if not InRange(BaseSize, MIN_SIZE - IMPORT_SIZE_SPAN * SIZE_STEP, MAX_SIZE + IMPORT_SIZE_SPAN * SIZE_STEP) or not InRange(BaseHeight, 0, MAX_BASE_HEIGHT) then
+  begin
+    ErrorMessage := rsSeamlyBadBase;
+    Exit;
+  end;
   Measurements.Notes := ChildText(Root, 'notes');
   First := Max(Round(BaseSize) - IMPORT_SIZE_SPAN * SIZE_STEP, MIN_SIZE);
   Last := Min(Round(BaseSize) + IMPORT_SIZE_SPAN * SIZE_STEP, MAX_SIZE);
@@ -498,11 +532,20 @@ begin
       end;
       if not ParseNumber(AttributeOf(TDOMElement(Item), 'size_increase'), Increase) then
         Increase := 0;
-      for Index := 0 to Measurements.SizeCount - 1 do
+      Values := nil;
+      SetLength(Values, Measurements.SizeCount);
+      Valid := True;
+      for Index := 0 to High(Values) do
       begin
         Steps := (StrToInt(Measurements.Sizes[Index]) - BaseSize) / SIZE_STEP;
-        Measurement.SetValueFor(Index, ToMillimetres(Base + Steps * Increase, AUnit));
+        Values[Index] := ToMillimetres(Base + Steps * Increase, AUnit);
+        Valid := Valid and Finite(Values[Index]);
       end;
+      if not Valid then
+        AddLine(Report.Notes, Format(rsSeamlyBadNumber, [Measurement.Key]))
+      else
+        for Index := 0 to High(Values) do
+          Measurement.SetValueFor(Index, Values[Index]);
     end;
     Item := Item.NextSibling;
   end;
@@ -561,6 +604,7 @@ function ImportSeamly(const Text: string; Catalogue: TCatalogue; Measurements: T
 var
   Stream: TStringStream;
   Document: TXMLDocument;
+  SavedMask: TFPUExceptionMask;
 begin
   Result := False;
   Report := Default(TImportReport);
@@ -568,6 +612,8 @@ begin
   Measurements.Clear;
   Document := nil;
   Stream := TStringStream.Create(Text);
+  SavedMask := GetExceptionMask;
+  SetExceptionMask(SavedMask + [exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
   try
     try
       ReadXMLFile(Document, Stream);
@@ -577,10 +623,15 @@ begin
         ErrorMessage := Format(rsSeamlyBadFile, [Failure.Message]);
       on Failure: EDOMError do
         ErrorMessage := Format(rsSeamlyBadFile, [Failure.Message]);
+      // Anything else odd in the file is still only a file that cannot be read
+      on Failure: Exception do
+        ErrorMessage := Format(rsSeamlyBadFile, [Failure.Message]);
     end;
     if not Result then
       Measurements.Clear;
   finally
+    ClearExceptions(False);
+    SetExceptionMask(SavedMask);
     FreeAndNil(Document);
     FreeAndNil(Stream);
   end;

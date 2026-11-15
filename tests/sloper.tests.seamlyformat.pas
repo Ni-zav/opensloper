@@ -60,6 +60,10 @@ type
     procedure TestFormulaInFileUnits;
     procedure TestFormulaLoopIsReported;
     procedure TestFormulaDivisionByZero;
+    // Numbers past a double's range, or that become so, are noted and
+    // left at 0, never raised or kept as NaN or infinity
+    procedure TestNumbersPastRange;
+    procedure TestMultiSizeNumbersPastRange;
     procedure TestMultiSizeValues;
     procedure TestMultiSizeInCentimetres;
     procedure TestMultiSizeStaysInRange;
@@ -291,6 +295,42 @@ procedure TTestSeamlyFormat.TestFormulaDivisionByZero;
 begin
   Import(Individual('mm', '<m name="@a" value="1 / 0"/>'));
   AssertTrue(HasLine(FReport.Notes, Format(rsSeamlyFormula, ['a', '1 / 0'])));
+end;
+
+procedure TTestSeamlyFormat.TestNumbersPastRange;
+var
+  Index: integer;
+begin
+  Import(Individual('mm', '<m name="@a" value="1e400"/><m name="@b" value="NaN"/><m name="@c" value="1e200 * 1e200"/>' +
+    '<m name="@d" value="1 / (1e200 * 1e200)"/><m name="@e" value="-1e308 - 1e308"/>'));
+  AssertTrue('too big to read', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['a', '1e400'])));
+  AssertTrue('not a number', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['b', 'NaN'])));
+  AssertTrue('a product past range', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['c', '1e200 * 1e200'])));
+  AssertTrue('a step past range', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['d', '1 / (1e200 * 1e200)'])));
+  AssertTrue('a sum past range', HasLine(FReport.Notes, Format(rsSeamlyFormula, ['e', '-1e308 - 1e308'])));
+  for Index := 0 to FSet.Count - 1 do
+    AssertEquals(FSet.Items[Index].Key, 0, FSet.Items[Index].Value);
+  // In range in the file, past it in millimetres
+  Import(Individual('cm', '<m name="@a" value="1e308"/><m name="@b" value="@a / 1"/>'));
+  AssertTrue(HasLine(FReport.Notes, Format(rsSeamlyBadNumber, ['a'])));
+  AssertTrue(HasLine(FReport.Notes, Format(rsSeamlyBadNumber, ['b'])));
+  AssertEquals(0, FSet.Find('a').Value);
+  AssertEquals(0, FSet.Find('b').Value);
+end;
+
+procedure TTestSeamlyFormat.TestMultiSizeNumbersPastRange;
+var
+  Index: integer;
+begin
+  AssertImportFails(StringReplace(MultiSize('cm', 50, 176, ''), '"50"', '"NaN"', []), rsSeamlyBadBase);
+  AssertImportFails(StringReplace(MultiSize('cm', 50, 176, ''), '"50"', '"1e300"', []), rsSeamlyBadBase);
+  AssertImportFails(StringReplace(MultiSize('cm', 50, 176, ''), '"176"', '"1e400"', []), rsSeamlyBadBase);
+  AssertImportFails(StringReplace(MultiSize('cm', 50, 176, ''), '"176"', '"1e300"', []), rsSeamlyBadBase);
+  AssertImportFails(MultiSize('cm', 100, 176, ''), rsSeamlyBadBase);
+  Import(MultiSize('cm', 50, 176, '<m name="@a" base="1e308" size_increase="1e308" height_increase="0"/>'));
+  AssertTrue(HasLine(FReport.Notes, Format(rsSeamlyBadNumber, ['a'])));
+  for Index := 0 to FSet.SizeCount - 1 do
+    AssertEquals(FSet.Sizes[Index], 0, FSet.Find('a').ValueFor(Index));
 end;
 
 procedure TTestSeamlyFormat.TestMultiSizeValues;

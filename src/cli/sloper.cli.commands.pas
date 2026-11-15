@@ -70,7 +70,7 @@ implementation
 
 uses
   SysUtils, fpjson, ConsoleTools, Sloper.CLI.Arguments, Sloper.Docs.Reference, Sloper.Core.Version, Sloper.Core.JSON,
-  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.PatternFile,
+  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
   Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout,
   Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection;
 
@@ -188,9 +188,18 @@ function KeepUpTo(Pattern: TPattern; const ObjectName: string): boolean;
 var
   Target: TEvalNode;
   Last: TEvalNode;
+  Index: integer;
+  Listed: boolean;
 begin
+  // A repeat's points are made when it is evaluated, and stand for the repeat
+  Pattern.Evaluate;
   Target := Pattern.FindObject(ObjectName);
-  if not Assigned(Target) then
+  if Target is TRepeatPoint then
+    Target := TRepeatPoint(Target).Source;
+  Listed := False;
+  for Index := 0 to Pattern.ObjectCount - 1 do
+    Listed := Listed or (Pattern.Objects[Index] = Target);
+  if not Listed then
   begin
     WriteLn(CliErr^, Format(rsUpToUnknown, [ObjectName]));
     Exit(False);

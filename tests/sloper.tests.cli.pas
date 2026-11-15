@@ -59,6 +59,7 @@ type
     procedure TestPack;
     procedure TestExportDraft;
     procedure TestExportDraftUpToUnknown;
+    procedure TestExportDraftUpToRepeatPoint;
     procedure TestExportDraftBadWidth;
     procedure TestMaterialsOfPattern;
     procedure TestMaterialsOfLayout;
@@ -314,6 +315,26 @@ procedure TTestCLI.TestExportDraftUpToUnknown;
 begin
   AssertEquals(EXIT_FAILURE, Run(['export-draft', SizedToteBag(150, 140), '--upto=Nothing']));
   AssertEquals(Format(rsUpToUnknown, ['Nothing']), FErr.Trim);
+end;
+
+// A repeat's point stands for its repeat, which is what the file lists
+procedure TTestCLI.TestExportDraftUpToRepeatPoint;
+var
+  Pattern: TPattern;
+  Path, Svg, Err: string;
+begin
+  Path := InFolder('buttons.sloper');
+  Pattern := TPattern.Create;
+  try
+    Pattern.AddRepeatBetween('R', Pattern.AddFreePoint('A', '0', '0').Key, Pattern.AddFreePoint('B', '100', '0').Key, '3', False);
+    Pattern.AddFreePoint('Later', '50', '50');
+    AssertTrue(Err, SavePatternToFile(Pattern, Path, Err));
+  finally
+    FreeAndNil(Pattern);
+  end;
+  Svg := InFolder('upto.svg');
+  AssertEquals(FErr, 0, Run(['export-draft', Path, '-o', Svg, '--upto=R[2]']));
+  AssertTrue('drawn', Pos('<svg', ReadWholeFile(Svg)) > 0);
 end;
 
 procedure TTestCLI.TestExportDraftBadWidth;

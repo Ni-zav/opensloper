@@ -84,6 +84,7 @@ type
     procedure TestContextualFormulaInput;
     procedure TestLabelsWaitForResults;
     procedure TestObjectsAtPickOrder;
+    procedure TestHiddenPieceNotPicked;
     procedure TestNextKeyGoesRound;
     procedure TestEdgesCoincide;
     procedure TestCoincidentEdgeSlots;
@@ -736,6 +737,30 @@ begin
   AssertEquals('a point first', FPattern.FindObject('P').Key, Keys[0]);
   AssertEquals('only the edges', First + ',' + Second, KeysText(EdgeKeys(FPattern, Keys)));
   AssertEquals('outside everything', '', KeysText(ObjectsAt(FPattern, Vec2(500, 500), 2, 2)));
+end;
+
+// A hidden piece is not offered, nor taken for the side of a shared edge
+procedure TTestCanvasModel.TestHiddenPieceNotPicked;
+var
+  Left, Right: TPieceObject;
+  E, F, Reason: string;
+  Path: TPiecePath;
+  Entry: TSeamEntry;
+begin
+  Left := BuildPiece;
+  E := FPattern.AddFreePoint('E', '200', '0').Key;
+  F := FPattern.AddFreePoint('F', '200', '-100').Key;
+  FPattern.AddLine(FPattern.FindObject('B').Key, E, erOutline);
+  FPattern.AddLine(E, F, erOutline);
+  FPattern.AddLine(F, FPattern.FindObject('C').Key, erOutline);
+  FPattern.Evaluate;
+  AssertTrue(Reason, DetectPiecePath(FPattern, Vec2(150, -50), Path, Reason));
+  Right := FPattern.AddPiece('Right', Path, '10');
+  FPattern.Evaluate;
+  FPattern.SetPieceHidden(Right, True);
+  AssertEquals('not offered', '', KeysText(ObjectsAt(FPattern, Vec2(150, -50), 2, 2)));
+  AssertTrue('the shared edge', SeamEntryAt(FPattern, Vec2(101, -50), 2, Entry));
+  AssertEquals('the piece showing', Left.Key, Entry.PieceKey);
 end;
 
 procedure TTestCanvasModel.TestNextKeyGoesRound;

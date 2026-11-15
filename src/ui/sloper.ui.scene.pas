@@ -409,7 +409,8 @@ begin
   for Index := 0 to Pattern.ObjectCount - 1 do
   begin
     DraftObject := Pattern.Objects[Index];
-    if (DraftObject is TPieceObject) and DraftObject.HasResult and PointInPolygon(At, TPieceObject(DraftObject).CutLine) then
+    if (DraftObject is TPieceObject) and DraftObject.HasResult and Pattern.IsActive(DraftObject) and
+      PointInPolygon(At, TPieceObject(DraftObject).CutLine) then
       Add(DraftObject.Key, Abs(SignedArea(TPieceObject(DraftObject).CutLine)));
   end;
   SortFrom(First);
@@ -637,7 +638,8 @@ begin
     Exit;
   Inside := PointInPolygon(At, TPieceObject(Pattern.FindNode(Entry.PieceKey)).Outline);
   for Index := 0 to Pattern.ObjectCount - 1 do
-    if not Inside and (Pattern.Objects[Index] is TPieceObject) and Pattern.Objects[Index].HasResult then
+    if not Inside and (Pattern.Objects[Index] is TPieceObject) and Pattern.Objects[Index].HasResult and
+      Pattern.IsActive(Pattern.Objects[Index]) then
     begin
       Piece := TPieceObject(Pattern.Objects[Index]);
       if (Piece.PathIndexOf(Entry.EdgeKey) >= 0) and PointInPolygon(At, Piece.Outline) then

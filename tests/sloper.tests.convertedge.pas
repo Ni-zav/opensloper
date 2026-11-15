@@ -52,6 +52,7 @@ type
     procedure TestTransformCopyRefused;
     procedure TestLineToCurveRefusedForAFold;
     procedure TestLineToCurveRefusedForAFoldOnAPart;
+    procedure TestLineToCurveRefusedForAMirrorAxis;
     procedure TestPartsAndCopiesFollowTheCurve;
     procedure TestConvertedPatternReloads;
     procedure TestExtendCurveKeepsIdAndHandles;
@@ -267,6 +268,24 @@ begin
   AssertNull('refused', FPattern.ConvertToCurve(TEdgeObject(FPattern.FindNode(TopKey))));
   AssertTrue(FPattern.LastError, Pos('Front', FPattern.LastError) > 0);
   AssertTrue('still a line', FPattern.FindNode(TopKey) is TLineObject);
+end;
+
+// A mirror needs a straight axis, as a fold does
+procedure TTestConvertEdge.TestLineToCurveRefusedForAMirrorAxis;
+var
+  Axis: TLineObject;
+  Spec: TTransformSpec;
+begin
+  Axis := FPattern.AddLine(FPattern.AddFreePoint('P', '0', '0').Key, FPattern.AddFreePoint('Q', '0', '100').Key);
+  Spec := Default(TTransformSpec);
+  Spec.Kind := tkMirror;
+  Spec.Sources := [FPattern.AddFreePoint('A', '10', '5').Key];
+  Spec.AxisEdge := Axis.Key;
+  AssertNotNull(FPattern.LastError, FPattern.AddTransform(Spec));
+  FPattern.Evaluate;
+  AssertNull('refused', FPattern.ConvertToCurve(Axis));
+  AssertTrue(FPattern.LastError, Pos('mirror', FPattern.LastError) > 0);
+  AssertTrue('still a line', FPattern.FindNode(Axis.Key) is TLineObject);
 end;
 
 // A part of a line is straight only while the line is

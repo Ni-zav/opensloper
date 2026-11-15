@@ -56,6 +56,7 @@ resourcestring
   rsPatternOnlyLineToCurve = 'Only a line can become a curve, and %s is an arc';
   rsPatternAngleInUse = '%s reads %s.angle, which only a line has, so it cannot become a curve';
   rsPatternFoldFollows = '%s is the fold of %s, so %s cannot become a curve';
+  rsPatternMirrorAxisFollows = '%s is the axis of the mirror %s, so %s cannot become a curve';
   rsPatternNotExtendable = '%s cannot be carried on: only a curve or a curve path can';
   rsPatternExtendInUse = '%s is used by %s, so it cannot be carried on';
   rsPatternExtendSamePoint = '%s already ends at %s';
@@ -78,14 +79,15 @@ begin
   Result := True;
 end;
 
-// False, with the reason, when a piece's fold is Edge or an edge that is
-// straight only while Edge is: its parts, copies and offsets
-function CheckNoFoldFollows(Pattern: TPattern; Edge: TEdgeObject): boolean;
+// False, with the reason, when a piece's fold or a mirror's axis is Edge or
+// an edge that is straight only while Edge is: its parts, copies and offsets
+function CheckStaysStraight(Pattern: TPattern; Edge: TEdgeObject): boolean;
 var
   Following: TStringArray;
   DraftObject: TDraftObject;
   Source: string;
   Piece: TPieceObject;
+  Mirror: TTransformObject;
   Index: integer;
 begin
   Following := [Edge.Key];
@@ -109,6 +111,12 @@ begin
       Piece := TPieceObject(Pattern.Objects[Index]);
       if (Piece.FoldEdgeKey <> '') and (IndexStr(Piece.FoldEdgeKey, Following) >= 0) then
         Exit(Pattern.SetError(Format(rsPatternFoldFollows, [Pattern.FindNode(Piece.FoldEdgeKey).DisplayName, Piece.DisplayName, Edge.DisplayName])));
+    end
+    else if Pattern.Objects[Index] is TTransformObject then
+    begin
+      Mirror := TTransformObject(Pattern.Objects[Index]);
+      if (Mirror.AxisEdgeKey <> '') and (IndexStr(Mirror.AxisEdgeKey, Following) >= 0) then
+        Exit(Pattern.SetError(Format(rsPatternMirrorAxisFollows, [Pattern.FindNode(Mirror.AxisEdgeKey).DisplayName, Mirror.DisplayName, Edge.DisplayName])));
     end;
   Result := True;
 end;
@@ -178,7 +186,7 @@ begin
           Pattern.SetError(Format(rsPatternAngleInUse, [User.DisplayName, Edge.DisplayName]));
           Exit;
         end;
-  if not CheckNoFoldFollows(Pattern, Edge) then
+  if not CheckStaysStraight(Pattern, Edge) then
     Exit;
   Formats := DefaultFormatSettings;
   Formats.DecimalSeparator := '.';

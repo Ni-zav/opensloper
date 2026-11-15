@@ -2746,7 +2746,6 @@ function PerpendicularFeet(const SourcePos: TVec2; const Pieces: TEdgePieceArray
 var
   Piece: TEdgePiece;
   Param: double;
-  Foot, Tangent: TVec2;
 
   procedure AddFoot(const APoint: TVec2);
   begin
@@ -2764,16 +2763,10 @@ begin
         AddFoot(Piece.Line.PointAt(Param));
     end
     else
-    begin
-      // The nearest point counts only where the line to it is square to
-      // the curve, not where the curve simply ends
-      Param := Piece.Curve.ClosestParam(SourcePos);
-      Foot := Piece.Curve.PointAt(Param);
-      Tangent := Piece.Curve.DerivativeAt(Param);
-      if (Tangent.Length > EPSILON) and
-        (Abs(Dot(SourcePos - Foot, Tangent * (1 / Tangent.Length))) <= DEFAULT_TOLERANCE) then
-        AddFoot(Foot);
-    end;
+      // Every foot on the curve, not only the nearest point, which may be
+      // an end that is not square to it
+      for Param in Piece.Curve.PerpendicularParams(SourcePos) do
+        AddFoot(Piece.Curve.PointAt(Param));
 end;
 
 function TProjectPoint.Compute(Context: TEvalContext): TEvalState;

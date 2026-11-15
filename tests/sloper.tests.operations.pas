@@ -60,6 +60,8 @@ type
     procedure TestProjectSquareOntoLine;
     procedure TestProjectAtAngle;
     procedure TestProjectOntoCurve;
+    // A foot further along counts when the nearest point is only the end
+    procedure TestProjectFootPastNearestEnd;
     procedure TestProjectTakesNearest;
     procedure TestPatternChecks;
     procedure TestFollowsInputs;
@@ -68,7 +70,7 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.Evaluator;
+  SysUtils, Sloper.Core.Evaluator, Sloper.Core.Bezier;
 
 procedure TTestOperations.SetUp;
 begin
@@ -387,6 +389,30 @@ begin
   FPattern.Evaluate;
   AssertAt('foot at the top of the arch', Square, 50, -75);
   AssertAt('straight down', Down, 15.625, -56.25);
+end;
+
+procedure TTestOperations.TestProjectFootPastNearestEnd;
+var
+  Curve: TEdgeObject;
+  Foot: TPointObject;
+  Shape: TCubicBezier;
+  Param: double;
+  Tangent: TVec2;
+begin
+  Pt('A', 0, 0);
+  Pt('B', 100, 0);
+  // A U hanging down the screen, and a point just above its left tip
+  Curve := TEdgeObject(Check(FPattern.AddCurve(FPattern.FindObject('A').Key, FPattern.FindObject('B').Key,
+    '270', '100', '270', '100')));
+  Pt('P', -1, -5);
+  Foot := TPointObject(Check(FPattern.AddProjectPoint('F', FPattern.FindObject('P').Key, Curve.Key, pdPerpendicular, '', False)));
+  FPattern.Evaluate;
+  AssertTrue(Foot.Message, Foot.State = esValid);
+  Shape := BezierFromHandles(Vec2(0, 0), 270, 100, Vec2(100, 0), 270, 100);
+  Param := Shape.ClosestParam(Foot.Position);
+  AssertPointsNear('on the curve', Shape.PointAt(Param), Foot.Position);
+  Tangent := Shape.DerivativeAt(Param);
+  AssertEquals('square to it', 0, Dot(Vec2(-1, -5) - Foot.Position, Tangent * (1 / Tangent.Length)), DEFAULT_TOLERANCE);
 end;
 
 procedure TTestOperations.TestProjectTakesNearest;

@@ -25,7 +25,7 @@ unit Sloper.Tests.Bezier;
 interface
 
 uses
-  fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Bezier;
+  fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Numeric, Sloper.Core.Bezier;
 
 type
   TTestBezier = class(TOSTestCase)
@@ -35,6 +35,7 @@ type
     procedure TestHandleAnglesReadBack;
     procedure TestZeroHandleAngleFallsBack;
     procedure TestTangentAtZeroHandle;
+    procedure TestPerpendicularParams;
     procedure TestStraightCurveLength;
     procedure TestParabolaLength;
     procedure TestParamAtLength;
@@ -126,6 +127,25 @@ begin
   AssertPointsNear('both zero, at the end', Vec2(100, 0), Curve.TangentAt(1));
   Curve := CubicBezier(Vec2(5, 5), Vec2(5, 5), Vec2(5, 5), Vec2(5, 5));
   AssertPointsNear('a single point', Vec2(0, 0), Curve.TangentAt(0));
+end;
+
+procedure TTestBezier.TestPerpendicularParams;
+var
+  Curve: TCubicBezier;
+  Params: TDoubleArray;
+begin
+  // A U hanging down the screen: from the middle of its top, the line is
+  // square to both tips and to the bottom
+  Curve := CubicBezier(Vec2(0, 0), Vec2(0, 100), Vec2(100, 100), Vec2(100, 0));
+  Params := Curve.PerpendicularParams(Vec2(50, 0));
+  AssertEquals(3, Length(Params));
+  AssertEquals('the left tip', 0, Params[0], 1e-9);
+  AssertEquals('the bottom', 0.5, Params[1], 1e-9);
+  AssertEquals('the right tip', 1, Params[2], 1e-9);
+  // From beside a tip, only the far side is square
+  Params := Curve.PerpendicularParams(Vec2(-1, -5));
+  AssertEquals(1, Length(Params));
+  AssertTrue('past the nearest end', Params[0] > 0.1);
 end;
 
 procedure TTestBezier.TestStraightCurveLength;

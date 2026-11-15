@@ -27,7 +27,7 @@ unit Sloper.Core.Bezier;
 interface
 
 uses
-  Sloper.Core.Geometry;
+  Sloper.Core.Geometry, Sloper.Core.Numeric;
 
 const
   // Flattening tolerance used to find intersections before refining, in mm
@@ -66,6 +66,9 @@ type
     function Flatten(Tolerance: double): TCurveSampleArray;
     // Parameter of the nearest point on the curve to P
     function ClosestParam(const P: TVec2): double;
+    // Every parameter where the line from P is square to the curve, nearest
+    // or not, in order; the ends only where the curve is square there too
+    function PerpendicularParams(const P: TVec2): TDoubleArray;
     function Reversed: TCubicBezier;
     function Translated(const D: TVec2): TCubicBezier;
     function Rotated(const Pivot: TVec2; AngleDeg: double): TCubicBezier;
@@ -88,7 +91,7 @@ function IntersectBezierCircle(const C: TCubicBezier; const Centre: TVec2; Radiu
 implementation
 
 uses
-  Math, Sloper.Core.Numeric;
+  Math;
 
 const
   LENGTH_TOLERANCE = 1e-9;
@@ -308,6 +311,71 @@ begin
   Add(0, P0);
   Subdivide(Self, 0, 1, 0);
   SetLength(Result, Count);
+end;
+
+function TCubicBezier.PerpendicularParams(const P: TVec2): TDoubleArray;
+const
+  // (B(t) - P) . B'(t) has degree five, so at most five roots; this many
+  // samples part them unless two are almost one, where the curve only
+  // grazes the circle round P, and ClosestParam finds that one
+  SAMPLES = 64;
+  BISECTIONS = 60;
+var
+  Index, Step: integer;
+  Lo, Hi, FLo, FHi, Mid: double;
+
+  function Squareness(T: double): double;
+  begin
+    Result := Dot(PointAt(T) - P, DerivativeAt(T));
+  end;
+
+  // Kept in order, once, and only where it is square to within
+  // DEFAULT_TOLERANCE, which a sign change at a cusp need not be
+  procedure Add(T: double);
+  var
+    Foot, Tangent: TVec2;
+    Slot: integer;
+  begin
+    Foot := PointAt(T);
+    Tangent := TangentAt(T);
+    if (Tangent.Length <= EPSILON) or (Abs(Dot(P - Foot, Tangent * (1 / Tangent.Length))) > DEFAULT_TOLERANCE) then
+      Exit;
+    Slot := System.Length(Result);
+    while (Slot > 0) and (Result[Slot - 1] > T) do
+      Dec(Slot);
+    if ((Slot > 0) and (T - Result[Slot - 1] <= MERGE_PARAM_TOLERANCE)) or
+      ((Slot < System.Length(Result)) and (Result[Slot] - T <= MERGE_PARAM_TOLERANCE)) then
+      Exit;
+    Insert(T, Result, Slot);
+  end;
+
+begin
+  Result := nil;
+  FLo := Squareness(0);
+  if FLo = 0 then
+    Add(0);
+  for Index := 1 to SAMPLES do
+  begin
+    Lo := (Index - 1) / SAMPLES;
+    Hi := Index / SAMPLES;
+    FHi := Squareness(Hi);
+    if FHi = 0 then
+      Add(Hi)
+    else if (FLo <> 0) and ((FLo < 0) <> (FHi < 0)) then
+    begin
+      for Step := 1 to BISECTIONS do
+      begin
+        Mid := (Lo + Hi) / 2;
+        if (Squareness(Mid) < 0) = (FLo < 0) then
+          Lo := Mid
+        else
+          Hi := Mid;
+      end;
+      Add((Lo + Hi) / 2);
+    end;
+    FLo := FHi;
+  end;
+  Add(ClosestParam(P));
 end;
 
 function TCubicBezier.ClosestParam(const P: TVec2): double;

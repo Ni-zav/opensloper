@@ -637,11 +637,11 @@ begin
   Builder := TStringBuilder.Create;
   try
     Builder.Append(Piece.DisplayName + '|');
+    // The outline is the path's edges already flattened as the build reads
+    // them, so the edges' own points need not be flattened again
     for Index := 0 to High(Piece.Path) do
-    begin
-      Builder.Append(Piece.Path[Index].EdgeKey + ' ');
-      AddPoints(TEdgeObject(Pattern.FindNode(Piece.Path[Index].EdgeKey)).Flatten(COARSE_FLATNESS));
-    end;
+      Builder.Append(Piece.Path[Index].EdgeKey + BoolToStr(Piece.Path[Index].Reversed, 'r', '') + ' ');
+    Builder.Append('|');
     for Point in Piece.Outline do
     begin
       AddNumber(Point.X);

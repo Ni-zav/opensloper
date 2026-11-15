@@ -88,6 +88,8 @@ type
     FPicking: boolean;
     FPickKind: TTransformKind;
     FPickSources: TStringArray;
+    // The document's generation, which changes when another pattern is opened
+    FGeneration: integer;
     FPickFirst: string;
     FOnToolChange: TNotifyEvent;
     FOnCursorMove: TCursorMoveEvent;
@@ -383,16 +385,44 @@ begin
   FSelection := nil;
   FHoverKey := '';
   if Assigned(FDocument) then
+  begin
+    FGeneration := FDocument.Generation;
     FDocument.AddListener(@DocumentChanged);
+  end;
   Invalidate;
 end;
 
 procedure TPatternCanvas.DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
+
+  function AllExist(const Keys: TStringArray): boolean;
+  var
+    Key: string;
+  begin
+    for Key in Keys do
+      if not Assigned(Document.Pattern.FindNode(Key)) then
+        Exit(False);
+    Result := True;
+  end;
+
 begin
   if dcObjectsReplaced in Changes then
   begin
     DropMissingSelection;
-    ActiveTool.ObjectsReplaced;
+    // Another pattern: IDs come back meaning other objects, so nothing
+    // picked or part way through carries over
+    if Document.Generation <> FGeneration then
+    begin
+      FGeneration := Document.Generation;
+      EndPicking;
+      ActiveTool.Reset;
+    end
+    else
+    begin
+      // An undo can take what a transform was to copy
+      if FPicking and not (AllExist(FPickSources) and ((FPickFirst = '') or AllExist([FPickFirst]))) then
+        EndPicking;
+      ActiveTool.ObjectsReplaced;
+    end;
     FTipSnapShown := False;
   end;
   Invalidate;

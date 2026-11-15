@@ -678,7 +678,9 @@ var
 begin
   Result := nil;
   for Entry in Side do
-    if (Pattern.FindNode(Entry.PieceKey) is TPieceObject) and (Pattern.FindNode(Entry.EdgeKey) is TEdgeObject) then
+    // Keys come back in another pattern, so the edge must still be the piece's
+    if (Pattern.FindNode(Entry.PieceKey) is TPieceObject) and (Pattern.FindNode(Entry.EdgeKey) is TEdgeObject) and
+      (TPieceObject(Pattern.FindNode(Entry.PieceKey)).PathIndexOf(Entry.EdgeKey) >= 0) then
       Insert(Entry, Result, Length(Result));
 end;
 

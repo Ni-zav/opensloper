@@ -501,6 +501,11 @@ begin
   AssertEquals('kept', 1, Length(ExistingSeamEntries(FPattern, Side)));
   Side[0].PieceKey := '9999';
   AssertEquals('dropped', 0, Length(ExistingSeamEntries(FPattern, Side)));
+  // Both still there, but the edge is no longer the piece's
+  Side := Copy(Seam.SideA);
+  Side[0].EdgeKey := FPattern.AddLine(FPattern.AddFreePoint('Far1', '500', '500').Key,
+    FPattern.AddFreePoint('Far2', '600', '500').Key).Key;
+  AssertEquals('not on the piece', 0, Length(ExistingSeamEntries(FPattern, Side)));
 end;
 
 // Drawing labels treats what is left as an edge, so a seam must not reach it

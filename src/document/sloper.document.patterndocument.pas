@@ -124,7 +124,8 @@ type
     procedure RequireNoChange;
     function MeasurementFileFor(const PatternFileName: string): string;
     procedure ApplySnapshot(const Text: string);
-    procedure SetMeasurementSet(ASet: TMeasurementSet; const APath: string);
+    // Text is the file as ASet was read from it, so a write since is still seen
+    procedure SetMeasurementSet(ASet: TMeasurementSet; const APath, AText: string);
     procedure RecordLocked;
     function ChangedLocked: string;
   public
@@ -433,17 +434,14 @@ begin
   FPattern.Evaluate;
 end;
 
-procedure TPatternDocument.SetMeasurementSet(ASet: TMeasurementSet; const APath: string);
-var
-  Reason: string;
+procedure TPatternDocument.SetMeasurementSet(ASet: TMeasurementSet; const APath, AText: string);
 begin
   FPattern.Measurements := ASet;
   FreeAndNil(FMeasurements);
   FMeasurements := ASet;
   FMeasurementPath := APath;
   FPendingMeasurementText := '';
-  if (APath = '') or not ReadTextFile(APath, FMeasurementText, Reason) then
-    FMeasurementText := '';
+  FMeasurementText := AText;
 end;
 
 procedure TPatternDocument.NewPattern(AUnits: TMeasureUnit);
@@ -465,11 +463,12 @@ end;
 function TPatternDocument.LoadFromFile(const FileName: string; out ErrorMessage: string): boolean;
 var
   Loaded: TPattern;
-  FullName, SetPath, SetError: string;
+  FullName, SetPath, SetError, SetText: string;
   NewSet: TMeasurementSet;
 begin
   RequireNoChange;
   NewSet := nil;
+  SetText := '';
   Loaded := TPattern.Create;
   try
     if not LoadPatternFromFile(Loaded, FileName, ErrorMessage) then
@@ -484,14 +483,14 @@ begin
     begin
       SetPath := ExpandFileName(SetPath);
       NewSet := TMeasurementSet.Create;
-      if not NewSet.LoadFromFile(SetPath, SetError) then
+      if not ReadTextFile(SetPath, SetText, SetError) or not NewSet.LoadFromText(SetText, SetError) then
         FreeAndNil(NewSet);
     end;
 
     FreeAndNil(FPattern);
     FPattern := Loaded;
     Loaded := nil;
-    SetMeasurementSet(NewSet, SetPath);
+    SetMeasurementSet(NewSet, SetPath, SetText);
     NewSet := nil;
   finally
     FreeAndNil(NewSet);
@@ -549,7 +548,7 @@ function TPatternDocument.ChangeMeasurements(const Edits: TMeasurementEditArray;
   out ErrorMessage: string): boolean;
 var
   NewSet: TMeasurementSet;
-  Size: string;
+  Size, SetText: string;
 begin
   RequireNoChange;
   Changes := nil;
@@ -566,10 +565,10 @@ begin
     Exit(False);
   NewSet := TMeasurementSet.Create;
   try
-    if not NewSet.LoadFromFile(FMeasurementPath, ErrorMessage) then
+    if not ReadTextFile(FMeasurementPath, SetText, ErrorMessage) or not NewSet.LoadFromText(SetText, ErrorMessage) then
       Exit(False);
     NewSet.SelectSize(Size);
-    SetMeasurementSet(NewSet, FMeasurementPath);
+    SetMeasurementSet(NewSet, FMeasurementPath, SetText);
     NewSet := nil;
   finally
     FreeAndNil(NewSet);
@@ -642,7 +641,7 @@ begin
     if Assigned(FMeasurements) then
       Size := FMeasurements.SizeName;
     NewSet.SelectSize(Size);
-    SetMeasurementSet(NewSet, FMeasurementPath);
+    SetMeasurementSet(NewSet, FMeasurementPath, Text);
     NewSet := nil;
   finally
     FreeAndNil(NewSet);
@@ -656,12 +655,13 @@ end;
 function TPatternDocument.UseMeasurements(const FileName: string; out ErrorMessage: string): boolean;
 var
   NewSet: TMeasurementSet;
-  NewPath, OldStored: string;
+  NewPath, OldStored, SetText: string;
   WasModified: boolean;
   Changes: TDocumentChanges;
 begin
   RequireNoChange;
   ErrorMessage := '';
+  SetText := '';
   NewSet := nil;
   NewPath := '';
   WasModified := Modified;
@@ -671,10 +671,10 @@ begin
     begin
       NewPath := ExpandFileName(FileName);
       NewSet := TMeasurementSet.Create;
-      if not NewSet.LoadFromFile(NewPath, ErrorMessage) then
+      if not ReadTextFile(NewPath, SetText, ErrorMessage) or not NewSet.LoadFromText(SetText, ErrorMessage) then
         Exit(False);
     end;
-    SetMeasurementSet(NewSet, NewPath);
+    SetMeasurementSet(NewSet, NewPath, SetText);
     NewSet := nil;
   finally
     FreeAndNil(NewSet);

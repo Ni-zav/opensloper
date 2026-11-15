@@ -1986,9 +1986,9 @@ begin
   if Segment.Kind = skLine then
     Result := Segment.Line.P2 - Segment.Line.P1
   else if AtEnd then
-    Result := Segment.Curve.DerivativeAt(1)
+    Result := Segment.Curve.TangentAt(1)
   else
-    Result := Segment.Curve.DerivativeAt(0);
+    Result := Segment.Curve.TangentAt(0);
   if Result.Length > 0 then
     Result := Result * (1 / Result.Length);
 end;
@@ -2077,8 +2077,8 @@ var
     Result := nil;
     for Span := 0 to OFFSET_SPANS_PER_CURVE - 1 do
     begin
-      Tangent1 := Curve.DerivativeAt(Span / OFFSET_SPANS_PER_CURVE);
-      Tangent2 := Curve.DerivativeAt((Span + 1) / OFFSET_SPANS_PER_CURVE);
+      Tangent1 := Curve.TangentAt(Span / OFFSET_SPANS_PER_CURVE);
+      Tangent2 := Curve.TangentAt((Span + 1) / OFFSET_SPANS_PER_CURVE);
       if (Tangent1.Length = 0) or (Tangent2.Length = 0) then
         Continue;
       First := Curve.PointAt(Span / OFFSET_SPANS_PER_CURVE) + Across(Tangent1);

@@ -34,6 +34,7 @@ type
     procedure TestEndpointsAndMidpoint;
     procedure TestHandleAnglesReadBack;
     procedure TestZeroHandleAngleFallsBack;
+    procedure TestTangentAtZeroHandle;
     procedure TestStraightCurveLength;
     procedure TestParabolaLength;
     procedure TestParamAtLength;
@@ -111,6 +112,20 @@ var
 begin
   C := BezierFromHandles(Vec2(0, 0), 60, 0, Vec2(100, 0), 90, 50);
   AssertNear('towards the other handle', AngleBetween(Vec2(0, 0), Vec2(100, -50)), C.StartAngle);
+end;
+
+procedure TTestBezier.TestTangentAtZeroHandle;
+var
+  Curve: TCubicBezier;
+begin
+  Curve := CubicBezier(Vec2(0, 0), Vec2(0, 0), Vec2(50, 50), Vec2(100, 0));
+  AssertPointsNear('the derivative is zero', Vec2(0, 0), Curve.DerivativeAt(0));
+  AssertPointsNear('towards the second handle', Vec2(50, 50), Curve.TangentAt(0));
+  AssertPointsNear('a handle there is the derivative', Curve.DerivativeAt(1), Curve.TangentAt(1));
+  Curve := CubicBezier(Vec2(0, 0), Vec2(0, 0), Vec2(100, 0), Vec2(100, 0));
+  AssertPointsNear('both zero, at the end', Vec2(100, 0), Curve.TangentAt(1));
+  Curve := CubicBezier(Vec2(5, 5), Vec2(5, 5), Vec2(5, 5), Vec2(5, 5));
+  AssertPointsNear('a single point', Vec2(0, 0), Curve.TangentAt(0));
 end;
 
 procedure TTestBezier.TestStraightCurveLength;

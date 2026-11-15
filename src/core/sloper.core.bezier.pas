@@ -46,6 +46,11 @@ type
     P0, P1, P2, P3: TVec2;
     function PointAt(T: double): TVec2;
     function DerivativeAt(T: double): TVec2;
+    // The direction the curve runs at T, not normalised. At an end with a
+    // handle of zero length, where the derivative is zero, it is the limit:
+    // towards the next control point that is not on that end. Zero only when
+    // the whole curve is one point.
+    function TangentAt(T: double): TVec2;
     function SecondDerivativeAt(T: double): TVec2;
     function Length: double;
     function LengthBetween(T0, T1: double): double;
@@ -112,6 +117,25 @@ var
 begin
   U := 1 - T;
   Result := (P1 - P0) * (3 * U * U) + (P2 - P1) * (6 * U * T) + (P3 - P2) * (3 * T * T);
+end;
+
+function TCubicBezier.TangentAt(T: double): TVec2;
+begin
+  Result := DerivativeAt(T);
+  if (Result.X <> 0) or (Result.Y <> 0) then
+    Exit;
+  if T <= 0 then
+  begin
+    Result := P2 - P0;
+    if (Result.X = 0) and (Result.Y = 0) then
+      Result := P3 - P0;
+  end
+  else if T >= 1 then
+  begin
+    Result := P3 - P1;
+    if (Result.X = 0) and (Result.Y = 0) then
+      Result := P3 - P0;
+  end;
 end;
 
 function TCubicBezier.SecondDerivativeAt(T: double): TVec2;

@@ -51,6 +51,9 @@ type
     procedure TestInnerCornerTooTightCollapses;
     procedure TestTightCurveCollapses;
     procedure TestCurveWithRoomStaysValid;
+    // A handle of zero length has no derivative at its end, but the curve
+    // still has a direction there, so all of it is offset
+    procedure TestZeroHandleOffsetAllAlong;
     procedure TestClosedRunJoinsAtItsStart;
     procedure TestFollowsMeasurements;
     procedure TestChainOrdersEdges;
@@ -244,6 +247,30 @@ begin
   FPattern.Evaluate;
   AssertTrue('away from the centre', Edge.State = esValid);
   AssertEquals(15, Distance(Edge.PointAtLength(Edge.Length / 2), Vec2(0, 0)), 0.01);
+end;
+
+procedure TTestOffsetRun.TestZeroHandleOffsetAllAlong;
+var
+  A, B: string;
+  Curve: TCurveObject;
+  Edge: TOffsetEdge;
+  Index: integer;
+  Along: double;
+begin
+  A := Pt('A');
+  B := Pt('B', 100, 0);
+  Curve := FPattern.AddCurve(A, B, '60', '0', '120', '0', erOutline);
+  Edge := FPattern.AddOffsetEdge(Curve.Key, '10', osLeft);
+  FPattern.Evaluate;
+  AssertTrue(Edge.Message, Edge.State = esValid);
+  AssertEquals('from the start', 10, Distance(Edge.PointAtLength(0), Vec2(0, 0)), 0.01);
+  AssertEquals('to the end', 10, Distance(Edge.PointAtLength(Edge.Length), Vec2(100, 0)), 0.01);
+  // Both handles are zero here, so the curve is the straight line
+  for Index := 0 to 10 do
+  begin
+    Along := Edge.Length * Index / 10;
+    AssertEquals('parallel', 10, Abs(Edge.PointAtLength(Along).Y), 0.01);
+  end;
 end;
 
 procedure TTestOffsetRun.TestClosedRunJoinsAtItsStart;

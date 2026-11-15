@@ -55,6 +55,7 @@ type
     procedure TestApplyInsideWord;
     procedure TestDetails;
     procedure TestCaretOutOfRange;
+    procedure TestCaretAfterMultibyteCharacter;
   end;
 
 implementation
@@ -239,6 +240,25 @@ procedure TTestCompletion.TestCaretOutOfRange;
 begin
   AssertEquals(0, Length(FormulaCompletion(FPattern, nil, 'A.', 9, False).Items));
   AssertEquals(0, Length(FormulaCompletion(FPattern, nil, 'A.', -1, False).Items));
+end;
+
+// × is two bytes but one character in the edit
+procedure TTestCompletion.TestCaretAfterMultibyteCharacter;
+var
+  Text, Done: string;
+  Completion: TCompletion;
+  Caret: integer;
+begin
+  Text := '10×#wai';
+  AssertEquals('bytes', 8, CaretBytes(Text, 7));
+  AssertEquals('chars', 7, CaretChars(Text, 8));
+  AssertEquals('before the ×', 2, CaretBytes(Text, 2));
+  AssertEquals('past the end', 8, CaretBytes(Text, 20));
+  Completion := FormulaCompletion(FPattern, nil, Text, CaretBytes(Text, 7), False);
+  AssertTrue('offers', Length(Completion.Items) > 0);
+  Done := ApplyCompletion(Text, Completion, 0, Caret);
+  AssertEquals('10×#waist_ease', Done);
+  AssertEquals('caret at the end', 14, CaretChars(Done, Caret));
 end;
 
 initialization

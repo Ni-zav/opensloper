@@ -317,7 +317,7 @@ implementation
 uses
   Math, Spin, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Transform,
   Sloper.Core.Note, Sloper.Core.Settings, Sloper.UI.GridColumns, Sloper.UI.ObjectList, Sloper.UI.PieceProperties, Sloper.UI.PropertyText, Sloper.UI.Spacing,
-  Sloper.UI.FontBox;
+  Sloper.UI.FontBox, Sloper.UI.Completion;
 
 type
   // Rows every object has: type, name and formula fields first; what made a
@@ -1102,7 +1102,7 @@ begin
     // Keep the text so it can be fixed, with the cursor at the problem
     ShowRefusal(Edit, Reason);
     if ErrorPos > 0 then
-      Edit.SelStart := ErrorPos - 1;
+      Edit.SelStart := CaretChars(Edit.Text, ErrorPos - 1);
   end;
 end;
 

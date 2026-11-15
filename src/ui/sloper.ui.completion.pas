@@ -51,6 +51,11 @@ type
 function FormulaCompletion(Pattern: TPattern; Node: TEvalNode; const Text: string; Caret: integer; Explicit: boolean): TCompletion;
 // Text with the item in place of the word, and where the caret goes
 function ApplyCompletion(const Text: string; const Completion: TCompletion; Index: integer; out Caret: integer): string;
+// An edit's caret counts characters and these functions count bytes of the
+// UTF-8 text, which differ after a character such as ×: the byte offset of
+// the caret Chars characters in, and the characters in the first Bytes bytes
+function CaretBytes(const Text: string; Chars: integer): integer;
+function CaretChars(const Text: string; Bytes: integer): integer;
 
 resourcestring
   rsCompletionFunction = 'Function';
@@ -61,7 +66,7 @@ implementation
 
 uses
   SysUtils, Sloper.Core.EvalTypes, Sloper.Core.Measurements, Sloper.Core.Names, Sloper.Core.Variables, Sloper.Core.Draft,
-  Sloper.Core.Drag, Sloper.Core.Units, Sloper.UI.ObjectList;
+  Sloper.Core.Drag, Sloper.Core.Units, Sloper.UI.ObjectList, Math;
 
 const
   PROPERTY_NAMES: array[0..5] of string = ('x', 'y', 'length', 'angle', 'angle1', 'angle2');
@@ -266,6 +271,34 @@ begin
   if (Length(Found.Items) = 1) and (Result.Upto = Caret) and SameText(Found.Items[0].Insert, CaretWord) then
     Exit;
   Result.Items := Found.Items;
+end;
+
+// A byte starts a character unless it continues one (10xxxxxx)
+function StartsChar(Value: char): boolean;
+begin
+  Result := (Ord(Value) and $C0) <> $80;
+end;
+
+function CaretBytes(const Text: string; Chars: integer): integer;
+begin
+  Result := 0;
+  while (Result < Length(Text)) and (Chars > 0) do
+  begin
+    Inc(Result);
+    while (Result < Length(Text)) and not StartsChar(Text[Result + 1]) do
+      Inc(Result);
+    Dec(Chars);
+  end;
+end;
+
+function CaretChars(const Text: string; Bytes: integer): integer;
+var
+  Index: integer;
+begin
+  Result := 0;
+  for Index := 1 to Min(Bytes, Length(Text)) do
+    if StartsChar(Text[Index]) then
+      Inc(Result);
 end;
 
 function ApplyCompletion(const Text: string; const Completion: TCompletion; Index: integer; out Caret: integer): string;

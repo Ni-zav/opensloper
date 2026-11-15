@@ -96,7 +96,8 @@ begin
   FEdit := AEdit;
   FPattern := APattern;
   FNode := ANode;
-  FCompletion := FormulaCompletion(APattern, ANode, AEdit.Text, AEdit.SelStart, Explicit);
+  // The edit counts characters, completion counts bytes
+  FCompletion := FormulaCompletion(APattern, ANode, AEdit.Text, CaretBytes(AEdit.Text, AEdit.SelStart), Explicit);
   if Length(FCompletion.Items) = 0 then
   begin
     Hide;
@@ -150,7 +151,7 @@ begin
   try
     FEdit.Text := NewText;
     FEdit.SelLength := 0;
-    FEdit.SelStart := NewCaret;
+    FEdit.SelStart := CaretChars(NewText, NewCaret);
   finally
     FSetting := False;
   end;

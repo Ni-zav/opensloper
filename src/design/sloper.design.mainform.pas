@@ -1415,6 +1415,8 @@ begin
   FObjects.Document := nil;
   FVariables.Document := nil;
   FMeasurements.Document := nil;
+  FRoles.Document := nil;
+  FAlign.Document := nil;
   FDocument.RemoveListener(@DocumentChanged);
   FreeAndNil(FDocument);
 end;

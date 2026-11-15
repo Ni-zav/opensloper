@@ -67,6 +67,7 @@ type
     procedure TestAlignAlreadyThere;
     procedure TestDistribute;
     procedure TestDistributeFindsOutermost;
+    procedure TestPointGivenTwiceCountsOnce;
     procedure TestDistributeHolds;
     procedure TestDistributeOnlyMovesInner;
     procedure TestDistributeNeedsThree;
@@ -484,6 +485,20 @@ begin
   AssertAt('C', 100, 0);
   AssertAt('D', 200, 0);
   AssertTrue(FPattern.FindNode(Key) is TBetweenPoint);
+end;
+
+// Each point is arranged once, however often it is listed
+procedure TTestArrange.TestPointGivenTwiceCountsOnce;
+var
+  A, B, C, D: TFreePoint;
+begin
+  A := Free('A', 0, 0);
+  B := Free('B', 300, 0);
+  C := Free('C', 10, 50);
+  D := Free('D', 250, -30);
+  Apply(Request(aaDistribute, [A, C, D, C, B]));
+  AssertAt('C', 100, 0);
+  AssertAt('D', 200, 0);
 end;
 
 // Whatever order they were picked in

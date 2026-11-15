@@ -134,16 +134,24 @@ begin
   Result := '{' + Key + '}.' + AXIS_FIELDS[Axis];
 end;
 
+// Each point once, however often it is given: a converted point is freed,
+// so a second target for it would read freed memory
 function SelectedPoints(Pattern: TPattern; const Keys: TStringArray): specialize TArray<TPointObject>;
 var
   Key: string;
-  Point: TPointObject;
+  Point, Seen: TPointObject;
+  Listed: boolean;
 begin
   Result := nil;
   for Key in Keys do
   begin
     Point := PointNamed(Pattern, Key);
-    if Assigned(Point) then
+    if not Assigned(Point) then
+      Continue;
+    Listed := False;
+    for Seen in Result do
+      Listed := Listed or (Seen = Point);
+    if not Listed then
       Insert(Point, Result, Length(Result));
   end;
 end;

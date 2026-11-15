@@ -39,6 +39,12 @@ type
     procedure TearDown; override;
   published
     procedure TestMapStoredFormula;
+    // Braces with no close are passed over in one pass, not searched again
+    // from each one
+    procedure TestMapStoredFormulaUnclosed;
+    // From another pattern, an ID the copy does not hold would mean an
+    // unrelated object here, so it is refused
+    procedure TestOutsideIdsRefused;
     procedure TestLineOnSamePoints;
     procedure TestCurveKeepsHandles;
     procedure TestPointsAndLineAreCopied;
@@ -102,6 +108,81 @@ begin
   finally
     FreeAndNil(Map);
   end;
+end;
+
+procedure TTestFragment.TestMapStoredFormulaUnclosed;
+var
+  Map: TPatternIdMap;
+  Text: string;
+begin
+  Map := TPatternIdMap.Create;
+  try
+    Map.Add('3', '30');
+    // The first brace runs to the close, so this is one ID no map holds
+    Text := StringOfChar('{', 300000) + '3}';
+    AssertTrue('kept as it is', Text = MapStoredFormula(Text, Map));
+    Text := StringOfChar('{', 300000) + '3';
+    AssertTrue('never closed', Text = MapStoredFormula(Text, Map));
+    AssertEquals('{30} + {', MapStoredFormula('{3} + {', Map));
+    AssertEquals('{} {30}', MapStoredFormula('{} {3}', Map));
+  finally
+    FreeAndNil(Map);
+  end;
+end;
+
+procedure TTestFragment.TestOutsideIdsRefused;
+var
+  A, B, Line, Unrelated, Text: string;
+  Index: integer;
+  Pasted: TFragmentPaste;
+  Reason: string;
+
+// The copied fragment with the object of ID Id given Name: Value
+  function Changed(const Id, Name: string; Value: TJSONData): string;
+  var
+    Root: TJSONObject;
+    Objects: TJSONArray;
+    Reason: string;
+    Item: integer;
+  begin
+    AssertTrue(ParseJSONObject(Text, Root, Reason));
+    try
+      Objects := Root.Arrays['objects'];
+      for Item := 0 to Objects.Count - 1 do
+        if IntToStr(Objects.Objects[Item].Integers['id']) = Id then
+          Objects.Objects[Item].Elements[Name] := Value;
+      Result := JSONToText(Root);
+    finally
+      FreeAndNil(Root);
+    end;
+  end;
+
+  // The object using it has a new ID by then, so only the rest is compared
+  procedure Refused(const What, Fragment, Outside: string);
+  var
+    Reason, Rest: string;
+    Pasted: TFragmentPaste;
+  begin
+    AssertFalse(What, PasteFragment(FOther, Fragment, Pasted, Reason));
+    Rest := Format(rsPatternObjectOutside, [#1, Outside]);
+    Rest := Copy(Rest, Pos(#1, Rest) + 1, MaxInt);
+    AssertEquals(What + ': ' + Reason, Rest, Copy(Reason, Length(Reason) - Length(Rest) + 1, MaxInt));
+  end;
+
+begin
+  A := Pt(FPattern, 'A', 0, 0);
+  B := Pt(FPattern, 'B', 100, 0);
+  Line := FPattern.AddLine(A, B, erOutline).Key;
+  Text := CopyFragment(FPattern, [Line]).Text;
+  // The other pattern has objects with every ID the copy might name
+  for Index := 1 to 6 do
+    Unrelated := Pt(FOther, 'Z' + IntToStr(Index), Index, 0);
+  Refused('a reference', Changed(Line, 'end', TJSONIntegerNumber.Create(StrToInt(Unrelated))), Unrelated);
+  Refused('a formula', Changed(A, 'x', TJSONString.Create('{' + Unrelated + '}.x')), Unrelated);
+  // In the same pattern, what the copy needs but does not hold is used as it is
+  Unrelated := Pt(FPattern, 'C', 0, 50);
+  AssertTrue(Reason, PasteFragment(FPattern, Changed(Line, 'end', TJSONIntegerNumber.Create(StrToInt(Unrelated))), Pasted, Reason));
+  AssertEquals(Unrelated, TEdgeObject(FPattern.FindNode(Pasted.Keys[0])).EndKey);
 end;
 
 procedure TTestFragment.TestLineOnSamePoints;

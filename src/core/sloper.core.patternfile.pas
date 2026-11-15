@@ -64,7 +64,10 @@ function LockedObjectText(DraftObject: TDraftObject): string;
 // refer to objects already in the pattern; an ID not in the map is read as it
 // is. Names must be free. On failure the pattern may hold some of them and
 // ErrorMessage says why. Call Evaluate afterwards.
-function AddPatternItems(Pattern: TPattern; Variables, Objects: TJSONArray; IdMap: TPatternIdMap; out ErrorMessage: string): boolean;
+// With OnlyMapped, every ID they use must be in IdMap: an ID outside it is
+// refused, not read as the object of that ID already in the pattern.
+function AddPatternItems(Pattern: TPattern; Variables, Objects: TJSONArray; IdMap: TPatternIdMap; OnlyMapped: boolean;
+  out ErrorMessage: string): boolean;
 // Formula text in stored form with every {id} read through IdMap
 function MapStoredFormula(const Text: string; IdMap: TPatternIdMap): string;
 // The pattern's measurement file as a path: relative to the folder of
@@ -85,6 +88,7 @@ resourcestring
   rsPatternObjectMissing = 'Object %s has no valid "%s"';
   rsPatternObjectUnknownType = 'Object %s has an unknown type "%s"';
   rsPatternObjectNotBefore = 'Object %s uses object %s, which is not defined before it';
+  rsPatternObjectOutside = 'Object %s uses object %s, which is not part of the copy';
   rsPatternObjectProblem = 'Object %s: %s';
   rsPatternMaterialProblem = 'Material %s: %s';
 
@@ -142,6 +146,8 @@ type
     FError: string;
     FId: string;  // the object being loaded, for messages
     FIdMap: TPatternIdMap;  // nil when IDs are read as they are
+    FOnlyMapped: boolean;  // an ID outside FIdMap is refused
+    FOutside: string;  // the first ID outside FIdMap, which fails the item
     function MapKey(Id: integer): string;
     function MapFormula(const Text: string): string;
     function ReadFreeId(Item: TJSONObject; out Id: string): boolean;
@@ -183,7 +189,7 @@ type
     procedure RetireDraftIds(Data: TJSONData);
     function LoadObject(Item: TJSONObject): boolean;
   public
-    constructor Create(APattern: TPattern; AIdMap: TPatternIdMap = nil);
+    constructor Create(APattern: TPattern; AIdMap: TPatternIdMap = nil; OnlyMapped: boolean = False);
     function Load(const Text: string): boolean;
     function AddItems(Variables, Objects: TJSONArray): boolean;
     property Error: string read FError;
@@ -923,43 +929,56 @@ end;
 
 { Loading }
 
-constructor TPatternLoader.Create(APattern: TPattern; AIdMap: TPatternIdMap);
+constructor TPatternLoader.Create(APattern: TPattern; AIdMap: TPatternIdMap; OnlyMapped: boolean);
 begin
   FPattern := APattern;
   FIdMap := AIdMap;
+  FOnlyMapped := OnlyMapped and Assigned(AIdMap);
 end;
 
+// Outside the map, and only mapped IDs wanted, this is '', which no object has
 function TPatternLoader.MapKey(Id: integer): string;
 begin
   Result := IntToStr(Id);
-  if Assigned(FIdMap) and FIdMap.ContainsKey(Result) then
-    Result := FIdMap[Result];
+  if not Assigned(FIdMap) then
+    Exit;
+  if FIdMap.ContainsKey(Result) then
+    Result := FIdMap[Result]
+  else if FOnlyMapped then
+  begin
+    if FOutside = '' then
+      FOutside := Result;
+    Result := '';
+  end;
 end;
 
-function TPatternLoader.MapFormula(const Text: string): string;
-begin
-  if Assigned(FIdMap) then
-    Result := MapStoredFormula(Text, FIdMap)
-  else
-    Result := Text;
-end;
-
-// Stored form writes an object or variable only as {id}, so braces mark every ID
-function MapStoredFormula(const Text: string; IdMap: TPatternIdMap): string;
+// Stored form writes an object or variable only as {id}, so braces mark
+// every ID. Outside is the first ID not in IdMap, which is kept as it is.
+function MapIds(const Text: string; IdMap: TPatternIdMap; out Outside: string): string;
 var
   Position, Close: integer;
   Id: string;
 begin
   Result := '';
+  Outside := '';
   Position := 1;
   while Position <= Length(Text) do
   begin
-    Close := Pos('}', Text, Position);
-    if (Text[Position] = '{') and (Close > Position + 1) then
+    // Searched only from a brace, and never again once there is no close
+    Close := 0;
+    if Text[Position] = '{' then
+    begin
+      Close := Pos('}', Text, Position);
+      if Close = 0 then
+        Break;
+    end;
+    if Close > Position + 1 then
     begin
       Id := Copy(Text, Position + 1, Close - Position - 1);
       if IdMap.ContainsKey(Id) then
-        Id := IdMap[Id];
+        Id := IdMap[Id]
+      else if Outside = '' then
+        Outside := Id;
       Result := Result + '{' + Id + '}';
       Position := Close + 1;
     end
@@ -969,6 +988,25 @@ begin
       Inc(Position);
     end;
   end;
+  Result := Result + Copy(Text, Position, MaxInt);
+end;
+
+function TPatternLoader.MapFormula(const Text: string): string;
+var
+  Outside: string;
+begin
+  if not Assigned(FIdMap) then
+    Exit(Text);
+  Result := MapIds(Text, FIdMap, Outside);
+  if FOnlyMapped and (Outside <> '') and (FOutside = '') then
+    FOutside := Outside;
+end;
+
+function MapStoredFormula(const Text: string; IdMap: TPatternIdMap): string;
+var
+  Outside: string;
+begin
+  Result := MapIds(Text, IdMap, Outside);
 end;
 
 function TPatternLoader.Fail(const Msg: string): boolean;
@@ -1159,7 +1197,7 @@ begin
   if not GetJSONId(Item, 'id', Value) then
     Exit(False);
   Id := MapKey(Value);
-  Result := not Assigned(FPattern.FindNode(Id)) and not Assigned(FPattern.FindMaterial(Id));
+  Result := (Id <> '') and not Assigned(FPattern.FindNode(Id)) and not Assigned(FPattern.FindMaterial(Id));
 end;
 
 function TPatternLoader.LoadVariables(Data: TJSONData): boolean;
@@ -1192,6 +1230,8 @@ begin
     Variable.Description := Description;
     Variable.Formula.ParseStored(MapFormula(Text));
     FPattern.InsertVariable(Variable);
+    if FOutside <> '' then
+      Exit(Fail(Format(rsPatternObjectOutside, [Id, FOutside])));
   end;
   Result := True;
 end;
@@ -2118,8 +2158,13 @@ begin
     Item := TJSONObject(Data.Items[Index]);
     if not ReadFreeId(Item, FId) then
       Exit(Fail(Format(rsPatternFileBadId, [Index + 1, 'objects'])));
-    if not LoadObject(Item) then
+    // Whatever else an ID outside the copy made fail, this is why
+    if not LoadObject(Item) or (FOutside <> '') then
+    begin
+      if FOutside <> '' then
+        Fail(Format(rsPatternObjectOutside, [FId, FOutside]));
       Exit(False);
+    end;
   end;
   Result := True;
 end;
@@ -2202,11 +2247,12 @@ begin
   end;
 end;
 
-function AddPatternItems(Pattern: TPattern; Variables, Objects: TJSONArray; IdMap: TPatternIdMap; out ErrorMessage: string): boolean;
+function AddPatternItems(Pattern: TPattern; Variables, Objects: TJSONArray; IdMap: TPatternIdMap; OnlyMapped: boolean;
+  out ErrorMessage: string): boolean;
 var
   Loader: TPatternLoader;
 begin
-  Loader := TPatternLoader.Create(Pattern, IdMap);
+  Loader := TPatternLoader.Create(Pattern, IdMap, OnlyMapped);
   try
     Result := Loader.AddItems(Variables, Objects);
     ErrorMessage := Loader.Error;

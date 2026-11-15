@@ -607,7 +607,9 @@ begin
   for Key in FSelection do
     if not FMap.ContainsKey(Key) then
       Exit(Fail(rsFragmentNotFragment));
-  if not AddPatternItems(FPattern, FVariables, FObjects, FMap, FError) then
+  // From another pattern, every ID must be one the copy holds; in the same
+  // one, what it needs but could not copy is the object still here
+  if not AddPatternItems(FPattern, FVariables, FObjects, FMap, not FSamePattern, FError) then
     Exit(False);
   Added := nil;
   for Index := 0 to FObjects.Count - 1 do

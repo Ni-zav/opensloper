@@ -195,6 +195,9 @@ begin
   FBaseText := '';
   FPendingText := '';
   FHistory.Clear;
+  // A conflict belongs to the file it was found in
+  FConflicts := nil;
+  FConflictText := '';
   FSavedText := FSet.SaveToText;
   Changed;
 end;
@@ -208,6 +211,9 @@ begin
   FBaseText := '';
   FPendingText := '';
   FHistory.Clear;
+  // A conflict belongs to the file it was found in
+  FConflicts := nil;
+  FConflictText := '';
   // Not saved yet, so closing it asks
   FSavedText := '';
   Changed;
@@ -235,6 +241,9 @@ begin
   FBaseText := Text;
   FPendingText := '';
   FHistory.Clear;
+  // A conflict belongs to the file it was found in
+  FConflicts := nil;
+  FConflictText := '';
   FSavedText := FSet.SaveToText;
   Changed;
   Result := True;

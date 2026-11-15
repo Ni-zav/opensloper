@@ -73,6 +73,7 @@ type
     procedure TestMergeTakesDeletion;
     procedure TestSameChangeBothSides;
     procedure TestConflictKeepMine;
+    procedure TestOpeningDropsAConflict;
     procedure TestConflictTakeTheirs;
     procedure TestConflictTheyDeleted;
     procedure TestSaveRefusedWhileFileIsNewer;
@@ -488,6 +489,22 @@ begin
   AssertEquals(0, Length(FDocument.Conflicts));
   AssertTrue('so it can be saved', FDocument.Modified);
   AssertTrue('and the file is taken in', FDocument.CheckFile = fcSame);
+end;
+
+// A conflict belongs to the file it was found in
+procedure TTestMeasurementDocument.TestOpeningDropsAConflict;
+var
+  Err: string;
+begin
+  OpenSample;
+  FDocument.SetValue(0, 0, 830);
+  ChangeOnDisk('waist', 840);
+  AssertTrue(CheckTwice = fcConflict);
+  AssertTrue(Err, FDocument.Open(FFileName, Err));
+  AssertEquals('none left', 0, Length(FDocument.Conflicts));
+  AssertNear('the file as it is', 840, FDocument.Measurements[0].Value);
+  ChangeOnDisk('waist', 850);
+  AssertTrue('changes are taken in again', CheckTwice = fcReloaded);
 end;
 
 procedure TTestMeasurementDocument.TestConflictTakeTheirs;

@@ -207,8 +207,8 @@ type
     // False when the item cannot be placed, as when its piece has gone since
     function NewPlacement(const Item: TUnplacedCopy; out Placement: TPlacement; out Piece: TPieceObject): boolean;
     function IsPlaced(SourceId: integer; const PieceKey: string; Copy: integer): boolean;
-    procedure AddOverlapProblems(var Problems: TLayoutProblemArray);
-    procedure AddFontProblems(var Problems: TLayoutProblemArray);
+    procedure AddOverlapProblems(const Shapes: TPlacedPieceArray; var Problems: TLayoutProblemArray);
+    procedure AddFontProblems(const Shapes: TPlacedPieceArray; var Problems: TLayoutProblemArray);
     // The far corner of everything printed, from (0, 0)
     function SheetExtent(const Shapes: TPlacedPieceArray): TVec2;
     function PageIsExcluded(const Caption: string): boolean;
@@ -1839,14 +1839,14 @@ begin
 end;
 
 // Once for each font that prints in the default font instead
-procedure TLayout.AddFontProblems(var Problems: TLayoutProblemArray);
+procedure TLayout.AddFontProblems(const Shapes: TPlacedPieceArray; var Problems: TLayoutProblemArray);
 var
   Note: TSheetNote;
   Told: TStringArray;
   Text: string;
 begin
   Told := nil;
-  for Note in PrintedNotes(Self, PlacedPieces) do
+  for Note in PrintedNotes(Self, Shapes) do
   begin
     Text := FontProblem(Note.Style);
     if (Text = '') or (IndexText(Text, Told) >= 0) then
@@ -1859,9 +1859,8 @@ begin
   end;
 end;
 
-procedure TLayout.AddOverlapProblems(var Problems: TLayoutProblemArray);
+procedure TLayout.AddOverlapProblems(const Shapes: TPlacedPieceArray; var Problems: TLayoutProblemArray);
 var
-  Shapes: TPlacedPieceArray;
   First, Second: integer;
   Note: TSheetNote;
   Values: TFieldValues;
@@ -1874,7 +1873,6 @@ var
   end;
 
 begin
-  Shapes := PlacedPieces;
   Values := FieldValues('', '');
   for Note in Notes do
     for First := 0 to High(Shapes) do
@@ -1921,6 +1919,7 @@ var
   AllRead: boolean;
   Profile: TMachineProfile;
   Chosen: TOutputProfile;
+  Shapes: TPlacedPieceArray;
 
   procedure Add(const Text: string; Blocking: boolean);
   begin
@@ -1943,6 +1942,8 @@ var
 begin
   Result := nil;
   AllRead := True;
+  // Placing every piece is the costly part, so it is done once
+  Shapes := PlacedPieces;
   if (Output.Profile <> '') and not ChosenProfile(Profile) then
     Add(Format(rsLayoutUnknownProfile, [Output.Profile]), False);
   // Never a quiet fallback: a print missing its stitch lines would be cut
@@ -1991,14 +1992,14 @@ begin
     if Assigned(Source.Pattern) and (Source.LoadError = '') and not HasPieces(Source) then
       Add(Format(rsLayoutNoPieces, [ExtractFileName(Source.PatternFile)]), False);
   // A source that failed already says why; this is for a sheet that would print blank
-  if AllRead and ((Length(Placements) = 0) or ((Output.Material <> '') and (Length(PlacedPieces) = 0))) then
+  if AllRead and ((Length(Placements) = 0) or ((Output.Material <> '') and (Length(Shapes) = 0))) then
     Add(rsLayoutNothingPlaced, True);
   if AllRead and (Output.Material <> '') and not MaterialExists then
     Add(Format(rsLayoutNoMaterial, [Output.Material]), False);
-  if (Output.Kind = okTiled) and TooManyTilePages(SheetExtent(PlacedPieces), Output.Tiles) then
+  if (Output.Kind = okTiled) and TooManyTilePages(SheetExtent(Shapes), Output.Tiles) then
     Add(Format(rsLayoutTooManyPages, [MAX_TILE_PAGES]), True);
-  AddOverlapProblems(Result);
-  AddFontProblems(Result);
+  AddOverlapProblems(Shapes, Result);
+  AddFontProblems(Shapes, Result);
 end;
 
 end.

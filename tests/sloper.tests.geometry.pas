@@ -48,6 +48,9 @@ type
     procedure TestLineCircleTangent;
     procedure TestLineCircleMiss;
     procedure TestLineCircleSegmentLimits;
+    procedure TestCirclesCrossTouchAndMiss;
+    // Two crossings close together stay two, however large the circles
+    procedure TestLargeCirclesCrossingClose;
     procedure TestSignedAreaAndOrientation;
     procedure TestPointInPolygon;
     procedure TestPolylineLength;
@@ -237,6 +240,34 @@ procedure TTestGeometry.TestLineCircleMiss;
 begin
   AssertEquals(0, Length(IntersectLineCircle(Line2(Vec2(-200, 60), Vec2(200, 60)),
     True, Vec2(0, 0), 50)));
+end;
+
+procedure TTestGeometry.TestCirclesCrossTouchAndMiss;
+var
+  First, Second: TVec2;
+begin
+  AssertEquals('cross', 2, IntersectCircles(Vec2(0, 0), 50, Vec2(60, 0), 50, First, Second));
+  AssertPointsNear('left, up the screen', Vec2(30, -40), First);
+  AssertPointsNear('right', Vec2(30, 40), Second);
+  AssertEquals('touch outside', 1, IntersectCircles(Vec2(0, 0), 50, Vec2(80, 0), 30, First, Second));
+  AssertPointsNear('where they touch outside', Vec2(50, 0), First);
+  AssertEquals('touch inside', 1, IntersectCircles(Vec2(0, 0), 50, Vec2(20, 0), 30, First, Second));
+  AssertPointsNear('where they touch inside', Vec2(50, 0), First);
+  AssertEquals('apart', 0, IntersectCircles(Vec2(0, 0), 50, Vec2(81, 0), 30, First, Second));
+  AssertEquals('one inside the other', 0, IntersectCircles(Vec2(0, 0), 50, Vec2(19, 0), 30, First, Second));
+  AssertEquals('same centre', 0, IntersectCircles(Vec2(0, 0), 50, Vec2(0, 0), 30, First, Second));
+end;
+
+procedure TTestGeometry.TestLargeCirclesCrossingClose;
+var
+  First, Second: TVec2;
+  Gap: double;
+begin
+  // Crossings 0.06 mm apart on circles of 1 m
+  Gap := 2 * Sqrt(Sqr(1000) - Sqr(0.03));
+  AssertEquals(2, IntersectCircles(Vec2(0, 0), 1000, Vec2(Gap, 0), 1000, First, Second));
+  AssertPointsNear('left', Vec2(Gap / 2, -0.03), First, 1e-6);
+  AssertPointsNear('right', Vec2(Gap / 2, 0.03), Second, 1e-6);
 end;
 
 procedure TTestGeometry.TestLineCircleSegmentLimits;

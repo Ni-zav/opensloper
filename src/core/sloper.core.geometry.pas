@@ -122,7 +122,8 @@ function IntersectLineCircle(const L: TLine2; Extend: boolean; const Centre: TVe
 
 // Where two circles cross: First is to the left going from centre A to centre
 // B, and Second to the right. Count is 0 when they miss or share a centre, 1
-// when they touch.
+// when they touch: when the gap between them, outside or inside, is below
+// TANGENT_TOLERANCE.
 function IntersectCircles(const A: TVec2; RadiusA: double; const B: TVec2; RadiusB: double; out First, Second: TVec2): integer;
 // Positive when the points run anticlockwise on screen
 function SignedArea(const Pts: TVec2Array): double;
@@ -463,7 +464,7 @@ end;
 
 function IntersectCircles(const A: TVec2; RadiusA: double; const B: TVec2; RadiusB: double; out First, Second: TVec2): integer;
 var
-  Gap, Along, HeightSquared, Height: double;
+  Gap, Along, HeightSquared, Height, Outside, Inside: double;
   Unit2, Foot, Across: TVec2;
 begin
   First := Vec2(0, 0);
@@ -471,19 +472,24 @@ begin
   Gap := Distance(A, B);
   if Gap < TOUCH_TOLERANCE then
     Exit(0);
-  Along := (Gap * Gap + RadiusA * RadiusA - RadiusB * RadiusB) / (2 * Gap);
-  HeightSquared := RadiusA * RadiusA - Along * Along;
-  if HeightSquared < -TOUCH_TOLERANCE * Max(RadiusA * RadiusA, 1) then
+  // As for a line and a circle, closeness is a distance: the circles touch
+  // when the gap between them, outside or inside, is below
+  // TANGENT_TOLERANCE, whatever their size
+  Outside := Gap - (RadiusA + RadiusB);
+  Inside := Abs(RadiusA - RadiusB) - Gap;
+  if (Outside > TANGENT_TOLERANCE) or (Inside > TANGENT_TOLERANCE) then
     Exit(0);
+  Along := (Gap * Gap + RadiusA * RadiusA - RadiusB * RadiusB) / (2 * Gap);
   Unit2 := (B - A) * (1 / Gap);
   Foot := A + Unit2 * Along;
-  if HeightSquared <= TOUCH_TOLERANCE * Max(RadiusA * RadiusA, 1) then
+  if (Outside >= -TANGENT_TOLERANCE) or (Inside >= -TANGENT_TOLERANCE) then
   begin
     First := Foot;
     Second := Foot;
     Exit(1);
   end;
-  Height := Sqrt(HeightSquared);
+  HeightSquared := RadiusA * RadiusA - Along * Along;
+  Height := Sqrt(Max(HeightSquared, 0));
   Across := LeftOf(Unit2) * Height;
   First := Foot + Across;
   Second := Foot - Across;

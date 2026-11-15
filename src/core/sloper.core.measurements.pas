@@ -679,7 +679,7 @@ end;
 
 function TMeasurementSet.SaveToFile(const FileName: string; out ErrorMessage: string): boolean;
 begin
-  Result := WriteTextFile(FileName, SaveToText, ErrorMessage);
+  Result := WriteTextFileAtomic(FileName, SaveToText, ErrorMessage);
 end;
 
 function TMeasurementSet.LoadFromFile(const FileName: string; out ErrorMessage: string): boolean;

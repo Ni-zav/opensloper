@@ -48,6 +48,7 @@ type
     procedure TearDown; override;
   published
     procedure TestChangeIsOneStep;
+    procedure TestFailedSaveKeepsTheFile;
     // Generation changes when New or Open replaces the pattern, not on edits
     procedure TestGenerationCountsPatterns;
     procedure TestUndoRedoRestoresExactly;
@@ -120,6 +121,31 @@ begin
   DeleteFile(ConcatPaths([FFolder, 'sets', 'skirt.sloper']));
   RemoveDir(ConcatPaths([FFolder, 'sets']));
   RemoveDir(FFolder);
+end;
+
+// Saving goes through a file beside it, so a save that fails part way leaves
+// the old file whole; here that file cannot be made
+procedure TTestDocument.TestFailedSaveKeepsTheFile;
+var
+  Path, Before, After, Err: string;
+begin
+  Path := ConcatPaths([FFolder, 'skirt.sloper']);
+  FDocument.BeginChange('Add');
+  FDocument.Pattern.AddFreePoint('A', '0', '0');
+  FDocument.EndChange;
+  AssertTrue(Err, FDocument.SaveToFile(Path, Err));
+  AssertTrue(Err, ReadTextFile(Path, Before, Err));
+  FDocument.BeginChange('Add');
+  FDocument.Pattern.AddFreePoint('B', '10', '0');
+  FDocument.EndChange;
+  AssertTrue(CreateDir(Path + '.tmp'));
+  try
+    AssertFalse('refused', FDocument.SaveToFile(Path, Err));
+  finally
+    RemoveDir(Path + '.tmp');
+  end;
+  AssertTrue(Err, ReadTextFile(Path, After, Err));
+  AssertEquals('the old file whole', Before, After);
 end;
 
 function TTestDocument.Clock: TDateTime;

@@ -429,7 +429,7 @@ end;
 
 function TAppSettings.SaveToFile(const FileName: string; out ErrorMessage: string): boolean;
 begin
-  Result := WriteTextFile(FileName, SaveToText, ErrorMessage);
+  Result := WriteTextFileAtomic(FileName, SaveToText, ErrorMessage);
 end;
 
 function TAppSettings.LoadFromFile(const FileName: string; out ErrorMessage: string): boolean;

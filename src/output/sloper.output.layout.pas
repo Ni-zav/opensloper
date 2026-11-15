@@ -1165,7 +1165,7 @@ end;
 
 function TLayout.SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
 begin
-  Result := WriteTextFile(AFileName, SaveToText, ErrorMessage);
+  Result := WriteTextFileAtomic(AFileName, SaveToText, ErrorMessage);
   if Result then
     FileName := AFileName;
 end;

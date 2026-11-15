@@ -516,7 +516,7 @@ begin
   FullName := ExpandFileName(FileName);
   // The measurement file is stored relative to where the pattern now goes
   FPattern.MeasurementFile := MeasurementFileFor(FullName);
-  if not WriteTextFile(FullName, SavePatternToText(FPattern), ErrorMessage) then
+  if not WriteTextFileAtomic(FullName, SavePatternToText(FPattern), ErrorMessage) then
   begin
     FPattern.MeasurementFile := MeasurementFileFor(FFileName);
     Exit(False);

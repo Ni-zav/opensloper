@@ -2278,7 +2278,7 @@ end;
 
 function SavePatternToFile(Pattern: TPattern; const FileName: string; out ErrorMessage: string): boolean;
 begin
-  Result := WriteTextFile(FileName, SavePatternToText(Pattern), ErrorMessage);
+  Result := WriteTextFileAtomic(FileName, SavePatternToText(Pattern), ErrorMessage);
 end;
 
 function LoadPatternFromFile(Pattern: TPattern; const FileName: string; out ErrorMessage: string): boolean;

@@ -278,6 +278,7 @@ Measurement files are edited in their own application, `opensloper-measurements`
 
 **Writing safely.**
 
+- Patterns, layouts, measurement files and the settings are always written atomically (a temporary file beside the file, then a rename, `WriteTextFileAtomic`), so a failed or interrupted save leaves the old file whole, and an app reading a file another app is saving sees the old file or the new one, never half of it.
 - Every save of small edits re-reads the file just before writing, applies its changes and writes atomically (a temporary file, then rename), so a change made elsewhere is never overwritten; `ChangeMeasurementsInFile` makes every change or none.
 - Every app with a measurement file open watches it. A file seen changing must read the same on two checks before it is taken in, and one that does not parse is left alone. With no unsaved edits the app reloads. The measurements app, with unsaved edits, merges by key against the file as last read: a key changed on one side takes that side, and one changed on both asks which to keep. Saving over a file that changed since it was read is refused until the change has been taken in.
 - `TMeasurementDocument` keeps its own undo history of the file's text (`TTextHistory`, shared with the publish app); a change read from disk clears it, since an older step would bring back what the file has just replaced.

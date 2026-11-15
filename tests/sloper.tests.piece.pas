@@ -25,7 +25,7 @@ interface
 
 uses
   fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Draft, Sloper.Core.Pattern,
-  Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.SeamAllowance;
+  Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Numeric, Sloper.Core.SeamAllowance;
 
 type
   TTestPiece = class(TOSTestCase)

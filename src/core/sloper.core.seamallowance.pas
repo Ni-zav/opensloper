@@ -28,10 +28,7 @@ unit Sloper.Core.SeamAllowance;
 interface
 
 uses
-  Sloper.Core.Geometry;
-
-type
-  TDoubleArray = array of double;
+  Sloper.Core.Geometry, Sloper.Core.Numeric;
 
 // Outline is a closed polygon without a repeated last point, either way
 // round; Allowances[Index] is the width of the segment leaving
@@ -51,12 +48,6 @@ const
   MITRE_LIMIT = 4;
   // Sine of the turn below which two segments count as one straight line
   STRAIGHT_TURN = 1e-9;
-
-function UnitVector(const From, Target: TVec2): TVec2;
-begin
-  Result := Target - From;
-  Result := Result * (1 / Result.Length);
-end;
 
 // Right of the direction of travel on screen: outwards on an anticlockwise path
 function Outwards(const Direction: TVec2): TVec2;
@@ -170,7 +161,7 @@ begin
   begin
     Before := (Index + Count - 1) mod Count;
     After := (Index + 1) mod Count;
-    OffsetVertex(Points[Index], UnitVector(Points[Before], Points[Index]), UnitVector(Points[Index], Points[After]),
+    OffsetVertex(Points[Index], (Points[Index] - Points[Before]).Normalized, (Points[After] - Points[Index]).Normalized,
       Widths[Before], Widths[Index], Raw[0]);
   end;
 

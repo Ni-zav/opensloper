@@ -911,7 +911,7 @@ begin
   Direction := SegmentEnd - SegmentStart;
   if Direction.Length < EPSILON then
     Exit(Vec2(0, 0));
-  Direction := Direction * (1 / Direction.Length);
+  Direction := Direction.Normalized;
   Left := LeftOf(Direction);
   if PointInPolygon(Lerp(SegmentStart, SegmentEnd, 0.5) + Left * SIDE_STEP, Outline) then
     Result := Left
@@ -944,7 +944,7 @@ begin
     if Index < High(Points) then
       Normal := Normal + GarmentInward(Outline, Points[Index], Points[Index + 1]);
     if Normal.Length > EPSILON then
-      Normal := Normal * (1 / Normal.Length);
+      Normal := Normal.Normalized;
     Result[Index] := Points[Index] + Normal * Inset;
   end;
 end;

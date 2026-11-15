@@ -49,6 +49,7 @@ type
     procedure TestLineCircleMiss;
     procedure TestLineCircleSegmentLimits;
     procedure TestCirclesCrossTouchAndMiss;
+    procedure TestNormalized;
     // Two crossings close together stay two, however large the circles
     procedure TestLargeCirclesCrossingClose;
     procedure TestSignedAreaAndOrientation;
@@ -240,6 +241,12 @@ procedure TTestGeometry.TestLineCircleMiss;
 begin
   AssertEquals(0, Length(IntersectLineCircle(Line2(Vec2(-200, 60), Vec2(200, 60)),
     True, Vec2(0, 0), 50)));
+end;
+
+procedure TTestGeometry.TestNormalized;
+begin
+  AssertPointsNear('length 1', Vec2(0.6, -0.8), Vec2(3, -4).Normalized, 1e-12);
+  AssertPointsNear('zero stays zero', Vec2(0, 0), Vec2(0, 0).Normalized, 0);
 end;
 
 procedure TTestGeometry.TestCirclesCrossTouchAndMiss;

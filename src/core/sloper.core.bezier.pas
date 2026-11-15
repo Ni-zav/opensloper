@@ -519,7 +519,7 @@ begin
   Dir := L.P2 - L.P1;
   if Dir.Length < EPSILON then
     Exit;
-  Dir := Dir * (1 / Dir.Length);
+  Dir := Dir.Normalized;
   // Signed distances of the control points from the line; the curve's own
   // distance is the Bézier with these values, a cubic in t
   D0 := Cross(Dir, C.P0 - L.P1);

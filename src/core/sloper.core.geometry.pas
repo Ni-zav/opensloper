@@ -39,6 +39,8 @@ type
   TVec2 = record
     X, Y: double;
     function Length: double;
+    // The same direction with length 1; a zero vector stays zero
+    function Normalized: TVec2;
     class operator +(const A, B: TVec2): TVec2;
     class operator -(const A, B: TVec2): TVec2;
     class operator -(const A: TVec2): TVec2;
@@ -152,6 +154,17 @@ const
 function TVec2.Length: double;
 begin
   Result := Hypot(X, Y);
+end;
+
+function TVec2.Normalized: TVec2;
+var
+  Size: double;
+begin
+  Size := Length;
+  if Size = 0 then
+    Result := Self
+  else
+    Result := Self * (1 / Size);
 end;
 
 class operator TVec2.+(const A, B: TVec2): TVec2;

@@ -68,7 +68,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Sloper.Output.Tiling;
+  SysUtils, Math, Sloper.Core.Numeric, Sloper.Output.Tiling;
 
 const
   // The window's drag grid, so packed pieces can be lined up by hand
@@ -98,7 +98,6 @@ type
   end;
 
   TPackBoxArray = array of TPackBox;
-  TDoubleArray = array of double;
 
 // Longest side first, then file order, so ties always fall the same way
 function ComesFirst(const First, Second: TPackItem): boolean;

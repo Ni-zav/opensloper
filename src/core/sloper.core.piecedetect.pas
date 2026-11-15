@@ -45,7 +45,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Generics.Collections, Sloper.Core.EvalTypes, Sloper.Core.Draft, Sloper.Core.SeamAllowance;
+  SysUtils, Math, Generics.Collections, Sloper.Core.EvalTypes, Sloper.Core.Draft, Sloper.Core.Numeric, Sloper.Core.SeamAllowance;
 
 const
   // How far along an edge (in mm) its direction leaving a node is measured,

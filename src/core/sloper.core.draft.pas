@@ -2046,8 +2046,7 @@ begin
     Result := Segment.Curve.TangentAt(1)
   else
     Result := Segment.Curve.TangentAt(0);
-  if Result.Length > 0 then
-    Result := Result * (1 / Result.Length);
+  Result := Result.Normalized;
 end;
 
 function TOffsetEdge.Compute(Context: TEvalContext): TEvalState;
@@ -2312,7 +2311,7 @@ var
     Result := Edge.PointAtLength(Edge.Length) - Corner;
     if Distance(Edge.PointAtLength(0), Corner) > Result.Length then
       Result := Edge.PointAtLength(0) - Corner;
-    Result := Result * (1 / Result.Length);
+    Result := Result.Normalized;
   end;
 
 begin

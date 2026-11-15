@@ -27,7 +27,7 @@ interface
 
 uses
   SysUtils, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.SeamAllowance,
-  Sloper.Core.Materials;
+  Sloper.Core.Materials, Sloper.Core.Numeric;
 
 const
   // The formula field of the seam allowance, and its member in pattern files

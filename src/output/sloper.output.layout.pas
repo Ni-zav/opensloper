@@ -310,6 +310,9 @@ function NoteSpread(const Note: TSheetNote; const Values: TFieldValues): TRect2;
 function NoteLineLeft(const Note: TSheetNote; const Values: TFieldValues; const Line: string): double;
 // The layout's own notes, then the pattern notes printed with each piece
 function PrintedNotes(Layout: TLayout; const Shapes: TPlacedPieceArray): TSheetNoteArray;
+// A half piece with its mirror image across the fold, joined into one
+// outline; the half as it is when the two enclose nothing
+function WholeOutline(const Points: TVec2Array; const Fold: TLine2): TVec2Array;
 
 // What the publish app should open for a pattern: its layout, when there is
 // one beside it, otherwise the pattern itself
@@ -1248,7 +1251,6 @@ begin
   end;
 end;
 
-// A half piece with its mirror image across the fold, joined into one outline
 function WholeOutline(const Points: TVec2Array; const Fold: TLine2): TVec2Array;
 var
   Mirrored: TVec2Array;
@@ -1260,6 +1262,8 @@ begin
   for Index := 0 to High(Points) do
     Mirrored[Index] := MirrorPoint(Points[Index], Fold.P1, Fold.P2);
   Joined := Union(ClipperPaths(Points), ClipperPaths(Mirrored), frNonZero, OUTLINE_KEPT_DECIMALS);
+  if Length(Joined) = 0 then
+    Exit(Copy(Points));
   Best := 0;
   for Index := 1 to High(Joined) do
     if Abs(Area(Joined[Index])) > Abs(Area(Joined[Best])) then

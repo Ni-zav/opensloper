@@ -162,6 +162,7 @@ type
     procedure TestPlaceCopyAtFlipsEvenCopies;
     procedure TestPlaceGoneCopyRefused;
     procedure TestNewPiecesWrapAtTheRoll;
+    procedure TestWholeOutlineOfNothing;
     procedure TestRemovePlacementReturnsToUnplaced;
     procedure TestFailingPieceWaitsUnplaced;
     procedure TestExtraCopyWarns;
@@ -1915,6 +1916,18 @@ begin
   AssertEquals(6, Length(FLayout.Placements));
   for Shape in FLayout.PlacedPieces do
     AssertTrue('on the roll', Shape.Bounds.MaxX <= FLayout.UsableWidth + 1e-6);
+end;
+
+// A flat half encloses nothing; it is kept as it is
+procedure TTestLayout.TestWholeOutlineOfNothing;
+var
+  Flat: TVec2Array;
+  Fold: TLine2;
+begin
+  Flat := [Vec2(0, 0), Vec2(50, 0), Vec2(100, 0)];
+  Fold.P1 := Vec2(0, 0);
+  Fold.P2 := Vec2(0, 100);
+  AssertEquals('kept', 3, Length(WholeOutline(Flat, Fold)));
 end;
 
 // A tray item from before its pattern lost the piece places nothing

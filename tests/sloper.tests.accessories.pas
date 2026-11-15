@@ -102,6 +102,7 @@ type
     procedure TestAssignmentIsKept;
     procedure TestOtherRoleDetaches;
     procedure TestDeletingLineDetaches;
+    procedure TestDeletingLineAFormulaReadsRefused;
     procedure TestAttachNeedsMarkingRole;
     procedure TestAttachByHand;
     procedure TestOldPlacementBecomesRole;
@@ -1084,6 +1085,24 @@ begin
   AssertEquals(0, Length(Piece.Markings));
   AssertTrue(Piece.Message, Piece.State = esValid);
   AssertFalse('an outline edge is still in use', FPattern.Delete(Edges[0]));
+end;
+
+// A piece that also reads the line in a formula still uses it
+procedure TTestAccessories.TestDeletingLineAFormulaReadsRefused;
+var
+  Piece: TPieceObject;
+  First, Second: TLineObject;
+begin
+  Rectangle;
+  Piece := PieceAt(50, 50);
+  First := FPattern.AddLine(Pt('P', 20, 50), Pt('Q', 120, 50), erStitch);
+  Second := FPattern.AddLine(Pt('R', 20, 60), Pt('S', 120, 60), erConstruction);
+  AssertTrue(FPattern.LastError, FPattern.AddStitchMarking(Piece, Second.Key, First.DisplayName + '.length / 20', '1'));
+  FPattern.Evaluate;
+  AssertEquals(2, Length(Piece.Markings));
+  AssertFalse('read by a formula', FPattern.Delete(First));
+  AssertTrue('still there', FPattern.FindNode(First.Key) = First);
+  AssertEquals(2, Length(Piece.Markings));
 end;
 
 procedure TTestAccessories.TestAttachNeedsMarkingRole;

@@ -268,7 +268,7 @@ resourcestring
 implementation
 
 uses
-  Math, Sloper.Core.Bezier;
+  Math, Sloper.Core.Bezier, Sloper.Core.Formula;
 
 const
   // Share of the piece's span along its grain that the arrow covers
@@ -423,7 +423,13 @@ function TPieceObject.UsesOnlyAsMarking(const AKey: string): boolean;
 var
   InputKey: string;
   Reads, AsMarking, Index: integer;
+  Ref: TFormulaReference;
 begin
+  // A formula that reads it uses it too
+  for Index := 0 to FieldCount - 1 do
+    for Ref in Fields[Index].Formula.References do
+      if ReferenceKey(Ref) = AKey then
+        Exit(False);
   Reads := 0;
   for InputKey in InputKeys do
     if InputKey = AKey then

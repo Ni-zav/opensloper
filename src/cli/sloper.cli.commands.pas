@@ -295,7 +295,7 @@ end;
 function RunLayout(const PatternFile, MeasurementOption, SizeOption, OutputOption: string): integer;
 var
   Layout: TLayout;
-  Target, Err: string;
+  Target, Err, Measurements: string;
   Problem: TLayoutProblem;
 begin
   Target := OutputOption;
@@ -305,7 +305,11 @@ begin
   try
     Layout.FileName := Target;
     Layout.Name := ChangeFileExt(ExtractFileName(PatternFile), '');
-    Layout.AddSource(ExtractRelativePath(ExpandFileName(ExtractFilePath(Target)), ExpandFileName(PatternFile)), MeasurementOption, SizeOption);
+    // Both typed relative to here, and stored relative to the layout
+    Measurements := MeasurementOption;
+    if Measurements <> '' then
+      Measurements := Layout.StoredPath(Measurements);
+    Layout.AddSource(Layout.StoredPath(PatternFile), Measurements, SizeOption);
     Layout.LoadSources;
     Layout.PlaceNewPieces;
     Layout.UseDefaultTitle;

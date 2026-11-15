@@ -59,6 +59,7 @@ type
     procedure TestPack;
     procedure TestExportDraft;
     procedure TestExportDraftUpToUnknown;
+    procedure TestLayoutMeasurementsFromHere;
     procedure TestExportDraftUpToRepeatPoint;
     procedure TestExportDraftBadWidth;
     procedure TestMaterialsOfPattern;
@@ -275,6 +276,37 @@ begin
   AssertEquals(FErr, 0, Run(['export', Layout, '-o', Pdf]));
   AssertEquals(Format(rsWroteFile, [Pdf]), OutLines[0]);
   AssertEquals('a PDF', '%PDF', Copy(ReadWholeFile(Pdf), 1, 4));
+end;
+
+// -m is typed relative to here, and stored relative to the layout
+procedure TTestCLI.TestLayoutMeasurementsFromHere;
+var
+  Err, Here: string;
+  Layout: TLayout;
+begin
+  ForceDirectories(InFolder('work'));
+  CopyWholeFile(ConcatPaths([ExamplesFolder, 'skirt-block', 'skirt-block.sloper']), InFolder(ConcatPaths(['work', 'skirt-block.sloper'])));
+  CopyWholeFile(ConcatPaths([ExamplesFolder, 'skirt-block', 'skirt.slm']), InFolder(ConcatPaths(['work', 'sizes.slm'])));
+  Here := GetCurrentDir;
+  SetCurrentDir(FFolder);
+  try
+    AssertEquals(FErr, 0, Run(['layout', ConcatPaths(['work', 'skirt-block.sloper']), '-m', ConcatPaths(['work', 'sizes.slm'])]));
+  finally
+    SetCurrentDir(Here);
+  end;
+  Layout := TLayout.Create;
+  try
+    AssertTrue(Err, Layout.LoadFromFile(InFolder(ConcatPaths(['work', 'skirt-block.slayout'])), Err));
+    AssertEquals('stored beside the layout', 'sizes.slm', Layout.Sources[0].MeasurementFile);
+    Layout.LoadSources;
+    AssertEquals('found', '', Layout.Sources[0].LoadError);
+  finally
+    FreeAndNil(Layout);
+    DeleteFile(InFolder(ConcatPaths(['work', 'skirt-block.sloper'])));
+    DeleteFile(InFolder(ConcatPaths(['work', 'sizes.slm'])));
+    DeleteFile(InFolder(ConcatPaths(['work', 'skirt-block.slayout'])));
+    RemoveDir(InFolder('work'));
+  end;
 end;
 
 procedure TTestCLI.TestExportNeedsLayout;

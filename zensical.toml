@@ -1,12 +1,12 @@
 [project]
-site_url = "https://billbsing.github.io/opensloper/"
+site_url = "https://opensloper.github.io/opensloper/"
 site_name = "OpenSloper"
 site_description = "Parametric sewing pattern drafting"
 site_author = "The OpenSloper authors"
 
 copyright = "Copyright &copy; 2026 The OpenSloper authors. Documentation licensed under CC BY-SA 4.0."
 
-repo_url = "https://github.com/billbsing/opensloper.git"
+repo_url = "https://github.com/opensloper/opensloper"
 site_dir = "release/site_docs"
 # repo_name = "user/repo"
 # edit_uri = "edit/main/docs/"

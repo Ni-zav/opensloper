@@ -82,6 +82,7 @@ type
     procedure DrawTitleBoxes;
     // The pages, the cover and the blocks, for Fit
     function ShownBounds(out Bounds: TRect2): boolean;
+    function HoldsTarget: boolean;
     procedure DragTo(X, Y: integer);
     procedure TogglePageAt(const At: TVec2);
     procedure DrawPage(const Page: TTilePage);
@@ -317,10 +318,26 @@ begin
     FOnSelectionChange(Self);
 end;
 
+// The piece or note a press or drag moves is still there: a reload of the
+// layout can take it
+function TPreviewCanvas.HoldsTarget: boolean;
+begin
+  if FSelectedNote >= 0 then
+    Result := FSelectedNote < Length(FDocument.Layout.Notes)
+  else
+    Result := (FSelected >= 0) and (FSelected < Length(FDocument.Layout.Placements));
+end;
+
 procedure TPreviewCanvas.DragTo(X, Y: integer);
 var
   At: TVec2;
 begin
+  if not HoldsTarget then
+  begin
+    FMode := pmIdle;
+    FDocument.CancelChange;
+    Exit;
+  end;
   At := FView.ToLayout(Vec2(X, Y));
   if FSelectedNote >= 0 then
   begin
@@ -489,7 +506,9 @@ begin
       Invalidate;
     end;
     pmPressed:
-      if Max(Abs(X - FPressPos.X), Abs(Y - FPressPos.Y)) >= DRAG_THRESHOLD then
+      if not HoldsTarget then
+        FMode := pmIdle
+      else if Max(Abs(X - FPressPos.X), Abs(Y - FPressPos.Y)) >= DRAG_THRESHOLD then
       begin
         if FSelectedNote >= 0 then
           FDocument.BeginChange(rsPreviewMoveNote)
@@ -551,8 +570,10 @@ begin
   case Key of
     VK_SPACE:
       FSpaceDown := True;
+    // Not while a piece is held: the drag would lose what it moves
     VK_DELETE, VK_BACK:
-      RemoveSelected;
+      if FMode = pmIdle then
+        RemoveSelected;
     VK_ESCAPE:
       if FMode = pmDragging then
       begin
@@ -567,7 +588,12 @@ begin
       else if FZoomArea then
         SetZoomArea(False)
       else
+      begin
+        // A press not yet a drag ends with the selection it was on
+        if FMode = pmPressed then
+          FMode := pmIdle;
         SetSelected(-1);
+      end;
     else
       Exit;
   end;

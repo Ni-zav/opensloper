@@ -820,7 +820,7 @@ SVG shows pieces where they were placed, for plotters, laser cutters and Inkscap
 
 ASTM D6673 is paywalled and listed as withdrawn, so the layers follow Valentina's GPL exporter, with 6 from its ASTM export; 8 and 13 come from CAD systems' published layer lists. The output reads cleanly in `ezdxf` but has not been tried on a real cutting system; that test should check the layers and file-level text.
 
-**Pack Pieces** (and `opensloper-cli pack`) packs every copy, tray included, as one undo step of ordinary placements. Bounding boxes, tallest first, each as low and left as it fits, as it stands or a quarter turn from it (on a material sheet only with `allowTurns`), flips kept, 10 mm apart; the same input gives the same result. Tiled tries each column count for the fewest pages; large format and material sheets pack to the width for the shortest length. It keeps the existing arrangement when that is already better, and says so.
+**Pack Pieces** (and `opensloper-cli pack`) packs every copy, tray included, as one undo step of ordinary placements. Bounding boxes, tallest first, each as low and left as it fits, as it stands or a quarter turn from it (on a material sheet only with `allowTurns`), flips kept, 10 mm apart; the same input gives the same result. Tiled tries each column count for the fewest pages; large format and material sheets pack to the width for the shortest length. Pieces that do not fit on the sheet (too wide either way round, or past a material's length) are set below the packed ones, so none lies on another, and the count is reported. It keeps the existing arrangement when that is already better, and says so.
 
 ### Cutting machines and material sheets
 

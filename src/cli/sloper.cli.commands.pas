@@ -39,7 +39,7 @@ resourcestring
   rsUpToRefused = 'Could not leave out %s: %s';
   rsPacked = 'Packed %d copies in %s';
   rsPackedPages = 'Packed %d copies on %d pages in %s';
-  rsPackLeftOut = 'Warning: %d pieces are too wide for the roll, so they stayed where they were';
+  rsPackLeftOut = 'Warning: %d pieces did not fit on the sheet, so they were set below it';
   rsMeasurementsUsage = 'Use: measurements list FILE, measurements set FILE KEY VALUE or measurements missing FILE PATTERN';
   rsMeasurementBadNumber = 'The value must be a number of millimetres, such as 820 or 41.5';
   rsMeasurementAdded = '@%s added at %s mm in %s';

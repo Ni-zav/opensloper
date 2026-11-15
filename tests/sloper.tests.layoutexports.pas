@@ -141,6 +141,7 @@ type
     procedure TestPackTurnsByQuarters;
     procedure TestPackRollWidth;
     procedure TestPackLeavesOutTooWide;
+    procedure TestPackSetsLeftOutBelow;
     procedure TestPackRefusesProjector;
     procedure TestPackClearsExcludedPages;
     procedure TestPackNothing;
@@ -1531,6 +1532,27 @@ begin
   Outcome := PackLayout(FLayout);
   AssertEquals('left out', 1, Outcome.LeftOut);
   AssertEquals('the small one', 1, Outcome.Count);
+end;
+
+// Pieces past the material's length go below it, clear of the packed ones
+procedure TTestLayoutExports.TestPackSetsLeftOutBelow;
+var
+  Outcome: TPackResult;
+  Shape: TPlacedPiece;
+  Below: integer;
+begin
+  AddPattern('a.sloper', [100, 100, 200, 200, 600], [100, 100, 200, 200, 100]);
+  UseMaterial(500, 250);
+  FLayout.PlaceNewPieces;
+  Outcome := PackLayout(FLayout);
+  AssertTrue(Outcome.Reason, Outcome.Done);
+  AssertEquals('left out', 3, Outcome.LeftOut);
+  AssertNoOverlap;
+  Below := 0;
+  for Shape in FLayout.PlacedPieces do
+    if Shape.Bounds.MaxY > 250 then
+      Inc(Below);
+  AssertEquals('below the material', 3, Below);
 end;
 
 procedure TTestLayoutExports.TestPackRefusesProjector;

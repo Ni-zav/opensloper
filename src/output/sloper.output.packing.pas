@@ -37,7 +37,7 @@ type
     Done: boolean;
     Reason: string;
     Count: integer;
-    // Pieces too wide for the sheet either way round, left where they were
+    // Pieces that did not fit on the sheet, set below the packed ones
     LeftOut: integer;
     // Pages for tiled output
     Pages: integer;
@@ -194,12 +194,28 @@ end;
 
 // Items that fit, in Spots; returns how many did not. Depth is how far down
 // pieces can go, and Turns says whether a quarter turn may be tried.
+// The box a piece takes at its spot
+function SpotBox(const Spot: TPackSpot; const Item: TPackItem): TPackBox;
+begin
+  Result.MinX := Spot.X;
+  Result.MinY := Spot.Y;
+  if Spot.Turned then
+  begin
+    Result.MaxX := Spot.X + Item.Height;
+    Result.MaxY := Spot.Y + Item.Width;
+  end
+  else
+  begin
+    Result.MaxX := Spot.X + Item.Width;
+    Result.MaxY := Spot.Y + Item.Height;
+  end;
+end;
+
 function PackInto(const Items: TPackItemArray; Limit: double; out Spots: TPackSpotArray; Depth: double = Infinity; Turns: boolean = True;
   const Start: TPackBoxArray = nil): integer;
 var
   Item: TPackItem;
   Boxes: TPackBoxArray;
-  Box: TPackBox;
   Xs, Ys: TDoubleArray;
   Best: TPackSpot;
   BestBottom: double;
@@ -224,19 +240,57 @@ begin
       Continue;
     end;
     Insert(Best, Spots, Length(Spots));
-    Box.MinX := Best.X;
-    Box.MinY := Best.Y;
-    if Best.Turned then
-    begin
-      Box.MaxX := Best.X + Item.Height;
-      Box.MaxY := Best.Y + Item.Width;
-    end
-    else
-    begin
-      Box.MaxX := Best.X + Item.Width;
-      Box.MaxY := Best.Y + Item.Height;
-    end;
-    Insert(Box, Boxes, Length(Boxes));
+    Insert(SpotBox(Best, Item), Boxes, Length(Boxes));
+  end;
+end;
+
+// Sets the pieces PackInto left out below the packed ones, so none lies on
+// another: packed again with no depth when they fit across, else one under
+// another at the left
+procedure SetLeftOutBelow(const Items: TPackItemArray; Limit: double; var Spots: TPackSpotArray; Turns: boolean);
+var
+  Item: TPackItem;
+  Spot: TPackSpot;
+  Boxes: TPackBoxArray;
+  Rest: TPackItemArray;
+  More: TPackSpotArray;
+  Placed: boolean;
+  Bottom: double;
+begin
+  Boxes := nil;
+  Rest := nil;
+  for Item in Items do
+  begin
+    Placed := False;
+    for Spot in Spots do
+      if Spot.Placement = Item.Placement then
+      begin
+        Insert(SpotBox(Spot, Item), Boxes, Length(Boxes));
+        Placed := True;
+      end;
+    if not Placed then
+      Insert(Item, Rest, Length(Rest));
+  end;
+  PackInto(Rest, Limit, More, Infinity, Turns, Boxes);
+  Spots := Concat(Spots, More);
+  Bottom := 0;
+  for Item in Items do
+    for Spot in Spots do
+      if Spot.Placement = Item.Placement then
+        Bottom := Max(Bottom, SpotBox(Spot, Item).MaxY + PACK_GAP);
+  // Too wide for the sheet either way round
+  for Item in Rest do
+  begin
+    Placed := False;
+    for Spot in More do
+      Placed := Placed or (Spot.Placement = Item.Placement);
+    if Placed then
+      Continue;
+    Spot := Default(TPackSpot);
+    Spot.Placement := Item.Placement;
+    Spot.Y := Ceil(Bottom / PACK_GRID) * PACK_GRID;
+    Insert(Spot, Spots, Length(Spots));
+    Bottom := Spot.Y + Item.Height + PACK_GAP;
   end;
 end;
 
@@ -347,7 +401,7 @@ var
   Before: TPlacementArray;
   PagesBefore: integer;
   LengthBefore: double;
-  CanKeep: boolean;
+  CanKeep, Turns: boolean;
 begin
   Result := Default(TPackResult);
   if Layout.Output.Kind = okProjector then
@@ -375,7 +429,12 @@ begin
   if Layout.Output.Kind = okTiled then
     Spots := BestTiledSpots(Layout, Items)
   else
-    Result.LeftOut := PackInto(Items, Layout.UsableWidth, Spots, SheetDepth(Layout), (Layout.Output.Kind <> okMaterial) or Layout.Output.AllowTurns);
+  begin
+    Turns := (Layout.Output.Kind <> okMaterial) or Layout.Output.AllowTurns;
+    Result.LeftOut := PackInto(Items, Layout.UsableWidth, Spots, SheetDepth(Layout), Turns);
+    if Result.LeftOut > 0 then
+      SetLeftOutBelow(Items, Layout.UsableWidth, Spots, Turns);
+  end;
   ApplySpots(Layout, Spots);
   Result.Pages := PagesInUse(Layout);
   if CanKeep and LessThan(PagesBefore, LengthBefore, Result.Pages, SheetLength(Layout)) then
@@ -388,7 +447,7 @@ begin
   end;
   Layout.Output.ExcludedPages := nil;
   Result.Done := True;
-  Result.Count := Length(Spots);
+  Result.Count := Length(Spots) - Result.LeftOut;
 end;
 
 function PackBoxes(const Sizes: TVec2Array; Limit, Depth: double; Turns: boolean; const Placed: array of TRect2): TBoxSpotArray;

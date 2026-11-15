@@ -316,7 +316,7 @@ resourcestring
   rsPackChange = 'Pack pieces';
   rsPackedPages = 'Packed %d copies on %d pages';
   rsPacked = 'Packed %d copies';
-  rsPackLeftOut = '%s; %d too wide for the roll stayed where they were';
+  rsPackLeftOut = '%s; %d did not fit on the sheet and were set below it';
   rsChangeSettings = 'Change paper';
   rsPlaceChange = 'Place new pieces';
   rsPlaceOne = 'Place piece';

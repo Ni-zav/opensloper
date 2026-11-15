@@ -336,7 +336,7 @@ var
   Outcome: TPackResult;
   Err: string;
 begin
-  if ExtractFileExt(LayoutFile) <> LAYOUT_EXTENSION then
+  if not SameText(ExtractFileExt(LayoutFile), LAYOUT_EXTENSION) then
   begin
     WriteLn(CliErr^, Format(rsExportNeedsLayout, [LAYOUT_EXTENSION]));
     Exit(EXIT_FAILURE);
@@ -392,7 +392,7 @@ begin
     Exit(EXIT_FAILURE);
   Layout := TLayout.Create;
   try
-    if ExtractFileExt(FileName) = LAYOUT_EXTENSION then
+    if SameText(ExtractFileExt(FileName), LAYOUT_EXTENSION) then
     begin
       if not Layout.LoadFromFile(FileName, Err) then
       begin
@@ -475,7 +475,7 @@ var
   Problem: TLayoutProblem;
   Chosen: TExportFormat;
 begin
-  if ExtractFileExt(LayoutFile) <> LAYOUT_EXTENSION then
+  if not SameText(ExtractFileExt(LayoutFile), LAYOUT_EXTENSION) then
   begin
     WriteLn(CliErr^, Format(rsExportNeedsLayout, [LAYOUT_EXTENSION]));
     Exit(EXIT_FAILURE);

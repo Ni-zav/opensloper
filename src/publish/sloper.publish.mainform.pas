@@ -1519,7 +1519,7 @@ var
   Reason: string;
 begin
   // A pattern starts a new layout, which is remembered once it is saved
-  if ExtractFileExt(Path) = PATTERN_EXTENSION then
+  if SameText(ExtractFileExt(Path), PATTERN_EXTENSION) then
     FDocument.NewForPattern(Path)
   else if FDocument.Open(Path, Reason) then
     FRecent.Remember(Path)

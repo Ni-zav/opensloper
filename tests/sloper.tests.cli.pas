@@ -57,6 +57,7 @@ type
     procedure TestExportNeedsLayout;
     procedure TestExportBadFormat;
     procedure TestPack;
+    procedure TestLayoutExtensionAnyCase;
     procedure TestExportDraft;
     procedure TestExportDraftUpToUnknown;
     procedure TestLayoutMeasurementsFromHere;
@@ -353,6 +354,17 @@ begin
   AssertEquals(FErr, 0, Run(['pack', Layout]));
   AssertTrue(FOut, FOut.StartsWith('Packed '));
   AssertTrue(FOut, FOut.Trim.EndsWith(Layout));
+end;
+
+// Windows and macOS keep a file's name as typed, .SLAYOUT included
+procedure TTestCLI.TestLayoutExtensionAnyCase;
+var
+  Layout: string;
+begin
+  Layout := InFolder('Tote.SLAYOUT');
+  AssertEquals(FErr, 0, Run(['layout', SizedToteBag(150, 140), '-o', Layout]));
+  AssertEquals(FErr, 0, Run(['pack', Layout]));
+  AssertEquals(FErr, 0, Run(['export', Layout, '-o', InFolder('tote.pdf')]));
 end;
 
 procedure TTestCLI.TestExportDraft;

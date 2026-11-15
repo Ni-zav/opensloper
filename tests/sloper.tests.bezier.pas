@@ -54,6 +54,9 @@ type
     procedure TestIntersectCurvesNoCrossing;
     procedure TestIntersectCircle;
     procedure TestIntersectCircleOneCrossing;
+    // Crossings closer than the flattening, and a touch, are found
+    procedure TestIntersectCircleCloseCrossings;
+    procedure TestIntersectCurvesCloseCrossings;
   end;
 
 implementation
@@ -354,6 +357,66 @@ begin
   Hits := IntersectBezierCircle(Parabola, Vec2(0, 0), 60);
   AssertEquals('count', 1, Length(Hits));
   AssertPointsNear('crossing', Vec2(37.47115810813606, 46.8605624169735), Hits[0].Point);
+end;
+
+// An arch, and at its parameter 0.42, away from where it is flattened, the
+// unit tangent and the unit normal towards its hollow side
+function ArchAndFrame(out Touch, Along, Hollow: TVec2): TCubicBezier;
+var
+  Bend: TVec2;
+begin
+  Result := CubicBezier(Vec2(0, 0), Vec2(33, -30), Vec2(66, -30), Vec2(100, 0));
+  Touch := Result.PointAt(0.42);
+  Along := Result.DerivativeAt(0.42);
+  Along := Along * (1 / Along.Length);
+  Bend := Result.SecondDerivativeAt(0.42);
+  Hollow := Bend - Along * Dot(Bend, Along);
+  Hollow := Hollow * (1 / Hollow.Length);
+end;
+
+procedure TTestBezier.TestIntersectCircleCloseCrossings;
+const
+  RADIUS = 1500;
+var
+  Arch: TCubicBezier;
+  Touch, Along, Hollow: TVec2;
+  Hits: TIntersectionArray;
+begin
+  // A circle much flatter than the arch, touching it from the hollow side,
+  // holds the arch inside it but for the touch
+  Arch := ArchAndFrame(Touch, Along, Hollow);
+  Hits := IntersectBezierCircle(Arch, Touch + Hollow * RADIUS, RADIUS);
+  AssertEquals('a touch', 1, Length(Hits));
+  AssertPointsNear('where', Touch, Hits[0].Point, 1e-4);
+  // 0.001 mm smaller, it crosses twice, under a millimetre apart
+  Hits := IntersectBezierCircle(Arch, Touch + Hollow * RADIUS, RADIUS - 0.001);
+  AssertEquals('two crossings', 2, Length(Hits));
+  AssertTrue('either side of the touch', (Hits[0].T1 < 0.42) and (Hits[1].T1 > 0.42));
+  AssertEquals('on the circle', RADIUS - 0.001, Distance(Hits[0].Point, Touch + Hollow * RADIUS), 1e-6);
+  AssertEquals('on the circle', RADIUS - 0.001, Distance(Hits[1].Point, Touch + Hollow * RADIUS), 1e-6);
+end;
+
+procedure TTestBezier.TestIntersectCurvesCloseCrossings;
+var
+  Arch, Straight: TCubicBezier;
+  Touch, Along, Hollow, Start, Finish: TVec2;
+  Hits: TIntersectionArray;
+begin
+  Arch := ArchAndFrame(Touch, Along, Hollow);
+  // A straight curve along the tangent touches the arch once
+  Start := Touch - Along * 50;
+  Finish := Touch + Along * 50;
+  Straight := CubicBezier(Start, Start + (Finish - Start) * (1 / 3), Start + (Finish - Start) * (2 / 3), Finish);
+  Hits := IntersectBeziers(Arch, Straight);
+  AssertEquals('a touch', 1, Length(Hits));
+  AssertPointsNear('where', Touch, Hits[0].Point, 1e-4);
+  // Moved 0.001 mm into the hollow, it crosses twice, close together
+  Straight := Straight.Translated(Hollow * 0.001);
+  Hits := IntersectBeziers(Arch, Straight);
+  AssertEquals('two crossings', 2, Length(Hits));
+  AssertTrue('either side of the touch', (Hits[0].T1 < 0.42) and (Hits[1].T1 > 0.42));
+  // Two curves on top of each other share a stretch, not crossings
+  AssertEquals('the same curve', 0, Length(IntersectBeziers(Arch, Arch)));
 end;
 
 initialization

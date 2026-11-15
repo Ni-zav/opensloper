@@ -66,6 +66,11 @@ type
     function Flatten(Tolerance: double): TCurveSampleArray;
     // Parameter of the nearest point on the curve to P
     function ClosestParam(const P: TVec2): double;
+    // Where (B(t) - P) . B'(t) changes sign or is zero, in order: where the
+    // distance from P turns, nearest and farthest. Two turns closer than a
+    // sixty-fourth of the curve may be missed, which only a curve grazing
+    // the circle round P has.
+    function SquareParams(const P: TVec2): TDoubleArray;
     // Every parameter where the line from P is square to the curve, nearest
     // or not, in order; the ends only where the curve is square there too
     function PerpendicularParams(const P: TVec2): TDoubleArray;
@@ -313,11 +318,9 @@ begin
   SetLength(Result, Count);
 end;
 
-function TCubicBezier.PerpendicularParams(const P: TVec2): TDoubleArray;
+function TCubicBezier.SquareParams(const P: TVec2): TDoubleArray;
 const
-  // (B(t) - P) . B'(t) has degree five, so at most five roots; this many
-  // samples part them unless two are almost one, where the curve only
-  // grazes the circle round P, and ClosestParam finds that one
+  // (B(t) - P) . B'(t) has degree five, so at most five roots
   SAMPLES = 64;
   BISECTIONS = 60;
 var
@@ -329,8 +332,40 @@ var
     Result := Dot(PointAt(T) - P, DerivativeAt(T));
   end;
 
-  // Kept in order, once, and only where it is square to within
-  // DEFAULT_TOLERANCE, which a sign change at a cusp need not be
+begin
+  Result := nil;
+  FLo := Squareness(0);
+  if FLo = 0 then
+    Insert(0.0, Result, System.Length(Result));
+  for Index := 1 to SAMPLES do
+  begin
+    Lo := (Index - 1) / SAMPLES;
+    Hi := Index / SAMPLES;
+    FHi := Squareness(Hi);
+    if FHi = 0 then
+      Insert(Hi, Result, System.Length(Result))
+    else if (FLo <> 0) and ((FLo < 0) <> (FHi < 0)) then
+    begin
+      for Step := 1 to BISECTIONS do
+      begin
+        Mid := (Lo + Hi) / 2;
+        if (Squareness(Mid) < 0) = (FLo < 0) then
+          Lo := Mid
+        else
+          Hi := Mid;
+      end;
+      Insert((Lo + Hi) / 2, Result, System.Length(Result));
+    end;
+    FLo := FHi;
+  end;
+end;
+
+function TCubicBezier.PerpendicularParams(const P: TVec2): TDoubleArray;
+var
+  T: double;
+
+// Kept in order, once, and only where it is square to within
+// DEFAULT_TOLERANCE, which a sign change at a cusp need not be
   procedure Add(T: double);
   var
     Foot, Tangent: TVec2;
@@ -351,30 +386,9 @@ var
 
 begin
   Result := nil;
-  FLo := Squareness(0);
-  if FLo = 0 then
-    Add(0);
-  for Index := 1 to SAMPLES do
-  begin
-    Lo := (Index - 1) / SAMPLES;
-    Hi := Index / SAMPLES;
-    FHi := Squareness(Hi);
-    if FHi = 0 then
-      Add(Hi)
-    else if (FLo <> 0) and ((FLo < 0) <> (FHi < 0)) then
-    begin
-      for Step := 1 to BISECTIONS do
-      begin
-        Mid := (Lo + Hi) / 2;
-        if (Squareness(Mid) < 0) = (FLo < 0) then
-          Lo := Mid
-        else
-          Hi := Mid;
-      end;
-      Add((Lo + Hi) / 2);
-    end;
-    FLo := FHi;
-  end;
+  for T in SquareParams(P) do
+    Add(T);
+  // A grazing foot, two turns too close for the samples to part
   Add(ClosestParam(P));
 end;
 
@@ -554,61 +568,234 @@ begin
   T := EnsureRange(T, 0, 1);
 end;
 
-function IntersectBeziers(const A, B: TCubicBezier): TIntersectionArray;
+// Newton towards the nearest approach of A at S and B at T, where the
+// gradient of half the squared distance between them is zero
+procedure RefineClosestApproach(const A, B: TCubicBezier; var S, T: double);
 var
-  SA, SB: TCurveSampleArray;
-  I, J: integer;
+  I: integer;
+  F, DA, DB: TVec2;
+  G1, G2, H11, H12, H22, Det, DS, DT: double;
+begin
+  for I := 1 to NEWTON_ITERATIONS do
+  begin
+    F := A.PointAt(S) - B.PointAt(T);
+    DA := A.DerivativeAt(S);
+    DB := B.DerivativeAt(T);
+    G1 := Dot(F, DA);
+    G2 := -Dot(F, DB);
+    H11 := Dot(DA, DA) + Dot(F, A.SecondDerivativeAt(S));
+    H12 := -Dot(DA, DB);
+    H22 := Dot(DB, DB) - Dot(F, B.SecondDerivativeAt(T));
+    Det := H11 * H22 - H12 * H12;
+    if Abs(Det) < EPSILON then
+      Break;
+    DS := (G1 * H22 - G2 * H12) / Det;
+    DT := (G2 * H11 - G1 * H12) / Det;
+    S := EnsureRange(S - DS, 0, 1);
+    T := EnsureRange(T - DT, 0, 1);
+    if (Abs(DS) < 1e-12) and (Abs(DT) < 1e-12) then
+      Break;
+  end;
+end;
+
+// How far a curve can stray from its chord: no further than its handles do
+function ChordBend(const C: TCubicBezier): double;
+var
+  Chord: TLine2;
+begin
+  Chord := Line2(C.P0, C.P3);
+  Result := Max(Distance(C.P1, Chord.ClosestPoint(C.P1, False)), Distance(C.P2, Chord.ClosestPoint(C.P2, False)));
+end;
+
+// The least distance between two segments, and where on each it is
+function ChordGap(const First, Second: TLine2; out OnFirst, OnSecond: double): double;
+var
   Hit: TIntersection;
-  S, T: double;
+  Candidate: double;
+begin
+  if IntersectLines(First, Second, False, False, Hit) then
+  begin
+    OnFirst := EnsureRange(Hit.T1, 0, 1);
+    OnSecond := EnsureRange(Hit.T2, 0, 1);
+    Exit(0);
+  end;
+  OnFirst := 0;
+  OnSecond := EnsureRange(Second.ParamOf(First.P1), 0, 1);
+  Result := Distance(First.P1, Second.PointAt(OnSecond));
+  Candidate := Distance(First.P2, Second.ClosestPoint(First.P2, False));
+  if Candidate < Result then
+  begin
+    Result := Candidate;
+    OnFirst := 1;
+    OnSecond := EnsureRange(Second.ParamOf(First.P2), 0, 1);
+  end;
+  Candidate := Distance(Second.P1, First.ClosestPoint(Second.P1, False));
+  if Candidate < Result then
+  begin
+    Result := Candidate;
+    OnFirst := EnsureRange(First.ParamOf(Second.P1), 0, 1);
+    OnSecond := 0;
+  end;
+  Candidate := Distance(Second.P2, First.ClosestPoint(Second.P2, False));
+  if Candidate < Result then
+  begin
+    Result := Candidate;
+    OnFirst := EnsureRange(First.ParamOf(Second.P2), 0, 1);
+    OnSecond := 1;
+  end;
+end;
+
+function IntersectBeziers(const A, B: TCubicBezier): TIntersectionArray;
+const
+  // Pieces this close to their chords are taken as straight
+  FLAT = 1e-4;
+  MAX_DEPTH = 40;
+  // Pairs of pieces looked at before the curves are taken to overlap
+  WORK_LIMIT = 20000;
+  // Two cubic curves that do not share a stretch cross at most 9 times
+  MAX_CROSSINGS = 9;
+var
+  Work: integer;
+  Overlap: boolean;
+
+  procedure Add(S, T: double);
+  begin
+    if Distance(A.PointAt(S), B.PointAt(T)) <= DEFAULT_TOLERANCE / 10 then
+      AddIntersection(Result, A.PointAt(S), S, T);
+  end;
+
+  // Pieces PA of A from A0 to A1 and PB of B from B0 to B1, halved while
+  // they are near enough to meet and not yet straight
+  procedure Visit(const PA: TCubicBezier; A0, A1: double; const PB: TCubicBezier; B0, B1: double; Depth: integer);
+  var
+    BendA, BendB, OnA, OnB, S, T: double;
+    FirstA, SecondA, FirstB, SecondB: TCubicBezier;
+    Crossed: boolean;
+  begin
+    if Overlap then
+      Exit;
+    Inc(Work);
+    if Work > WORK_LIMIT then
+    begin
+      Overlap := True;
+      Exit;
+    end;
+    BendA := ChordBend(PA);
+    BendB := ChordBend(PB);
+    if ChordGap(Line2(PA.P0, PA.P3), Line2(PB.P0, PB.P3), OnA, OnB) > BendA + BendB + DEFAULT_TOLERANCE / 10 then
+      Exit;
+    if ((BendA <= FLAT) and (BendB <= FLAT)) or (Depth >= MAX_DEPTH) then
+    begin
+      S := A0 + (A1 - A0) * OnA;
+      T := B0 + (B1 - B0) * OnB;
+      // A crossing refines on the curves; where they only touch, or cross
+      // at a slant too slight to solve, their nearest approach is the point
+      Crossed := RefineCurveCrossing(A, B, S, T);
+      if not Crossed then
+      begin
+        S := A0 + (A1 - A0) * OnA;
+        T := B0 + (B1 - B0) * OnB;
+        RefineClosestApproach(A, B, S, T);
+      end;
+      Add(S, T);
+      Exit;
+    end;
+    PA.Split(0.5, FirstA, SecondA);
+    PB.Split(0.5, FirstB, SecondB);
+    Visit(FirstA, A0, (A0 + A1) / 2, FirstB, B0, (B0 + B1) / 2, Depth + 1);
+    Visit(FirstA, A0, (A0 + A1) / 2, SecondB, (B0 + B1) / 2, B1, Depth + 1);
+    Visit(SecondA, (A0 + A1) / 2, A1, FirstB, B0, (B0 + B1) / 2, Depth + 1);
+    Visit(SecondA, (A0 + A1) / 2, A1, SecondB, (B0 + B1) / 2, B1, Depth + 1);
+  end;
+
+  // Where the curves only touch, they stay within tolerance for a short
+  // stretch, and pieces along it can each give a point of it: neighbours
+  // with the curves still together halfway between are one touch, kept
+  // where the curves are nearest. Two crossings have a gap between them.
+  procedure MergeTouches;
+  var
+    Index, Kept: integer;
+    MidS, MidT: double;
+  begin
+    Kept := 0;
+    for Index := 1 to High(Result) do
+    begin
+      MidS := (Result[Kept].T1 + Result[Index].T1) / 2;
+      MidT := (Result[Kept].T2 + Result[Index].T2) / 2;
+      if PointsNear(Result[Kept].Point, Result[Index].Point) and
+        (Distance(A.PointAt(MidS), B.PointAt(MidT)) <= DEFAULT_TOLERANCE / 10) then
+      begin
+        if Distance(A.PointAt(Result[Index].T1), B.PointAt(Result[Index].T2)) <
+          Distance(A.PointAt(Result[Kept].T1), B.PointAt(Result[Kept].T2)) then
+          Result[Kept] := Result[Index];
+      end
+      else
+      begin
+        Inc(Kept);
+        Result[Kept] := Result[Index];
+      end;
+    end;
+    if Length(Result) > 0 then
+      SetLength(Result, Kept + 1);
+  end;
+
 begin
   Result := nil;
-  // Find crossings of the two polylines, then refine each on the curves
-  SA := A.Flatten(COARSE_FLATNESS);
-  SB := B.Flatten(COARSE_FLATNESS);
-  for I := 1 to High(SA) do
-    for J := 1 to High(SB) do
-      if IntersectLines(Line2(SA[I - 1].Point, SA[I].Point), Line2(SB[J - 1].Point, SB[J].Point), False, False, Hit) then
-      begin
-        S := SA[I - 1].T + (SA[I].T - SA[I - 1].T) * EnsureRange(Hit.T1, 0, 1);
-        T := SB[J - 1].T + (SB[J].T - SB[J - 1].T) * EnsureRange(Hit.T2, 0, 1);
-        if RefineCurveCrossing(A, B, S, T) then
-          AddIntersection(Result, A.PointAt(S), S, T);
-      end;
+  Work := 0;
+  Overlap := False;
+  Visit(A, 0, 1, B, 0, 1, 0);
   MergeIntersections(Result);
+  MergeTouches;
+  // More than two cubics can cross, or too much to look at: they share a
+  // stretch, which has no crossing point to give
+  if Overlap or (Length(Result) > MAX_CROSSINGS) then
+    Result := nil;
 end;
 
 function IntersectBezierCircle(const C: TCubicBezier; const Centre: TVec2; Radius: double): TIntersectionArray;
+const
+  BISECTIONS = 60;
 var
-  Samples: TCurveSampleArray;
-  SegHits: TIntersectionArray;
-  I, J, K: integer;
-  T, G, DG: double;
-  Q, D1: TVec2;
+  Breaks: TDoubleArray;
+  Index, Step: integer;
+  Lo, Hi, Mid, GLo, GHi: double;
+
+// How far outside the circle the curve is at T, in mm
+  function Gap(T: double): double;
+  begin
+    Result := Distance(C.PointAt(T), Centre) - Radius;
+  end;
+
 begin
   Result := nil;
-  Samples := C.Flatten(COARSE_FLATNESS);
-  for I := 1 to High(Samples) do
+  // Between the turns of the curve's distance from the centre, the distance
+  // only rises or falls, so each stretch crosses the circle at most once,
+  // and a turn on the circle is a touch. Crossings closer together than any
+  // flattening are found as surely as those far apart.
+  Breaks := C.SquareParams(Centre);
+  Insert(0.0, Breaks, 0);
+  Insert(1.0, Breaks, System.Length(Breaks));
+  for Index := 0 to High(Breaks) do
+    if Abs(Gap(Breaks[Index])) <= DEFAULT_TOLERANCE / 10 then
+      AddIntersection(Result, C.PointAt(Breaks[Index]), Breaks[Index], 0);
+  for Index := 1 to High(Breaks) do
   begin
-    SegHits := IntersectLineCircle(Line2(Samples[I - 1].Point, Samples[I].Point), False, Centre, Radius);
-    for J := 0 to High(SegHits) do
+    Lo := Breaks[Index - 1];
+    Hi := Breaks[Index];
+    GLo := Gap(Lo);
+    GHi := Gap(Hi);
+    if (Abs(GLo) <= DEFAULT_TOLERANCE / 10) or (Abs(GHi) <= DEFAULT_TOLERANCE / 10) or ((GLo < 0) = (GHi < 0)) then
+      Continue;
+    for Step := 1 to BISECTIONS do
     begin
-      T := Samples[I - 1].T + (Samples[I].T - Samples[I - 1].T) * EnsureRange(SegHits[J].T1, 0, 1);
-      // Newton on |B(t) - centre|² - r² = 0
-      for K := 1 to NEWTON_ITERATIONS do
-      begin
-        Q := C.PointAt(T) - Centre;
-        D1 := C.DerivativeAt(T);
-        G := Dot(Q, Q) - Radius * Radius;
-        DG := 2 * Dot(Q, D1);
-        if Abs(DG) < EPSILON then
-          Break;
-        T := EnsureRange(T - G / DG, 0, 1);
-        if Abs(G / DG) < 1e-12 then
-          Break;
-      end;
-      if Abs(Distance(C.PointAt(T), Centre) - Radius) <= DEFAULT_TOLERANCE / 10 then
-        AddIntersection(Result, C.PointAt(T), T, 0);
+      Mid := (Lo + Hi) / 2;
+      if (Gap(Mid) < 0) = (GLo < 0) then
+        Lo := Mid
+      else
+        Hi := Mid;
     end;
+    Mid := (Lo + Hi) / 2;
+    AddIntersection(Result, C.PointAt(Mid), Mid, 0);
   end;
   MergeIntersections(Result);
 end;

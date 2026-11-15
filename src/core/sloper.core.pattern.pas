@@ -3643,16 +3643,18 @@ var
 
 begin
   Copies := CopiesOf(Transform);
+  // A piece that only marks a copy lets it go, as DeleteNode does
   for Item in Copies do
     for User in UsersOf(Item) do
-      if not IsCopy(User) then
+      if not IsCopy(User) and not ((User is TPieceObject) and TPieceObject(User).UsesOnlyAsMarking(Item.Key)) then
         Exit(SetError(Format(rsPatternInUse, [Item.DisplayName, User.DisplayName])));
   for User in UsersOf(Transform) do
     if not IsCopy(User) then
       Exit(SetError(Format(rsPatternInUse, [Transform.DisplayName, User.DisplayName])));
   // Edges first, since they read the points
   for Index := High(Copies) downto 0 do
-    DeleteNode(Copies[Index]);
+    if not DeleteNode(Copies[Index]) then
+      Exit(False);
   Result := DeleteNode(Transform);
 end;
 

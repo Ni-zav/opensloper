@@ -70,6 +70,7 @@ type
     procedure TestCopyCannotBeDeletedAlone;
     procedure TestDeletingTransformTakesCopies;
     procedure TestDeletingTransformInUseRefused;
+    procedure TestDeletingTransformTakesMarkedCopy;
     procedure TestCopyCannotBeDragged;
     procedure TestCopyCannotBeConverted;
     procedure TestRoundTrip;
@@ -517,6 +518,35 @@ begin
   AssertNotNull(FPattern.LastError, FPattern.AddOffsetPoint('N', FPattern.FindObject('A_r1').Key, omCartesian, '5', '0'));
   AssertFalse('N uses the copy', FPattern.Delete(Transform));
   AssertNotNull('copy stays', FPattern.FindObject('A_r1'));
+end;
+
+// A piece that only marks a copy lets it go, as with any marked point
+procedure TTestTransform.TestDeletingTransformTakesMarkedCopy;
+var
+  Path: TPiecePath;
+  Reason, Hole: string;
+  Piece: TPieceObject;
+  Transform: TTransformObject;
+begin
+  FPattern.AddLine(Pt('A', 0, 0).Key, Pt('B', 100, 0).Key, erOutline);
+  FPattern.AddLine(FPattern.FindObject('B').Key, Pt('C', 100, 100).Key, erOutline);
+  FPattern.AddLine(FPattern.FindObject('C').Key, Pt('D', 0, 100).Key, erOutline);
+  FPattern.AddLine(FPattern.FindObject('D').Key, FPattern.FindObject('A').Key, erOutline);
+  FPattern.Evaluate;
+  AssertTrue(Reason, DetectPiecePath(FPattern, Vec2(50, 50), Path, Reason));
+  Piece := FPattern.AddPiece('Square', Path, '10');
+  AssertNotNull(FPattern.LastError, Piece);
+  Hole := Pt('H', 30, 50).Key;
+  AssertTrue(FPattern.LastError, FPattern.SetMarker(Hole, pmHole, '4'));
+  FPattern.Evaluate;
+  Transform := Rotate([Hole], Pt('P', 50, 50).Key, '180');
+  FPattern.Evaluate;
+  AssertEquals('the copy is marked too', 2, Length(Piece.Markings));
+  AssertTrue(FPattern.LastError, FPattern.Delete(Transform));
+  AssertNull('copy gone', FPattern.FindObject('H_r1'));
+  FPattern.Evaluate;
+  AssertEquals('its marking taken off', 1, Length(Piece.Markings));
+  AssertTrue(Piece.Message, Piece.State = esValid);
 end;
 
 // The refusal says what the copy follows and where to change it

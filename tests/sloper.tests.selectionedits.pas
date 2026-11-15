@@ -54,6 +54,7 @@ type
     procedure TestDeleteClearsSelection;
     procedure TestDeleteRefusedWhenUsed;
     procedure TestDeleteNothingSelected;
+    procedure TestDeleteRepeatPointTakesRepeat;
     procedure TestCopyLeavesOutPiece;
     procedure TestCopyNothingCopyable;
     procedure TestCopyNothingSelected;
@@ -213,6 +214,23 @@ begin
   AssertNull('deleted', Pattern.FindNode(FE));
   AssertTrue(Edit.Reselect);
   AssertEquals('nothing selected', 0, Length(Edit.Selection));
+  AssertOneStep('delete', Edit, rsSelectionDelete);
+end;
+
+// A repeat is picked by its points, so deleting one of them deletes it
+procedure TTestSelectionEdits.TestDeleteRepeatPointTakesRepeat;
+var
+  Edit: TSelectionEdit;
+  Added: TRepeatObject;
+  Key: string;
+begin
+  Added := Pattern.AddRepeatBetween('R', FA, FC, '3', False);
+  AssertNotNull(Pattern.LastError, Added);
+  Key := Added.Key;
+  Pattern.Evaluate;
+  Edit := DeleteSelection(FDocument, [Added.Item(2).Key], rsSelectionDelete);
+  AssertTrue(Edit.Message, Edit.Done);
+  AssertNull('the repeat deleted', Pattern.FindNode(Key));
   AssertOneStep('delete', Edit, rsSelectionDelete);
 end;
 

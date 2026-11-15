@@ -267,16 +267,28 @@ function DeleteSelection(Document: TPatternDocument; const Selection: TStringArr
 var
   Index: integer;
   Node: TEvalNode;
+  Wanted: TStringArray;
+  Key: string;
 begin
   Result := Default(TSelectionEdit);
   if Length(Selection) = 0 then
     Exit;
+  // A repeat is picked by its points, which are not in the object list
+  Wanted := nil;
+  for Key in Selection do
+  begin
+    Node := Document.Pattern.FindNode(Key);
+    if Node is TRepeatPoint then
+      Insert(TRepeatPoint(Node).Source.Key, Wanted, Length(Wanted))
+    else
+      Insert(Key, Wanted, Length(Wanted));
+  end;
   Document.BeginChange(Description);
   // Later objects can use earlier ones, so delete from the end of the pattern
   for Index := Document.Pattern.ObjectCount - 1 downto 0 do
   begin
     Node := Document.Pattern.Objects[Index];
-    if (IndexStr(Node.Key, Selection) >= 0) and not Document.Pattern.Delete(Node) then
+    if (IndexStr(Node.Key, Wanted) >= 0) and not Document.Pattern.Delete(Node) then
     begin
       Result.Message := Document.Pattern.LastError;
       Document.CancelChange;

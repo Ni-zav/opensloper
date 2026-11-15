@@ -68,6 +68,7 @@ type
     procedure TestNoHatchOnProjector;
     procedure TestNoMaterialStaysUnfilled;
     procedure TestCutListField;
+    procedure TestMaterialsFieldListsEachOnce;
     procedure TestCaptionNamesMaterial;
     procedure TestMissingOutputMembersKeepDefaults;
     procedure TestOldCalibrationIsIgnored;
@@ -650,6 +651,19 @@ begin
   FLayout.Title.Fields := nil;
   Insert(FIELD_CUT_LIST, FLayout.Title.Fields, 0);
   AssertEquals(Format(rsTitleCutList, [Values.CutList]), FLayout.TitleLines(Values)[0]);
+end;
+
+// Each material once, across patterns that share only some of them
+procedure TTestLayout.TestMaterialsFieldListsEachOnce;
+begin
+  WritePattern;
+  FLayout.AddSource('front.sloper', '', '');
+  FLayout.AddSource('front.sloper', '', '');
+  FLayout.LoadSources;
+  AssertNotNull(FLayout.Sources[0].Pattern.AddMaterial('Lining'));
+  AssertNotNull(FLayout.Sources[1].Pattern.AddMaterial('Contrast'));
+  AssertNotNull(FLayout.Sources[1].Pattern.AddMaterial('Lin'));
+  AssertEquals('Main, Lining, Contrast, Lin', FLayout.FieldValues('', '').Materials);
 end;
 
 procedure TTestLayout.TestCaptionNamesMaterial;

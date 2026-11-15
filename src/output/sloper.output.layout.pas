@@ -560,7 +560,23 @@ function TLayout.FieldValues(const APage, APages: string): TFieldValues;
 var
   Source: TLayoutSource;
   SetName: string;
+  MeasurementNames, MaterialNames: TStringArray;
+  Index: integer;
+
+// Each name once, compared whole, so Jo is not taken for Joanne
+  procedure AddOnce(const AName: string; var Seen: TStringArray; var List: string);
+  begin
+    if (AName = '') or (IndexStr(AName, Seen) >= 0) then
+      Exit;
+    Insert(AName, Seen, Length(Seen));
+    if List <> '' then
+      List := List + ', ';
+    List := List + AName;
+  end;
+
 begin
+  MeasurementNames := nil;
+  MaterialNames := nil;
   Result := Default(TFieldValues);
   Result.LayoutName := Name;
   Result.Page := APage;
@@ -580,23 +596,14 @@ begin
       SetName := ChangeFileExt(ExtractFileName(Source.MeasurementPath), '');
     if Assigned(Source.Measurements) and (Source.Measurements.SizeName <> '') then
       SetName := Format(rsLayoutSetAndSize, [SetName, Source.Measurements.SizeName]);
-    if (SetName <> '') and (Pos(SetName, Result.MeasurementsName) = 0) then
-    begin
-      if Result.MeasurementsName <> '' then
-        Result.MeasurementsName := Result.MeasurementsName + ', ';
-      Result.MeasurementsName := Result.MeasurementsName + SetName;
-    end;
+    AddOnce(SetName, MeasurementNames, Result.MeasurementsName);
     if not Assigned(Source.Pattern) then
       Continue;
     if (Result.CutList <> '') and (Source.Pattern.CutList <> '') then
       Result.CutList := Result.CutList + ' · ';
     Result.CutList := Result.CutList + Source.Pattern.CutList;
-    if Pos(Source.Pattern.MaterialNames, Result.Materials) = 0 then
-    begin
-      if Result.Materials <> '' then
-        Result.Materials := Result.Materials + ', ';
-      Result.Materials := Result.Materials + Source.Pattern.MaterialNames;
-    end;
+    for Index := 0 to Source.Pattern.MaterialCount - 1 do
+      AddOnce(Source.Pattern.Materials[Index].Name, MaterialNames, Result.Materials);
   end;
   Result.MaterialNeeded := MaterialNeeded;
 end;

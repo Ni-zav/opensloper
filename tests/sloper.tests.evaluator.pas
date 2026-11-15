@@ -73,6 +73,9 @@ type
     procedure TestMissingInputIsAnError;
     procedure TestCycleIsAnError;
     procedure TestLongCycleIsQuick;
+    // A node reading thousands, and one read by thousands, are built in
+    // linear time, each dependency once however often it is named
+    procedure TestManyDependenciesAreQuick;
     procedure TestReaches;
     procedure TestReachesLongChain;
     procedure TestRerunClearsOldStates;
@@ -118,6 +121,8 @@ constructor TSumContext.Create;
 begin
   Nodes := TList.Create;
   Index := TStringList.Create;
+  // Plain comparison: the locale's allocates, which is slow on long lists
+  Index.UseLocale := False;
   Index.Sorted := True;
   Index.CaseSensitive := True;
 end;
@@ -349,6 +354,32 @@ begin
   AssertEquals(Format(rsEvalBlocked, ['Node ' + RingKey(0)]), N('t').Message);
   AssertTrue('u reads t', N('u').State = esBlocked);
   AssertEquals(Format(rsEvalBlocked, ['Node t']), N('u').Message);
+end;
+
+procedure TTestEvaluator.TestManyDependenciesAreQuick;
+const
+  Count = 50000;
+var
+  I: integer;
+  Inputs: array of string;
+  Started: QWord;
+begin
+  Node('hub', 1, []);
+  Inputs := nil;
+  SetLength(Inputs, 2 * Count);
+  for I := 0 to Count - 1 do
+  begin
+    Node(Format('n%.6d', [I]), 0, ['hub']);
+    Inputs[I] := Format('n%.6d', [I]);
+    Inputs[Count + I] := Inputs[I];
+  end;
+  Node('big', 0, Inputs);
+  Started := GetTickCount64;
+  RunGraph;
+  AssertTrue('seconds, not minutes', GetTickCount64 - Started < 5000);
+  AssertEquals('each once', Count, Length(N('big').DependencyKeys));
+  AssertTrue(N('big').State = esValid);
+  AssertEquals('both times it names each', 2 * Count, N('big').Value, 0.001);
 end;
 
 procedure TTestEvaluator.TestReaches;

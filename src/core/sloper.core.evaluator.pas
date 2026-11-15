@@ -149,23 +149,6 @@ begin
     Result := Ref.Id;
 end;
 
-procedure AddUnique(var Keys: TStringArray; const Key: string);
-var
-  Existing: string;
-begin
-  for Existing in Keys do
-    if Existing = Key then
-      Exit;
-  SetLength(Keys, Length(Keys) + 1);
-  Keys[High(Keys)] := Key;
-end;
-
-procedure AddNode(var Nodes: TEvalNodeArray; Node: TEvalNode);
-begin
-  SetLength(Nodes, Length(Nodes) + 1);
-  Nodes[High(Nodes)] := Node;
-end;
-
 { TEvalNode }
 
 constructor TEvalNode.Create(const AKey: string);
@@ -301,18 +284,60 @@ begin
   Result := nil;
 end;
 
+// Most nodes name a few keys, which a scan checks quickest; past this many a
+// set does, so a node naming thousands takes linear time
+const
+  SCANNED_KEYS = 16;
+
 function TEvalNode.DependencyKeys: TStringArray;
 var
-  InputKey: string;
+  Inputs: TStringArray;
   Entry: TFormulaField;
   Ref: TFormulaReference;
+  Total, Count: integer;
+  Seen: specialize TDictionary<string, boolean>;
+
+  procedure Add(const NewKey: string);
+  var
+    Index: integer;
+  begin
+    if Assigned(Seen) then
+    begin
+      if Seen.ContainsKey(NewKey) then
+        Exit;
+      Seen.Add(NewKey, True);
+    end
+    else
+      for Index := 0 to Count - 1 do
+        if Result[Index] = NewKey then
+          Exit;
+    Result[Count] := NewKey;
+    Inc(Count);
+  end;
+
+var
+  InputKey: string;
 begin
-  Result := nil;
-  for InputKey in InputKeys do
-    AddUnique(Result, InputKey);
+  Inputs := InputKeys;
+  Total := Length(Inputs);
   for Entry in FFields do
-    for Ref in Entry.Formula.References do
-      AddUnique(Result, ReferenceKey(Ref));
+    Inc(Total, Length(Entry.Formula.References));
+  Result := nil;
+  SetLength(Result, Total);
+  Count := 0;
+  Seen := nil;
+  if Total > SCANNED_KEYS then
+    Seen := specialize TDictionary<string, boolean>.Create;
+  try
+    for InputKey in Inputs do
+      Add(InputKey);
+    for Entry in FFields do
+      for Ref in Entry.Formula.References do
+        Add(ReferenceKey(Ref));
+  finally
+    FreeAndNil(Seen);
+  end;
+  SetLength(Result, Count);
 end;
 
 { TEvaluator }
@@ -321,9 +346,11 @@ procedure TEvaluator.Rebuild(const Nodes: TEvalNodeArray; Context: TEvalContext)
 var
   Node, Dep: TEvalNode;
   DepKey: string;
-  Waiting: array of integer;
+  Keys: TStringArray;
+  Found: array of TEvalNodeArray;  // each node's dependencies, by FIndex
+  DependentCount, Waiting: array of integer;
   Queue: TEvalNodeArray;
-  Index, Head: integer;
+  Index, Count, Head, Tail: integer;
 begin
   FNodes := Copy(Nodes);
   for Index := 0 to High(FNodes) do
@@ -333,35 +360,67 @@ begin
     FNodes[Index].FDependents := nil;
     FNodes[Index].FMissingKey := '';
   end;
+  // Each list is sized once, from counts, so a node read by thousands does
+  // not grow its list thousands of times
+  Found := nil;
+  SetLength(Found, Length(FNodes));
+  DependentCount := nil;
+  SetLength(DependentCount, Length(FNodes));
   for Node in FNodes do
-    for DepKey in Node.DependencyKeys do
+  begin
+    Keys := Node.DependencyKeys;
+    SetLength(Found[Node.FIndex], Length(Keys));
+    Count := 0;
+    for DepKey in Keys do
     begin
       Dep := Context.FindNode(DepKey);
       if not Assigned(Dep) then
       begin
         if Node.FMissingKey = '' then
           Node.FMissingKey := DepKey;
-      end
-      else
-      begin
-        AddNode(Node.FDeps, Dep);
-        AddNode(Dep.FDependents, Node);
+        Continue;
       end;
+      Found[Node.FIndex][Count] := Dep;
+      Inc(Count);
+      // A dependency outside FNodes is read, but has no list here
+      if (Dep.FIndex < Length(FNodes)) and (FNodes[Dep.FIndex] = Dep) then
+        Inc(DependentCount[Dep.FIndex]);
     end;
+    SetLength(Found[Node.FIndex], Count);
+  end;
+  for Node in FNodes do
+    SetLength(Node.FDependents, DependentCount[Node.FIndex]);
+  for Index := 0 to High(DependentCount) do
+    DependentCount[Index] := 0;
+  for Node in FNodes do
+  begin
+    Node.FDeps := Found[Node.FIndex];
+    for Dep in Node.FDeps do
+      if (Dep.FIndex < Length(FNodes)) and (FNodes[Dep.FIndex] = Dep) then
+      begin
+        Dep.FDependents[DependentCount[Dep.FIndex]] := Node;
+        Inc(DependentCount[Dep.FIndex]);
+      end;
+  end;
 
   // Kahn's algorithm, in list order where there is a choice
   Waiting := nil;
   SetLength(Waiting, Length(FNodes));
   Queue := nil;
+  SetLength(Queue, Length(FNodes));
+  Tail := 0;
   for Index := 0 to High(FNodes) do
   begin
     FNodes[Index].FState := esDirty;
     Waiting[Index] := Length(FNodes[Index].FDeps);
     if Waiting[Index] = 0 then
-      AddNode(Queue, FNodes[Index]);
+    begin
+      Queue[Tail] := FNodes[Index];
+      Inc(Tail);
+    end;
   end;
   Head := 0;
-  while Head < Length(Queue) do
+  while Head < Tail do
   begin
     Node := Queue[Head];
     Inc(Head);
@@ -369,9 +428,13 @@ begin
     begin
       Dec(Waiting[Dep.FIndex]);
       if Waiting[Dep.FIndex] = 0 then
-        AddNode(Queue, Dep);
+      begin
+        Queue[Tail] := Dep;
+        Inc(Tail);
+      end;
     end;
   end;
+  SetLength(Queue, Tail);
   FOrder := Queue;
 end;
 

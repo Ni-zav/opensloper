@@ -61,6 +61,7 @@ type
     procedure TestExportDraftUpToUnknown;
     procedure TestLayoutMeasurementsFromHere;
     procedure TestLayoutMissingPattern;
+    procedure TestMaterialsSaysWhatItLeftOut;
     procedure TestExportDraftUpToRepeatPoint;
     procedure TestExportDraftBadWidth;
     procedure TestMaterialsOfPattern;
@@ -315,6 +316,19 @@ begin
   AssertEquals(EXIT_FAILURE, Run(['layout', InFolder('skirt.slopr')]));
   AssertEquals(Format(rsFileNotFound, [InFolder('skirt.slopr')]), FErr.Trim);
   AssertFalse('no layout written', FileExists(InFolder('skirt.slayout')));
+end;
+
+// An estimate that leaves out a pattern says so, and is not a success
+procedure TTestCLI.TestMaterialsSaysWhatItLeftOut;
+var
+  Pattern: string;
+begin
+  Pattern := CopyExample(ConcatPaths(['skirt-block', 'skirt-block.sloper']));
+  CopyExample(ConcatPaths(['skirt-block', 'skirt.slm']));
+  AssertEquals(FErr, 0, Run(['layout', Pattern]));
+  AssertTrue(DeleteFile(InFolder('skirt.slm')));
+  AssertEquals(EXIT_FAILURE, Run(['materials', InFolder('skirt-block.slayout')]));
+  AssertTrue(FErr, Pos(Format(rsLayoutNoFile, [InFolder('skirt.slm')]), FErr) > 0);
 end;
 
 procedure TTestCLI.TestExportNeedsLayout;

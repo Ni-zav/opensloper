@@ -385,6 +385,8 @@ var
   Note, Size, Err: string;
   Report, Item: TJSONObject;
   List, Notes: TJSONArray;
+  Source: TLayoutSource;
+  Failed: boolean;
 begin
   if not CheckFileExists(FileName) then
     Exit(EXIT_FAILURE);
@@ -404,6 +406,14 @@ begin
       Layout.AddSource(ExtractFileName(FileName), '', '');
     end;
     Layout.LoadSources;
+    // The estimate leaves out a pattern it cannot read, so it says which
+    Failed := False;
+    for Source in Layout.Sources do
+      if Source.LoadError <> '' then
+      begin
+        WriteLn(CliErr^, Format(rsWarning, [Format(rsLayoutSourceProblem, [ExtractFileName(Source.PatternFile), Source.LoadError])]));
+        Failed := True;
+      end;
     Needs := LayoutMaterialNeeds(Layout);
     if AsJSON then
     begin
@@ -435,6 +445,8 @@ begin
       finally
         FreeAndNil(Report);
       end;
+      if Failed then
+        Exit(EXIT_FAILURE);
       Exit(0);
     end;
     if Length(Needs) = 0 then
@@ -449,6 +461,8 @@ begin
         WriteLn(CliOut^, '  ', Note);
     end;
     Result := 0;
+    if Failed then
+      Result := EXIT_FAILURE;
   finally
     FreeAndNil(Layout);
   end;

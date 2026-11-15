@@ -76,6 +76,7 @@ type
     procedure TestCutterProfileKeepsCutAndHoles;
     procedure TestInstructionsProfile;
     procedure TestProfileStylesOnPaper;
+    procedure TestProfileStyleOnProjectorKeepsInk;
     procedure TestMachineProfileAfterOutputProfile;
     procedure TestAAMAFollowsOutputProfile;
     procedure TestPaperMarksKeepEverything;
@@ -149,7 +150,7 @@ implementation
 
 uses
   Math, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.Settings, Sloper.Core.Draft, Sloper.Core.EvalTypes, Sloper.Core.PatternFile,
-  Sloper.Core.PieceDetect, Sloper.Output.LayoutSVG,
+  Sloper.Core.PieceDetect, Sloper.Output.LayoutSVG, Sloper.Output.LayoutPDF,
   Sloper.Output.LayoutDXF, Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Output.Tiling, Sloper.Output.DraftSVG, StrUtils;
 
 const
@@ -704,6 +705,29 @@ begin
   AssertTrue(Text, Pos('<g class="line-fold"><path d="', Text) > 0);
   AssertTrue('its own look', Pos('stroke="#0000ff" stroke-width="0.5" stroke-dasharray="3 2"', Text) > 0);
   AssertTrue('others keep theirs', Pos('<g class="line-placement"><path d="', Text) > 0);
+end;
+
+// After a line in the profile's own colour, the ink is white again on the
+// projector's black sheet
+procedure TTestLayoutExports.TestProfileStyleOnProjectorKeepsInk;
+var
+  Profile: TOutputProfile;
+  Text: string;
+  After: integer;
+begin
+  AddMarkedPattern('a.sloper');
+  Profile := FullOutputProfile;
+  Profile.Name := 'Blue folds';
+  Profile.Styles[erFold].Custom := True;
+  Profile.Styles[erFold].Color := '#0000FF';
+  FLayout.OutputProfiles := [Profile];
+  FLayout.Output.OutputProfile := 'Blue folds';
+  FLayout.Output.Kind := okProjector;
+  FLayout.PlaceNewPieces;
+  Text := LayoutToPDF(FLayout);
+  After := Pos('0 0 1 RG', Text);
+  AssertTrue('the fold in its colour', After > 0);
+  AssertEquals('no black ink after it', 0, Pos('0 G 0 g', Copy(Text, After, MaxInt)));
 end;
 
 // The profile leaves the fold line out, so the machine has nothing to score

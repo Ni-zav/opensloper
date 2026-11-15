@@ -433,7 +433,10 @@ begin
         FWriter.SetLineWidth(FMarkWidth);
     end;
     FWriter.Polyline(PagePoints(Page, Line.Points), False);
-    if Line.Style.Custom then
+    // Back to the ink: white on a projector's black sheet
+    if Line.Style.Custom and (FLayout.Output.Kind = okProjector) then
+      FWriter.SetGray(1)
+    else if Line.Style.Custom then
       FWriter.SetGray(0);
   end;
   FWriter.SetDash(0);

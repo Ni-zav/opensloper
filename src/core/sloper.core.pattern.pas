@@ -560,6 +560,7 @@ resourcestring
   rsPatternPieceTooShort = 'A piece needs at least two edges, or one that closes on itself';
   rsPatternCornerNotStraight = 'Only corners between straight edges can be rounded, and %s is not straight';
   rsPatternCornerNotMeeting = '%s and %s do not meet at a point';
+  rsPatternCornerSameEdge = 'A corner needs two different edges, and %s was given twice';
   rsPatternCornerOnFold = '%s is the fold of %s, and a fold has to stay one straight edge';
   rsPatternPieceRepeats = 'A piece cannot use %s twice';
   rsPatternNotInPiece = '%s is not part of %s';
@@ -2038,6 +2039,11 @@ begin
   Second := TEdgeObject(FindNode(EdgeBId));
   if not CheckEdge(First) or not CheckEdge(Second) then
     Exit;
+  if First = Second then
+  begin
+    SetError(Format(rsPatternCornerSameEdge, [First.DisplayName]));
+    Exit;
+  end;
   if (First.StartKey = Second.StartKey) or (First.StartKey = Second.EndKey) then
     Vertex := First.StartKey
   else if (First.EndKey = Second.StartKey) or (First.EndKey = Second.EndKey) then

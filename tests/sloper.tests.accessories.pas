@@ -63,6 +63,7 @@ type
     procedure TestCornerRadiusTooBigIsInvalid;
     procedure TestCornerRefusesCurve;
     procedure TestCornerRefusesEdgesNotMeeting;
+    procedure TestCornerRefusesOneEdgeTwice;
     procedure TestCornerOnAPiece;
     procedure TestCornerOnAPieceEitherOrder;
     procedure TestAllFourCornersOfAPiece;
@@ -449,6 +450,19 @@ begin
   FPattern.Evaluate;
   AssertTrue(not Assigned(FPattern.AddRoundCorner(First.Key, Second.Key, '20')));
   AssertEquals(Format(rsPatternCornerNotMeeting, [First.Name, Second.Name]), FPattern.LastError);
+end;
+
+procedure TTestAccessories.TestCornerRefusesOneEdgeTwice;
+var
+  Edge: TLineObject;
+  Before: integer;
+begin
+  Edge := Line(Pt('A'), Pt('B', 100));
+  FPattern.Evaluate;
+  Before := FPattern.ObjectCount;
+  AssertTrue(not Assigned(FPattern.AddRoundCorner(Edge.Key, Edge.Key, '20')));
+  AssertEquals(Format(rsPatternCornerSameEdge, [Edge.Name]), FPattern.LastError);
+  AssertEquals('nothing added', Before, FPattern.ObjectCount);
 end;
 
 // The cut-away corner lost from a rectangle piece rounded with this radius

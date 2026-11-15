@@ -44,6 +44,8 @@ type
     Names: TStringArray;
   end;
 
+  TCatalogueTranslationArray = array of TCatalogueTranslation;
+
   TCatalogueEntry = class
   public
     Key, Name, Group, Description, HowTo: string;
@@ -51,7 +53,7 @@ type
     Overlay: TFigurePath;
     // Typical minimum and maximum in mm
     RangeMin, RangeMax: double;
-    Translations: array of TCatalogueTranslation;
+    Translations: TCatalogueTranslationArray;
     // Outside it is only a warning, so that unusual bodies are not blocked
     function InRange(Value: double): boolean;
     // The name to export under, '' when the format has none
@@ -66,7 +68,7 @@ type
     FEntries: TCatalogueEntryList;
     FFigures: array[TCatalogueView] of TFigurePaths;
     // Every name of each format, whether it has an entry or not
-    FKnownNames: array of TCatalogueTranslation;
+    FKnownNames: TCatalogueTranslationArray;
     procedure LoadKnownNames(Obj: TJSONObject);
     function GetCount: integer;
     function GetEntry(Index: integer): TCatalogueEntry;
@@ -137,6 +139,32 @@ const
   CATALOGUE_FORMAT = 'measurement-catalogue';
   CATALOGUE_VERSION = 1;
   VIEW_NAMES: array[TCatalogueView] of string = ('front', 'back', 'side');
+
+// Each format's list of names, as "translations" and "knownNames" hold them;
+// only text names are read, and a format with none is left out
+function NameLists(List: TJSONData): TCatalogueTranslationArray;
+var
+  Index, NameIndex: integer;
+  Item: TCatalogueTranslation;
+  Names: TJSONData;
+begin
+  Result := nil;
+  if not Assigned(List) or (List.JSONType <> jtObject) then
+    Exit;
+  for Index := 0 to List.Count - 1 do
+  begin
+    Names := List.Items[Index];
+    if Names.JSONType <> jtArray then
+      Continue;
+    Item := Default(TCatalogueTranslation);
+    Item.FormatName := TJSONObject(List).Names[Index];
+    for NameIndex := 0 to Names.Count - 1 do
+      if Names.Items[NameIndex].JSONType = jtString then
+        Insert(Names.Items[NameIndex].AsString, Item.Names, Length(Item.Names));
+    if Length(Item.Names) > 0 then
+      Insert(Item, Result, Length(Result));
+  end;
+end;
 
 function TCatalogueEntry.InRange(Value: double): boolean;
 begin
@@ -351,21 +379,8 @@ function TCatalogue.LoadEntry(Item: TJSONObject; out ErrorMessage: string): bool
   end;
 
   procedure ReadTranslations(Entry: TCatalogueEntry);
-  var
-    List: TJSONData;
-    Index, NameIndex: integer;
   begin
-    List := Item.Find('translations');
-    if not Assigned(List) or (List.JSONType <> jtObject) then
-      Exit;
-    SetLength(Entry.Translations, List.Count);
-    for Index := 0 to List.Count - 1 do
-    begin
-      Entry.Translations[Index].FormatName := TJSONObject(List).Names[Index];
-      SetLength(Entry.Translations[Index].Names, List.Items[Index].Count);
-      for NameIndex := 0 to List.Items[Index].Count - 1 do
-        Entry.Translations[Index].Names[NameIndex] := List.Items[Index].Items[NameIndex].AsString;
-    end;
+    Entry.Translations := NameLists(Item.Find('translations'));
   end;
 
 var
@@ -410,21 +425,8 @@ begin
 end;
 
 procedure TCatalogue.LoadKnownNames(Obj: TJSONObject);
-var
-  List: TJSONData;
-  Index, NameIndex: integer;
 begin
-  List := Obj.Find('knownNames');
-  if not Assigned(List) or (List.JSONType <> jtObject) then
-    Exit;
-  SetLength(FKnownNames, List.Count);
-  for Index := 0 to List.Count - 1 do
-  begin
-    FKnownNames[Index].FormatName := TJSONObject(List).Names[Index];
-    SetLength(FKnownNames[Index].Names, List.Items[Index].Count);
-    for NameIndex := 0 to List.Items[Index].Count - 1 do
-      FKnownNames[Index].Names[NameIndex] := List.Items[Index].Items[NameIndex].AsString;
-  end;
+  FKnownNames := NameLists(Obj.Find('knownNames'));
 end;
 
 function TCatalogue.LoadFromText(const Text: string; out ErrorMessage: string): boolean;

@@ -41,6 +41,7 @@ type
     procedure TestFind;
     procedure TestRange;
     procedure TestTranslations;
+    procedure TestOddTranslationsLoad;
     procedure TestSearch;
     procedure TestOverlayAt;
     procedure TestOverlayAtOnlyListedKeys;
@@ -138,6 +139,18 @@ begin
   AssertTrue('the ends count', FCatalogue[0].InRange(1500));
   AssertFalse(FCatalogue[0].InRange(549));
   AssertFalse(FCatalogue[0].InRange(1501));
+end;
+
+// Lists that are empty or hold something other than names are left out
+procedure TTestCatalogue.TestOddTranslationsLoad;
+var
+  Err: string;
+begin
+  AssertTrue(Err, FCatalogue.LoadFromText(HEAD + '{"key": "a", "translations": {"seamly2d": [], "valentina": [{}, "a_v"], ' +
+    '"other": "x"}, ' + ENTRY_REST + ', "group": "arm", "view": "side", "overlay": [[0, 0], [1, 1]], "range": [1, 2]}], ' +
+    '"knownNames": {"seamly2d": [[]], "valentina": ["a_v"]}}', Err));
+  AssertEquals('an empty list names nothing', '', FCatalogue.Find('a').NameIn('seamly2d'));
+  AssertEquals('the names it has', 'a_v', FCatalogue.Find('a').NameIn('valentina'));
 end;
 
 procedure TTestCatalogue.TestTranslations;

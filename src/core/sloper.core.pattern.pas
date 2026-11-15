@@ -2603,9 +2603,15 @@ begin
     if Into.ContainsKey(Key) then
       Continue;
     Node := FindNode(Key);
+    // A repeat's point stands for the repeat, which brings what it uses
+    if Node is TRepeatPoint then
+    begin
+      System.Insert(TRepeatPoint(Node).Source.Key, Waiting, System.Length(Waiting));
+      Continue;
+    end;
     if not (Node is TDraftObject) then
       Continue;
-    Into.Add(VisibilityKey(TDraftObject(Node)), True);
+    Into.Add(Key, True);
     for Used in Node.DependencyKeys do
       if not Into.ContainsKey(Used) then
         System.Insert(Used, Waiting, System.Length(Waiting));

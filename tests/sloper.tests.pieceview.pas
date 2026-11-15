@@ -46,6 +46,7 @@ type
     procedure TestSharedEdgeStays;
     procedure TestLooseLineKeepsItsPoint;
     procedure TestRepeatPointsFollowTheirRepeat;
+    procedure TestPieceOnTwoRepeatPoints;
     procedure TestNoteGoesWithItsPiece;
     procedure TestShowAllPieces;
     procedure TestIsolateDimsTheRest;
@@ -207,6 +208,35 @@ begin
     if Point is TRepeatPoint then
       AssertFalse('a repeat point', FPattern.IsHidden(Point));
   AssertFalse('its edge, which it uses', FPattern.IsHidden(EdgeBetween('E', 'F')));
+end;
+
+// Two corners from one repeat stand for it once
+procedure TTestPieceView.TestPieceOnTwoRepeatPoints;
+var
+  Repeat_: TRepeatObject;
+  First, Second: string;
+  Path: TPiecePath;
+  Triangle: TPieceObject;
+begin
+  Repeat_ := FPattern.AddRepeatBetween('R', Key('E'), Key('F'), '3', False);
+  AssertNotNull(FPattern.LastError, Repeat_);
+  FPattern.Evaluate;
+  First := FPattern.UsePoint(Repeat_.Item(1).Key);
+  Second := FPattern.UsePoint(Repeat_.Item(2).Key);
+  Path := nil;
+  SetLength(Path, 3);
+  Path[0].EdgeKey := FPattern.AddLine(Key('G'), First, erOutline).Key;
+  Path[1].EdgeKey := FPattern.AddLine(First, Second, erOutline).Key;
+  Path[2].EdgeKey := FPattern.AddLine(Second, Key('G'), erOutline).Key;
+  FPattern.Evaluate;
+  Triangle := FPattern.AddPiece('Triangle', Path, '10');
+  AssertNotNull(FPattern.LastError, Triangle);
+  FPattern.Evaluate;
+  FPattern.SetPieceHidden(FFront, True);
+  AssertTrue('the hidden piece', FPattern.IsHidden(FFront));
+  AssertFalse('the repeat', FPattern.IsHidden(Repeat_));
+  FPattern.SetPieceHidden(Triangle, True);
+  AssertTrue('the repeat goes with its piece', FPattern.IsHidden(Repeat_));
 end;
 
 procedure TTestPieceView.TestNoteGoesWithItsPiece;

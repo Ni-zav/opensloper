@@ -117,6 +117,7 @@ type
     procedure GridValidate(Sender: TObject; ACol, ARow: integer; const OldValue: string; var NewValue: string);
     procedure GridEditText(Sender: TObject; ACol, ARow: integer; const Value: string);
     function CommitCell(Column, Index: integer; const NewText: string): boolean;
+    procedure ShowHeader;
     procedure HeaderDone(Sender: TObject);
     procedure UnitChange(Sender: TObject);
     procedure WatchTick(Sender: TObject);
@@ -1132,6 +1133,19 @@ begin
     ShowStatus(Reason);
 end;
 
+// Another file: its name and notes, even in a field being typed in, whose
+// text was the last file's
+procedure TMeasurementsForm.ShowHeader;
+begin
+  FRefreshing := True;
+  try
+    FNameEdit.Text := FDocument.Measurements.Name;
+    FNotesEdit.Text := FDocument.Measurements.Notes;
+  finally
+    FRefreshing := False;
+  end;
+end;
+
 procedure TMeasurementsForm.HeaderDone(Sender: TObject);
 begin
   if FRefreshing then
@@ -1217,6 +1231,9 @@ end;
 
 function TMeasurementsForm.ConfirmDiscard: boolean;
 begin
+  // Text still in a cell or a header field is an edit too
+  FGrid.EditingDone;
+  HeaderDone(Self);
   if not FDocument.Modified then
     Exit(True);
   case AskSaveChanges(ExtractFileName(FDocument.FileName)) of
@@ -1229,15 +1246,16 @@ end;
 
 procedure TMeasurementsForm.CloseAsked(Sender: TObject; var CanClose: boolean);
 begin
-  FGrid.EditingDone;
-  HeaderDone(Self);
   CanClose := ConfirmDiscard;
 end;
 
 procedure TMeasurementsForm.NewClick(Sender: TObject);
 begin
   if ConfirmDiscard then
+  begin
     FDocument.New;
+    ShowHeader;
+  end;
 end;
 
 procedure TMeasurementsForm.OpenPath(const Path: string);
@@ -1245,14 +1263,16 @@ var
   Reason: string;
 begin
   if FDocument.Open(Path, Reason) then
-    FRecent.Remember(Path)
+  begin
+    FRecent.Remember(Path);
+    ShowHeader;
+  end
   else
     MessageDlg(Format(rsOpenFailed, [Path, Reason]), mtError, [mbOK], 0);
 end;
 
 procedure TMeasurementsForm.RecentOpen(Sender: TObject; const FileName: string);
 begin
-  FGrid.EditingDone;
   if ConfirmDiscard then
     OpenPath(FileName);
 end;
@@ -1385,6 +1405,7 @@ begin
       Exit;
     end;
     FDocument.TakeImported(Imported);
+    ShowHeader;
     Lines := TStringList.Create;
     Lines.Add(Format(rsImportCounts, [Imported.Count, Length(Report.Translated), Length(Report.Kept), Length(Report.Corrected)]));
     AddSection(rsImportNotes, Report.Notes);

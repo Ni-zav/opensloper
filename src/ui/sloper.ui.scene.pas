@@ -515,6 +515,8 @@ var
   Edges: array of TEdgeObject;
   Group: array of TEdgeObject;
   Taken: array of boolean;
+  Lengths: array of double;
+  Starts, Ends: TVec2Array;
   Index, Other, Member: integer;
   Chord, Normal: TVec2;
   Slot: TEdgeSlot;
@@ -527,13 +529,30 @@ begin
       Insert(TEdgeObject(Pattern.Objects[Index]), Edges, Length(Edges));
   Taken := nil;
   SetLength(Taken, Length(Edges));
+  // A curve's length is integrated, so each edge is measured once and pairs
+  // are checked in full only when their lengths and ends agree
+  Lengths := nil;
+  Starts := nil;
+  Ends := nil;
+  SetLength(Lengths, Length(Edges));
+  SetLength(Starts, Length(Edges));
+  SetLength(Ends, Length(Edges));
+  for Index := 0 to High(Edges) do
+  begin
+    Lengths[Index] := Edges[Index].Length;
+    Starts[Index] := Edges[Index].PointAtLength(0);
+    Ends[Index] := Edges[Index].PointAtLength(Lengths[Index]);
+  end;
   for Index := 0 to High(Edges) do
   begin
     if Taken[Index] then
       Continue;
     Group := [Edges[Index]];
     for Other := Index + 1 to High(Edges) do
-      if not Taken[Other] and EdgesCoincide(Edges[Index], Edges[Other], COINCIDE_TOLERANCE) then
+      if not Taken[Other] and (Abs(Lengths[Index] - Lengths[Other]) <= COINCIDE_TOLERANCE) and
+        ((PointsNear(Starts[Index], Starts[Other], COINCIDE_TOLERANCE) and PointsNear(Ends[Index], Ends[Other], COINCIDE_TOLERANCE)) or
+        (PointsNear(Starts[Index], Ends[Other], COINCIDE_TOLERANCE) and PointsNear(Ends[Index], Starts[Other], COINCIDE_TOLERANCE))) and
+        EdgesCoincide(Edges[Index], Edges[Other], COINCIDE_TOLERANCE) then
       begin
         Taken[Other] := True;
         Insert(Edges[Other], Group, Length(Group));

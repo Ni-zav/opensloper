@@ -697,9 +697,9 @@ begin
       StartNode := Context.FindNode(FGrainStartKey);
       EndNode := Context.FindNode(FGrainEndKey);
       if not (StartNode is TPointObject) then
-        Exit(Fail(esError, Format(rsDraftNotAPoint, [FGrainStartKey])));
+        Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FGrainStartKey)])));
       if not (EndNode is TPointObject) then
-        Exit(Fail(esError, Format(rsDraftNotAPoint, [FGrainEndKey])));
+        Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FGrainEndKey)])));
       Line := Line2(TPointObject(StartNode).Position, TPointObject(EndNode).Position);
       if PointsNear(Line.P1, Line.P2) then
         Exit(Fail(esInvalid, rsPieceGrainSamePlace));

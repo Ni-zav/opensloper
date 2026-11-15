@@ -599,6 +599,9 @@ function EdgesInDrawOrder(const Objects: TDraftObjectArray): TDraftObjectArray;
 // Role names as written in files, in role order; False when one is unknown
 function RolesToNames(Roles: TEdgeRoles): TStringArray;
 function NamesToRoles(const Names: array of string; out Roles: TEdgeRoles): boolean;
+// What a message calls the object with Key: its name, or the key when there
+// is no such object
+function KeyLabel(Context: TEvalContext; const Key: string): string;
 
 resourcestring
   rsDraftMarkerSize = 'A marker needs a size above 0';
@@ -858,10 +861,8 @@ begin
   Result := Node is TPointObject;
   if Result then
     APosition := TPointObject(Node).Position
-  else if Assigned(Node) then
-    Fail(esError, Format(rsDraftNotAPoint, [Node.DisplayName]))
   else
-    Fail(esError, Format(rsDraftNotAPoint, [AKey]));
+    Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, AKey)]));
 end;
 
 function TPointObject.TypeName: string;
@@ -1218,7 +1219,7 @@ var
     if Result then
       APosition := TPointObject(Input).Position
     else
-      Fail(esError, Format(rsDraftNotAPoint, [AKey]));
+      Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, AKey)]));
   end;
 
 begin
@@ -1229,7 +1230,7 @@ begin
   begin
     Node := Context.FindNode(FEdge);
     if not (Node is TEdgeObject) then
-      Exit(Fail(esError, Format(rsDraftNotAnEdge, [FEdge])));
+      Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FEdge)])));
     Target := TEdgeObject(Node);
   end
   else if not EndPoint(FFirst, First) or not EndPoint(FLast, Last) then
@@ -1306,7 +1307,7 @@ var
 begin
   Node := Context.FindNode(FEdge);
   if not (Node is TEdgeObject) then
-    Exit(Fail(esError, Format(rsDraftNotAnEdge, [FEdge])));
+    Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FEdge)])));
   EdgeObject := TEdgeObject(Node);
   if not EvalField(Context, 'value', Amount) then
     Exit(esError);
@@ -1684,6 +1685,17 @@ begin
 end;
 
 // Position of the point with Key, or False if it is not a point
+function KeyLabel(Context: TEvalContext; const Key: string): string;
+var
+  Node: TEvalNode;
+begin
+  Node := Context.FindNode(Key);
+  if Assigned(Node) then
+    Result := Node.DisplayName
+  else
+    Result := Key;
+end;
+
 function PointPosition(Context: TEvalContext; const Key: string; out APosition: TVec2): boolean;
 var
   Node: TEvalNode;
@@ -1695,10 +1707,17 @@ begin
     APosition := TPointObject(Node).Position;
 end;
 
-function EdgeEnds(Edge: TEdgeObject; Context: TEvalContext; out StartPos, EndPos: TVec2): TEvalState;
+// esError with BadKey the end that is not a point, or esInvalid when the
+// ends are in one place
+function EdgeEnds(Edge: TEdgeObject; Context: TEvalContext; out StartPos, EndPos: TVec2; out BadKey: string): TEvalState;
 begin
   EndPos := Vec2(0, 0);
-  if not PointPosition(Context, Edge.StartKey, StartPos) or not PointPosition(Context, Edge.EndKey, EndPos) then
+  BadKey := '';
+  if not PointPosition(Context, Edge.StartKey, StartPos) then
+    BadKey := Edge.StartKey
+  else if not PointPosition(Context, Edge.EndKey, EndPos) then
+    BadKey := Edge.EndKey;
+  if BadKey <> '' then
     Exit(esError);
   if PointsNear(StartPos, EndPos) then
     Exit(esInvalid);
@@ -1741,10 +1760,11 @@ end;
 function TLineObject.Compute(Context: TEvalContext): TEvalState;
 var
   StartPos, EndPos: TVec2;
+  BadKey: string;
 begin
-  Result := EdgeEnds(Self, Context, StartPos, EndPos);
+  Result := EdgeEnds(Self, Context, StartPos, EndPos, BadKey);
   case Result of
-    esError: Exit(Fail(esError, Format(rsDraftNotAPoint, [StartKey + '/' + EndKey])));
+    esError: Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, BadKey)])));
     esInvalid: Exit(Fail(esInvalid, rsDraftSamePlace));
   end;
   FSegments := nil;
@@ -1866,7 +1886,7 @@ var
   Radius: double;
 begin
   if not PointPosition(Context, StartKey, CentrePos) then
-    Exit(Fail(esError, Format(rsDraftNotAPoint, [StartKey])));
+    Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, StartKey)])));
   if not EvalLength(Context, 'radius', Radius) then
     Exit(esError);
   if Radius <= 0 then
@@ -1898,7 +1918,7 @@ var
   Radius, FirstAngle, LastAngle: double;
 begin
   if not PointPosition(Context, StartKey, CentrePos) then
-    Exit(Fail(esError, Format(rsDraftNotAPoint, [StartKey])));
+    Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, StartKey)])));
   if not EvalLength(Context, 'radius', Radius) or not EvalField(Context, 'angle1', FirstAngle) or not EvalField(Context, 'angle2', LastAngle) then
     Exit(esError);
   if Radius <= 0 then
@@ -2059,7 +2079,7 @@ var
     begin
       Edge := InputEdge(Context, FRun[Index].EdgeKey);
       if not Assigned(Edge) then
-        Exit(Fail(esError, Format(rsDraftNotAnEdge, [FRun[Index].EdgeKey])));
+        Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FRun[Index].EdgeKey)])));
       FStraight := FStraight and Edge.IsStraight;
       Segments := Edge.Segments;
       Oriented := nil;
@@ -2357,10 +2377,11 @@ function TCurveObject.Compute(Context: TEvalContext): TEvalState;
 var
   StartPos, EndPos: TVec2;
   A1, L1, A2, L2: double;
+  BadKey: string;
 begin
-  Result := EdgeEnds(Self, Context, StartPos, EndPos);
+  Result := EdgeEnds(Self, Context, StartPos, EndPos, BadKey);
   case Result of
-    esError: Exit(Fail(esError, Format(rsDraftNotAPoint, [StartKey + '/' + EndKey])));
+    esError: Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, BadKey)])));
     esInvalid: Exit(Fail(esInvalid, rsDraftSamePlace));
   end;
   if not EvalField(Context, 'angle1', A1) or not EvalLength(Context, 'length1', L1) or not EvalField(Context, 'angle2', A2) or
@@ -2436,7 +2457,7 @@ begin
   for Index := 0 to High(FNodeKeys) do
   begin
     if not PointPosition(Context, FNodeKeys[Index], Positions[Index]) then
-      Exit(Fail(esError, Format(rsDraftNotAPoint, [FNodeKeys[Index]])));
+      Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FNodeKeys[Index])])));
     if (Index > 0) and PointsNear(Positions[Index - 1], Positions[Index]) then
       Exit(Fail(esInvalid, rsDraftSamePlace));
     NodeName := 'node' + IntToStr(Index + 1);
@@ -2531,7 +2552,7 @@ var
 begin
   Node := Context.FindNode(FSource);
   if not (Node is TEdgeObject) then
-    Exit(Fail(esError, Format(rsDraftNotAnEdge, [FSource])));
+    Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FSource)])));
   SourceEdge := TEdgeObject(Node);
   // The source can change between a line and a curve
   FStraight := IsStraightEdge(SourceEdge);
@@ -2737,7 +2758,7 @@ begin
     Exit(esError);
   EdgeObject := InputEdge(Context, FEdge);
   if not Assigned(EdgeObject) then
-    Exit(Fail(esError, Format(rsDraftNotAnEdge, [FEdge])));
+    Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FEdge)])));
   if not EvalLength(Context, 'radius', Radius) then
     Exit(esError);
   if Radius < 0 then
@@ -2821,7 +2842,7 @@ begin
     Exit(esError);
   EdgeObject := InputEdge(Context, FEdge);
   if not Assigned(EdgeObject) then
-    Exit(Fail(esError, Format(rsDraftNotAnEdge, [FEdge])));
+    Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FEdge)])));
   SourceName := Context.FindNode(FSource).DisplayName;
 
   Candidates := nil;

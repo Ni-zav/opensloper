@@ -233,7 +233,7 @@ var
   Angle: double;
 begin
   if not PointAtKey(Context, FPivotKey, Pivot) then
-    Exit(Fail(esError, Format(rsDraftNotAPoint, [FPivotKey])));
+    Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FPivotKey)])));
   if not EvalField(Context, FIELD_ANGLE, Angle) then
     Exit(esError);
   FMap := AffineTurnAbout(Pivot, Angle);
@@ -250,7 +250,7 @@ begin
   begin
     Node := Context.FindNode(FAxisEdgeKey);
     if not (Node is TEdgeObject) then
-      Exit(Fail(esError, Format(rsDraftNotAnEdge, [FAxisEdgeKey])));
+      Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FAxisEdgeKey)])));
     if not TEdgeObject(Node).IsStraight then
       Exit(Fail(esInvalid, Format(rsTransformCurvedAxis, [Node.DisplayName])));
     First := TEdgeObject(Node).PointAtLength(0);
@@ -259,11 +259,11 @@ begin
   else
   begin
     if not PointAtKey(Context, FAxisAKey, First) then
-      Exit(Fail(esError, Format(rsDraftNotAPoint, [FAxisAKey])));
+      Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FAxisAKey)])));
     if FAxisBKey <> '' then
     begin
       if not PointAtKey(Context, FAxisBKey, Second) then
-        Exit(Fail(esError, Format(rsDraftNotAPoint, [FAxisBKey])));
+        Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FAxisBKey)])));
     end
     else
     begin
@@ -300,7 +300,7 @@ begin
   if FPivotKey <> '' then
   begin
     if not PointAtKey(Context, FPivotKey, Pivot) then
-      Exit(Fail(esError, Format(rsDraftNotAPoint, [FPivotKey])));
+      Exit(Fail(esError, Format(rsDraftNotAPoint, [KeyLabel(Context, FPivotKey)])));
     if not EvalField(Context, FIELD_ROTATE, Turn) then
       Exit(esError);
     Movement := AffineThen(Movement, AffineTurnAbout(Pivot, Turn));
@@ -345,7 +345,7 @@ begin
     Exit(Fail(esError, Format(rsDraftNotAPoint, [FSource])));
   Mover := Context.FindNode(FTransformKey);
   if not (Mover is TTransformObject) then
-    Exit(Fail(esError, Format(rsTransformNotATransform, [FTransformKey])));
+    Exit(Fail(esError, Format(rsTransformNotATransform, [KeyLabel(Context, FTransformKey)])));
   FPosition := TTransformObject(Mover).Map.Apply(TPointObject(Node).Position);
   Result := esValid;
 end;
@@ -410,7 +410,7 @@ begin
     Exit(Fail(esError, Format(rsDraftNotAnEdge, [FSource])));
   Mover := Context.FindNode(FTransformKey);
   if not (Mover is TTransformObject) then
-    Exit(Fail(esError, Format(rsTransformNotATransform, [FTransformKey])));
+    Exit(Fail(esError, Format(rsTransformNotATransform, [KeyLabel(Context, FTransformKey)])));
   // The source can change between a line and a curve
   FStraight := TEdgeObject(Node).IsStraight;
   Map := TTransformObject(Mover).Map;

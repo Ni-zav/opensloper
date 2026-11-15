@@ -62,6 +62,8 @@ type
     procedure TestProjectOntoCurve;
     // A foot further along counts when the nearest point is only the end
     procedure TestProjectFootPastNearestEnd;
+    // An input of the wrong kind is named in the message, not given by ID
+    procedure TestWrongInputNamed;
     procedure TestProjectTakesNearest;
     procedure TestPatternChecks;
     procedure TestFollowsInputs;
@@ -413,6 +415,29 @@ begin
   AssertPointsNear('on the curve', Shape.PointAt(Param), Foot.Position);
   Tangent := Shape.DerivativeAt(Param);
   AssertEquals('square to it', 0, Dot(Vec2(-1, -5) - Foot.Position, Tangent * (1 / Tangent.Length)), DEFAULT_TOLERANCE);
+end;
+
+procedure TTestOperations.TestWrongInputNamed;
+var
+  Base: TEdgeObject;
+  Wrong: TLineObject;
+  Repeated: TRepeatObject;
+begin
+  Pt('A', 0, 0);
+  Pt('B', 100, 0);
+  Base := Line('A', 'B');
+  // Only a damaged file or a bug could make these; the loader refuses them
+  Wrong := TLineObject.Create('900', Base.Key, FPattern.FindObject('B').Key);
+  FPattern.InsertObject(Wrong);
+  Repeated := TRepeatObject.CreateOnEdge('901', FPattern.FindObject('A').Key, True);
+  Repeated.Name := 'R';
+  Repeated.Field('count').ParseStored('3');
+  FPattern.InsertObject(Repeated);
+  FPattern.Evaluate;
+  AssertTrue('a line from an edge', Wrong.State = esError);
+  AssertEquals(Format(rsDraftNotAPoint, [Base.DisplayName]), Wrong.Message);
+  AssertTrue('a repeat on a point', Repeated.State = esError);
+  AssertEquals(Format(rsDraftNotAnEdge, ['A']), Repeated.Message);
 end;
 
 procedure TTestOperations.TestProjectTakesNearest;

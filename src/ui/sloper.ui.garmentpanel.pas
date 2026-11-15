@@ -79,6 +79,8 @@ type
     FMaterialKey: string;
     FAllMaterials: boolean;
     FMaterialChosen: boolean;
+    // The document's generation, which changes when another pattern is opened
+    FGeneration: integer;
     FRefreshing: boolean;
     FToolbar: TPanel;
     FMaterialBox: TComboBox;
@@ -318,7 +320,10 @@ begin
   FShown := Default(TGarmentScene);
   FMaterialChosen := False;
   if Assigned(FDocument) then
+  begin
+    FGeneration := FDocument.Generation;
     FDocument.AddListener(@DocumentChanged);
+  end;
   FDirty := True;
   RefreshMaterials;
   if Assigned(FDrawing) then
@@ -336,9 +341,11 @@ end;
 // does only while the tab shows
 procedure TGarmentPanel.DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
 begin
-  if dcObjectsReplaced in Changes then
+  // Another pattern, not an undo or redo: start again on its first
+  // material, fitted
+  if (dcObjectsReplaced in Changes) and (Document.Generation <> FGeneration) then
   begin
-    // Another pattern: start again on its first material, fitted
+    FGeneration := Document.Generation;
     FBuilder.Clear;
     FMaterialChosen := False;
     FFitted := True;

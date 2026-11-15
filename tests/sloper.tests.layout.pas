@@ -163,6 +163,7 @@ type
     procedure TestPlaceGoneCopyRefused;
     procedure TestNewPiecesWrapAtTheRoll;
     procedure TestWholeOutlineOfNothing;
+    procedure TestTitleFieldsKeepTheirOrder;
     procedure TestRemovePlacementReturnsToUnplaced;
     procedure TestFailingPieceWaitsUnplaced;
     procedure TestExtraCopyWarns;
@@ -1916,6 +1917,14 @@ begin
   AssertEquals(6, Length(FLayout.Placements));
   for Shape in FLayout.PlacedPieces do
     AssertTrue('on the roll', Shape.Bounds.MaxX <= FLayout.UsableWidth + 1e-6);
+end;
+
+procedure TTestLayout.TestTitleFieldsKeepTheirOrder;
+begin
+  AssertEquals('date, pattern', 'date,pattern.name', string.Join(',', TitleFieldsWith(['date', 'pattern.name'], 'date', True)));
+  AssertEquals('added last', 'date,custom,materials',
+    string.Join(',', TitleFieldsWith(['date', 'custom'], 'materials', True)));
+  AssertEquals('taken out, others kept', 'custom', string.Join(',', TitleFieldsWith(['date', 'custom'], 'date', False)));
 end;
 
 // A flat half encloses nothing; it is kept as it is

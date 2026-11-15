@@ -308,6 +308,9 @@ function NoteFrameBounds(const Note: TSheetNote; const Values: TFieldValues): TR
 function NoteSpread(const Note: TSheetNote; const Values: TFieldValues): TRect2;
 // Where each line of the note starts across, in layout space
 function NoteLineLeft(const Note: TSheetNote; const Values: TFieldValues; const Line: string): double;
+// Fields with Field shown or not: the others keep their order, and a field
+// shown anew goes last
+function TitleFieldsWith(const Fields: TStringArray; const Field: string; Shown: boolean): TStringArray;
 // The layout's own notes, then the pattern notes printed with each piece
 function PrintedNotes(Layout: TLayout; const Shapes: TPlacedPieceArray): TSheetNoteArray;
 // A half piece with its mirror image across the fold, joined into one
@@ -471,6 +474,26 @@ var
 begin
   Box := NoteBounds(Note, Values);
   Result := AlignedLeft(Box.MinX, Box.MaxX - Box.MinX, TextWidth(Line, Note.Size, Note.Style), Note.Align);
+end;
+
+function TitleFieldsWith(const Fields: TStringArray; const Field: string; Shown: boolean): TStringArray;
+var
+  Each: string;
+  Found: boolean;
+begin
+  Result := nil;
+  Found := False;
+  for Each in Fields do
+    if Each = Field then
+    begin
+      if Shown and not Found then
+        Insert(Each, Result, Length(Result));
+      Found := True;
+    end
+    else
+      Insert(Each, Result, Length(Result));
+  if Shown and not Found then
+    Insert(Field, Result, Length(Result));
 end;
 
 function PrintedNotes(Layout: TLayout; const Shapes: TPlacedPieceArray): TSheetNoteArray;

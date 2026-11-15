@@ -715,13 +715,13 @@ var
 begin
   if FRefreshing then
     Exit;
-  Title := Default(TTitleBlock);
+  // The fields keep the order they print in, and any the boxes do not show
+  Title := FDocument.Layout.Title;
   Title.Enabled := FTitleBox.Checked;
   Title.EveryPage := FEveryPageBox.Checked;
   Title.Corner := TTitleCorner(FCornerBox.ItemIndex);
   for Index := 0 to High(FFieldBoxes) do
-    if FFieldBoxes[Index].Checked then
-      Insert(TITLE_FIELDS[Index], Title.Fields, Length(Title.Fields));
+    Title.Fields := TitleFieldsWith(Title.Fields, TITLE_FIELDS[Index], FFieldBoxes[Index].Checked);
   FDocument.BeginChange(rsChangeTitle);
   FDocument.Layout.Title := Title;
   FDocument.EndChange;

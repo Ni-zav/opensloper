@@ -549,6 +549,7 @@ var
   Solution: TSolution;
   Unknown_, Index, Factor: integer;
   MarkPower: double;
+  FitsPlain: boolean;
 
   function Fixed(UnknownIndex: integer; Value: double): TAffine;
   begin
@@ -602,8 +603,12 @@ begin
     for Index := 0 to High(Numbers) do
     begin
       Unknown_ := FUnknownOf[Index];
-      if not Solution.Determined[Unknown_] and not Result[Index].Marked and (Fits(Unknown_, 0) <> Fits(Unknown_, 1)) then
-        Settle(Unknown_, IfThen(Fits(Unknown_, 0), 0, 1));
+      if Solution.Determined[Unknown_] or Result[Index].Marked then
+        Continue;
+      // Each trial solves the whole system, so each is tried once
+      FitsPlain := Fits(Unknown_, 0);
+      if FitsPlain <> Fits(Unknown_, 1) then
+        Settle(Unknown_, IfThen(FitsPlain, 0, 1));
     end;
     // A factor of something read from the pattern that is still open is
     // taken as a plain number, if that fits: @waist / 4 in a note's value

@@ -303,6 +303,8 @@ type
 function NoteBounds(const Note: TSheetNote; const Values: TFieldValues): TRect2;
 // The same, with its white box when it has one
 function NoteFrameBounds(const Note: TSheetNote; const Values: TFieldValues): TRect2;
+// The same, reaching out to its leader's tip: all the note prints on
+function NoteSpread(const Note: TSheetNote; const Values: TFieldValues): TRect2;
 // Where each line of the note starts across, in layout space
 function NoteLineLeft(const Note: TSheetNote; const Values: TFieldValues; const Line: string): double;
 // The layout's own notes, then the pattern notes printed with each piece
@@ -446,6 +448,17 @@ begin
   Result := NoteBounds(Note, Values);
   if Note.Boxed then
     Result := PaddedBox(Result);
+end;
+
+function NoteSpread(const Note: TSheetNote; const Values: TFieldValues): TRect2;
+begin
+  Result := NoteFrameBounds(Note, Values);
+  if Note.Leader = nlNone then
+    Exit;
+  Result.MinX := Min(Result.MinX, Note.Tip.X);
+  Result.MinY := Min(Result.MinY, Note.Tip.Y);
+  Result.MaxX := Max(Result.MaxX, Note.Tip.X);
+  Result.MaxY := Max(Result.MaxY, Note.Tip.Y);
 end;
 
 function NoteLineLeft(const Note: TSheetNote; const Values: TFieldValues; const Line: string): double;
@@ -1753,9 +1766,9 @@ begin
     Result.Y := Max(Result.Y, Shape.Bounds.MaxY);
   end;
   Values := FieldValues('', '');
-  for Note in Notes do
+  for Note in PrintedNotes(Self, Shapes) do
   begin
-    Spread := NoteBounds(Note, Values);
+    Spread := NoteSpread(Note, Values);
     Result.X := Max(Result.X, Spread.MaxX);
     Result.Y := Max(Result.Y, Spread.MaxY);
   end;
@@ -1799,9 +1812,9 @@ begin
         Result[Index].Blank := False;
         Break;
       end;
-    for Note in Notes do
+    for Note in PrintedNotes(Self, Shapes) do
     begin
-      Spread := NoteBounds(Note, Values);
+      Spread := NoteSpread(Note, Values);
       if (Spread.MaxX > Result[Index].Area.MinX) and (Spread.MinX < Result[Index].Area.MaxX) and
         (Spread.MaxY > Result[Index].Area.MinY) and (Spread.MinY < Result[Index].Area.MaxY) then
         Result[Index].Blank := False;

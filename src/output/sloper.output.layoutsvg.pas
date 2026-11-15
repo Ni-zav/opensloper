@@ -239,15 +239,26 @@ var
   ForMachine: boolean;
   Index: integer;
   Width, Height: double;
+  Values: TFieldValues;
+  Note: TSheetNote;
+  Spread: TRect2;
 begin
   Shapes := Layout.PlacedPieces;
   ForMachine := (Layout.Output.Profile <> '') and Layout.ChosenProfile(Profile);
   Width := 0;
   Height := 0;
+  Values := Layout.FieldValues('', '');
   for Index := 0 to High(Shapes) do
   begin
     Width := Max(Width, Shapes[Index].Bounds.MaxX);
     Height := Max(Height, Shapes[Index].Bounds.MaxY);
+    // A piece's notes print with it, wherever they reach
+    for Note in Shapes[Index].Notes do
+    begin
+      Spread := NoteSpread(Note, Values);
+      Width := Max(Width, Spread.MaxX);
+      Height := Max(Height, Spread.MaxY);
+    end;
   end;
   Width := Width + 2 * SHEET_MARGIN;
   Height := Height + 2 * SHEET_MARGIN;
@@ -258,7 +269,7 @@ begin
     if ForMachine then
       Result := Result + MachinePieceGroup(Shapes[Index], Index + 1, Profile)
     else
-      Result := Result + PieceGroup(Shapes[Index], Index + 1, Layout.FieldValues('', ''));
+      Result := Result + PieceGroup(Shapes[Index], Index + 1, Values);
   Result := Result + '</svg>' + #10;
 end;
 

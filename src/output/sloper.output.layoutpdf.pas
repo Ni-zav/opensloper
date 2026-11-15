@@ -319,15 +319,8 @@ begin
     Ink := 1;
   for Note in PrintedNotes(FLayout, FShapes) do
   begin
-    Spread := NoteFrameBounds(Note, PageValues);
-    Frame := Spread;
-    if Note.Leader <> nlNone then
-    begin
-      Spread.MinX := Min(Spread.MinX, Note.Tip.X);
-      Spread.MinY := Min(Spread.MinY, Note.Tip.Y);
-      Spread.MaxX := Max(Spread.MaxX, Note.Tip.X);
-      Spread.MaxY := Max(Spread.MaxY, Note.Tip.Y);
-    end;
+    Frame := NoteFrameBounds(Note, PageValues);
+    Spread := NoteSpread(Note, PageValues);
     if (Spread.MaxX < Page.Area.MinX) or (Spread.MinX > Page.Area.MaxX) or (Spread.MaxY < Page.Area.MinY) or (Spread.MinY > Page.Area.MaxY) then
       Continue;
     FWriter.SetGray(Ink);

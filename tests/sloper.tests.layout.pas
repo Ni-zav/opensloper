@@ -79,6 +79,7 @@ type
     procedure TestPatternNotesStayUpright;
     procedure TestPatternNotesInPDFAndSVG;
     procedure TestCalloutPrintsItsLeader;
+    procedure TestPieceNoteFarOutIsOnTheSheet;
     procedure TestSheetNoteLookRoundTrip;
     procedure TestBoxedNoteAndAlignmentInPDF;
     procedure TestRotationQuarterTurn;
@@ -814,6 +815,50 @@ begin
   SVG := LayoutToSVG(FLayout);
   AssertTrue('in SVG', Pos('>Hello<', SVG) > 0);
   AssertEquals('screen only in SVG', 0, Pos('Private', SVG));
+end;
+
+// A pattern note well outside its piece still gets a sheet and a page
+procedure TTestLayout.TestPieceNoteFarOutIsOnTheSheet;
+var
+  Pattern: TPattern;
+  Reason, SVG: string;
+  Piece: TPieceObject;
+  Shapes: TPlacedPieceArray;
+  Spread: TRect2;
+  Page: TTilePage;
+  Rows, Columns: integer;
+  Printed: boolean;
+  Point: TFormatSettings;
+begin
+  Point := DefaultFormatSettings;
+  Point.DecimalSeparator := '.';
+  WritePattern;
+  Pattern := TPattern.Create;
+  try
+    AssertTrue(Reason, LoadPatternFromFile(Pattern, FPatternPath, Reason));
+    Piece := TPieceObject(Pattern.FindObject('Front'));
+    AssertNotNull(Pattern.LastError, Pattern.AddNote('', 'Far', naPiece, Piece.Key, '', '600', '20', DEFAULT_NOTE_SIZE, True, nlArrow));
+    AssertTrue(Reason, SavePatternToFile(Pattern, FPatternPath, Reason));
+  finally
+    FreeAndNil(Pattern);
+  end;
+  Prepare;
+  FLayout.Output.Tiles := Tiles;
+  FLayout.PlaceNewPieces;
+  Shapes := FLayout.PlacedPieces;
+  AssertEquals(1, Length(Shapes[0].Notes));
+  Spread := NoteBounds(Shapes[0].Notes[0], FLayout.FieldValues('', ''));
+  AssertTrue('past the piece', Spread.MinX > Shapes[0].Bounds.MaxX);
+  Printed := False;
+  for Page in FLayout.Pages(Shapes, Rows, Columns) do
+    if (Page.Area.MinX <= Spread.MinX) and (Page.Area.MaxX >= Spread.MinX) and (Page.Area.MinY <= Spread.MinY) and
+      (Page.Area.MaxY >= Spread.MinY) then
+      Printed := Printed or not Page.Blank;
+  AssertTrue('its page printed', Printed);
+  SVG := LayoutToSVG(FLayout);
+  SVG := Copy(SVG, Pos('width="', SVG) + Length('width="'), MaxInt);
+  SVG := Copy(SVG, 1, Pos('mm"', SVG) - 1);
+  AssertTrue('in the SVG sheet: ' + SVG, StrToFloat(SVG, Point) >= Spread.MaxX);
 end;
 
 // The tip follows the piece; the text keeps its place relative to it

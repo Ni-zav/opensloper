@@ -298,6 +298,9 @@ var
   Target, Err, Measurements: string;
   Problem: TLayoutProblem;
 begin
+  // A layout of a file that is not there would load nothing
+  if not CheckFileExists(PatternFile) or ((MeasurementOption <> '') and not CheckFileExists(MeasurementOption)) then
+    Exit(EXIT_FAILURE);
   Target := OutputOption;
   if Target = '' then
     Target := ChangeFileExt(PatternFile, LAYOUT_EXTENSION);

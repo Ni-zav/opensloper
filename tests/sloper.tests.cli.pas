@@ -60,6 +60,7 @@ type
     procedure TestExportDraft;
     procedure TestExportDraftUpToUnknown;
     procedure TestLayoutMeasurementsFromHere;
+    procedure TestLayoutMissingPattern;
     procedure TestExportDraftUpToRepeatPoint;
     procedure TestExportDraftBadWidth;
     procedure TestMaterialsOfPattern;
@@ -307,6 +308,13 @@ begin
     DeleteFile(InFolder(ConcatPaths(['work', 'skirt-block.slayout'])));
     RemoveDir(InFolder('work'));
   end;
+end;
+
+procedure TTestCLI.TestLayoutMissingPattern;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['layout', InFolder('skirt.slopr')]));
+  AssertEquals(Format(rsFileNotFound, [InFolder('skirt.slopr')]), FErr.Trim);
+  AssertFalse('no layout written', FileExists(InFolder('skirt.slayout')));
 end;
 
 procedure TTestCLI.TestExportNeedsLayout;

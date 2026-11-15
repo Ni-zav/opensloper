@@ -213,6 +213,18 @@ begin
   AssertTrue(FPattern.SetFormula(Done, 'count', '100000'));
   FPattern.Evaluate;
   AssertTrue('too many', Done.State = esInvalid);
+  // Past Int64, which Round cannot take, it is still only too many
+  AssertTrue(FPattern.SetFormula(Done, 'count', '1e300'));
+  FPattern.Evaluate;
+  AssertTrue('far too many', Done.State = esInvalid);
+  AssertEquals(Format(rsDraftRepeatCount, [500, FormatFloat('0.###', 1e300)]), Done.Message);
+  AssertTrue(FPattern.SetFormula(Done, 'count', '0.5'));
+  FPattern.Evaluate;
+  AssertTrue('rounds to none', Done.State = esInvalid);
+  AssertTrue(FPattern.SetFormula(Done, 'count', '500.4'));
+  FPattern.Evaluate;
+  AssertTrue('rounds to the most', Done.State = esValid);
+  AssertEquals('the most', 500, Done.Count);
 end;
 
 procedure TTestRepeat.TestSamePointRefused;

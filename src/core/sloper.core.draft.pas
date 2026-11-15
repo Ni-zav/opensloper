@@ -1257,7 +1257,9 @@ var
 begin
   if not EvalField(Context, 'count', Amount) then
     Exit(esError);
-  if (Round(Amount) < 1) or (Round(Amount) > MAX_REPEAT_COUNT) then
+  // Checked as a number first, as Round raises past Int64; between these it
+  // rounds to 1 .. MAX_REPEAT_COUNT, and NaN fails it
+  if not ((Amount > 0.5) and (Amount < MAX_REPEAT_COUNT + 0.5)) then
     Exit(Fail(esInvalid, Format(rsDraftRepeatCount, [MAX_REPEAT_COUNT, FormatFloat('0.###', Amount)])));
   Result := ComputePositions(Context, Round(Amount));
   if Result = esValid then

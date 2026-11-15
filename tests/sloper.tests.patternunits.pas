@@ -56,12 +56,15 @@ type
     procedure TestNotesPlacedInPatternUnit;
     procedure TestConvertToCurveHandlesInPatternUnit;
     procedure TestLengthText;
+    // A value too large to work with makes its object invalid, and what
+    // reads it blocked, instead of raising out of the evaluation
+    procedure TestHugeValuesAreInvalid;
   end;
 
 implementation
 
 uses
-  SysUtils, Sloper.Core.Units, Sloper.Core.Geometry, Sloper.Core.Variables, Sloper.Core.Drag, Sloper.Core.PatternFile,
+  SysUtils, Sloper.Core.Units, Sloper.Core.Geometry, Sloper.Core.Variables, Sloper.Core.Drag, Sloper.Core.PatternFile, Sloper.Core.Evaluator,
   Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.EvalTypes;
 
 procedure TTestPatternUnits.SetUp;
@@ -376,6 +379,36 @@ begin
   AssertEquals('to 0.1 cm', '1.2', RoundLengthFormulaText(12.34, muCentimetre));
 end;
 
+procedure TTestPatternUnits.TestHugeValuesAreInvalid;
+var
+  A, B, C, D, E, F: TPointObject;
+  Cross: TEvalNode;
+begin
+  FPattern.Units := muCentimetre;
+  A := Pt('A', '1e308', '0');
+  B := TPointObject(Check(FPattern.AddOffsetPoint('B', A.Key, omCartesian, '1', '0')));
+  // Two lines whose crossing multiplies numbers past range
+  C := Pt('C', '1e200', '1e200');
+  D := Pt('D', '-1e200', '-1e200');
+  E := Pt('E', '1e200', '-1e200');
+  F := Pt('F', '-1e200', '1e200');
+  Cross := Check(FPattern.AddIntersectPoint('X', FPattern.AddLine(C.Key, D.Key).Key, FPattern.AddLine(E.Key, F.Key).Key,
+    False, False, 1)) as TEvalNode;
+  FPattern.Evaluate;
+  AssertTrue('past range in mm', A.State = esInvalid);
+  AssertEquals(rsEvalOutOfRange, A.Message);
+  AssertTrue('reads it', B.State = esBlocked);
+  AssertTrue('in range itself', C.State = esValid);
+  AssertTrue('a crossing past range', Cross.State = esInvalid);
+  AssertEquals(rsEvalOutOfRange, Cross.Message);
+  // The evaluation after it still works
+  AssertTrue(FPattern.SetFormula(A, 'x', '1'));
+  FPattern.Evaluate;
+  AssertTrue(A.Message, A.State = esValid);
+  AssertTrue(B.Message, B.State = esValid);
+end;
+
 initialization
   RegisterTest(TTestPatternUnits);
+
 end.

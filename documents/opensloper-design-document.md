@@ -327,10 +327,10 @@ The evaluator (`Sloper.Core.Evaluator`) turns definitions into coordinates in de
 | --- | --- | --- | --- |
 | Valid | Computed fine |  | Normal |
 | Error | Formula problem | Unknown name, divide by zero, a measurement the set lacks | Red, message on hover |
-| Invalid | Geometry impossible | Parallel lines, distance past the end of a curve | Red, message on hover |
+| Invalid | Geometry impossible | Parallel lines, distance past the end of a curve, a number too large to work with | Red, message on hover |
 | Blocked | An input failed | Depends on an invalid point | Faded orange, "blocked by point C" |
 
-Each node keeps its last good value, drawn ghosted while it fails, so the drawing has no sudden holes. A key missing from the measurement set is one error on its `@` node, and everything reading it is blocked. A reference to an ID that no longer exists is an error on the reader.
+Each node keeps its last good value, drawn ghosted while it fails, so the drawing has no sudden holes. A key missing from the measurement set is one error on its `@` node, and everything reading it is blocked. A reference to an ID that no longer exists is an error on the reader. A math error raised while a node computes, such as a coordinate of `1e308` cm overflowing as it becomes mm, makes that node invalid; the evaluator catches it around each node, so it never ends the evaluation.
 
 **Editing API.** `TPattern` (`Add…`, `SetFormula`, `Rename`, `Delete`) reports refusals in `LastError`, `LastErrorField` and `LastErrorPos`; `Delete` is refused while other nodes use the object. Undo wraps these calls (see Key design decisions). `TPattern` stays the one entry point, but operations that only rework objects already there live in their own units behind its methods: changing type in `Sloper.Core.TypeChange` and merging and breaking points in `Sloper.Core.PointMerge`, which work through a small public editing kernel at the end of the class (`SetError`, `ForgetGraph`, `DeleteNode`, `OrderObjectsByInputs`, `ReplacePoint`, `ReplaceEdge`, `CheckPoint`, `CheckEdgeTarget`); the materials are a `TPatternMaterials` the pattern owns (`Sloper.Core.PatternMaterials`). Operations that make new objects (transforms, offset runs, round corners, notes) stay in `TPattern`, since moving them would open its object-creation internals. Callers go through `TPattern`'s methods, not the units, so they need only `Sloper.Core.Pattern` (decided 2026-11-09).
 

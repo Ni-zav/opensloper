@@ -86,7 +86,8 @@ type
     function FieldUnitKind(const AName: string): TFieldUnitKind; virtual;
     // Computes the result. Called only when every dependency is valid. On
     // failure returns esError or esInvalid with Message set, keeping the last
-    // good result.
+    // good result. A math error raised here makes the node invalid, and may
+    // leave that result part changed.
     function Compute(Context: TEvalContext): TEvalState; virtual; abstract;
     // Called after Compute succeeds, for what every node of a kind adds to
     // its result, such as a point's marker size; failing works as in Compute
@@ -130,6 +131,7 @@ resourcestring
   rsEvalBlocked = 'Blocked by %s';
   rsEvalMissing = 'Uses object %s, which no longer exists';
   rsEvalCycle = 'Part of a circular reference';
+  rsEvalOutOfRange = 'A number here is too large to work with';
 
 implementation
 
@@ -402,9 +404,18 @@ begin
     else
     begin
       Node.FMessage := '';
-      Node.FState := Node.Compute(Context);
-      if Node.FState = esValid then
-        Node.FState := Node.ComputeExtras(Context);
+      // A value too large to work with raises in the geometry it reaches;
+      // it is the node's failure, not the evaluation's
+      try
+        Node.FState := Node.Compute(Context);
+        if Node.FState = esValid then
+          Node.FState := Node.ComputeExtras(Context);
+      except
+        on EMathError do
+          Node.FState := Node.Fail(esInvalid, rsEvalOutOfRange);
+        on EIntError do
+          Node.FState := Node.Fail(esInvalid, rsEvalOutOfRange);
+      end;
       if Node.FState = esValid then
       begin
         Node.FMessage := '';

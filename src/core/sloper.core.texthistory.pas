@@ -24,6 +24,10 @@ unit Sloper.Core.TextHistory;
 
 interface
 
+const
+  // Steps kept, as the pattern's undo keeps; each holds a whole file's text
+  TEXT_HISTORY_LIMIT = 500;
+
 type
   TTextHistory = class
   private
@@ -97,6 +101,11 @@ begin
   begin
     Insert(Before, FUndo, Length(FUndo));
     Insert(Description, FDescriptions, Length(FDescriptions));
+    if Length(FUndo) > TEXT_HISTORY_LIMIT then
+    begin
+      Delete(FUndo, 0, Length(FUndo) - TEXT_HISTORY_LIMIT);
+      Delete(FDescriptions, 0, Length(FDescriptions) - TEXT_HISTORY_LIMIT);
+    end;
   end;
   FRedo := nil;
   FRedoDescriptions := nil;

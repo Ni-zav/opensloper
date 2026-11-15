@@ -74,6 +74,7 @@ type
     procedure TestSameChangeBothSides;
     procedure TestConflictKeepMine;
     procedure TestOpeningDropsAConflict;
+    procedure TestHistoryKeepsTheLatestSteps;
     procedure TestConflictTakeTheirs;
     procedure TestConflictTheyDeleted;
     procedure TestSaveRefusedWhileFileIsNewer;
@@ -93,7 +94,7 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.JSON, Sloper.Core.Names, Sloper.Core.Pattern, Sloper.Core.PatternCheck, Sloper.Core.PatternFile;
+  SysUtils, Sloper.Core.JSON, Sloper.Core.Names, Sloper.Core.Pattern, Sloper.Core.PatternCheck, Sloper.Core.PatternFile, Sloper.Core.TextHistory;
 
 procedure TTestMeasurementDocument.SetUp;
 begin
@@ -505,6 +506,31 @@ begin
   AssertNear('the file as it is', 840, FDocument.Measurements[0].Value);
   ChangeOnDisk('waist', 850);
   AssertTrue('changes are taken in again', CheckTwice = fcReloaded);
+end;
+
+// Each step holds a whole file, so only the latest are kept
+procedure TTestMeasurementDocument.TestHistoryKeepsTheLatestSteps;
+var
+  History: TTextHistory;
+  Index, Steps: integer;
+  Text: string;
+begin
+  History := TTextHistory.Create;
+  try
+    for Index := 1 to TEXT_HISTORY_LIMIT + 10 do
+      History.Add(IntToStr(Index), 'Step', '');
+    Steps := 0;
+    Text := 'now';
+    while History.CanUndo do
+    begin
+      Text := History.Undo(Text);
+      Inc(Steps);
+    end;
+    AssertEquals('kept', TEXT_HISTORY_LIMIT, Steps);
+    AssertEquals('the oldest kept', '11', Text);
+  finally
+    FreeAndNil(History);
+  end;
 end;
 
 procedure TTestMeasurementDocument.TestConflictTakeTheirs;

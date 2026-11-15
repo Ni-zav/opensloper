@@ -396,6 +396,10 @@ begin
     FRefusals := nil;
   if Changes * [dcPattern, dcObjectsReplaced, dcMeasurements] = [] then
     Exit;
+  // A drag sends one notice per move; every row is rebuilt once at the end,
+  // when EndChange or CancelChange notifies with the change closed
+  if Document.ChangeOpen then
+    Exit;
   if FCommitting then
     QueueRefresh
   else

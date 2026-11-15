@@ -123,6 +123,10 @@ type
     procedure TestNotesRoundTrip;
     procedure TestBadNotesRefused;
     procedure TestNoteMakesAPageNeeded;
+    // A layout too large for MAX_TILE_PAGES gets that many at most, and a
+    // problem that stops printing, never billions or an overflow
+    procedure TestTilePagesCapped;
+    procedure TestTooManyPagesBlocks;
     procedure TestNotePrintedOnItsPage;
     procedure TestNoteOverPieceWarns;
     procedure TestNoteAt;
@@ -2077,6 +2081,53 @@ begin
   AssertTrue('the grid reaches it', Columns >= 3);
   AssertFalse('its page is printed', Pages[2].Blank);
   AssertTrue('the one between stays blank', Pages[1].Blank);
+end;
+
+procedure TTestLayout.TestTilePagesCapped;
+var
+  Pages: TTilePageArray;
+  Rows, Columns: integer;
+  Fine: TTileSettings;
+begin
+  AssertFalse(TooManyTilePages(Vec2(1000, 1000), Tiles));
+  Pages := TilePages(Vec2(1e300, 1e300), Tiles, Rows, Columns);
+  AssertTrue(TooManyTilePages(Vec2(1e300, 1e300), Tiles));
+  AssertEquals('as many as the grid holds', Rows * Columns, Length(Pages));
+  AssertTrue('no more than the cap', Length(Pages) <= MAX_TILE_PAGES);
+  Pages := TilePages(Vec2(1e300, 100), Tiles, Rows, Columns);
+  AssertEquals(1, Rows);
+  AssertEquals(MAX_TILE_PAGES, Columns);
+  Pages := TilePages(Vec2(NaN, Infinity), Tiles, Rows, Columns);
+  AssertTrue(TooManyTilePages(Vec2(NaN, 100), Tiles));
+  AssertTrue(Length(Pages) <= MAX_TILE_PAGES);
+  // A sliver of paper to print on is as many pages
+  Fine := Tiles;
+  Fine.Margin := 104.9995;
+  Fine.Overlap := 0;
+  AssertTrue(TilesAreUsable(Fine));
+  AssertTrue(TooManyTilePages(Vec2(10000, 10000), Fine));
+  Pages := TilePages(Vec2(10000, 10000), Fine, Rows, Columns);
+  AssertTrue(Length(Pages) <= MAX_TILE_PAGES);
+end;
+
+procedure TTestLayout.TestTooManyPagesBlocks;
+var
+  Pages: TTilePageArray;
+  Rows, Columns: integer;
+  Problem: TLayoutProblem;
+  Found: boolean;
+begin
+  WritePattern;
+  Prepare;
+  FLayout.PlaceNewPieces;
+  FLayout.AddNote('Far away', 1e300, 20, 12);
+  Pages := FLayout.Pages(FLayout.PlacedPieces, Rows, Columns);
+  AssertTrue(Length(Pages) <= MAX_TILE_PAGES);
+  Found := False;
+  for Problem in FLayout.Problems do
+    if Problem.Text = Format(rsLayoutTooManyPages, [MAX_TILE_PAGES]) then
+      Found := Problem.Blocking;
+  AssertTrue(ProblemText, Found);
 end;
 
 procedure TTestLayout.TestNotePrintedOnItsPage;

@@ -27,6 +27,11 @@ interface
 uses
   Sloper.Core.Geometry;
 
+const
+  // The most pages a tiled print has: about 75 by 120 m of A4. Past this a
+  // layout is refused, and only this many pages are laid out.
+  MAX_TILE_PAGES = 10000;
+
 type
   TTileSettings = record
     PaperWidth, PaperHeight, Margin, Overlap: double;
@@ -47,7 +52,11 @@ type
 
 // False when the margins and overlap leave nothing to print on
 function TilesAreUsable(const Settings: TTileSettings): boolean;
-// Every page needed to cover the layout from (0, 0) to Extent, row by row
+// True when covering Extent takes more than MAX_TILE_PAGES pages, or Extent
+// is not finite
+function TooManyTilePages(const Extent: TVec2; const Settings: TTileSettings): boolean;
+// Every page needed to cover the layout from (0, 0) to Extent, row by row,
+// but no more than MAX_TILE_PAGES of them
 function TilePages(const Extent: TVec2; const Settings: TTileSettings; out RowCount, ColumnCount: integer): TTilePageArray;
 // A1, A2 ... B1; rows past Z go on to AA
 function TileCaption(Row, Column: integer): string;
@@ -65,12 +74,37 @@ begin
     (Settings.PaperHeight - 2 * Settings.Margin - Settings.Overlap > 0) and (Settings.Margin >= 0) and (Settings.Overlap >= 0);
 end;
 
-// Pages after the first each add their printable size less the overlap
+// Pages after the first each add their printable size less the overlap.
+// Past MAX_TILE_PAGES, or for an extent that is not a number, this is
+// MAX_TILE_PAGES + 1, so Ceil never meets a number past an integer.
 function PagesFor(Extent, Printable, Overlap: double): integer;
+var
+  Count: double;
 begin
+  // Comparing NaN raises while floating point exceptions are unmasked
+  if IsNan(Extent) then
+    Exit(MAX_TILE_PAGES + 1);
   Result := 1;
-  if Extent > Printable then
-    Result := 1 + Ceil((Extent - Printable - DEFAULT_TOLERANCE) / (Printable - Overlap));
+  if Extent <= Printable then
+    Exit;
+  Count := (Extent - Printable - DEFAULT_TOLERANCE) / (Printable - Overlap);
+  if Count >= MAX_TILE_PAGES then
+    Exit(MAX_TILE_PAGES + 1);
+  Result := 1 + Ceil(Count);
+end;
+
+procedure CountTiles(const Extent: TVec2; const Settings: TTileSettings; out RowCount, ColumnCount: integer);
+begin
+  ColumnCount := PagesFor(Extent.X, Settings.PaperWidth - 2 * Settings.Margin, Settings.Overlap);
+  RowCount := PagesFor(Extent.Y, Settings.PaperHeight - 2 * Settings.Margin, Settings.Overlap);
+end;
+
+function TooManyTilePages(const Extent: TVec2; const Settings: TTileSettings): boolean;
+var
+  RowCount, ColumnCount: integer;
+begin
+  CountTiles(Extent, Settings, RowCount, ColumnCount);
+  Result := int64(RowCount) * ColumnCount > MAX_TILE_PAGES;
 end;
 
 function TilePages(const Extent: TVec2; const Settings: TTileSettings; out RowCount, ColumnCount: integer): TTilePageArray;
@@ -80,8 +114,10 @@ var
 begin
   PrintWidth := Settings.PaperWidth - 2 * Settings.Margin;
   PrintHeight := Settings.PaperHeight - 2 * Settings.Margin;
-  ColumnCount := PagesFor(Extent.X, PrintWidth, Settings.Overlap);
-  RowCount := PagesFor(Extent.Y, PrintHeight, Settings.Overlap);
+  CountTiles(Extent, Settings, RowCount, ColumnCount);
+  // Too many is a problem that stops printing; these are the first of them
+  ColumnCount := Min(ColumnCount, MAX_TILE_PAGES);
+  RowCount := Min(RowCount, MAX_TILE_PAGES div ColumnCount);
   Result := nil;
   SetLength(Result, RowCount * ColumnCount);
   Index := 0;

@@ -208,6 +208,8 @@ type
     function IsPlaced(SourceId: integer; const PieceKey: string; Copy: integer): boolean;
     procedure AddOverlapProblems(var Problems: TLayoutProblemArray);
     procedure AddFontProblems(var Problems: TLayoutProblemArray);
+    // The far corner of everything printed, from (0, 0)
+    function SheetExtent(const Shapes: TPlacedPieceArray): TVec2;
     function PageIsExcluded(const Caption: string): boolean;
     // The lowest ID no source has, once the counter is past JSON_MAX_ID
     function LowestFreeSourceId: integer;
@@ -326,6 +328,7 @@ resourcestring
   rsLayoutBadPaper = 'Paper "%s" is not known; give paperWidth and paperHeight for custom paper';
   rsLayoutBadNextId = '"nextId" must be a whole number above every source ID';
   rsLayoutNoPrintArea = 'The margin and overlap leave nothing to print on';
+  rsLayoutTooManyPages = 'The layout would print on more than %d pages; move what lies far out, or use larger paper or smaller margins';
   rsLayoutNoFile = 'File not found: %s';
   rsLayoutSetAndSize = '%s, size %s';
   rsLayoutSourceProblem = '%s: %s';
@@ -926,6 +929,8 @@ begin
     if not GetJSONString(Item, 'text', Note.Text) or not GetJSONNumber(Item, 'x', Note.X) or not GetJSONNumber(Item, 'y', Note.Y) then
       Exit(False);
     ReadOptionalNumber(Item, 'size', Note.Size);
+    if (Note.Size <= 0) or (Note.Size > MAX_NOTE_SIZE) then
+      Exit(False);
     if GetJSONString(Item, 'align', AlignText) then
       for Align := Low(TTextAlign) to High(TTextAlign) do
         if TEXT_ALIGN_NAMES[Align] = AlignText then
@@ -1734,6 +1739,28 @@ begin
   Output.ExcludedPages := Kept;
 end;
 
+function TLayout.SheetExtent(const Shapes: TPlacedPieceArray): TVec2;
+var
+  Shape: TPlacedPiece;
+  Note: TSheetNote;
+  Spread: TRect2;
+  Values: TFieldValues;
+begin
+  Result := Vec2(0, 0);
+  for Shape in Shapes do
+  begin
+    Result.X := Max(Result.X, Shape.Bounds.MaxX);
+    Result.Y := Max(Result.Y, Shape.Bounds.MaxY);
+  end;
+  Values := FieldValues('', '');
+  for Note in Notes do
+  begin
+    Spread := NoteBounds(Note, Values);
+    Result.X := Max(Result.X, Spread.MaxX);
+    Result.Y := Max(Result.Y, Spread.MaxY);
+  end;
+end;
+
 function TLayout.Pages(const Shapes: TPlacedPieceArray; out RowCount, ColumnCount: integer): TTilePageArray;
 var
   Extent: TVec2;
@@ -1743,19 +1770,8 @@ var
   Spread: TRect2;
   Values: TFieldValues;
 begin
-  Extent := Vec2(0, 0);
-  for Shape in Shapes do
-  begin
-    Extent.X := Max(Extent.X, Shape.Bounds.MaxX);
-    Extent.Y := Max(Extent.Y, Shape.Bounds.MaxY);
-  end;
+  Extent := SheetExtent(Shapes);
   Values := FieldValues('', '');
-  for Note in Notes do
-  begin
-    Spread := NoteBounds(Note, Values);
-    Extent.X := Max(Extent.X, Spread.MaxX);
-    Extent.Y := Max(Extent.Y, Spread.MaxY);
-  end;
   if Output.Kind <> okTiled then
   begin
     RowCount := 1;
@@ -1950,6 +1966,8 @@ begin
     Add(rsLayoutNothingPlaced, True);
   if AllRead and (Output.Material <> '') and not MaterialExists then
     Add(Format(rsLayoutNoMaterial, [Output.Material]), False);
+  if (Output.Kind = okTiled) and TooManyTilePages(SheetExtent(PlacedPieces), Output.Tiles) then
+    Add(Format(rsLayoutTooManyPages, [MAX_TILE_PAGES]), True);
   AddOverlapProblems(Result);
   AddFontProblems(Result);
 end;

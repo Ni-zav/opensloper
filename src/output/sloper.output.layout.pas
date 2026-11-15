@@ -204,7 +204,8 @@ type
     FNeedKey, FNeedSummary: string;
     function ResolvePath(const Stored: string): string;
     procedure LoadSource(Source: TLayoutSource);
-    function NewPlacement(const Item: TUnplacedCopy; out Piece: TPieceObject): TPlacement;
+    // False when the item cannot be placed, as when its piece has gone since
+    function NewPlacement(const Item: TUnplacedCopy; out Placement: TPlacement; out Piece: TPieceObject): boolean;
     function IsPlaced(SourceId: integer; const PieceKey: string; Copy: integer): boolean;
     procedure AddOverlapProblems(var Problems: TLayoutProblemArray);
     procedure AddFontProblems(var Problems: TLayoutProblemArray);
@@ -1509,16 +1510,18 @@ begin
 end;
 
 // Even copies are the other side of a mirrored pair
-function TLayout.NewPlacement(const Item: TUnplacedCopy; out Piece: TPieceObject): TPlacement;
+function TLayout.NewPlacement(const Item: TUnplacedCopy; out Placement: TPlacement; out Piece: TPieceObject): boolean;
 var
   Source: TLayoutSource;
 begin
-  Result := Default(TPlacement);
-  Result.SourceId := Item.SourceId;
-  Result.PieceKey := Item.PieceKey;
-  Result.Copy := Item.Copy;
-  FindPiece(Result, Source, Piece);
-  Result.Flipped := Piece.Mirrored and not Piece.OnFold and not Odd(Item.Copy);
+  Placement := Default(TPlacement);
+  Placement.SourceId := Item.SourceId;
+  Placement.PieceKey := Item.PieceKey;
+  Placement.Copy := Item.Copy;
+  // The item may be older than the pattern, which a reload changes
+  Result := Item.CanPlace and FindPiece(Placement, Source, Piece) and (Piece.State = esValid) and (Length(Piece.CutLine) > 0);
+  if Result then
+    Placement.Flipped := Piece.Mirrored and not Piece.OnFold and not Odd(Item.Copy);
 end;
 
 function TLayout.PlaceCopies(const Copies: TUnplacedCopyArray): integer;
@@ -1537,9 +1540,8 @@ begin
     RowY := Max(RowY, Shape.Bounds.MaxY + SHELF_GAP);
   for Item in Copies do
   begin
-    if not Item.CanPlace then
+    if not NewPlacement(Item, Placement, Piece) then
       Continue;
-    Placement := NewPlacement(Item, Piece);
     Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile);
     if (RowX > 0) and (RowX + Shape.Bounds.MaxX - Shape.Bounds.MinX > SHELF_WIDTH) then
     begin
@@ -1568,9 +1570,8 @@ var
   Placement: TPlacement;
   Shape: TPlacedPiece;
 begin
-  if not Item.CanPlace then
+  if not NewPlacement(Item, Placement, Piece) then
     Exit(-1);
-  Placement := NewPlacement(Item, Piece);
   Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile);
   Placement.X := Max(0, Round((At.X - (Shape.Bounds.MaxX - Shape.Bounds.MinX) / 2) / Step) * Step);
   Placement.Y := Max(0, Round((At.Y - (Shape.Bounds.MaxY - Shape.Bounds.MinY) / 2) / Step) * Step);

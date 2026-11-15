@@ -160,6 +160,7 @@ type
     procedure TestPlaceCopyAtCentres;
     procedure TestPlaceCopyAtStaysOnSheet;
     procedure TestPlaceCopyAtFlipsEvenCopies;
+    procedure TestPlaceGoneCopyRefused;
     procedure TestRemovePlacementReturnsToUnplaced;
     procedure TestFailingPieceWaitsUnplaced;
     procedure TestExtraCopyWarns;
@@ -1898,6 +1899,22 @@ begin
   // 120 mm wide, centred, then on the 0.5 mm grid
   AssertNear('left', 240, Shapes[0].Bounds.MinX);
   AssertNear('top', 340, Shapes[0].Bounds.MinY);
+end;
+
+// A tray item from before its pattern lost the piece places nothing
+procedure TTestLayout.TestPlaceGoneCopyRefused;
+var
+  Item: TUnplacedCopy;
+  Pattern: TPattern;
+begin
+  WritePattern;
+  Prepare;
+  Item := FLayout.Unplaced[0];
+  Pattern := FLayout.Sources[0].Pattern;
+  AssertTrue(Pattern.LastError, Pattern.Delete(Pattern.FindObject('Front')));
+  AssertEquals('dropped', -1, FLayout.PlaceCopyAt(Item, Vec2(300, 400), 0.5));
+  AssertEquals('in rows', 0, FLayout.PlaceCopies([Item]));
+  AssertEquals('nothing placed', 0, Length(FLayout.Placements));
 end;
 
 procedure TTestLayout.TestPlaceCopyAtStaysOnSheet;

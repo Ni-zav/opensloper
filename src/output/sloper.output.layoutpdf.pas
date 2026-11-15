@@ -44,6 +44,9 @@ resourcestring
   rsPDFPages = '%d pages to print, %d blank, %d left out';
   rsPDFProjectorFit = 'Set the projector so that this square measures %s on the material.';
   rsPDFProjectorZoom = 'Show at 100%, then adjust the projector, not the viewer.';
+  // The test square's side, put into rsPDFCheckSquare and rsPDFProjectorFit
+  rsPDFSquareInches = '4 in';
+  rsPDFSquareCentimetres = '10 cm';
 
 implementation
 
@@ -170,12 +173,12 @@ begin
   if FLayout.Output.Paper = 'Letter' then
   begin
     Side := LETTER_TEST_SQUARE_SIDE;
-    Width := '4 in';
+    Width := rsPDFSquareInches;
   end
   else
   begin
     Side := TEST_SQUARE_SIDE;
-    Width := '10 cm';
+    Width := rsPDFSquareCentimetres;
   end;
   if FLayout.Output.Kind = okProjector then
     FWriter.Text(Left, Top + 22, BODY_SIZE, Format(rsPDFProjectorFit, [Width]))

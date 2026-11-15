@@ -56,6 +56,9 @@ type
     procedure TestHighestIds;
     // An ID past 32 bits is refused, not cut down to another object's
     procedure TestIdPast32BitsRefused;
+    // A transform's sources must be IDs: a fraction, a huge number or one
+    // past 32 bits is refused, not raised out of the loader or cut down
+    procedure TestTransformSourcesMustBeIds;
     procedure TestHeaderErrors;
     procedure TestObjectErrors;
     procedure TestFailedLoadEmptiesPattern;
@@ -389,6 +392,21 @@ begin
   AssertFalse('a reference, which would read as 1', LoadPatternFromText(FLoaded,
     PatternWithObjects('[{"id": 1, "type": "freePoint", "name": "A", "x": "0", "y": "0"}, ' +
     '{"id": 2, "type": "offsetPoint", "name": "B", "base": 4294967297, "mode": "cartesian", "dx": "1", "dy": "0"}]'), Err));
+end;
+
+procedure TTestPatternFile.TestTransformSourcesMustBeIds;
+const
+  POINT_A = '{"id": 1, "type": "freePoint", "name": "A", "x": "0", "y": "0"}, ';
+  MOVE = '{"id": 2, "type": "move", "name": "M", "suffix": "_M", "mode": "cartesian", "dx": "1", "dy": "0", "sources": ';
+var
+  Err: string;
+begin
+  AssertTrue(Err, LoadPatternFromText(FLoaded, PatternWithObjects('[' + POINT_A + MOVE + '[1]}]'), Err));
+  AssertFalse('huge', LoadPatternFromText(FLoaded, PatternWithObjects('[' + POINT_A + MOVE + '[1e300]}]'), Err));
+  AssertFalse('fraction', LoadPatternFromText(FLoaded, PatternWithObjects('[' + POINT_A + MOVE + '[1.5]}]'), Err));
+  AssertFalse('past 32 bits, which would read as 1', LoadPatternFromText(FLoaded,
+    PatternWithObjects('[' + POINT_A + MOVE + '[4294967297]}]'), Err));
+  AssertFalse('zero', LoadPatternFromText(FLoaded, PatternWithObjects('[' + POINT_A + MOVE + '[0]}]'), Err));
 end;
 
 procedure TTestPatternFile.TestHeaderErrors;

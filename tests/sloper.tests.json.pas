@@ -211,7 +211,7 @@ var
   Obj: TJSONObject;
   Msg, S: string;
   D: double;
-  I: integer;
+  I, Index: integer;
 begin
   AssertTrue(ParseJSONObject('{"big": 4294967297}', Obj, Msg));
   try
@@ -231,6 +231,16 @@ begin
     AssertFalse('float is not an integer', GetJSONInteger(Obj, 'n', I));
     AssertFalse('missing', GetJSONNumber(Obj, 'zz', D));
     AssertFalse('boolean is not a number', GetJSONNumber(Obj, 'b', D));
+  finally
+    FreeAndNil(Obj);
+  end;
+  AssertTrue(ParseJSONObject('{"ids": [7, 0, 1.5, 1e300, 4294967297, 2147483647, "3"]}', Obj, Msg));
+  try
+    AssertTrue(JSONItemId(Obj.Arrays['ids'][0], I));
+    AssertEquals(7, I);
+    for Index := 1 to 6 do
+      AssertFalse('not an ID: ' + Obj.Arrays['ids'][Index].AsJSON, JSONItemId(Obj.Arrays['ids'][Index], I));
+    AssertFalse('nothing', JSONItemId(nil, I));
   finally
     FreeAndNil(Obj);
   end;

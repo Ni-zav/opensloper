@@ -71,6 +71,8 @@ function GetJSONNumber(Obj: TJSONObject; const Name: string; out Value: double):
 function GetJSONInteger(Obj: TJSONObject; const Name: string; out Value: integer): boolean;
 // An object's ID: a whole number from 1 to JSON_MAX_ID
 function GetJSONId(Obj: TJSONObject; const Name: string; out Value: integer): boolean;
+// The same for an item of a list
+function JSONItemId(Data: TJSONData; out Value: integer): boolean;
 function GetJSONBoolean(Obj: TJSONObject; const Name: string; out Value: boolean): boolean;
 
 resourcestring
@@ -452,7 +454,17 @@ end;
 
 function GetJSONId(Obj: TJSONObject; const Name: string; out Value: integer): boolean;
 begin
-  Result := GetJSONInteger(Obj, Name, Value) and (Value >= 1) and (Value <= JSON_MAX_ID);
+  Result := JSONItemId(Obj.Find(Name), Value);
+end;
+
+function JSONItemId(Data: TJSONData; out Value: integer): boolean;
+begin
+  Value := 0;
+  // As GetJSONInteger: only 32 bits, and never a fraction or a huge number
+  // that AsInteger would raise on
+  if Data is TJSONIntegerNumber then
+    Value := Data.AsInteger;
+  Result := (Value >= 1) and (Value <= JSON_MAX_ID);
 end;
 
 function GetJSONBoolean(Obj: TJSONObject; const Name: string; out Value: boolean): boolean;

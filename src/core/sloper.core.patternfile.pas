@@ -807,15 +807,14 @@ end;
 // Whole positive numbers from a list, as keys; anything else is passed over
 function ViewIds(List: TJSONData): TStringArray;
 var
-  Index: integer;
+  Index, Id: integer;
 begin
   Result := nil;
   if not Assigned(List) or (List.JSONType <> jtArray) then
     Exit;
   for Index := 0 to List.Count - 1 do
-    if (List.Items[Index].JSONType = jtNumber) and (TJSONNumber(List.Items[Index]).NumberType = ntInteger) and
-      (List.Items[Index].AsInteger > 0) then
-      Insert(IntToStr(List.Items[Index].AsInteger), Result, Length(Result));
+    if JSONItemId(List.Items[Index], Id) then
+      Insert(IntToStr(Id), Result, Length(Result));
 end;
 
 // The view is only a convenience, so anything odd in it is passed over
@@ -1672,7 +1671,7 @@ end;
 function TPatternLoader.ReadSources(Item: TJSONObject; out Sources: TStringArray): boolean;
 var
   List: TJSONData;
-  Index: integer;
+  Index, Id: integer;
   Node: TEvalNode;
   Key: string;
 begin
@@ -1682,9 +1681,9 @@ begin
     Exit(Missing('sources'));
   for Index := 0 to List.Count - 1 do
   begin
-    if List.Items[Index].JSONType <> jtNumber then
+    if not JSONItemId(List.Items[Index], Id) then
       Exit(Missing('sources'));
-    Key := MapKey(List.Items[Index].AsInteger);
+    Key := MapKey(Id);
     Node := FPattern.FindNode(Key);
     if not Assigned(Node) then
       Exit(Fail(Format(rsPatternObjectNotBefore, [FId, Key])));

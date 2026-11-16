@@ -2,6 +2,8 @@
 ;   ISCC /DAppVersion=VERSION /DSourceDir=STAGED /DOutputDir=DIST /DOutputName=NAME opensloper.iss
 ; SourceDir is the folder the .zip download is made from: the programs, data
 ; (with the offline user guide in data\help), LICENSE.txt and README.txt.
+; SourceDir and OutputDir must be absolute: a relative path is taken from the
+; folder of this file.
 ;
 ; It installs for all users into Program Files, or for the current user alone
 ; without administrator rights, as the user chooses; the registry entries

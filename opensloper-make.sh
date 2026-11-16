@@ -635,8 +635,8 @@ package_setup() {
     return
   fi
   # Git Bash would take the /-options for paths and rewrite them
-  MSYS2_ARG_CONV_EXCL='*' "$iscc" /Q "/DAppVersion=$VERSION" "/DSourceDir=$(cygpath -w "$root")" \
-    "/DOutputDir=$(cygpath -w release/dist)" "/DOutputName=$name-setup" resources/windows/opensloper.iss
+  MSYS2_ARG_CONV_EXCL='*' "$iscc" /Q "/DAppVersion=$VERSION" "/DSourceDir=$(cygpath -aw "$root")" \
+    "/DOutputDir=$(cygpath -aw release/dist)" "/DOutputName=$name-setup" resources/windows/opensloper.iss
   echo "release/dist/$name-setup.exe"
 }
 

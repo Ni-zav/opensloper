@@ -42,6 +42,7 @@ Commands:
   package                pack the built apps for this platform into release/dist
   release [VERSION]      print a release's notes: its CHANGELOG.md section, else
                          its commits since the last release
+  version                print the current version
   help                   show this help
 EOF
 }
@@ -57,6 +58,9 @@ app_version() {
   echo "$version"
 }
 
+cmd_version() {
+  app_version;
+}
 # The Pascal sources the formatter and the standards check look at:
 # src/packages/ and the Lazarus-generated package unit osclipper2.pas are left alone
 source_files() {
@@ -552,6 +556,7 @@ case "$COMMAND" in
   docs) cmd_docs "$@" ;;
   package) cmd_package "$@" ;;
   release) cmd_release "$@" ;;
+  version) cmd_version "$@" ;;
   help | -h | --help) usage ;;
   "")
     usage >&2

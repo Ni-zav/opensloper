@@ -29,7 +29,7 @@ uses
   Sloper.Core.Piece,
   Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties,
   Sloper.UI.ListPanel, Sloper.UI.ObjectsPanel, Sloper.UI.VariablesPanel,
-  Sloper.UI.MeasurementsPanel, Sloper.UI.AlignPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
+  Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
   Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.UI.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
   Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.Accordion, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
   Sloper.UI.GarmentPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
@@ -132,7 +132,6 @@ type
     FGarment: TGarmentPanel;
     FVariables: TVariablesPanel;
     FMeasurements: TMeasurementsPanel;
-    FAlign: TAlignPanel;
     FNewSetDialog: TSaveDialog;
     FMeasurementWatch: TTimer;
     FOpenSetAction: TAction;
@@ -179,7 +178,6 @@ type
     procedure GarmentHoverPiece(Sender: TObject; const PieceKey: string);
     procedure GarmentSelectPiece(Sender: TObject; const PieceKey: string);
     procedure ObjectsSelect(Sender: TObject);
-    procedure AlignSelect(Sender: TObject; const Key: string);
     procedure ObjectsZoom(Sender: TObject);
     procedure ObjectsDelete(Sender: TObject);
     procedure MeasurementsNewSet(Sender: TObject);
@@ -318,7 +316,6 @@ resourcestring
   rsTabGarment = 'Garment';
   rsTabVariables = 'Variables';
   rsTabMeasurements = 'Measurements';
-  rsTabAlign = 'Align';
   rsMenuViewLabels = '&Labels';
   rsMenuViewPieceFills = 'Piece &Fills';
   rsMenuViewAnnotations = '&Annotations';
@@ -592,12 +589,6 @@ begin
   FMeasurementWatch := TTimer.Create(Self);
   FMeasurementWatch.Interval := MEASUREMENT_WATCH_MILLISECONDS;
   FMeasurementWatch.OnTimer := @MeasurementWatchTick;
-  FAlign := TAlignPanel(AddSection('align', rsTabAlign, TAlignPanel.Create(Self)));
-  FAlign.Document := FDocument;
-  FAlign.OnMessage := @ListPanelMessage;
-  FAlign.OnSelect := @AlignSelect;
-  // Hidden until the panel is fixed; the arrange code stays for the Automation API
-  FSidePanel.SetSectionShown(FAlign.Parent, False);
   FRoles := TRolesPanel(AddSection('lines', rsTabLines, TRolesPanel.Create(Self)));
   FRoles.Document := FDocument;
   FRoles.OnMessage := @ListPanelMessage;
@@ -643,11 +634,6 @@ end;
 procedure TMainForm.ListPanelMessage(Sender: TObject; const AText: string);
 begin
   StatusBar.Panels[PANEL_MESSAGE].Text := AText;
-end;
-
-procedure TMainForm.AlignSelect(Sender: TObject; const Key: string);
-begin
-  FCanvas.SelectObjects([Key]);
 end;
 
 procedure TMainForm.ObjectsSelect(Sender: TObject);
@@ -1369,7 +1355,6 @@ end;
 procedure TMainForm.CanvasSelectionChange(Sender: TObject);
 begin
   FObjects.ShowSelection(FCanvas.Selection);
-  FAlign.Selection := FCanvas.Selection;
   FProperties.ShowSelection(FCanvas.Selection);
   FGarment.ShowSelection(FCanvas.Selection);
   UpdateMenus;
@@ -1393,7 +1378,6 @@ begin
   FVariables.Document := nil;
   FMeasurements.Document := nil;
   FRoles.Document := nil;
-  FAlign.Document := nil;
   FDocument.RemoveListener(@DocumentChanged);
   FreeAndNil(FDocument);
 end;

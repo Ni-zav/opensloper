@@ -97,6 +97,7 @@ type
     procedure TestArrangeAligns;
     procedure TestArrangeLeavesFormulasUnlessTold;
     procedure TestArrangeRefused;
+    procedure TestArrangeRefusedForLockedPoint;
     procedure TestAddRepeat;
     procedure TestRepeatPointAsAnInput;
     // A repeat point takes its ID inside the call's change: a call that fails
@@ -913,6 +914,19 @@ begin
   AssertNear('left', 15, ObjectNamed('Q').Get('x', 0.0));
   Call('arrange', '{"action": "alignVertical", "points": ["P", "Q"], "reference": "P", "replace": ["Q"]}');
   AssertNear('replaced', 70, ObjectNamed('Q').Get('x', 0.0));
+end;
+
+// The document refuses moving a locked point, and nothing is changed
+procedure TTestAPI.TestArrangeRefusedForLockedPoint;
+begin
+  OpenTestPattern;
+  Call('add_point', '{"type": "freePoint", "name": "P", "x": "70", "y": "0"}');
+  Call('add_point', '{"type": "freePoint", "name": "Q", "x": "10", "y": "5"}');
+  Call('set_locked', '{"name": "Q", "locked": true}');
+  Call('arrange', '{"action": "alignVertical", "points": ["P", "Q"], "reference": "P"}');
+  AssertEquals('refused', RPC_REFUSED, ErrorCode);
+  AssertEquals(Format(rsPatternLocked, ['Q']), ErrorText);
+  AssertNear('not moved', 10, ObjectNamed('Q').Get('x', 0.0));
 end;
 
 procedure TTestAPI.TestAddRepeat;

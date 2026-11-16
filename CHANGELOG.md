@@ -117,13 +117,19 @@ Changed, Fixed and Removed under each version.
 - A pending measurement conflict is dropped when another file is opened.
 - Only text names are read from the catalogue's name lists.
 - The measurement text that was loaded is remembered, not read a second time.
-- The Lines and Align panels no longer outlive the document when the design
+- The Lines panel no longer outlives the document when the design
   window closes.
 - A publish drag no longer loses the piece it moves.
 - A header or cell edit is finished before switching measurement files.
 - The title fields keep their order when one is ticked or cleared.
 - A plain bracket before a link no longer garbles the Python client's
   docstrings.
+
+### Removed
+
+- The hidden Align tab of the design app. Points are lined up and spaced out
+  by their formulas and by Tools → Points → Repeat Points; the Automation
+  API's `arrange` stays (#36).
 
 ## 0.2.0
 

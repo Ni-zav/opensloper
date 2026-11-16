@@ -516,7 +516,7 @@ Construction lines are left out by their role, and an edge with outline split pa
 
 The core works these out (`TPattern.IsHidden`, `IsDimmed`, `IsActive`, `PiecesInDrawOrder`) and keeps them until the view, an evaluation or the object count changes; the canvas, snapping and the painter only ask. The Garment tab follows all three (see Garment view).
 
-**Align and distribute** (`Sloper.Core.Arrange`). Modelled on Inkscape's Align and Distribute, but each action rewrites the selected points' definitions so the arrangement holds when measurements change: align sets `x` to `{A}.x`; distribute makes inner points Between points at `i/(n+1)` or Along edge points at equal arc length. A point placed by a formula is only replaced on a yes, and nothing formula-driven is overwritten silently. A point's operation changes in place (`ConvertToFree`, `ConvertToBetween`, `ConvertToAlongEdge`), keeping its ID, name, users and marker with its size. The Align tab is hidden (2026-11-05) because the panel does not work correctly; the code is reached through the Automation API's `arrange`.
+**Align and distribute** (`Sloper.Core.Arrange`), through the Automation API's `arrange` only. Modelled on Inkscape's Align and Distribute, but each action rewrites the selected points' definitions so the arrangement holds when measurements change: align sets `x` to `{A}.x`; distribute makes inner points Between points at `i/(n+1)` or Along edge points at equal arc length. A point placed by a formula is only replaced on a yes, and nothing formula-driven is overwritten silently. A point's operation changes in place (`ConvertToFree`, `ConvertToBetween`, `ConvertToAlongEdge`), keeping its ID, name, users and marker with its size. The design app has no Align tab (removed 2026-11-16, issue #36, after being hidden since 2026-11-05): in the app, points are lined up and spaced out by their formulas (`{A}.x`, a Between point at a ratio) and by Repeat Points, which say what they mean and follow the measurements, so a separate panel only offered a second way to write the same formulas. Through the API the action is still useful, since Claude can line up many points in one step.
 
 #### Copy and paste
 
@@ -980,7 +980,6 @@ Agreed, but not built. Each line is meant to become one issue.
 - **Separate Piece command**:(Issue #34) one command for separating front and back (see Transforms), only if the manual steps prove tedious.
 - **Piece detection**: (Issue #35) Shift-click to merge faces, and a start-edge fallback.
 - **Custom piece labels.**
-- **Align tab**: (Issue #36) fix the panel and show it again; until then align and distribute are reached through the Automation API's `arrange` (see Align and distribute).
 - **Check pattern overlay**: draw the problems on the canvas, and report dangling outline edges.
 - **Dependency arrows**: hovering or selecting an object draws faint arrows to its inputs, optionally to its dependents (see Links and problem display).
 - **Typing note text on the canvas**, rather than in the properties.

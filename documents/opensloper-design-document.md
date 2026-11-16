@@ -953,29 +953,29 @@ Agreed, but not built. Each line is meant to become one issue.
 
 **General**
 
-- **Preferences across open apps.** An app already open picks up a preference changed in another only when restarted. The apps' link could carry it (see Finding an open window under Publish app), with every app listening and a message sent to all of them.
-- **Portable install.** A `portable.ini` beside the executable keeps settings, state and cache next to it (see File locations).
+- **Preferences across open apps.** (Issue #29) An app already open picks up a preference changed in another only when restarted. The apps' link could carry it (see Finding an open window under Publish app), with every app listening and a message sent to all of them.
+- **Portable install.** (Issue #30) A `portable.ini` beside the executable keeps settings, state and cache next to it (see File locations).
 - **Translation**, for the community release (see Translation).
-- **Release packaging**, for the community release: packaging the Qt bindings, macOS notarisation, Intel macOS builds, signed Windows programs, and a macOS `.icns` icon.
-- **The assistant on Windows and macOS.** On Windows FPC 3.2.2 loads OpenSSL only as the 1.1 DLLs, which are not shipped, so the assistant cannot connect; on macOS it is untried (see Platforms).
+- **Release packaging** (Issue #17), for the community release: packaging the Qt bindings, macOS notarisation, Intel macOS builds, signed Windows programs, and a macOS `.icns` icon.
+- **The assistant on Windows and macOS.** (Issue #31) On Windows FPC 3.2.2 loads OpenSSL only as the 1.1 DLLs, which are not shipped, so the assistant cannot connect; on macOS it is untried (see Platforms).
 - **Bodice block regression pattern** in `tests/patterns/`.
 - **More tutorials**: moving a dart, a tote bag, a leather card wallet; and a documentation page per app's icon.
-- **Help in the apps.** F1 and the Help menu open the page for the current tool or dialog through a table of help IDs; an offline copy of the site ships with each app, with the website as fallback. Translated and versioned documentation wait for the community release.
+- **Help in the apps.** (Issue #32) F1 and the Help menu open the page for the current tool or dialog through a table of help IDs; an offline copy of the site ships with each app, with the website as fallback. Translated and versioned documentation wait for the community release.
 - **Developer documentation** of the units (PasDoc), once someone else needs to read the code.
 
 **Design app**
 
-- **Unit suffixes in angle and ratio fields** are not refused yet (see Pattern units).
+- **Unit suffixes in angle and ratio fields** (Issue #33) are not refused yet (see Pattern units).
 - **More operations**: a bisector, and a tangent from a point to a curve.
 - **Transforms**: a live ghost while dragging, and snapping to existing angles.
-- **Separate Piece command**: one command for separating front and back (see Transforms), only if the manual steps prove tedious.
-- **Piece detection**: Shift-click to merge faces, and a start-edge fallback.
+- **Separate Piece command**:(Issue #34) one command for separating front and back (see Transforms), only if the manual steps prove tedious.
+- **Piece detection**: (Issue #35) Shift-click to merge faces, and a start-edge fallback.
 - **Custom piece labels.**
-- **Align tab**: fix the panel and show it again; until then align and distribute are reached through the Automation API's `arrange` (see Align and distribute).
+- **Align tab**: (Issue #36) fix the panel and show it again; until then align and distribute are reached through the Automation API's `arrange` (see Align and distribute).
 - **Check pattern overlay**: draw the problems on the canvas, and report dangling outline edges.
 - **Dependency arrows**: hovering or selecting an object draws faint arrows to its inputs, optionally to its dependents (see Links and problem display).
 - **Typing note text on the canvas**, rather than in the properties.
-- **SVG stamps** (annotations stage 4). A drawing from another app (a logo, a fold or assembly diagram) placed and anchored like a note, so it moves with the geometry. Paths only: `<text>` is refused with a message asking for it to be converted to paths, which keeps fonts out. Drawn at true size from the SVG's own units (px taken at 96 per inch, with a warning), and stored in the pattern as path data, so the pattern does not depend on the outside file.
+- **SVG stamps** (Issue #9) (annotations stage 4). A drawing from another app (a logo, a fold or assembly diagram) placed and anchored like a note, so it moves with the geometry. Paths only: `<text>` is refused with a message asking for it to be converted to paths, which keeps fonts out. Drawn at true size from the SVG's own units (px taken at 96 per inch, with a warning), and stored in the pattern as path data, so the pattern does not depend on the outside file.
 - **Rounding curved corners**, which needs a tangent found numerically (see Accessories).
 - **Pleats in the Garment tab**, drawn as lines.
 - **Role styles in Preferences**: overriding a role's colour, dash and weight.

@@ -340,8 +340,9 @@ cmd_docs() {
 # few distributions package); the GUI programs then look there first.
 # The Windows and macOS downloads ship OpenSSL 3 for the Claude assistant,
 # with Mozilla's root certificates from curl.se, which OpenSSL there cannot
-# read from the system: on Windows the DLLs in OPENSSL_DLL_DIR (default
-# /mingw64/bin, Git for Windows' own), on macOS the dylibs of OPENSSL_PREFIX
+# read from the system: on Windows the DLLs in OPENSSL_DLL_DIR (default the
+# first of /mingw64/bin, the openssl on PATH and C:/Program Files/OpenSSL*
+# that has them), on macOS the dylibs of OPENSSL_PREFIX
 # (default Homebrew's openssl@3). Linux uses the system's OpenSSL.
 
 # The bundle's file types: the design app opens them all, and hands
@@ -487,16 +488,34 @@ write_third_party() {
   } > "$folder/THIRD-PARTY.txt"
 }
 
-# The OpenSSL 3 DLLs, beside the programs
+# The OpenSSL 3 DLLs, beside the programs: from OPENSSL_DLL_DIR when it is
+# set, else the first of Git for Windows' MinGW folder, the folder of the
+# openssl on PATH and the usual install folders that has both
 copy_openssl_windows() {
-  local root=$1 dir=${OPENSSL_DLL_DIR:-/mingw64/bin} dll
-  for dll in libssl-3-x64.dll libcrypto-3-x64.dll; do
-    if [ ! -f "$dir/$dll" ]; then
-      echo "No $dll in $dir; set OPENSSL_DLL_DIR to the folder of the OpenSSL 3 DLLs" >&2
-      exit 1
+  local root=$1 dir found= openssl_bin candidates=()
+  if [ -n "${OPENSSL_DLL_DIR:-}" ]; then
+    candidates=("$OPENSSL_DLL_DIR")
+  else
+    candidates=(/mingw64/bin)
+    openssl_bin=$(command -v openssl 2>/dev/null || true)
+    [ -n "$openssl_bin" ] && candidates+=("$(dirname "$openssl_bin")")
+    candidates+=("/c/Program Files/OpenSSL/bin" "/c/Program Files/OpenSSL-Win64/bin"
+      "/c/Program Files/OpenSSL" "/c/Program Files/OpenSSL-Win64")
+  fi
+  for dir in "${candidates[@]}"; do
+    if [ -f "$dir/libssl-3-x64.dll" ] && [ -f "$dir/libcrypto-3-x64.dll" ]; then
+      found=$dir
+      break
     fi
-    cp "$dir/$dll" "$root/"
   done
+  if [ -z "$found" ]; then
+    echo "No libssl-3-x64.dll and libcrypto-3-x64.dll in any of:" >&2
+    printf '  %s\n' "${candidates[@]}" >&2
+    echo "Set OPENSSL_DLL_DIR to the folder of the OpenSSL 3 DLLs" >&2
+    exit 1
+  fi
+  echo "OpenSSL DLLs from $found"
+  cp "$found/libssl-3-x64.dll" "$found/libcrypto-3-x64.dll" "$root/"
 }
 
 # The OpenSSL 3 dylibs, in the bundle's Frameworks, finding each other there

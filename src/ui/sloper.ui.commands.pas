@@ -32,17 +32,23 @@ uses
 type
   TCommandSet = class(TComponent)
   private
+    FForm: TCustomForm;
     FActions: TActionList;
     FBar: TToolBar;
     FToolIcons, FDisabledIcons, FMenuIcons: TImageList;
   public
     // Puts the toolbar at the top of Form and gives Menu its icons
     constructor Create(Form: TCustomForm; Menu: TMainMenu); reintroduce;
+    // Another toolbar on the form, aligned AAlign, with the same icons
+    function AddBar(AAlign: TAlign): TToolBar;
+    // An action for a command, shared by its menu item and toolbar button
     function NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut = 0; ATag: PtrInt = 0): TAction;
     function AddMenuItem(Parent: TMenuItem; AAction: TAction): TMenuItem;
-    // Check: the button stays down while the action is checked
-    procedure AddButton(AAction: TAction; Check: boolean = False);
-    procedure AddDivider;
+    // Check: the button stays down while the action is checked, and is
+    // grouped with its neighbours when the action is in a group. ABar is Bar
+    // when nil.
+    procedure AddButton(AAction: TBasicAction; Check: boolean = False; ABar: TToolBar = nil);
+    procedure AddDivider(ABar: TToolBar = nil);
     property Actions: TActionList read FActions;
     property Bar: TToolBar read FBar;
   end;
@@ -50,11 +56,6 @@ type
 // The tooltip: the caption without its accelerator or dots. The LCL adds the
 // shortcut itself.
 procedure SetActionHint(AAction: TAction);
-
-// An action in Actions for a command, shared by its menu item and toolbar
-// button
-function NewCommandAction(Actions: TActionList; const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent;
-  AShortCut: TShortCut = 0; ATag: PtrInt = 0): TAction;
 
 // A line between groups of buttons. Drawn here, as the Qt styles draw the
 // divider too faint to see.
@@ -229,6 +230,7 @@ end;
 constructor TCommandSet.Create(Form: TCustomForm; Menu: TMainMenu);
 begin
   inherited Create(Form);
+  FForm := Form;
   FToolIcons := CreateIconList(Self, Form.Scale96ToForm(TOOL_ICON_SIZE), clWindowText);
   FDisabledIcons := CreateIconList(Self, Form.Scale96ToForm(TOOL_ICON_SIZE), clGrayText);
   FMenuIcons := CreateIconList(Self, Form.Scale96ToForm(MENU_ICON_SIZE), clMenuText);
@@ -238,38 +240,37 @@ begin
   FActions.Images := FMenuIcons;
   Menu.Images := FMenuIcons;
   ShowMenuDividers;
-  FBar := TToolBar.Create(Self);
-  FBar.Parent := Form;
-  FBar.Align := alTop;
-  FBar.Images := FToolIcons;
-  FBar.DisabledImages := FDisabledIcons;
-  FBar.ShowCaptions := not IconsFound;
-  FBar.ShowHint := True;
-  FBar.AutoSize := True;
-  FBar.Wrapable := True;
+  FBar := AddBar(alTop);
+end;
+
+function TCommandSet.AddBar(AAlign: TAlign): TToolBar;
+begin
+  Result := TToolBar.Create(Self);
+  Result.Parent := FForm;
+  Result.Align := AAlign;
+  Result.Images := FToolIcons;
+  Result.DisabledImages := FDisabledIcons;
+  Result.ShowCaptions := not IconsFound;
+  Result.ShowHint := True;
+  Result.AutoSize := True;
+  Result.Wrapable := True;
   if IconsFound then
   begin
-    FBar.ButtonWidth := FToolIcons.Width + Form.Scale96ToForm(BUTTON_PADDING);
-    FBar.ButtonHeight := FToolIcons.Height + Form.Scale96ToForm(BUTTON_PADDING);
+    Result.ButtonWidth := FToolIcons.Width + FForm.Scale96ToForm(BUTTON_PADDING);
+    Result.ButtonHeight := FToolIcons.Height + FForm.Scale96ToForm(BUTTON_PADDING);
   end;
 end;
 
-function NewCommandAction(Actions: TActionList; const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent;
-  AShortCut: TShortCut; ATag: PtrInt): TAction;
+function TCommandSet.NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut; ATag: PtrInt): TAction;
 begin
-  Result := TAction.Create(Actions);
-  Result.ActionList := Actions;
+  Result := TAction.Create(FActions);
+  Result.ActionList := FActions;
   Result.Caption := ACaption;
   Result.ImageIndex := Ord(AIcon);
   SetActionShortCut(Result, AShortCut);
   Result.Tag := ATag;
   Result.OnExecute := AHandler;
   SetActionHint(Result);
-end;
-
-function TCommandSet.NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut; ATag: PtrInt): TAction;
-begin
-  Result := NewCommandAction(FActions, ACaption, AIcon, AHandler, AShortCut, ATag);
 end;
 
 function TCommandSet.AddMenuItem(Parent: TMenuItem; AAction: TAction): TMenuItem;
@@ -279,20 +280,27 @@ begin
   Parent.Add(Result);
 end;
 
-procedure TCommandSet.AddButton(AAction: TAction; Check: boolean);
+procedure TCommandSet.AddButton(AAction: TBasicAction; Check: boolean; ABar: TToolBar);
 var
   Button: TToolButton;
 begin
-  Button := TToolButton.Create(FBar);
-  Button.Parent := FBar;
+  if not Assigned(ABar) then
+    ABar := FBar;
+  Button := TToolButton.Create(ABar);
+  Button.Parent := ABar;
   Button.Action := AAction;
   if Check then
+  begin
     Button.Style := tbsCheck;
+    Button.Grouped := (AAction is TCustomAction) and (TCustomAction(AAction).GroupIndex > 0);
+  end;
 end;
 
-procedure TCommandSet.AddDivider;
+procedure TCommandSet.AddDivider(ABar: TToolBar);
 begin
-  AddToolDivider(FBar);
+  if not Assigned(ABar) then
+    ABar := FBar;
+  AddToolDivider(ABar);
 end;
 
 end.

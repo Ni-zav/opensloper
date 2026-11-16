@@ -100,11 +100,10 @@ type
     // Shared with the other apps, and changed through Edit → Preferences
     FPreferences: TPreferences;
     FRecent: TRecentMenu;
-    FActions: TActionList;
-    // The same icons at toolbar and menu sizes, in TAppIcon order, and greyed
-    // for disabled buttons: a grey copy of a black icon is still black
-    FToolIcons, FDisabledIcons, FMenuIcons: TImageList;
-    FCommandBar, FToolBar: TToolBar;
+    // The actions, their icons and the command bar along the top
+    FCommands: TCommandSet;
+    // The drafting tools down the left
+    FToolBar: TToolBar;
     FUndoAction, FRedoAction, FPieceFillsAction, FSideAction, FRulersAction, FAnnotationsAction: TAction;
     FHidePieceAction, FShowPiecesAction, FIsolateAction, FBringToFrontAction, FSendToBackAction: TAction;
     // Enabled only while there is something for them to work on
@@ -147,11 +146,6 @@ type
     function FragmentFormat: TClipboardFormat;
     function AddEditItem(AAction: TAction): TMenuItem;
     procedure SetLabelMode(Mode: TLabelMode);
-    function NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut = 0;
-      ATag: PtrInt = 0): TAction;
-    function AddMenuItem(AParent: TMenuItem; AAction: TAction): TMenuItem;
-    procedure AddButton(Bar: TToolBar; AAction: TBasicAction; Grouped: boolean = False);
-    procedure AddDivider(Bar: TToolBar);
     procedure CreateToolBars;
     procedure ToolBarResize(Sender: TObject);
     procedure CreateCommands;
@@ -714,71 +708,12 @@ begin
     MessageDlg(Format(rsMeasurementsFailed, [FNewSetDialog.FileName, Err]), mtError, [mbOK], 0);
 end;
 
-// An action for a command, shared by its menu item and toolbar button
-function TMainForm.NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut;
-  ATag: PtrInt): TAction;
-begin
-  Result := NewCommandAction(FActions, ACaption, AIcon, AHandler, AShortCut, ATag);
-end;
-
-function TMainForm.AddMenuItem(AParent: TMenuItem; AAction: TAction): TMenuItem;
-begin
-  Result := TMenuItem.Create(AParent);
-  Result.Action := AAction;
-  AParent.Add(Result);
-end;
-
-procedure TMainForm.AddButton(Bar: TToolBar; AAction: TBasicAction; Grouped: boolean);
-var
-  Button: TToolButton;
-begin
-  Button := TToolButton.Create(Bar);
-  Button.Parent := Bar;
-  Button.Action := AAction;
-  if Grouped then
-  begin
-    Button.Style := tbsCheck;
-    Button.Grouped := True;
-  end;
-end;
-
-procedure TMainForm.AddDivider(Bar: TToolBar);
-begin
-  AddToolDivider(Bar);
-end;
-
 // Commands along the top, drafting tools down the left. Without the icon
 // folder the buttons show their captions instead.
 procedure TMainForm.CreateToolBars;
-
-  function NewBar(AAlign: TAlign): TToolBar;
-  begin
-    Result := TToolBar.Create(Self);
-    Result.Parent := Self;
-    Result.Align := AAlign;
-    Result.Images := FToolIcons;
-    Result.DisabledImages := FDisabledIcons;
-    Result.ShowCaptions := not IconsFound;
-    Result.ShowHint := True;
-    Result.AutoSize := True;
-    Result.Wrapable := True;
-    if IconsFound then
-    begin
-      Result.ButtonWidth := FToolIcons.Width + Scale96ToForm(8);
-      Result.ButtonHeight := FToolIcons.Height + Scale96ToForm(8);
-    end;
-  end;
-
 begin
-  FToolIcons := CreateIconList(Self, Scale96ToForm(24), clWindowText);
-  FDisabledIcons := CreateIconList(Self, Scale96ToForm(24), clGrayText);
-  FMenuIcons := CreateIconList(Self, Scale96ToForm(16), clMenuText);
-  FActions := TActionList.Create(Self);
-  FActions.Images := FMenuIcons;
-  MainMenu.Images := FMenuIcons;
-  ShowMenuDividers;
-  FCommandBar := NewBar(alTop);
-  FToolBar := NewBar(alLeft);
+  FCommands := TCommandSet.Create(Self, MainMenu);
+  FToolBar := FCommands.AddBar(alLeft);
   // Sized by hand, so a short window wraps the tools into another column
   FToolBar.AutoSize := False;
   FToolBar.Width := FToolBar.ButtonWidth + Scale96ToForm(6);
@@ -801,65 +736,65 @@ end;
 // The File, Edit and View commands from the form, and the top toolbar
 procedure TMainForm.CreateCommands;
 begin
-  MenuFileNew.Action := NewAction(rsMenuFileNew, aiNew, @MenuFileNewClick, CommandShortCut(kcNew));
-  MenuFileOpen.Action := NewAction(rsMenuFileOpen, aiOpen, @MenuFileOpenClick, CommandShortCut(kcOpen));
-  FSaveAction := NewAction(rsMenuFileSave, aiSave, @MenuFileSaveClick, CommandShortCut(kcSave));
+  MenuFileNew.Action := FCommands.NewAction(rsMenuFileNew, aiNew, @MenuFileNewClick, CommandShortCut(kcNew));
+  MenuFileOpen.Action := FCommands.NewAction(rsMenuFileOpen, aiOpen, @MenuFileOpenClick, CommandShortCut(kcOpen));
+  FSaveAction := FCommands.NewAction(rsMenuFileSave, aiSave, @MenuFileSaveClick, CommandShortCut(kcSave));
   MenuFileSave.Action := FSaveAction;
-  FSaveAsAction := NewAction(rsMenuFileSaveAs, aiSaveAs, @MenuFileSaveAsClick, CommandShortCut(kcSaveAs));
+  FSaveAsAction := FCommands.NewAction(rsMenuFileSaveAs, aiSaveAs, @MenuFileSaveAsClick, CommandShortCut(kcSaveAs));
   MenuFileSaveAs.Action := FSaveAsAction;
   // Open Set is also the toolbar's measurements button
   MenuFileMeasurements.Caption := rsMenuFileMeasurements;
   MenuFileMeasurements.ImageIndex := Ord(aiMeasurements);
-  AddMenuItem(MenuFileMeasurements, NewAction(rsMenuMeasurementsNew, aiNew, @MeasurementsNewSetClick));
-  FOpenSetAction := NewAction(rsMenuMeasurementsOpen, aiMeasurements, @MenuFileMeasurementsClick, CommandShortCut(kcOpenMeasurements));
-  AddMenuItem(MenuFileMeasurements, FOpenSetAction);
-  AddMenuItem(MenuFileMeasurements, NewAction(rsMenuMeasurementsEdit, aiOpen, @MeasurementsEditSet));
-  FPublishAction := NewAction(rsMenuFilePublish, aiPublish, @MenuFilePublishClick, CommandShortCut(kcPublish));
+  FCommands.AddMenuItem(MenuFileMeasurements, FCommands.NewAction(rsMenuMeasurementsNew, aiNew, @MeasurementsNewSetClick));
+  FOpenSetAction := FCommands.NewAction(rsMenuMeasurementsOpen, aiMeasurements, @MenuFileMeasurementsClick, CommandShortCut(kcOpenMeasurements));
+  FCommands.AddMenuItem(MenuFileMeasurements, FOpenSetAction);
+  FCommands.AddMenuItem(MenuFileMeasurements, FCommands.NewAction(rsMenuMeasurementsEdit, aiOpen, @MeasurementsEditSet));
+  FPublishAction := FCommands.NewAction(rsMenuFilePublish, aiPublish, @MenuFilePublishClick, CommandShortCut(kcPublish));
   MenuFilePublish.Action := FPublishAction;
-  FExportDraftAction := NewAction(rsMenuFileExportDraft, aiExportDraft, @MenuFileExportDraftClick);
+  FExportDraftAction := FCommands.NewAction(rsMenuFileExportDraft, aiExportDraft, @MenuFileExportDraftClick);
   MenuFileExportDraft.Action := FExportDraftAction;
-  MenuFileQuit.Action := NewAction(rsMenuFileQuit, aiQuit, @MenuFileQuitClick, CommandShortCut(kcQuit));
-  FUndoAction := NewAction(rsMenuEditUndo, aiUndo, @MenuEditUndoClick, CommandShortCut(kcUndo));
+  MenuFileQuit.Action := FCommands.NewAction(rsMenuFileQuit, aiQuit, @MenuFileQuitClick, CommandShortCut(kcQuit));
+  FUndoAction := FCommands.NewAction(rsMenuEditUndo, aiUndo, @MenuEditUndoClick, CommandShortCut(kcUndo));
   MenuEditUndo.Action := FUndoAction;
-  FRedoAction := NewAction(rsMenuEditRedo, aiRedo, @MenuEditRedoClick, CommandShortCut(kcRedo));
+  FRedoAction := FCommands.NewAction(rsMenuEditRedo, aiRedo, @MenuEditRedoClick, CommandShortCut(kcRedo));
   MenuEditRedo.Action := FRedoAction;
   // In a text field Cut, Copy and Paste work on its text
-  AddEditItem(NewAction(rsMenuEditCut, aiCut, @EditCutClick, CommandShortCut(kcCut)));
-  AddEditItem(NewAction(rsMenuEditCopy, aiCopy, @EditCopyClick, CommandShortCut(kcCopy)));
-  AddEditItem(NewAction(rsMenuEditPaste, aiPaste, @EditPasteClick, CommandShortCut(kcPaste)));
+  AddEditItem(FCommands.NewAction(rsMenuEditCut, aiCut, @EditCutClick, CommandShortCut(kcCut)));
+  AddEditItem(FCommands.NewAction(rsMenuEditCopy, aiCopy, @EditCopyClick, CommandShortCut(kcCopy)));
+  AddEditItem(FCommands.NewAction(rsMenuEditPaste, aiPaste, @EditPasteClick, CommandShortCut(kcPaste)));
   // The canvas handles the Delete key, so typing in a field can still delete text
-  FDeleteAction := NewAction(rsMenuEditDelete, aiDelete, @MenuEditDeleteClick);
+  FDeleteAction := FCommands.NewAction(rsMenuEditDelete, aiDelete, @MenuEditDeleteClick);
   MenuEditDelete.Action := FDeleteAction;
   MenuEdit.AddSeparator;
-  FLockAction := NewAction(rsMenuEditLock, aiLock, @EditLockClick);
-  AddMenuItem(MenuEdit, FLockAction);
-  FUnlockAction := NewAction(rsMenuEditUnlock, aiUnlock, @EditUnlockClick);
-  AddMenuItem(MenuEdit, FUnlockAction);
+  FLockAction := FCommands.NewAction(rsMenuEditLock, aiLock, @EditLockClick);
+  FCommands.AddMenuItem(MenuEdit, FLockAction);
+  FUnlockAction := FCommands.NewAction(rsMenuEditUnlock, aiUnlock, @EditUnlockClick);
+  FCommands.AddMenuItem(MenuEdit, FUnlockAction);
   MenuEdit.AddSeparator;
-  AddMenuItem(MenuEdit, NewAction(rsMenuEditMaterials, aiPieceFills, @MaterialsEditClick));
-  AddMenuItem(MenuEdit, NewAction(rsMenuEditPreferences, aiPreferences, @PreferencesClick, CommandShortCut(kcPreferences)));
-  MenuViewZoomIn.Action := NewAction(rsMenuViewZoomIn, aiZoomIn, @MenuViewZoomInClick, CommandShortCut(kcZoomIn));
-  MenuViewZoomOut.Action := NewAction(rsMenuViewZoomOut, aiZoomOut, @MenuViewZoomOutClick, CommandShortCut(kcZoomOut));
-  FFitAction := NewAction(rsMenuViewFit, aiFit, @MenuViewFitClick, CommandShortCut(kcFit));
+  FCommands.AddMenuItem(MenuEdit, FCommands.NewAction(rsMenuEditMaterials, aiPieceFills, @MaterialsEditClick));
+  FCommands.AddMenuItem(MenuEdit, FCommands.NewAction(rsMenuEditPreferences, aiPreferences, @PreferencesClick, CommandShortCut(kcPreferences)));
+  MenuViewZoomIn.Action := FCommands.NewAction(rsMenuViewZoomIn, aiZoomIn, @MenuViewZoomInClick, CommandShortCut(kcZoomIn));
+  MenuViewZoomOut.Action := FCommands.NewAction(rsMenuViewZoomOut, aiZoomOut, @MenuViewZoomOutClick, CommandShortCut(kcZoomOut));
+  FFitAction := FCommands.NewAction(rsMenuViewFit, aiFit, @MenuViewFitClick, CommandShortCut(kcFit));
   MenuViewFit.Action := FFitAction;
-  MenuViewTrueSize.Action := NewAction(rsMenuViewTrueSize, aiTrueSize, @MenuViewTrueSizeClick, CommandShortCut(kcTrueSize));
-  MenuHelpAbout.Action := NewAction(rsMenuHelpAbout, aiAbout, @MenuHelpAboutClick);
-  AddButton(FCommandBar, MenuFileNew.Action);
-  AddButton(FCommandBar, MenuFileOpen.Action);
-  AddButton(FCommandBar, MenuFileSave.Action);
-  AddDivider(FCommandBar);
-  AddButton(FCommandBar, FUndoAction);
-  AddButton(FCommandBar, FRedoAction);
-  AddButton(FCommandBar, MenuEditDelete.Action);
-  AddDivider(FCommandBar);
-  AddButton(FCommandBar, MenuViewZoomIn.Action);
-  AddButton(FCommandBar, MenuViewZoomOut.Action);
-  AddButton(FCommandBar, MenuViewFit.Action);
-  AddButton(FCommandBar, MenuViewTrueSize.Action);
-  AddDivider(FCommandBar);
-  AddButton(FCommandBar, FOpenSetAction);
-  AddButton(FCommandBar, MenuFilePublish.Action);
-  AddButton(FCommandBar, MenuFileExportDraft.Action);
+  MenuViewTrueSize.Action := FCommands.NewAction(rsMenuViewTrueSize, aiTrueSize, @MenuViewTrueSizeClick, CommandShortCut(kcTrueSize));
+  MenuHelpAbout.Action := FCommands.NewAction(rsMenuHelpAbout, aiAbout, @MenuHelpAboutClick);
+  FCommands.AddButton(MenuFileNew.Action);
+  FCommands.AddButton(MenuFileOpen.Action);
+  FCommands.AddButton(MenuFileSave.Action);
+  FCommands.AddDivider;
+  FCommands.AddButton(FUndoAction);
+  FCommands.AddButton(FRedoAction);
+  FCommands.AddButton(MenuEditDelete.Action);
+  FCommands.AddDivider;
+  FCommands.AddButton(MenuViewZoomIn.Action);
+  FCommands.AddButton(MenuViewZoomOut.Action);
+  FCommands.AddButton(MenuViewFit.Action);
+  FCommands.AddButton(MenuViewTrueSize.Action);
+  FCommands.AddDivider;
+  FCommands.AddButton(FOpenSetAction);
+  FCommands.AddButton(MenuFilePublish.Action);
+  FCommands.AddButton(MenuFileExportDraft.Action);
 end;
 
 // The side panel, label and fill toggles at the end of the View menu; each
@@ -873,11 +808,11 @@ begin
   Captions[lmContextual] := rsLabelsContextual;
   Captions[lmAll] := rsLabelsAll;
   Captions[lmNone] := rsLabelsNone;
-  FSideAction := NewAction(rsMenuViewSidePanel, aiSidePanel, @SideItemClick);
+  FSideAction := FCommands.NewAction(rsMenuViewSidePanel, aiSidePanel, @SideItemClick);
   MenuView.Add(NewLine);
-  AddMenuItem(MenuView, FSideAction);
-  FRulersAction := NewAction(rsMenuViewRulers, aiRulers, @RulersClick, CommandShortCut(kcRulers));
-  AddMenuItem(MenuView, FRulersAction);
+  FCommands.AddMenuItem(MenuView, FSideAction);
+  FRulersAction := FCommands.NewAction(rsMenuViewRulers, aiRulers, @RulersClick, CommandShortCut(kcRulers));
+  FCommands.AddMenuItem(MenuView, FRulersAction);
   MenuLabels := TMenuItem.Create(MainMenu);
   MenuLabels.Caption := rsMenuViewLabels;
   MenuLabels.ImageIndex := Ord(aiLabels);
@@ -885,28 +820,28 @@ begin
   MenuView.Add(MenuLabels);
   for Mode := Low(TLabelMode) to High(TLabelMode) do
   begin
-    FLabelActions[Mode] := NewAction(Captions[Mode], aiLabels, @LabelModeClick, 0, Ord(Mode));
+    FLabelActions[Mode] := FCommands.NewAction(Captions[Mode], aiLabels, @LabelModeClick, 0, Ord(Mode));
     FLabelActions[Mode].ImageIndex := -1;
     FLabelActions[Mode].GroupIndex := 2;
-    Item := AddMenuItem(MenuLabels, FLabelActions[Mode]);
+    Item := FCommands.AddMenuItem(MenuLabels, FLabelActions[Mode]);
     Item.RadioItem := True;
   end;
-  FPieceFillsAction := NewAction(rsMenuViewPieceFills, aiPieceFills, @PieceFillsClick);
-  AddMenuItem(MenuView, FPieceFillsAction);
-  FAnnotationsAction := NewAction(rsMenuViewAnnotations, aiAnnotations, @AnnotationsClick);
-  AddMenuItem(MenuView, FAnnotationsAction);
+  FPieceFillsAction := FCommands.NewAction(rsMenuViewPieceFills, aiPieceFills, @PieceFillsClick);
+  FCommands.AddMenuItem(MenuView, FPieceFillsAction);
+  FAnnotationsAction := FCommands.NewAction(rsMenuViewAnnotations, aiAnnotations, @AnnotationsClick);
+  FCommands.AddMenuItem(MenuView, FAnnotationsAction);
   // For overlapping pieces: view state, outside undo
   MenuView.Add(NewLine);
-  FHidePieceAction := NewAction(rsMenuViewHidePiece, aiHidePiece, @HidePieceClick);
-  AddMenuItem(MenuView, FHidePieceAction);
-  FShowPiecesAction := NewAction(rsMenuViewShowPieces, aiShowPieces, @ShowPiecesClick);
-  AddMenuItem(MenuView, FShowPiecesAction);
-  FIsolateAction := NewAction(rsMenuViewIsolate, aiIsolate, @IsolateClick);
-  AddMenuItem(MenuView, FIsolateAction);
-  FBringToFrontAction := NewAction(rsMenuViewBringToFront, aiBringToFront, @BringToFrontClick);
-  AddMenuItem(MenuView, FBringToFrontAction);
-  FSendToBackAction := NewAction(rsMenuViewSendToBack, aiSendToBack, @SendToBackClick);
-  AddMenuItem(MenuView, FSendToBackAction);
+  FHidePieceAction := FCommands.NewAction(rsMenuViewHidePiece, aiHidePiece, @HidePieceClick);
+  FCommands.AddMenuItem(MenuView, FHidePieceAction);
+  FShowPiecesAction := FCommands.NewAction(rsMenuViewShowPieces, aiShowPieces, @ShowPiecesClick);
+  FCommands.AddMenuItem(MenuView, FShowPiecesAction);
+  FIsolateAction := FCommands.NewAction(rsMenuViewIsolate, aiIsolate, @IsolateClick);
+  FCommands.AddMenuItem(MenuView, FIsolateAction);
+  FBringToFrontAction := FCommands.NewAction(rsMenuViewBringToFront, aiBringToFront, @BringToFrontClick);
+  FCommands.AddMenuItem(MenuView, FBringToFrontAction);
+  FSendToBackAction := FCommands.NewAction(rsMenuViewSendToBack, aiSendToBack, @SendToBackClick);
+  FCommands.AddMenuItem(MenuView, FSendToBackAction);
 end;
 
 function TMainForm.SelectedPieces: TPieceObjectArray;
@@ -1098,7 +1033,7 @@ procedure TMainForm.CreateDrawRoleBox;
 var
   Role: TEdgeRole;
 begin
-  AddDivider(FCommandBar);
+  FCommands.AddDivider;
   FRoleBox := TComboBox.Create(Self);
   FRoleBox.Style := csDropDownList;
   for Role := Low(TEdgeRole) to High(TEdgeRole) do
@@ -1107,7 +1042,7 @@ begin
   FRoleBox.Hint := rsDrawRoleHint;
   FRoleBox.ShowHint := True;
   FRoleBox.OnChange := @DrawRoleBoxChange;
-  FRoleBox.Parent := FCommandBar;
+  FRoleBox.Parent := FCommands.Bar;
 end;
 
 // The Tools menu and the toolbar down the left, in the same order. Each
@@ -1128,14 +1063,14 @@ var
 
   procedure AddCommand(AParent: TMenuItem; AAction: TAction);
   begin
-    AddMenuItem(AParent, AAction);
-    AddButton(FToolBar, AAction);
+    FCommands.AddMenuItem(AParent, AAction);
+    FCommands.AddButton(AAction, False, FToolBar);
   end;
 
   procedure AddBreak;
   begin
     MenuTools.Add(NewLine);
-    AddDivider(FToolBar);
+    FCommands.AddDivider(FToolBar);
   end;
 
   function AddSubmenu(const ACaption: string): TMenuItem;
@@ -1149,7 +1084,7 @@ var
   // toolbar hint. LCL leaves a caption alone once it differs from the action's.
   procedure AddShortItem(AParent: TMenuItem; AAction: TAction; const ACaption: string);
   begin
-    AddMenuItem(AParent, AAction).Caption := ACaption;
+    FCommands.AddMenuItem(AParent, AAction).Caption := ACaption;
   end;
 
 begin
@@ -1166,75 +1101,75 @@ begin
   for Tool := Low(TCanvasTool) to High(TCanvasTool) do
   begin
     Info := CanvasToolInfo(Tool);
-    FToolActions[Tool] := NewAction(Format(rsHintKey, [Info.Caption, ShortcutInfo(Info.Command).Keys]), Info.Icon, @ToolClick, 0, Ord(Tool));
+    FToolActions[Tool] := FCommands.NewAction(Format(rsHintKey, [Info.Caption, ShortcutInfo(Info.Command).Keys]), Info.Icon, @ToolClick, 0, Ord(Tool));
     FToolActions[Tool].GroupIndex := 1;
-    Item := AddMenuItem(MenuTools, FToolActions[Tool]);
+    Item := FCommands.AddMenuItem(MenuTools, FToolActions[Tool]);
     Item.RadioItem := True;
-    AddButton(FToolBar, FToolActions[Tool], True);
+    FCommands.AddButton(FToolActions[Tool], True, FToolBar);
   end;
-  AddCommand(MenuTools, NewAction(rsMenuToolsArc, aiArc, @ArcClick));
+  AddCommand(MenuTools, FCommands.NewAction(rsMenuToolsArc, aiArc, @ArcClick));
   AddBreak;
   SubMenu := AddSubmenu(rsMenuToolsEdge);
-  AddCommand(SubMenu, NewAction(rsMenuToolsSplit, aiSplit, @SplitClick));
-  AddCommand(SubMenu, NewAction(rsMenuToolsRoundCorner, aiRoundCorner, @RoundCornerClick));
+  AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsSplit, aiSplit, @SplitClick));
+  AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsRoundCorner, aiRoundCorner, @RoundCornerClick));
   // Menu only: on the toolbar they would look like the Line and Curve tools
   SubMenu.Add(NewLine);
-  AddMenuItem(SubMenu, NewAction(rsMenuToolsToLine, aiToLine, @ConvertClick, 0, Ord(False)));
-  AddMenuItem(SubMenu, NewAction(rsMenuToolsToCurve, aiToCurve, @ConvertClick, 0, Ord(True)));
+  FCommands.AddMenuItem(SubMenu, FCommands.NewAction(rsMenuToolsToLine, aiToLine, @ConvertClick, 0, Ord(False)));
+  FCommands.AddMenuItem(SubMenu, FCommands.NewAction(rsMenuToolsToCurve, aiToCurve, @ConvertClick, 0, Ord(True)));
   SubMenu := AddSubmenu(rsMenuToolsOffset);
-  OffsetAction := NewAction(rsMenuToolsOffsetLeft, aiOffsetLeft, @OffsetClick, 0, Ord(osLeft));
+  OffsetAction := FCommands.NewAction(rsMenuToolsOffsetLeft, aiOffsetLeft, @OffsetClick, 0, Ord(osLeft));
   AddShortItem(SubMenu, OffsetAction, rsMenuOffsetLeft);
-  AddButton(FToolBar, OffsetAction);
-  OffsetAction := NewAction(rsMenuToolsOffsetRight, aiOffsetRight, @OffsetClick, 0, Ord(osRight));
+  FCommands.AddButton(OffsetAction, False, FToolBar);
+  OffsetAction := FCommands.NewAction(rsMenuToolsOffsetRight, aiOffsetRight, @OffsetClick, 0, Ord(osRight));
   AddShortItem(SubMenu, OffsetAction, rsMenuOffsetRight);
-  AddButton(FToolBar, OffsetAction);
+  FCommands.AddButton(OffsetAction, False, FToolBar);
   // Menu only, as their icons would look like the two above
-  AddShortItem(SubMenu, NewAction(rsMenuToolsOffsetInside, aiOffsetRight, @OffsetPieceClick, 0, Ord(True)), rsMenuOffsetInside);
-  AddShortItem(SubMenu, NewAction(rsMenuToolsOffsetOutside, aiOffsetLeft, @OffsetPieceClick, 0, Ord(False)), rsMenuOffsetOutside);
-  AddDivider(FToolBar);
+  AddShortItem(SubMenu, FCommands.NewAction(rsMenuToolsOffsetInside, aiOffsetRight, @OffsetPieceClick, 0, Ord(True)), rsMenuOffsetInside);
+  AddShortItem(SubMenu, FCommands.NewAction(rsMenuToolsOffsetOutside, aiOffsetLeft, @OffsetPieceClick, 0, Ord(False)), rsMenuOffsetOutside);
+  FCommands.AddDivider(FToolBar);
   SubMenu := AddSubmenu(rsMenuToolsPoints);
-  AddCommand(SubMenu, NewAction(rsMenuToolsMerge, aiMergePoints, @MergeClick));
-  AddCommand(SubMenu, NewAction(rsMenuToolsBreak, aiBreakPoint, @BreakClick));
-  AddCommand(SubMenu, NewAction(rsMenuToolsRepeat, aiRepeat, @RepeatClick));
+  AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsMerge, aiMergePoints, @MergeClick));
+  AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsBreak, aiBreakPoint, @BreakClick));
+  AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsRepeat, aiRepeat, @RepeatClick));
   AddBreak;
   SubMenu := AddSubmenu(rsMenuToolsMarkings);
   for Marking := Low(TMarkingKind) to High(TMarkingKind) do
-    AddCommand(SubMenu, NewAction(MarkingCaptions[Marking], MARKING_ICONS[Marking], @MarkingClick, 0, Ord(Marking)));
+    AddCommand(SubMenu, FCommands.NewAction(MarkingCaptions[Marking], MARKING_ICONS[Marking], @MarkingClick, 0, Ord(Marking)));
   SubMenu.Add(NewLine);
-  AddCommand(SubMenu, NewAction(rsMenuToolsRemoveMarking, aiRemoveMarking, @RemoveMarkingClick));
+  AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsRemoveMarking, aiRemoveMarking, @RemoveMarkingClick));
   SubMenu := AddSubmenu(rsMenuToolsDrawAs);
   for Role := Low(TEdgeRole) to High(TEdgeRole) do
   begin
-    FRoleActions[Role] := NewAction(RoleCaption(Role), aiLine, @DrawRoleClick, 0, Ord(Role));
+    FRoleActions[Role] := FCommands.NewAction(RoleCaption(Role), aiLine, @DrawRoleClick, 0, Ord(Role));
     FRoleActions[Role].ImageIndex := -1;
     FRoleActions[Role].GroupIndex := 3;
-    Item := AddMenuItem(SubMenu, FRoleActions[Role]);
+    Item := FCommands.AddMenuItem(SubMenu, FRoleActions[Role]);
     Item.RadioItem := True;
   end;
   AddBreak;
   SubMenu := AddSubmenu(rsMenuToolsTransform);
   for Kind := Low(TTransformKind) to High(TTransformKind) do
-    AddCommand(SubMenu, NewAction(TransformCaptions[Kind], TRANSFORM_ICONS[Kind], @TransformClick, 0, Ord(Kind)));
+    AddCommand(SubMenu, FCommands.NewAction(TransformCaptions[Kind], TRANSFORM_ICONS[Kind], @TransformClick, 0, Ord(Kind)));
   // Menu only: it finds rather than makes, and double-clicking a copy does it too
   SubMenu.Add(NewLine);
-  SourceAction := NewAction(rsMenuToolsGoToSource, aiMove, @GoToSourceClick);
+  SourceAction := FCommands.NewAction(rsMenuToolsGoToSource, aiMove, @GoToSourceClick);
   SourceAction.ImageIndex := -1;
-  AddMenuItem(SubMenu, SourceAction);
-  AddCommand(MenuTools, NewAction(rsMenuToolsSuggest, aiSuggestSeams, @SuggestSeamsClick));
+  FCommands.AddMenuItem(SubMenu, SourceAction);
+  AddCommand(MenuTools, FCommands.NewAction(rsMenuToolsSuggest, aiSuggestSeams, @SuggestSeamsClick));
   // Menu only: a rare command, with no icon of its own
   MenuTools.Add(NewLine);
-  ConvertAction := NewAction(rsMenuToolsConvertUnits, aiSuggestSeams, @ConvertUnitsClick);
+  ConvertAction := FCommands.NewAction(rsMenuToolsConvertUnits, aiSuggestSeams, @ConvertUnitsClick);
   ConvertAction.ImageIndex := -1;
-  AddMenuItem(MenuTools, ConvertAction);
+  FCommands.AddMenuItem(MenuTools, ConvertAction);
   MenuTools.Add(NewLine);
-  FAutomationAction := NewAction(rsMenuToolsAllowClaude, aiSuggestSeams, @AutomationClick);
+  FAutomationAction := FCommands.NewAction(rsMenuToolsAllowClaude, aiSuggestSeams, @AutomationClick);
   FAutomationAction.ImageIndex := -1;
   FAutomationAction.AutoCheck := False;
-  AddMenuItem(MenuTools, FAutomationAction);
-  FDisconnectClaudeAction := NewAction(rsMenuToolsDisconnectClaude, aiSuggestSeams, @DisconnectClaudeClick);
+  FCommands.AddMenuItem(MenuTools, FAutomationAction);
+  FDisconnectClaudeAction := FCommands.NewAction(rsMenuToolsDisconnectClaude, aiSuggestSeams, @DisconnectClaudeClick);
   FDisconnectClaudeAction.ImageIndex := -1;
   FDisconnectClaudeAction.Enabled := False;
-  AddMenuItem(MenuTools, FDisconnectClaudeAction);
+  FCommands.AddMenuItem(MenuTools, FDisconnectClaudeAction);
 end;
 
 procedure TMainForm.MarkingClick(Sender: TObject);

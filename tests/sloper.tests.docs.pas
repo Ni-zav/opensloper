@@ -36,6 +36,7 @@ type
     procedure TestParserHasEveryOption;
     procedure TestEveryCommandListed;
     procedure TestPythonClientHasEveryMethod;
+    procedure TestDocTextLinks;
     procedure TestExamplePatternsHaveNoProblems;
     procedure TestTutorialImagesDrawWhatExists;
   end;
@@ -128,6 +129,17 @@ begin
   AssertTrue(ReferencePage('cli', Markdown));
   for Command in CLI_COMMANDS do
     AssertTrue(Command.Name, Pos('### ' + Command.Name + #10, Markdown) > 0);
+end;
+
+procedure TTestDocs.TestDocTextLinks;
+const
+  URL = 'https://billbsing.github.io/opensloper/reference/';
+begin
+  AssertEquals('See formulas (' + URL + 'formulas/).', DocText('See [formulas](formulas.md).'));
+  AssertEquals('A list[str], see formulas (' + URL + 'formulas/).',
+    DocText('A list[str], see [formulas](formulas.md).'));
+  AssertEquals('[x, y] or [a](b) then units (' + URL + 'units/)', DocText('[x, y] or [a](b) then [units](units.md)'));
+  AssertEquals('Plain [text] only', DocText('Plain [text] only'));
 end;
 
 procedure TTestDocs.TestPythonClientHasEveryMethod;

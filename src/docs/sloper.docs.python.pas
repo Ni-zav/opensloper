@@ -34,6 +34,9 @@ const
 
 // The text of opensloper.py
 function PythonClient: string;
+// Text from the methods table for a docstring: Markdown links to other
+// reference pages become their address, and nothing can end the docstring
+function DocText(const Text: string): string;
 
 implementation
 
@@ -261,25 +264,29 @@ begin
   end;
 end;
 
-// Text from the methods table for a docstring: Markdown links to other
-// reference pages become their address, and nothing can end the docstring
 function DocText(const Text: string): string;
 var
-  Start, Middle, Finish: integer;
+  Start, Close, Finish: integer;
   Page: string;
 begin
   Result := StringReplace(Text, '\', '\\', [rfReplaceAll]);
   Result := StringReplace(Result, '"""', '\"\"\"', [rfReplaceAll]);
+  // A link is [text](page.md), its text without a bracket, so a plain bracket
+  // before it is left alone
   Start := Pos('[', Result);
   while Start > 0 do
   begin
-    Middle := PosEx('](', Result, Start);
-    Finish := PosEx('.md)', Result, Middle);
-    if (Middle = 0) or (Finish = 0) then
+    Close := PosEx(']', Result, Start);
+    if Close = 0 then
       Break;
-    Page := Copy(Result, Middle + 2, Finish - Middle - 2);
-    Result := Copy(Result, 1, Start - 1) + Copy(Result, Start + 1, Middle - Start - 1) + ' (' + REFERENCE_URL + Page + '/)' +
-      Copy(Result, Finish + 4, MaxInt);
+    Finish := PosEx(')', Result, Close);
+    if (PosEx('[', Copy(Result, 1, Close), Start + 1) = 0) and (Copy(Result, Close + 1, 1) = '(') and (Finish > 0) and
+      (Copy(Result, Finish - 3, 3) = '.md') then
+    begin
+      Page := Copy(Result, Close + 2, Finish - Close - 5);
+      Result := Copy(Result, 1, Start - 1) + Copy(Result, Start + 1, Close - Start - 1) + ' (' + REFERENCE_URL + Page + '/)' +
+        Copy(Result, Finish + 1, MaxInt);
+    end;
     Start := PosEx('[', Result, Start + 1);
   end;
 end;

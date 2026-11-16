@@ -82,6 +82,9 @@ type
     // Where the design window's Publish… finds this window
     FAppLink: TAppLink;
     FRefreshing: boolean;
+    // The layout's SourcesKey when the Materials tab was last filled; a drag
+    // leaves it, so the tab is not worked out again on every move
+    FNeedsKey: string;
     // Rows stack in the order their Top says, so each takes the next one
     FNextRowTop: integer;
     // Where FRowParent goes back to when the open group ends
@@ -923,8 +926,12 @@ procedure TPublishForm.RefreshMaterialsTab;
 var
   Needs: TMaterialNeedArray;
   Index: integer;
-  Note: string;
+  Note, Key: string;
 begin
+  Key := FDocument.Layout.SourcesKey;
+  if (Key = FNeedsKey) and (FNeedGrid.RowCount > 1) then
+    Exit;
+  FNeedsKey := Key;
   Needs := LayoutMaterialNeeds(FDocument.Layout);
   FNeedGrid.RowCount := Max(Length(Needs), 1) + 1;
   if Length(Needs) = 0 then

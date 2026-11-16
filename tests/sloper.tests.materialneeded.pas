@@ -59,6 +59,7 @@ type
     procedure TestFieldInNote;
     procedure TestLayoutTakesMaterialSize;
     procedure TestLayoutKeepsSizeWithoutOne;
+    procedure TestSourcesKey;
   end;
 
 implementation
@@ -342,6 +343,21 @@ begin
   AssertFalse('no material chosen', FLayout.TakeMaterialSize);
 end;
 
+// The publish app keeps the Materials tab until the key changes
+procedure TTestMaterialNeeded.TestSourcesKey;
+var
+  Key: string;
+begin
+  AddPanel('Front', 0, 100, 200);
+  AddToLayout('front.sloper');
+  Key := FLayout.SourcesKey;
+  FLayout.Output.Kind := okMaterial;
+  AssertEquals(Key, FLayout.SourcesKey);
+  AddToLayout('back.sloper');
+  AssertFalse(Key = FLayout.SourcesKey);
+end;
+
 initialization
   RegisterTest(TTestMaterialNeeded);
+
 end.

@@ -291,6 +291,10 @@ type
     function TakeMaterialSize: boolean;
     // MaterialNeedSummary of the layout's patterns
     function MaterialNeeded: string;
+    // Changes when a pattern, its size or its file does, so what is worked out
+    // from the patterns alone can be kept until then; moving pieces and the
+    // output settings leave it
+    function SourcesKey: string;
     // How wide a sheet pieces can be laid across; large format and material only
     function UsableWidth: double;
     // For a material sheet, how much of it the pieces take; '' for other kinds
@@ -635,14 +639,20 @@ begin
   Result.MaterialNeeded := MaterialNeeded;
 end;
 
-function TLayout.MaterialNeeded: string;
+function TLayout.SourcesKey: string;
 var
   Source: TLayoutSource;
+begin
+  Result := '';
+  for Source in FSources do
+    Result := Result + Source.PatternFile + #0 + Source.Size + #0 + Source.LoadedStamp + #0 + IntToHex(PtrUInt(Source.Pattern)) + #1;
+end;
+
+function TLayout.MaterialNeeded: string;
+var
   Key: string;
 begin
-  Key := '';
-  for Source in FSources do
-    Key := Key + Source.PatternFile + #0 + Source.Size + #0 + Source.LoadedStamp + #0 + IntToHex(PtrUInt(Source.Pattern)) + #1;
+  Key := SourcesKey;
   if Key <> FNeedKey then
   begin
     FNeedSummary := MaterialNeedSummary(LayoutMaterialNeeds(Self));

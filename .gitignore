@@ -26,3 +26,4 @@ backup/
 
 # Local toolchain settings (see build.local.sh.example)
 /build.local.sh
+/.zensical-offline.toml

@@ -12,6 +12,15 @@ Changed, Fixed and Removed under each version.
 
 ## 0.3.0
 
+### Added
+
+- Installers: a `.deb` for Debian and Ubuntu, a `.dmg` for macOS and a
+  `setup.exe` for Windows, each registering the pattern, measurement and
+  layout files with their apps (#17). The `.tar.gz` and Windows `.zip` stay
+  for running from a folder; the macOS `.zip` is replaced by the `.dmg`.
+- Every download has the user guide to read offline, and Help → User Guide in
+  each app opens it, or the website when the guide is not there (#17).
+
 ### Changed
 
 - The Automation API's `export` refuses to replace a file already there, and

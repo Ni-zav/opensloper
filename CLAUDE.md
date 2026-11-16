@@ -18,7 +18,7 @@ The full design is in `documents/opensloper-design-document.md`. Read it before 
 - `src/cli/` — `opensloper-cli` (export, export-draft, layout, pack, materials, check, measurements, serve, doc), built on the core and ConsoleTools. Its commands and options are tables in `Sloper.CLI.Arguments`, which build the parser and the CLI reference page. The commands run in `Sloper.CLI.Commands` (`RunCli`), writing to the text files given, so `Sloper.Tests.CLI` runs them in the test program; a new command gets a test there.
 - `src/docs/` — code that writes the generated reference pages, the file format schemas and the Python API client (`opensloper.py`) of the user documentation (`opensloper-cli doc TOPIC`). Doc generation code goes here.
 - `src/packages/` — git submodules (Clipper2, BGRABitmap, ConsoleTools). Do not edit code in here; changes go upstream.
-- `resources/` — branding: app icons and the API logo (SVG), for builds, docs and other resources; `make-icons.sh` regenerates the apps' `.ico` files after an SVG changes, and `linux/` holds the `.desktop` entries.
+- `resources/` — branding: app icons and the API logo (SVG), for builds, docs and other resources; `make-icons.sh` regenerates the apps' `.ico` files after an SVG changes, `linux/` holds the `.desktop` entries and the file types (`opensloper.xml`), and `windows/` the Inno Setup installer script.
 - `data/` — files the apps read at run time: the measurement catalogue and its body figures, the Tabler toolbar icons (`data/icons`, MIT), and the fonts images are drawn with (`data/fonts`: Noto Sans, OFL, and DejaVu Sans, Bitstream Vera licence).
 - `tests/` — FPCUnit test project and regression patterns.
 - `src/core/clipper2/osclipper2.lpk` — Lazarus package that builds Clipper2 from the submodule; projects depend on it rather than adding Clipper2 to their search path.
@@ -32,7 +32,7 @@ git submodule update --init --recursive
 ./opensloper-make.sh help     # the commands and their options
 ./opensloper-make.sh test     # tests, with heaptrc leak check
 ./opensloper-make.sh build    # GUI apps and CLI, into release/ (not in git)
-./opensloper-make.sh package  # pack the built apps for this platform into release/dist (the release workflow runs it)
+./opensloper-make.sh package  # pack the built apps and installer for this platform into release/dist, with the offline guide from docs --offline (the release workflow runs it)
 ./opensloper-make.sh release  # a release's notes: APP_VERSION's CHANGELOG.md section, else its commits since the last release
 ./opensloper-make.sh format   # format sources with jcfsettings.cfg (--check to list only)
 ./opensloper-make.sh check    # rules the formatter cannot check (errors fail, warnings advise)

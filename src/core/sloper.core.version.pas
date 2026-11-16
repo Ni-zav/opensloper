@@ -30,6 +30,10 @@ const
   APP_NAME_LOWER = 'opensloper';
 
   PATTERN_FILE_EXT = '.sloper';
+  MEASUREMENT_FILE_EXT = '.slm';
+
+  // The user guide on the web, for builds without its offline copy
+  USER_GUIDE_URL = 'https://opensloper.github.io/opensloper/';
 
 implementation
 

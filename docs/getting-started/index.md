@@ -1,9 +1,31 @@
 # Getting started
 
-OpenSloper has no installer yet, so for now you build it from source. It runs
-on Linux and macOS.
+OpenSloper runs on Linux, macOS and Windows. Download it from the
+[releases page](https://github.com/opensloper/opensloper/releases), or build
+it from source.
 
-## What you need
+## Install
+
+| Download | For |
+| --- | --- |
+| `opensloper_VERSION_amd64.deb` | Debian 13 and Ubuntu 24.04 or later: open it, or run `sudo apt install ./opensloper_VERSION_amd64.deb` |
+| `opensloper-VERSION-linux-x86_64.tar.gz` | Other Linux distributions: unpack it and run the programs from its folder; its `README.txt` says how to add them to the menu |
+| `opensloper-VERSION-macos-arm64.dmg` | macOS 11 or later on Apple silicon: drag OpenSloper to Applications |
+| `opensloper-VERSION-windows-x86_64-setup.exe` | Windows 10 or later: run it to install |
+| `opensloper-VERSION-windows-x86_64.zip` | Windows, to run from a folder without installing |
+
+The installers add OpenSloper to the menu, and open patterns (`.sloper`),
+measurement files (`.slm`) and layouts (`.slayout`) in their apps when you
+double-click them. This guide comes with every download: choose
+Help → User Guide in any of the apps.
+
+The programs are not signed yet. If macOS says OpenSloper cannot be opened or
+is damaged, run `xattr -cr /Applications/OpenSloper.app` once in Terminal. On
+Windows, if SmartScreen asks, choose More info, then Run anyway.
+
+## Build from source
+
+### What you need
 
 - **Lazarus 4.8 with Free Pascal 3.2.2**, from your distribution or
   [lazarus-ide.org](https://www.lazarus-ide.org). Other versions from Free
@@ -12,7 +34,7 @@ on Linux and macOS.
 - **On Linux**, the Qt Pascal bindings: `libQt6Pas` or `libQt5Pas`. Qt 6 is
   used when it is installed.
 
-## Build
+### Build
 
 ```
 git clone --recursive https://github.com/billbsing/opensloper.git

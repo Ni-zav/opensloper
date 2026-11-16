@@ -8,3 +8,4 @@ Icon=opensloper-measure
 Terminal=false
 Categories=Graphics;Engineering;
 StartupWMClass=opensloper-measurements
+MimeType=application/x-opensloper-measurements;

@@ -1,5 +1,6 @@
 # Builds OpenSloper for Linux, macOS and Windows on every push to the release
-# branch, and publishes the downloads as the GitHub release of the version in
+# branch, each as an archive and an installer (.deb, .dmg, setup.exe) with the
+# offline user guide, and publishes the downloads as the GitHub release of the version in
 # Sloper.Core.Version (tag vVERSION). Until the version changes, each push
 # replaces that release's downloads and moves its tag to the new commit; a
 # 0.x version is marked as a pre-release.
@@ -32,8 +33,30 @@ env:
   LAZARUS_RELEASE: "4.8"
 
 jobs:
+  # The offline copy of the user guide, which every download ships in data/help.
+  # The reference pages are committed, so no Pascal build is needed.
+  user-guide:
+    name: Offline user guide
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Build the offline site
+        run: ./opensloper-make.sh docs --offline
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: user-guide
+          path: release/site_offline
+          if-no-files-found: error
+
   linux:
     name: Linux x86_64
+    needs: user-guide
     runs-on: ubuntu-24.04
     env:
       LAZARUS_DEBS: >-
@@ -72,7 +95,7 @@ jobs:
           cd ..
           sudo apt-get update -q
           sudo apt-get install -y -q $(for deb in $LAZARUS_DEBS; do echo "./debs/$deb"; done) \
-            qt6-base-dev qt6-qpa-plugins patchelf xvfb
+            qt6-base-dev qt6-qpa-plugins patchelf xvfb desktop-file-utils
           fpc -iV
           lazbuild --version
 
@@ -102,6 +125,11 @@ jobs:
           LCL_WIDGETSET: qt6
         run: ./opensloper-make.sh build
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: user-guide
+          path: release/site_offline
+
       - name: Package
         run: ./opensloper-make.sh package
 
@@ -115,6 +143,7 @@ jobs:
           tar -C "$RUNNER_TEMP/try" -xzf release/dist/*.tar.gz
           cd "$RUNNER_TEMP"/try/opensloper-*
           ldd ./opensloper-design | grep 'libQt6Pas.so.6 => .*/lib/libQt6Pas.so.6'
+          test -f data/help/index.html
           ./opensloper-cli --version
           ./opensloper-cli check "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt-block.sloper" \
             -m "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt.slm"
@@ -126,6 +155,28 @@ jobs:
             exit 1
           fi
 
+      # Installed from the .deb, run from the PATH, and removed again; the
+      # bindings must still come from the download
+      - name: Try the .deb
+        run: |
+          sudo apt-get install -y -q ./release/dist/opensloper_*_amd64.deb
+          ldd /usr/lib/opensloper/opensloper-design | grep 'libQt6Pas.so.6 => /usr/lib/opensloper/lib/libQt6Pas.so.6'
+          test -f /usr/lib/opensloper/data/help/index.html
+          grep -q 'application/x-opensloper-pattern' /usr/share/mime/globs2
+          desktop-file-validate /usr/share/applications/opensloper-*.desktop
+          cd "$RUNNER_TEMP"
+          opensloper-cli --version
+          opensloper-cli check "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt-block.sloper" \
+            -m "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt.slm"
+          status=0
+          timeout 15 xvfb-run -a opensloper-design || status=$?
+          if [ "$status" -ne 124 ]; then
+            echo "::error::opensloper-design from the .deb exited with $status during start-up"
+            exit 1
+          fi
+          sudo apt-get remove -y -q opensloper
+          test ! -e /usr/bin/opensloper-design
+
       - uses: actions/upload-artifact@v7
         with:
           name: opensloper-linux-x86_64
@@ -134,6 +185,7 @@ jobs:
 
   macos:
     name: macOS arm64
+    needs: user-guide
     # The current Apple silicon image: GitHub retires older ones (macos-14 is gone)
     runs-on: macos-latest
     env:
@@ -222,15 +274,22 @@ jobs:
       - name: Build
         run: ./opensloper-make.sh build --lazarusdir="$RUNNER_TEMP/lazarus" --compiler="$(command -v fpc)"
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: user-guide
+          path: release/site_offline
+
       - name: Package
         run: ./opensloper-make.sh package
 
       - name: Try the download
         run: |
-          mkdir -p "$RUNNER_TEMP/try"
-          ditto -x -k release/dist/*.zip "$RUNNER_TEMP/try"
-          cd "$RUNNER_TEMP"/try/opensloper-*/OpenSloper.app/Contents/MacOS
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/try" release/dist/*.dmg
+          cd "$RUNNER_TEMP"/try/OpenSloper.app/Contents/MacOS
+          test -L "$RUNNER_TEMP/try/Applications"
           codesign --verify --deep --strict ../..
+          plutil -lint ../Info.plist
+          test -f ../Resources/data/help/index.html
           ./opensloper-cli --version
           ./opensloper-cli check "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt-block.sloper" \
             -m "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt.slm"
@@ -243,6 +302,8 @@ jobs:
             exit 1
           fi
           kill "$app"
+          cd "$RUNNER_TEMP"
+          hdiutil detach "$RUNNER_TEMP/try"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -252,6 +313,7 @@ jobs:
 
   windows:
     name: Windows x86_64
+    needs: user-guide
     runs-on: windows-2022
     defaults:
       run:
@@ -297,12 +359,23 @@ jobs:
           if ($installer.ExitCode -ne 0) { throw "The Lazarus installer exited with $($installer.ExitCode)" }
           & "$env:LAZARUS_DIR\fpc\3.2.2\bin\x86_64-win64\fpc.exe" -iV
 
+      - name: Install Inno Setup
+        run: |
+          if [ ! -x "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then
+            choco install innosetup -y --no-progress
+          fi
+
       - name: Build
         env:
           LAZBUILD: C:/lazarus/lazbuild.exe
         run: |
           ./opensloper-make.sh build --pcp="$RUNNER_TEMP/lazarus-config" --lazarusdir=C:/lazarus \
             --compiler=C:/lazarus/fpc/3.2.2/bin/x86_64-win64/fpc.exe
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: user-guide
+          path: release/site_offline
 
       - name: Package
         env:
@@ -316,6 +389,7 @@ jobs:
           mkdir -p "$TRY"
           7z x -bso0 -o"$TRY" release/dist/*.zip
           cd "$TRY"/opensloper-*
+          test -f data/help/index.html
           ./opensloper-cli.exe --version
           ./opensloper-cli.exe check "$EXAMPLE/skirt-block.sloper" -m "$EXAMPLE/skirt.slm"
 
@@ -327,6 +401,32 @@ jobs:
           Start-Sleep -Seconds 15
           if ($app.HasExited) { throw "opensloper-design exited with $($app.ExitCode) during start-up" }
           Stop-Process -Id $app.Id
+
+      # For the current user, as most will install it, then uninstalled again
+      - name: Try the installer
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release\dist\*-setup.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'installed'
+          $run = Start-Process -FilePath $setup.FullName -Wait -PassThru `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$dir"
+          if ($run.ExitCode -ne 0) { throw "The installer exited with $($run.ExitCode)" }
+          if (-not (Test-Path (Join-Path $dir 'data\help\index.html'))) { throw 'No user guide installed' }
+          $command = (Get-ItemProperty 'HKCU:\Software\Classes\OpenSloper.Pattern\shell\open\command').'(default)'
+          if ($command -notlike '*opensloper-design.exe*') { throw "Patterns open with $command" }
+          & (Join-Path $dir 'opensloper-cli.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'opensloper-cli did not run' }
+          $app = Start-Process -FilePath (Join-Path $dir 'opensloper-design.exe') -PassThru
+          Start-Sleep -Seconds 15
+          if ($app.HasExited) { throw "The installed opensloper-design exited with $($app.ExitCode) during start-up" }
+          Stop-Process -Id $app.Id
+          Start-Sleep -Seconds 2
+          $run = Start-Process -FilePath (Join-Path $dir 'unins000.exe') -Wait -PassThru `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($run.ExitCode -ne 0) { throw "The uninstaller exited with $($run.ExitCode)" }
+          # The uninstaller finishes in a copy of itself
+          Start-Sleep -Seconds 5
+          if (Test-Path 'HKCU:\Software\Classes\OpenSloper.Pattern') { throw 'The file type is still registered' }
 
       - uses: actions/upload-artifact@v7
         with:
@@ -348,9 +448,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      # The downloads, not the user guide they were made with
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: opensloper-*
           merge-multiple: true
 
       - name: Create or update the release
@@ -370,9 +472,13 @@ jobs:
             echo
             echo "| Download | For |"
             echo "| --- | --- |"
-            echo "| \`opensloper-$VERSION-linux-x86_64.tar.gz\` | Linux x86_64; needs Qt 6.4 or later (the Qt6 Pascal bindings are included) |"
-            echo "| \`opensloper-$VERSION-macos-arm64.zip\` | macOS 11 or later on Apple silicon |"
-            echo "| \`opensloper-$VERSION-windows-x86_64.zip\` | Windows 10 or later, 64-bit |"
+            echo "| \`opensloper_${VERSION}_amd64.deb\` | Debian 13, Ubuntu 24.04 and later, x86_64: installs with menu entries and file types |"
+            echo "| \`opensloper-$VERSION-linux-x86_64.tar.gz\` | Linux x86_64, to run from a folder; needs Qt 6.4 or later (the Qt6 Pascal bindings are included) |"
+            echo "| \`opensloper-$VERSION-macos-arm64.dmg\` | macOS 11 or later on Apple silicon |"
+            echo "| \`opensloper-$VERSION-windows-x86_64-setup.exe\` | Windows 10 or later, 64-bit: installs with Start menu entries and file types |"
+            echo "| \`opensloper-$VERSION-windows-x86_64.zip\` | Windows 10 or later, 64-bit, to run from a folder |"
+            echo
+            echo "Each has the user guide to read offline (Help, User Guide)."
             echo
             echo "The programs are not signed: on macOS run \`xattr -cr OpenSloper.app\` once if it will not open,"
             echo "and on Windows choose More info, then Run anyway. README.txt in each download says more."

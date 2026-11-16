@@ -62,6 +62,10 @@ type
     // The fonts bundled for drawing text into images, data/fonts
     class function FontDir: string;
     class function FontDirIn(const Folder: string): string;
+    // The user guide's front page in the offline copy of the site that the
+    // downloads ship in data/help; '' when there is none, as in the source tree
+    class function UserGuideFile: string;
+    class function UserGuideFileIn(const Folder: string): string;
     // The folders the system and the user install fonts in, which may not
     // exist; PDF export looks there for a note's font
     class function SystemFontDirs: TStringArray;
@@ -89,6 +93,8 @@ const
   CATALOGUE_FILE_NAME = 'measurement-catalogue.json';
   ICON_FOLDER = 'icons';
   FONT_FOLDER = 'fonts';
+  USER_GUIDE_FOLDER = 'help';
+  USER_GUIDE_PAGE = 'index.html';
   {$IFDEF WINDOWS}
   PUBLISH_FILE_NAME = 'opensloper-publish.exe';
   MEASUREMENTS_FILE_NAME = 'opensloper-measurements.exe';
@@ -292,6 +298,16 @@ end;
 class function TAppPaths.FontDirIn(const Folder: string): string;
 begin
   Result := DataPathIn(Folder, FONT_FOLDER, True);
+end;
+
+class function TAppPaths.UserGuideFile: string;
+begin
+  Result := UserGuideFileIn(ExeDir);
+end;
+
+class function TAppPaths.UserGuideFileIn(const Folder: string): string;
+begin
+  Result := DataPathIn(Folder, ConcatPaths([USER_GUIDE_FOLDER, USER_GUIDE_PAGE]), False);
 end;
 
 class function TAppPaths.SystemFontDirs: TStringArray;

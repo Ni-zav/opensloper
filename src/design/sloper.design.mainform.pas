@@ -87,6 +87,9 @@ type
     procedure MenuViewFitClick(Sender: TObject);
     procedure MenuViewTrueSizeClick(Sender: TObject);
     procedure MenuHelpAboutClick(Sender: TObject);
+    procedure MenuHelpUserGuideClick(Sender: TObject);
+    procedure SystemOpenFiles(Sender: TObject; const FileNames: array of string);
+    procedure StartApp(const ProgramFile, Missing, Failed: string; const Args: array of string);
   private
     FDocument: TPatternDocument;
     // Claude working on the pattern through opensloper-cli serve --connect
@@ -236,7 +239,7 @@ implementation
 
 uses
   Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.Core.JSON, Sloper.Output.DraftSVG,
-  Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About,
+  Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.Evaluator, Sloper.API.Server,
   Sloper.API.Endpoint, Sloper.API.AppLink;
@@ -463,6 +466,7 @@ begin
   UpdateTitle;
   UpdateMenus;
   UpdateStatus;
+  Application.AddOnDropFilesHandler(@SystemOpenFiles);
 end;
 
 // Settings only arrange the window, so a problem with the file isn't worth
@@ -645,31 +649,59 @@ end;
 
 procedure TMainForm.MeasurementsEditSet(Sender: TObject);
 var
-  ProgramFile: string;
-  Process: TProcess;
+  Args: array of string;
 begin
-  ProgramFile := TAppPaths.MeasurementsProgram;
+  Args := [];
+  if FDocument.MeasurementPath <> '' then
+    Args := [FDocument.MeasurementPath];
+  // So it can list what this pattern needs; it reads the saved file
+  if FDocument.FileName <> '' then
+    Args := Concat(Args, [FDocument.FileName]);
+  StartApp(TAppPaths.MeasurementsProgram, rsMeasurementsAppMissing, rsMeasurementsAppFailed, Args);
+end;
+
+// Another of the apps, given its file; Missing and Failed say what went wrong
+procedure TMainForm.StartApp(const ProgramFile, Missing, Failed: string; const Args: array of string);
+var
+  Process: TProcess;
+  Arg: string;
+begin
   if ProgramFile = '' then
   begin
-    MessageDlg(rsMeasurementsAppMissing, mtError, [mbOK], 0);
+    MessageDlg(Missing, mtError, [mbOK], 0);
     Exit;
   end;
   Process := TProcess.Create(nil);
   try
     Process.Executable := ProgramFile;
-    if FDocument.MeasurementPath <> '' then
-      Process.Parameters.Add(FDocument.MeasurementPath);
-    // So it can list what this pattern needs; it reads the saved file
-    if FDocument.FileName <> '' then
-      Process.Parameters.Add(FDocument.FileName);
+    for Arg in Args do
+      Process.Parameters.Add(Arg);
     try
       Process.Execute;
     except
       on Failure: EProcess do
-        MessageDlg(Format(rsMeasurementsAppFailed, [Failure.Message]), mtError, [mbOK], 0);
+        MessageDlg(Format(Failed, [Failure.Message]), mtError, [mbOK], 0);
     end;
   finally
     FreeAndNil(Process);
+  end;
+end;
+
+// Files opened from the desktop while the app runs: on macOS the app bundle
+// is the design app, so measurement files and layouts go to their own apps
+procedure TMainForm.SystemOpenFiles(Sender: TObject; const FileNames: array of string);
+var
+  FileName, Extension: string;
+begin
+  for FileName in FileNames do
+  begin
+    Extension := LowerCase(ExtractFileExt(FileName));
+    if Extension = MEASUREMENT_FILE_EXT then
+      StartApp(TAppPaths.MeasurementsProgram, rsMeasurementsAppMissing, rsMeasurementsAppFailed, [FileName])
+    else if Extension = LAYOUT_EXTENSION then
+      StartApp(TAppPaths.PublishProgram, rsPublishMissing, rsPublishFailed, [FileName])
+    else if ConfirmDiscard then
+      OpenFile(FileName);
   end;
 end;
 
@@ -779,6 +811,10 @@ begin
   MenuViewFit.Action := FFitAction;
   MenuViewTrueSize.Action := FCommands.NewAction(rsMenuViewTrueSize, aiTrueSize, @MenuViewTrueSizeClick, CommandShortCut(kcTrueSize));
   MenuHelpAbout.Action := FCommands.NewAction(rsMenuHelpAbout, aiAbout, @MenuHelpAboutClick);
+  FCommands.AddMenuItem(MenuHelp, FCommands.NewAction(rsMenuUserGuide, aiUserGuide, @MenuHelpUserGuideClick));
+  // The guide first, as on every platform's Help menu
+  MenuHelp.Remove(MenuHelpAbout);
+  MenuHelp.Add(MenuHelpAbout);
   FCommands.AddButton(MenuFileNew.Action);
   FCommands.AddButton(MenuFileOpen.Action);
   FCommands.AddButton(MenuFileSave.Action);
@@ -1322,6 +1358,7 @@ end;
 
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
+  Application.RemoveOnDropFilesHandler(@SystemOpenFiles);
   // Stops answering Claude before anything it would touch goes
   FreeAndNil(FAutomation);
   SaveSettings;
@@ -1793,13 +1830,10 @@ end;
 // only when none does is another started
 procedure TMainForm.MenuFilePublishClick(Sender: TObject);
 var
-  ProgramFile: string;
-  Process: TProcess;
   Params: TJSONObject;
   Shown: boolean;
 begin
-  ProgramFile := TAppPaths.PublishProgram;
-  if ProgramFile = '' then
+  if TAppPaths.PublishProgram = '' then
   begin
     MessageDlg(rsPublishMissing, mtError, [mbOK], 0);
     Exit;
@@ -1824,21 +1858,8 @@ begin
   finally
     FreeAndNil(Params);
   end;
-  if Shown then
-    Exit;
-  Process := TProcess.Create(nil);
-  try
-    Process.Executable := ProgramFile;
-    Process.Parameters.Add(PublishTargetFor(FDocument.FileName));
-    try
-      Process.Execute;
-    except
-      on Failure: EProcess do
-        MessageDlg(Format(rsPublishFailed, [Failure.Message]), mtError, [mbOK], 0);
-    end;
-  finally
-    FreeAndNil(Process);
-  end;
+  if not Shown then
+    StartApp(TAppPaths.PublishProgram, rsPublishMissing, rsPublishFailed, [PublishTargetFor(FDocument.FileName)]);
 end;
 
 procedure TMainForm.MenuFileQuitClick(Sender: TObject);
@@ -1974,6 +1995,11 @@ end;
 procedure TMainForm.MenuHelpAboutClick(Sender: TObject);
 begin
   ShowAboutDialog(Self, APP_NAME, rsAboutSummary);
+end;
+
+procedure TMainForm.MenuHelpUserGuideClick(Sender: TObject);
+begin
+  ShowUserGuide;
 end;
 
 end.

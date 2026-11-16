@@ -33,6 +33,8 @@ type
     procedure TestIconDirMissing;
     procedure TestIconDirFromAppFolder;
     procedure TestDataInAppBundleResources;
+    procedure TestUserGuideMissing;
+    procedure TestUserGuideInDataHelp;
     procedure TestEveryIconHasItsFile;
     procedure TestEveryIconTakesTheTextColour;
     procedure TestTintReplacesEveryCurrentColor;
@@ -82,6 +84,31 @@ begin
     RemoveDir(Programs);
     RemoveDir(Bundle);
     RemoveDir(ExtractFileDir(Bundle));
+  end;
+end;
+
+// The source tree has no offline copy of the site; the downloads do
+procedure TTestIconSet.TestUserGuideMissing;
+begin
+  AssertEquals('', TAppPaths.UserGuideFileIn(ConcatPaths([GetTempDir, 'no-such-opensloper-folder', 'bin'])));
+end;
+
+procedure TTestIconSet.TestUserGuideInDataHelp;
+var
+  Root, Help, Page, Err: string;
+begin
+  Root := ConcatPaths([GetTempDir, 'opensloper-help-test']);
+  Help := ConcatPaths([Root, 'data', 'help']);
+  Page := ConcatPaths([Help, 'index.html']);
+  try
+    AssertTrue('made', ForceDirectories(Help));
+    AssertTrue(Err, WriteTextFile(Page, '<html></html>', Err));
+    AssertEquals(ExpandFileName(Page), TAppPaths.UserGuideFileIn(Root));
+  finally
+    DeleteFile(Page);
+    RemoveDir(Help);
+    RemoveDir(ExtractFileDir(Help));
+    RemoveDir(Root);
   end;
 end;
 

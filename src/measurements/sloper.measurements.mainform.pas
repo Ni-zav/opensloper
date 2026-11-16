@@ -105,6 +105,7 @@ type
     procedure HeaderChange(Sender: TObject);
     procedure PreferencesClick(Sender: TObject);
     procedure AboutClick(Sender: TObject);
+    procedure UserGuideClick(Sender: TObject);
     procedure RefreshGrid;
     function CellText(Row, Column: integer): string;
     function ValueColumns: integer;
@@ -256,7 +257,7 @@ implementation
 
 uses
   Graphics, LCLType, Math, Sloper.Core.AppPaths, Sloper.Core.RecentFiles, Sloper.Core.SeamlyFormat, Sloper.Core.Settings,
-  Sloper.UI.About, Sloper.UI.IconSet, Sloper.UI.Preferences, Sloper.UI.Spacing;
+  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.IconSet, Sloper.UI.Preferences, Sloper.UI.Spacing;
 
 const
   SIDE_WIDTH = 430;
@@ -372,6 +373,7 @@ begin
   Group.AddSeparator;
   FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuPreferences, aiPreferences, @PreferencesClick, CommandShortCut(kcPreferences)));
   Group := AddMenu(rsMenuHelp);
+  FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuUserGuide, aiUserGuide, @UserGuideClick));
   FCommands.AddMenuItem(Group, FCommands.NewAction(Format(rsMenuAbout, [rsMeasurementsTitle]), aiAbout, @AboutClick));
 
   FCommands.AddButton(NewAction);
@@ -1600,6 +1602,11 @@ end;
 procedure TMeasurementsForm.AboutClick(Sender: TObject);
 begin
   ShowAboutDialog(Self, rsMeasurementsTitle, rsAboutSummary);
+end;
+
+procedure TMeasurementsForm.UserGuideClick(Sender: TObject);
+begin
+  ShowUserGuide;
 end;
 
 procedure TMeasurementsForm.PreferencesClick(Sender: TObject);

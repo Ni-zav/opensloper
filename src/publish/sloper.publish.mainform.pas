@@ -119,6 +119,7 @@ type
     procedure RefreshCommands;
     procedure PreferencesClick(Sender: TObject);
     procedure AboutClick(Sender: TObject);
+    procedure UserGuideClick(Sender: TObject);
     procedure WatchTick(Sender: TObject);
     // Comes to the front when asked to show the layout open here
     function AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
@@ -344,7 +345,7 @@ implementation
 uses
   LCLType, Math, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
   Sloper.Core.Settings, Sloper.UI.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
-  Sloper.UI.About, Sloper.UI.Preferences,
+  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
   Sloper.Output.LayoutPDF, Sloper.Output.Packing, Sloper.Output.Preview, Sloper.Output.Printing, Sloper.Output.Tiling,
   Sloper.Publish.PrintDialog, Sloper.Core.JSON, Sloper.API.Endpoint, Sloper.Output.MaterialNeeded;
 
@@ -538,6 +539,7 @@ begin
   Group.AddSeparator;
   FCommands.AddMenuItem(Group, FReloadAction);
   Group := AddMenu(rsMenuHelp);
+  FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuUserGuide, aiUserGuide, @UserGuideClick));
   FCommands.AddMenuItem(Group, FCommands.NewAction(Format(rsMenuAbout, [rsPublishTitle]), aiAbout, @AboutClick));
 
   FCommands.AddButton(OpenAction);
@@ -1808,6 +1810,11 @@ end;
 procedure TPublishForm.AboutClick(Sender: TObject);
 begin
   ShowAboutDialog(Self, rsPublishTitle, rsAboutSummary);
+end;
+
+procedure TPublishForm.UserGuideClick(Sender: TObject);
+begin
+  ShowUserGuide;
 end;
 
 procedure TPublishForm.PreferencesClick(Sender: TObject);

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The OpenSloper file types, for shared-mime-info: installed as
+     share/mime/packages/opensloper.xml, so the desktop opens each with its app -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-opensloper-pattern">
+    <comment>OpenSloper pattern</comment>
+    <sub-class-of type="application/json"/>
+    <icon name="opensloper-design"/>
+    <glob pattern="*.sloper"/>
+  </mime-type>
+  <mime-type type="application/x-opensloper-measurements">
+    <comment>OpenSloper measurements</comment>
+    <sub-class-of type="application/json"/>
+    <icon name="opensloper-measure"/>
+    <glob pattern="*.slm"/>
+  </mime-type>
+  <mime-type type="application/x-opensloper-layout">
+    <comment>OpenSloper layout</comment>
+    <sub-class-of type="application/json"/>
+    <icon name="opensloper-publish"/>
+    <glob pattern="*.slayout"/>
+  </mime-type>
+</mime-info>

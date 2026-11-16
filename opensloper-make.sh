@@ -35,11 +35,14 @@ Commands:
   format [--check] [FILE...]
                          format the sources with jcfsettings.cfg; --check lists
                          the files that need it and changes nothing
-  docs [--serve] [--reinstall]
+  docs [--serve] [--offline] [--reinstall]
                          regenerate docs/reference/ and build the site into
-                         release/site_docs; --serve previews it, --reinstall
-                         makes the Python venv again
-  package                pack the built apps for this platform into release/dist
+                         release/site_docs; --serve previews it, --offline
+                         also builds the copy the downloads ship into
+                         release/site_offline, --reinstall makes the Python
+                         venv again
+  package                pack the built apps for this platform into release/dist:
+                         the archive and the installer (.deb, .dmg or setup.exe)
   release [VERSION]      print a release's notes: its CHANGELOG.md section, else
                          its commits since the last release
   version                print the current version
@@ -240,11 +243,16 @@ cmd_format() {
 # patterns. They are committed, so the site builds without a Pascal toolchain
 # (as the GitHub Pages workflow does); this command writes them again first
 # when release/opensloper-cli has been built.
+#
+# --offline also builds the copy of the site that package puts in each
+# download as data/help, read from disk: pages are linked as .../index.html,
+# search works without a server, and the web fonts give way to the system's.
 cmd_docs() {
-  local cli=release/opensloper-cli serve=0 reinstall=0 arg topic
+  local cli=release/opensloper-cli serve=0 offline=0 reinstall=0 arg topic
   for arg in "$@"; do
     case "$arg" in
       --serve) serve=1 ;;
+      --offline) offline=1 ;;
       --reinstall) reinstall=1 ;;
       *)
         echo "docs: unknown option $arg" >&2
@@ -303,17 +311,60 @@ cmd_docs() {
   else
     ./venv/bin/zensical build --clean --strict
   fi
+
+  if [ "$offline" -eq 1 ]; then
+    # Zensical takes the project root from the configuration's folder, so the
+    # offline configuration is written beside zensical.toml for the build
+    sed -e 's|^site_dir = .*|site_dir = "release/site_offline"\nuse_directory_urls = false|' \
+      -e 's|^\[project.theme\]$|&\nfont = false|' \
+      -e '$a\\n[project.plugins.offline]' zensical.toml > .zensical-offline.toml
+    trap 'rm -f .zensical-offline.toml' EXIT
+    ./venv/bin/zensical build --clean --strict -f .zensical-offline.toml
+    rm -f .zensical-offline.toml
+    echo "Offline copy in release/site_offline"
+  fi
 }
 
 # package: the apps that build put in release/ for this platform, as
 #   release/dist/opensloper-VERSION-linux-x86_64.tar.gz    (Linux)
-#   release/dist/opensloper-VERSION-macos-arm64.zip        (macOS: OpenSloper.app)
+#   release/dist/opensloper_VERSION_amd64.deb              (Linux, with dpkg-deb)
+#   release/dist/opensloper-VERSION-macos-arm64.dmg        (macOS: OpenSloper.app)
 #   release/dist/opensloper-VERSION-windows-x86_64.zip     (Windows, from Git Bash)
-# VERSION is APP_VERSION in Sloper.Core.Version.
-# STRIP names the strip program when it is not on PATH (as on Windows).
+#   release/dist/opensloper-VERSION-windows-x86_64-setup.exe  (Windows, with Inno Setup)
+# VERSION is APP_VERSION in Sloper.Core.Version. Each has the offline user
+# guide in data/help when docs --offline has built it into release/site_offline.
+# STRIP names the strip program when it is not on PATH (as on Windows), and
+# ISCC the Inno Setup compiler when it is not in its usual place.
 # On Linux, BUNDLE_LIBS lists libraries to ship in lib/ beside the programs
 # (the release workflow ships the Qt6 Pascal bindings, libQt6Pas.so.6, which
 # few distributions package); the GUI programs then look there first.
+
+# The bundle's file types: the design app opens them all, and hands
+# measurement files and layouts to the apps beside it
+plist_document_type() {
+  cat <<EOF
+    <dict>
+      <key>CFBundleTypeName</key><string>$1</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Owner</string>
+      <key>CFBundleTypeIconFile</key><string>OpenSloper</string>
+      <key>LSItemContentTypes</key><array><string>io.github.billbsing.opensloper.$2</string></array>
+    </dict>
+EOF
+}
+
+plist_exported_type() {
+  cat <<EOF
+    <dict>
+      <key>UTTypeIdentifier</key><string>io.github.billbsing.opensloper.$2</string>
+      <key>UTTypeDescription</key><string>$1</string>
+      <key>UTTypeConformsTo</key><array><string>public.json</string></array>
+      <key>UTTypeIconFile</key><string>OpenSloper</string>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>$3</string></array></dict>
+    </dict>
+EOF
+}
 
 # The programs lose their debug information; the build keeps it for debugging
 strip_programs() {
@@ -353,12 +404,15 @@ write_readme() {
           echo "from your distribution (libqt5pas1 or libqt6pas6 on Debian and Ubuntu)."
         fi
         echo
-        echo "share/applications holds menu entries and share/icons the icons; copy them"
-        echo "to ~/.local/share/applications and ~/.local/share/icons/hicolor/scalable/apps"
-        echo "with the programs on your PATH to start OpenSloper from the desktop menu."
+        echo "share/applications holds menu entries, share/icons the icons and share/mime"
+        echo "the file types; copy them to ~/.local/share/applications,"
+        echo "~/.local/share/icons/hicolor/scalable/apps and ~/.local/share/mime/packages"
+        echo "(then run update-mime-database ~/.local/share/mime), with the programs on"
+        echo "your PATH, to start OpenSloper from the desktop menu and open its files."
+        echo "On Debian and Ubuntu the .deb download does all this."
         ;;
       macOS)
-        echo "Move OpenSloper.app to Applications and open it: it is the pattern editor,"
+        echo "Drag OpenSloper.app to Applications and open it: it is the pattern editor,"
         echo "and its File menu opens the measurements editor and the publish window."
         echo "It is not signed by Apple. If macOS says it cannot be opened or is damaged,"
         echo "run this once in Terminal:"
@@ -369,13 +423,111 @@ write_readme() {
       Windows)
         echo "Run opensloper-design.exe (the pattern editor), opensloper-measurements.exe"
         echo "or opensloper-publish.exe from this folder; keep the data folder beside"
-        echo "them. opensloper-cli.exe is the command-line tool."
+        echo "them. opensloper-cli.exe is the command-line tool. The setup.exe download"
+        echo "installs the same programs, with Start menu entries and file types."
         echo
         echo "The programs are not signed, so Windows SmartScreen may ask before the"
         echo "first run: choose More info, then Run anyway."
         ;;
     esac
   } > "$file"
+}
+
+# The offline user guide, into a download's data folder
+copy_user_guide() {
+  local data=$1
+  if [ -f release/site_offline/index.html ]; then
+    cp -R release/site_offline "$data/help"
+  else
+    echo "No offline user guide in release/site_offline (run docs --offline), so" \
+      "the apps' Help menu opens the website" >&2
+  fi
+}
+
+# The .deb: the programs and data in /usr/lib/opensloper, linked from
+# /usr/bin (the programs find their data from their real path), with the menu
+# entries, icons and file types under /usr/share, which dpkg's triggers
+# register. It needs the Qt6 Pascal bindings bundled (BUNDLE_LIBS), which
+# Debian and Ubuntu package only from 2026, and Qt 6 itself from the system.
+package_deb() {
+  local root=$1 arch=$2 deb=release/stage/deb app size
+  case "$arch" in
+    x86_64) arch=amd64 ;;
+  esac
+  if ! command -v dpkg-deb >/dev/null; then
+    echo "No dpkg-deb, so no .deb" >&2
+    return
+  fi
+  if [ -z "${BUNDLE_LIBS:-}" ]; then
+    echo "No .deb without the Qt6 Pascal bindings in BUNDLE_LIBS" >&2
+    return
+  fi
+  rm -rf "$deb"
+  mkdir -p "$deb/DEBIAN" "$deb/usr/lib/opensloper" "$deb/usr/bin" "$deb/usr/share/applications" \
+    "$deb/usr/share/icons/hicolor/scalable/apps" "$deb/usr/share/mime/packages" "$deb/usr/share/doc/opensloper"
+  for app in opensloper-design opensloper-publish opensloper-measurements opensloper-cli; do
+    cp -p "$root/$app" "$deb/usr/lib/opensloper/"
+    ln -s "../lib/opensloper/$app" "$deb/usr/bin/$app"
+  done
+  cp -R "$root/lib" "$root/data" "$deb/usr/lib/opensloper/"
+  cp "$root"/share/applications/*.desktop "$deb/usr/share/applications/"
+  cp "$root"/share/icons/*.svg "$deb/usr/share/icons/hicolor/scalable/apps/"
+  cp "$root"/share/mime/packages/opensloper.xml "$deb/usr/share/mime/packages/"
+  {
+    echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
+    echo "Upstream-Name: OpenSloper"
+    echo "Source: https://github.com/opensloper/opensloper"
+    echo
+    echo "Files: *"
+    echo "Copyright: 2026 The OpenSloper authors"
+    echo "License: GPL-3.0-or-later"
+    echo " On Debian systems the licence is in /usr/share/common-licenses/GPL-3."
+  } > "$deb/usr/share/doc/opensloper/copyright"
+  gzip -9n < CHANGELOG.md > "$deb/usr/share/doc/opensloper/changelog.gz"
+  size=$(du -sk "$deb/usr" | cut -f1)
+  # Ubuntu 24.04 and Debian 13 name the Qt 6 libraries with t64
+  cat > "$deb/DEBIAN/control" <<EOF
+Package: opensloper
+Version: $VERSION
+Architecture: $arch
+Maintainer: The OpenSloper authors <contact@opensloper.com>
+Installed-Size: $size
+Depends: libc6, libqt6core6t64 (>= 6.4) | libqt6core6 (>= 6.4), libqt6gui6t64 | libqt6gui6, libqt6widgets6t64 | libqt6widgets6, libqt6printsupport6t64 | libqt6printsupport6, qt6-qpa-plugins
+Section: graphics
+Priority: optional
+Homepage: https://github.com/opensloper/opensloper
+Description: parametric sewing pattern drafting
+ OpenSloper drafts sewing patterns from body measurements and formulas, so
+ a pattern redrafts itself for every size. It has three apps: the pattern
+ editor, a measurements editor and a publish app that lays out, tiles and
+ prints the pieces, with opensloper-cli for the command line.
+EOF
+  dpkg-deb --root-owner-group --build "$deb" "release/dist/opensloper_${VERSION}_$arch.deb" >/dev/null
+  echo "release/dist/opensloper_${VERSION}_$arch.deb"
+}
+
+# The macOS disk image: the bundle beside a link to Applications to drag it to
+package_dmg() {
+  local folder=$1 name=$2
+  ln -s /Applications "$folder/Applications"
+  rm -f "release/dist/$name.dmg"
+  hdiutil create -quiet -volname "OpenSloper $VERSION" -srcfolder "$folder" -fs HFS+ -format UDZO \
+    "release/dist/$name.dmg"
+  rm "$folder/Applications"
+  echo "release/dist/$name.dmg"
+}
+
+# The Windows installer, from the folder the .zip is made of
+package_setup() {
+  local root=$1 name=$2 iscc="${ISCC:-C:/Program Files (x86)/Inno Setup 6/ISCC.exe}"
+  if [ ! -x "$iscc" ] && ! command -v "$iscc" >/dev/null 2>&1; then
+    echo "No Inno Setup compiler ($iscc), so no installer" >&2
+    return
+  fi
+  # Git Bash would take the /-options for paths and rewrite them
+  MSYS2_ARG_CONV_EXCL='*' "$iscc" /Q "/DAppVersion=$VERSION" "/DSourceDir=$(cygpath -w "$root")" \
+    "/DOutputDir=$(cygpath -w release/dist)" "/DOutputName=$name-setup" resources/windows/opensloper.iss
+  echo "release/dist/$name-setup.exe"
 }
 
 cmd_package() {
@@ -399,7 +551,7 @@ cmd_package() {
     Linux)
       name="opensloper-$VERSION-linux-$arch"
       root="$stage/$name"
-      mkdir -p "$root/share/applications" "$root/share/icons"
+      mkdir -p "$root/share/applications" "$root/share/icons" "$root/share/mime/packages"
       for app in "${apps[@]}"; do
         cp "release/$app" "$root/"
       done
@@ -414,7 +566,9 @@ cmd_package() {
         done
       fi
       cp -R data "$root/data"
+      copy_user_guide "$root/data"
       cp resources/linux/*.desktop "$root/share/applications/"
+      cp resources/linux/opensloper.xml "$root/share/mime/packages/"
       # Named as the desktop entries' Icon lines name them
       cp resources/opensloper-design.svg resources/opensloper-publish.svg resources/opensloper-measure.svg \
         "$root/share/icons/"
@@ -422,6 +576,7 @@ cmd_package() {
       write_readme "$root/README.txt" Linux
       tar -C "$stage" -czf "$dist/$name.tar.gz" "$name"
       echo "$dist/$name.tar.gz"
+      package_deb "$root" "$arch"
       ;;
     Darwin)
       # One bundle: the design app opens the other two as programs beside it
@@ -433,6 +588,7 @@ cmd_package() {
       done
       # Code signing takes only programs in MacOS, so the data is a resource
       cp -R data "$bundle/Contents/Resources/data"
+      copy_user_guide "$bundle/Contents/Resources/data"
       if command -v rsvg-convert >/dev/null && command -v iconutil >/dev/null; then
         iconset="$stage/OpenSloper.iconset"
         mkdir -p "$iconset"
@@ -463,6 +619,18 @@ cmd_package() {
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+$(plist_document_type "OpenSloper pattern" pattern)
+$(plist_document_type "OpenSloper measurements" measurements)
+$(plist_document_type "OpenSloper layout" layout)
+  </array>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+$(plist_exported_type "OpenSloper pattern" pattern sloper)
+$(plist_exported_type "OpenSloper measurements" measurements slm)
+$(plist_exported_type "OpenSloper layout" layout slayout)
+  </array>
 </dict>
 </plist>
 EOF
@@ -471,8 +639,7 @@ EOF
       codesign --force --deep --sign - "$bundle"
       cp LICENSE CHANGELOG.md "$stage/$name/"
       write_readme "$stage/$name/README.txt" macOS
-      (cd "$stage" && ditto -c -k --keepParent "$name" "../../$dist/$name.zip")
-      echo "$dist/$name.zip"
+      package_dmg "$stage/$name" "$name"
       ;;
     MINGW* | MSYS* | CYGWIN*)
       name="opensloper-$VERSION-windows-$arch"
@@ -485,11 +652,13 @@ EOF
       done
       strip_programs "${programs[@]}"
       cp -R data "$root/data"
+      copy_user_guide "$root/data"
       cp LICENSE "$root/LICENSE.txt"
       cp CHANGELOG.md "$root/CHANGELOG.md"
       write_readme "$root/README.txt" Windows
       (cd "$stage" && 7z a -tzip -bso0 "../../$dist/$name.zip" "$name")
       echo "$dist/$name.zip"
+      package_setup "$root" "$name"
       ;;
     *)
       echo "No packaging for $(uname -s)" >&2

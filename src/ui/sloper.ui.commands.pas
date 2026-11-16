@@ -51,6 +51,11 @@ type
 // shortcut itself.
 procedure SetActionHint(AAction: TAction);
 
+// An action in Actions for a command, shared by its menu item and toolbar
+// button
+function NewCommandAction(Actions: TActionList; const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent;
+  AShortCut: TShortCut = 0; ATag: PtrInt = 0): TAction;
+
 // A line between groups of buttons. Drawn here, as the Qt styles draw the
 // divider too faint to see.
 procedure AddToolDivider(Bar: TToolBar);
@@ -249,16 +254,22 @@ begin
   end;
 end;
 
-function TCommandSet.NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut; ATag: PtrInt): TAction;
+function NewCommandAction(Actions: TActionList; const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent;
+  AShortCut: TShortCut; ATag: PtrInt): TAction;
 begin
-  Result := TAction.Create(FActions);
-  Result.ActionList := FActions;
+  Result := TAction.Create(Actions);
+  Result.ActionList := Actions;
   Result.Caption := ACaption;
   Result.ImageIndex := Ord(AIcon);
   SetActionShortCut(Result, AShortCut);
   Result.Tag := ATag;
   Result.OnExecute := AHandler;
   SetActionHint(Result);
+end;
+
+function TCommandSet.NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut; ATag: PtrInt): TAction;
+begin
+  Result := NewCommandAction(FActions, ACaption, AIcon, AHandler, AShortCut, ATag);
 end;
 
 function TCommandSet.AddMenuItem(Parent: TMenuItem; AAction: TAction): TMenuItem;

@@ -149,7 +149,6 @@ type
     procedure SetLabelMode(Mode: TLabelMode);
     function NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut = 0;
       ATag: PtrInt = 0): TAction;
-    procedure SetActionHint(AAction: TAction);
     function AddMenuItem(AParent: TMenuItem; AAction: TAction): TMenuItem;
     procedure AddButton(Bar: TToolBar; AAction: TBasicAction; Grouped: boolean = False);
     procedure AddDivider(Bar: TToolBar);
@@ -719,21 +718,7 @@ end;
 function TMainForm.NewAction(const ACaption: string; AIcon: TAppIcon; AHandler: TNotifyEvent; AShortCut: TShortCut;
   ATag: PtrInt): TAction;
 begin
-  Result := TAction.Create(FActions);
-  Result.ActionList := FActions;
-  Result.Caption := ACaption;
-  Result.ImageIndex := Ord(AIcon);
-  SetActionShortCut(Result, AShortCut);
-  Result.Tag := ATag;
-  Result.OnExecute := AHandler;
-  SetActionHint(Result);
-end;
-
-// The tooltip: the caption without its accelerator or dots. The LCL adds
-// the shortcut itself.
-procedure TMainForm.SetActionHint(AAction: TAction);
-begin
-  AAction.Hint := StringReplace(StripHotkey(AAction.Caption), '...', '', []);
+  Result := NewCommandAction(FActions, ACaption, AIcon, AHandler, AShortCut, ATag);
 end;
 
 function TMainForm.AddMenuItem(AParent: TMenuItem; AAction: TAction): TMenuItem;

@@ -218,7 +218,7 @@ type
     procedure AutomationChanged(Sender: TObject);
     procedure StartAutomation;
     // For ui_state: the file, the selection, the label mode and the view
-    function WindowState: TJSONObject;
+    function UIStateJSON: TJSONObject;
     function DisplayName: string;
     // True when there are no unsaved changes, or the user saved or discarded them
     function ConfirmDiscard: boolean;
@@ -420,7 +420,7 @@ begin
   MeasurementsDialog.InitialDir := OpenDialog.InitialDir;
 
   FDocument := TPatternDocument.Create;
-  FAutomation := TAutomation.Create(FDocument, @WindowState);
+  FAutomation := TAutomation.Create(FDocument, @UIStateJSON);
   CreateToolBars;
   CreateCommands;
   FRecent := TRecentMenu.Create(Self, MenuFile, MenuFileOpen, rlPatterns, @RecentOpen);
@@ -591,7 +591,7 @@ begin
   FMaterials.OnEdit := @MaterialsEditClick;
   FAssistant := TAssistantPanel(AddSection('claude', rsTabClaude, TAssistantPanel.Create(Self)));
   FAssistant.Document := FDocument;
-  FAssistant.WindowState := @WindowState;
+  FAssistant.WindowState := @UIStateJSON;
   FSideSplitter := TSplitter.Create(Self);
   FSideSplitter.Parent := Self;
   FSideSplitter.Align := alRight;
@@ -1493,7 +1493,7 @@ begin
   StatusBarResize(StatusBar);
 end;
 
-function TMainForm.WindowState: TJSONObject;
+function TMainForm.UIStateJSON: TJSONObject;
 var
   Selection: TJSONArray;
   Key: string;

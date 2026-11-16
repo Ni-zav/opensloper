@@ -12,6 +12,103 @@ Changed, Fixed and Removed under each version.
 
 ## 0.3.0
 
+### Changed
+
+- The Automation API's `export` refuses to replace a file already there, and
+  `set_measurement` asks before it writes the measurement file.
+- The Claude assistant checks the server's certificate before sending the API
+  key.
+- The assistant's conversation ends when another pattern is opened.
+- The assistant keeps only its last three draft images in the conversation.
+- A tiled print is capped at 10,000 pages; past that the layout has a problem.
+- A draft PNG is capped in height, and an empty area is refused.
+- Pieces that packing cannot fit are set below the packed ones.
+- `opensloper-cli materials` warns about each pattern it could not read and
+  exits 2.
+- `opensloper-cli layout` refuses a pattern file that is not there.
+- Patterns, layouts, measurements and settings are written atomically.
+- The measurement and layout undo keep the latest 500 steps.
+- File → Save As starts in the pattern's own folder.
+- Files ending `.SLOPER` or `.SLAYOUT` are known whatever their case.
+- The evaluation graph is built in linear time, and formula references are
+  looked up rather than compared with every object.
+- An edge is measured once for a repeat, and once when finding coincident
+  edges.
+- A layout's pieces are placed once when listing its problems, and a garment
+  piece is fingerprinted without flattening its edges again.
+- The list panels rebuild once a drag ends, and the publish Materials tab
+  only when the patterns change.
+- Unit conversion tries a number's plain fit once.
+- Messages name an input of the wrong kind rather than give its ID.
+- The test square's printed size is translatable.
+- The design window's actions and toolbars are built with the code the other
+  apps share.
+- The MCP server and the assistant share their tool result code.
+- One array type and one vector normalising function serve all the geometry.
+- The design form's `ui_state` answer is named `UIStateJSON`, so it no longer
+  hides the form's own `WindowState`.
+
+### Fixed
+
+- An API edit left open by a method that fails is cancelled.
+- A malformed API request without an id gets no reply.
+- An API call's repeat point gets its ID inside the call's change.
+- An API input given by an ID that does not exist is refused.
+- `set_material` names the parameter in its number errors, and `add_point`
+  lists every point type.
+- An assistant question stopped before any answer is taken back.
+- An assistant stream cut off before its end is treated as failed.
+- A key changed in Preferences is used on the assistant's next question.
+- Stop ends the assistant's request at once.
+- The assistant says why its key file could not be saved or removed.
+- A reset connection to the Claude API no longer ends the design app.
+- JSON nested too deep to parse safely is refused.
+- Numbers past a double's range are refused in files, formulas and imported
+  measurements.
+- IDs from files are kept within 32 bits.
+- A transform's sources are read as IDs, not any number.
+- A fragment's odd selection or needs is refused instead of raising.
+- How deep an imported Seamly formula is worked out is limited.
+- A pasted ID from another pattern that the copy does not hold is refused.
+- A node is made invalid when a number too large raises as it computes.
+- A repeat's count is checked before it is rounded.
+- A curve is offset all along when a handle has zero length.
+- Two close crossings of large circles are told from a touch.
+- Every perpendicular foot on a curve is found, not only the nearest point.
+- A curve's crossings are found however close, and where it only touches.
+- A repeat is collected once when a piece uses several of its points.
+- A point keeps its marker when its operation is changed.
+- A point given twice is arranged once.
+- A marking a piece's formula also reads cannot be deleted.
+- A transform whose copy a piece only marks can be deleted.
+- A round corner given the same edge twice is refused.
+- A mirror's second axis point is checked when it is made.
+- A mirror's axis line cannot be turned into a curve.
+- A projector sheet draws in white again after a profile-coloured line.
+- The sheet and its pages are sized for the notes printed with pieces.
+- Each material and measurement set is listed once, matched whole.
+- Nothing is placed for a tray item whose piece has gone.
+- New pieces wrap at the roll or material width.
+- A fold piece keeps its half when opening it out encloses nothing.
+- A repeat is deleted when one of its points is selected.
+- Align says why it did nothing when a locked point would move.
+- Hidden and dimmed pieces are left out of click choices.
+- A pending pick and tool state are dropped when another pattern opens.
+- The Garment tab keeps its material and view through undo.
+- The formula caret is right with letters beyond ASCII.
+- A piece's colour choice starts on its own material's colour.
+- `--upto` draws up to a repeat when it names one of its points.
+- A layout's `-m` path is stored relative to the layout.
+- A pending measurement conflict is dropped when another file is opened.
+- Only text names are read from the catalogue's name lists.
+- The measurement text that was loaded is remembered, not read a second time.
+- The Lines and Align panels no longer outlive the document when the design
+  window closes.
+- A publish drag no longer loses the piece it moves.
+- A header or cell edit is finished before switching measurement files.
+- The title fields keep their order when one is ticked or cleared.
+- A plain bracket before a link no longer garbles the Python client's
+  docstrings.
 
 ## 0.2.0
 

@@ -857,7 +857,7 @@ Decided and built 2026-11-14 (issue #19, phase 2). How much of each material the
 
 ### Blender export (3D preview)
 
-Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator.
+Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`.
 
 Writing a cloth simulator (triangulation, sewing constraints, body and self-collision, a parametric avatar) is a multi-year effort in commercial tools, so the app only exports what Blender needs:
 

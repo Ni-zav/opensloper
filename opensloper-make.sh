@@ -490,7 +490,7 @@ package_deb() {
 Package: opensloper
 Version: $VERSION
 Architecture: $arch
-Maintainer: The OpenSloper authors <opensloper@users.noreply.github.com>
+Maintainer: The OpenSloper authors <contact@opensloper.com>
 Installed-Size: $size
 Depends: libc6, libqt6core6t64 (>= 6.4) | libqt6core6 (>= 6.4), libqt6gui6t64 | libqt6gui6, libqt6widgets6t64 | libqt6widgets6, libqt6printsupport6t64 | libqt6printsupport6, qt6-qpa-plugins
 Section: graphics

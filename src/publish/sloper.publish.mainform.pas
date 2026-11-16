@@ -467,7 +467,8 @@ begin
   FWatch.OnTimer := @WatchTick;
   if (ParamCount >= 1) and FileExists(ParamStr(1)) then
     OpenPath(ParamStr(1));
-  // Without it, Publish… opens another window rather than this one
+  // Without it, Publish… opens another window rather than this one, and
+  // preferences changed in another app show only after a restart
   FAppLink := TAppLink.Start(PUBLISH_KIND, @AppLinkMessage, True, Reason);
 end;
 
@@ -1545,6 +1546,12 @@ function TPublishForm.AppLinkMessage(const Method: string; Params: TJSONObject):
 var
   LayoutFile: string;
 begin
+  // Another app saved them; only printing reads the calibration
+  if Method = APP_LINK_PREFERENCES then
+  begin
+    FDocument.Layout.Calibration := UserCalibration;
+    Exit(True);
+  end;
   Result := (Method = APP_LINK_SHOW) and GetJSONString(Params, APP_LINK_LAYOUT_PARAM, LayoutFile) and
     (FDocument.Layout.FileName <> '') and SameFileName(ExpandFileName(FDocument.Layout.FileName), ExpandFileName(LayoutFile));
   if not Result then
@@ -1825,6 +1832,7 @@ begin
     Exit;
   // Only printing reads it, so nothing on screen changes
   FDocument.Layout.Calibration := Preferences.Calibration;
+  TellApps(APP_LINK_PREFERENCES, FAppLink);
 end;
 
 end.

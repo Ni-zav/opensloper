@@ -32,7 +32,7 @@ uses
   Sloper.UI.MeasurementsPanel, Sloper.UI.AlignPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
   Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.UI.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
   Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.Accordion, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
-  Sloper.UI.GarmentPanel, Sloper.Core.Garment, fpjson;
+  Sloper.UI.GarmentPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
 
 type
 
@@ -102,6 +102,9 @@ type
     FFragmentFormat: TClipboardFormat;
     // Shared with the other apps, and changed through Edit → Preferences
     FPreferences: TPreferences;
+    // Listening for the other apps, which say when they change the
+    // preferences; nil when it could not start
+    FAppLink: TAppLink;
     FRecent: TRecentMenu;
     // The actions, their icons and the command bar along the top
     FCommands: TCommandSet;
@@ -142,6 +145,7 @@ type
     procedure SaveSettings;
     procedure ApplyPreferences;
     procedure PreferencesClick(Sender: TObject);
+    function AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
     procedure EditCutClick(Sender: TObject);
     procedure EditCopyClick(Sender: TObject);
     procedure PutOnClipboard(const Copied: TFragmentCopy);
@@ -242,7 +246,7 @@ uses
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.Evaluator, Sloper.API.Server,
-  Sloper.API.Endpoint, Sloper.API.AppLink;
+  Sloper.API.Endpoint;
 
 const
   MARKING_ICONS: array[TMarkingKind] of TAppIcon = (aiHole, aiPlacement, aiStitchHoles);
@@ -401,6 +405,8 @@ resourcestring
   { TMainForm }
 
 procedure TMainForm.FormCreate(Sender: TObject);
+var
+  Reason: string;
 begin
   MenuFile.Caption := rsMenuFile;
   MenuEdit.Caption := rsMenuEdit;
@@ -467,6 +473,8 @@ begin
   UpdateMenus;
   UpdateStatus;
   Application.AddOnDropFilesHandler(@SystemOpenFiles);
+  // Without it, preferences changed in another app show only after a restart
+  FAppLink := TAppLink.Start(DESIGN_KIND, @AppLinkMessage, True, Reason);
 end;
 
 // Settings only arrange the window, so a problem with the file isn't worth
@@ -523,6 +531,17 @@ begin
   if not EditPreferences(Self, ptDesign, Preferences) then
     Exit;
   FPreferences := Preferences;
+  ApplyPreferences;
+  TellApps(APP_LINK_PREFERENCES, FAppLink);
+end;
+
+// Another app saved the preferences
+function TMainForm.AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
+begin
+  Result := Method = APP_LINK_PREFERENCES;
+  if not Result then
+    Exit;
+  FPreferences := UserPreferences;
   ApplyPreferences;
 end;
 
@@ -1359,6 +1378,7 @@ end;
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
   Application.RemoveOnDropFilesHandler(@SystemOpenFiles);
+  FreeAndNil(FAppLink);
   // Stops answering Claude before anything it would touch goes
   FreeAndNil(FAutomation);
   SaveSettings;

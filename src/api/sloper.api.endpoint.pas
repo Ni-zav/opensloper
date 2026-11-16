@@ -43,8 +43,10 @@ const
   // Windows listens here, never on every interface
   AUTOMATION_HOST = '127.0.0.1';
   // The kinds of endpoint, which start their files' names: a design window
-  // in automation mode, and a publish window listening for the other apps
+  // in automation mode, and each app's window listening for the other apps
   AUTOMATION_KIND = 'automation';
+  DESIGN_KIND = 'design';
+  MEASUREMENTS_KIND = 'measurements';
   PUBLISH_KIND = 'publish';
 
 type

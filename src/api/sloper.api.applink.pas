@@ -22,7 +22,8 @@
 // one JSON-RPC request, a method and its params, answered with whether the
 // window did it. The design window's Publish… asks each publish window to
 // come to the front if it shows the pattern's layout, and starts a new one
-// only when none does. No LCL dependency.
+// only when none does. An app that saves the preferences tells every other
+// window, which reads them again; nothing answers. No LCL dependency.
 unit Sloper.API.AppLink;
 
 {$mode ObjFPC}{$H+}
@@ -30,7 +31,7 @@ unit Sloper.API.AppLink;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Listener;
+  SysUtils, fpjson, Sloper.API.Endpoint, Sloper.API.Listener;
 
 const
   // A publish window showing the layout in params.layout comes to the front
@@ -38,6 +39,11 @@ const
   APP_LINK_LAYOUT_PARAM = 'layout';
   // The result: {"done": true} when the window did what was asked
   APP_LINK_DONE = 'done';
+  // The preferences in the settings file changed: read them again. Sent to
+  // every window as a notification, without params.
+  APP_LINK_PREFERENCES = 'preferences';
+  // The kinds every app's window listens on
+  APP_KINDS: array[0..2] of string = (DESIGN_KIND, MEASUREMENTS_KIND, PUBLISH_KIND);
 
 type
   // On the main thread in an app; True when this window did what was asked.
@@ -64,6 +70,9 @@ type
 // Sends Method to each window of Kind listening, newest first, until one
 // says it did it; False when none did, or none listens
 function SendToApp(const Kind, Method: string; Params: TJSONObject): boolean;
+// Sends Method to every app's window listening but Own (nil for none), as a
+// notification, so no window waits for another's main thread
+procedure TellApps(const Method: string; Own: TAppLink);
 
 resourcestring
   rsAppLinkNotRequest = 'The message must be a JSON-RPC 2.0 request with a method';
@@ -71,7 +80,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.API.Endpoint, Sloper.API.Rpc;
+  Sloper.Core.JSON, Sloper.API.Rpc;
 
 const
   // How long a window has to admit the sender, and to answer; ms. A window
@@ -131,6 +140,31 @@ begin
   end;
 end;
 
+// Connected and admitted to the window at Endpoint; nil when it is not
+// there, or did not admit the sender in time
+function ConnectToWindow(const Endpoint: TAutomationEndpoint): TSocketLines;
+begin
+  try
+    Result := TSocketLines.Create(ConnectAutomation(Endpoint));
+  except
+    // Nothing listens there: a window that closed without tidying up. A
+    // window writes its file only once it listens, so it is not one starting.
+    on Exception do
+    begin
+      RemoveAutomationEndpoint(Endpoint);
+      Exit(nil);
+    end;
+  end;
+  try
+    if not AuthenticateAt(Result, Endpoint, REPLY_MS) then
+      FreeAndNil(Result);
+  except
+    // The window went away
+    on Exception do
+      FreeAndNil(Result);
+  end;
+end;
+
 // Whether the window at Endpoint did what Request asks
 function AskEndpoint(const Endpoint: TAutomationEndpoint; const Request: string): boolean;
 var
@@ -140,21 +174,11 @@ var
   Answer: TJSONData;
 begin
   Result := False;
-  try
-    Lines := TSocketLines.Create(ConnectAutomation(Endpoint));
-  except
-    // Nothing listens there: a window that closed without tidying up. A
-    // window writes its file only once it listens, so it is not one starting.
-    on Exception do
-    begin
-      RemoveAutomationEndpoint(Endpoint);
-      Exit;
-    end;
-  end;
+  Lines := ConnectToWindow(Endpoint);
+  if not Assigned(Lines) then
+    Exit;
   try
     try
-      if not AuthenticateAt(Lines, Endpoint, REPLY_MS) then
-        Exit;
       {$IFDEF WINDOWS}
       AllowSetForegroundWindow(Endpoint.Pid);
       {$ENDIF}
@@ -190,6 +214,40 @@ begin
   finally
     FreeAndNil(Request);
   end;
+end;
+
+procedure TellApps(const Method: string; Own: TAppLink);
+var
+  Message: TJSONObject;
+  Notification, Kind: string;
+  Endpoint: TAutomationEndpoint;
+  Lines: TSocketLines;
+begin
+  // No id: the window answers nothing
+  Message := TJSONObject.Create(['jsonrpc', '2.0', 'method', Method]);
+  try
+    Notification := Message.AsJSON;
+  finally
+    FreeAndNil(Message);
+  end;
+  for Kind in APP_KINDS do
+    for Endpoint in ReadAutomationEndpoints(Kind) do
+    begin
+      if Assigned(Own) and (Endpoint.InfoPath = Own.Listener.Endpoint.InfoPath) then
+        Continue;
+      Lines := ConnectToWindow(Endpoint);
+      if Assigned(Lines) then
+      try
+        try
+          Lines.WriteLine(Notification);
+        except
+          // The window went away; it reads the file when it starts again
+          on Exception do ;
+        end;
+      finally
+        FreeAndNil(Lines);
+      end;
+    end;
 end;
 
 end.

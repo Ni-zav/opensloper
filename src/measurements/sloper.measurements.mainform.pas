@@ -28,7 +28,8 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Dialogs, Grids, ActnList, Sloper.Core.Catalogue,
   Sloper.Core.Measurements, Sloper.Core.Units,
-  Sloper.Document.MeasurementDocument, Sloper.Measurements.BodyFigure, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt;
+  Sloper.Document.MeasurementDocument, Sloper.Measurements.BodyFigure, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt,
+  Sloper.API.AppLink, fpjson;
 
 type
   TMeasurementsForm = class(TForm)
@@ -66,6 +67,11 @@ type
     FWatch: TTimer;
     FUnit: TMeasureUnit;
     FRefreshing, FAnswering: boolean;
+    // Listening for the other apps, which say when they change the
+    // preferences; nil when it could not start
+    FAppLink: TAppLink;
+    // Another app changed the preferences while a cell was being typed in
+    FPreferencesPending: boolean;
     procedure BuildMenu;
     procedure BuildHeader;
     procedure BuildBar;
@@ -155,6 +161,8 @@ type
     procedure ShowRefusal(const Reason: string);
     procedure LoadUnit;
     procedure SaveUnit;
+    procedure ShowUserUnit;
+    function AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -257,7 +265,7 @@ implementation
 
 uses
   Graphics, LCLType, Math, Sloper.Core.AppPaths, Sloper.Core.RecentFiles, Sloper.Core.SeamlyFormat, Sloper.Core.Settings,
-  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.IconSet, Sloper.UI.Preferences, Sloper.UI.Spacing;
+  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.IconSet, Sloper.UI.Preferences, Sloper.UI.Spacing, Sloper.API.Endpoint;
 
 const
   SIDE_WIDTH = 430;
@@ -282,6 +290,8 @@ const
   MODIFIED_MARK: array[boolean] of string = ('', '*');
 
 constructor TMeasurementsForm.Create(AOwner: TComponent);
+var
+  Reason: string;
 begin
   inherited CreateNew(AOwner);
   Caption := rsMeasurementsTitle;
@@ -314,10 +324,13 @@ begin
   FWatch.Interval := WATCH_MILLISECONDS;
   FWatch.OnTimer := @WatchTick;
   OpenArguments;
+  // Without it, preferences changed in another app show only after a restart
+  FAppLink := TAppLink.Start(MEASUREMENTS_KIND, @AppLinkMessage, True, Reason);
 end;
 
 destructor TMeasurementsForm.Destroy;
 begin
+  FreeAndNil(FAppLink);
   Application.RemoveAsyncCalls(Self);
   FreeAndNil(FDocument);
   FreeAndNil(FCatalogue);
@@ -1166,6 +1179,9 @@ end;
 
 procedure TMeasurementsForm.UnitChange(Sender: TObject);
 begin
+  // Shown from the preferences, so there is nothing to save
+  if TMeasureUnit(FUnitBox.ItemIndex) = FUnit then
+    Exit;
   FUnit := TMeasureUnit(FUnitBox.ItemIndex);
   SaveUnit;
   RefreshAll;
@@ -1184,7 +1200,35 @@ var
 begin
   Preferences := UserPreferences;
   Preferences.MeasureUnit := FUnit;
-  SaveUserPreferences(Preferences, Reason);
+  if SaveUserPreferences(Preferences, Reason) then
+    TellApps(APP_LINK_PREFERENCES, FAppLink);
+end;
+
+// The unit in the preferences, which another app may have changed
+procedure TMeasurementsForm.ShowUserUnit;
+var
+  AUnit: TMeasureUnit;
+begin
+  FPreferencesPending := False;
+  AUnit := UserPreferences.MeasureUnit;
+  if AUnit = FUnit then
+    Exit;
+  FUnit := AUnit;
+  FUnitBox.ItemIndex := Ord(FUnit);
+  RefreshAll;
+end;
+
+// Another app saved the preferences
+function TMeasurementsForm.AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
+begin
+  Result := Method = APP_LINK_PREFERENCES;
+  if not Result then
+    Exit;
+  // Showing the table in another unit now would lose what is being typed
+  if FAnswering or CellPending then
+    FPreferencesPending := True
+  else
+    ShowUserUnit;
 end;
 
 procedure TMeasurementsForm.WatchTick(Sender: TObject);
@@ -1192,6 +1236,8 @@ begin
   // Taking in a change now would lose what is being typed
   if FAnswering or CellPending then
     Exit;
+  if FPreferencesPending then
+    ShowUserUnit;
   if FDocument.CheckPattern then
     ShowStatus(Format(rsPatternReread, [ExtractFileName(FDocument.PatternFile)]));
   case FDocument.CheckFile of
@@ -1618,6 +1664,7 @@ begin
   FUnit := Preferences.MeasureUnit;
   FUnitBox.ItemIndex := Ord(FUnit);
   RefreshAll;
+  TellApps(APP_LINK_PREFERENCES, FAppLink);
 end;
 
 end.

@@ -17,8 +17,8 @@
 }
 
 // The apps' link to each other without the windows: a link listening on an
-// endpoint of its own kind, and the message the design window's Publish…
-// sends it. The link runs its handler on its own thread here; the test thread
+// endpoint of its own kind, the message the design window's Publish… sends
+// it, and the notice every window gets when the preferences change. The link runs its handler on its own thread here; the test thread
 // waits for the reply meanwhile.
 unit Sloper.Tests.AppLink;
 
@@ -30,6 +30,15 @@ uses
   SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.AppLink;
 
 type
+  // A window of some app, counting the times it was told the preferences changed
+  TToldWindow = class
+  public
+    Link: TAppLink;
+    Told: longint;
+    function Message(const Method: string; Params: TJSONObject): boolean;
+    destructor Destroy; override;
+  end;
+
   TTestAppLink = class(TOSTestCase)
   private
     FFolder: string;
@@ -47,6 +56,7 @@ type
     procedure TestKindsKeptApart;
     procedure TestEndpointRemovedOnStop;
     procedure TestStaleEndpointSkipped;
+    procedure TestPreferencesReachEveryApp;
   end;
 
 implementation
@@ -57,6 +67,22 @@ uses
 const
   OPEN_LAYOUT = 'skirt.slayout';
   STALE_PID = 999999;
+  // How long a told window may take to read the notice, and the step waited; ms
+  TOLD_WAIT_MS = 5000;
+  TOLD_STEP_MS = 20;
+
+function TToldWindow.Message(const Method: string; Params: TJSONObject): boolean;
+begin
+  Result := Method = APP_LINK_PREFERENCES;
+  if Result then
+    InterLockedIncrement(Told);
+end;
+
+destructor TToldWindow.Destroy;
+begin
+  FreeAndNil(Link);
+  inherited Destroy;
+end;
 
 procedure TTestAppLink.SetUp;
 begin
@@ -166,6 +192,49 @@ begin
     AssertFalse('the stale file removed', FileExists(Stale.InfoPath));
   finally
     DeleteFile(Stale.InfoPath);
+  end;
+end;
+
+// Every app's windows but the one that saved them. A process has one link
+// of each kind, so here the publish window is the one that saved them.
+procedure TTestAppLink.TestPreferencesReachEveryApp;
+var
+  Windows: array[0..2] of TToldWindow;
+  Kinds: array[0..2] of string = (DESIGN_KIND, MEASUREMENTS_KIND, PUBLISH_KIND);
+  Place, Waited: integer;
+  Err: string;
+begin
+  for Place := Low(Windows) to High(Windows) do
+    Windows[Place] := nil;
+  try
+    for Place := Low(Windows) to High(Windows) do
+    begin
+      Windows[Place] := TToldWindow.Create;
+      Windows[Place].Link := TAppLink.Start(Kinds[Place], @Windows[Place].Message, False, Err);
+      AssertTrue(Err, Assigned(Windows[Place].Link));
+    end;
+    TellApps(APP_LINK_PREFERENCES, Windows[2].Link);
+    Waited := 0;
+    while (Waited < TOLD_WAIT_MS) and ((Windows[0].Told = 0) or (Windows[1].Told = 0)) do
+    begin
+      Sleep(TOLD_STEP_MS);
+      Inc(Waited, TOLD_STEP_MS);
+    end;
+    AssertEquals('design', 1, Windows[0].Told);
+    AssertEquals('measurements', 1, Windows[1].Told);
+    AssertEquals('the window that saved them', 0, Windows[2].Told);
+    // Told everyone once more, with none of them the sender
+    TellApps(APP_LINK_PREFERENCES, nil);
+    Waited := 0;
+    while (Waited < TOLD_WAIT_MS) and (Windows[2].Told = 0) do
+    begin
+      Sleep(TOLD_STEP_MS);
+      Inc(Waited, TOLD_STEP_MS);
+    end;
+    AssertEquals('publish', 1, Windows[2].Told);
+  finally
+    for Place := Low(Windows) to High(Windows) do
+      FreeAndNil(Windows[Place]);
   end;
 end;
 

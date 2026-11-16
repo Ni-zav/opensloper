@@ -66,8 +66,8 @@ resourcestring
   rsOptUpTo = 'export-draft: draw only this object and those before it, as the pattern was when it was added';
   rsOptFormat = 'export: pdf, svg, dxf or machine-dxf; default: the extension of --output, or pdf. export-draft: svg or png; ' +
     'default: the extension of --output, or svg';
-  rsOptConnect = 'serve: work on the pattern open in the design window, which must allow Claude to connect ' +
-    '(Tools menu, or --automation)';
+  rsOptConnect = 'serve: work on the pattern open in the design window, which must allow assistants to connect ' +
+    '(Assistance menu, or --automation)';
   rsOptWidth = 'export-draft: the width of a png in pixels, from 16 to 4096; default: 1600';
   rsOptProfile = 'export: a machine profile from the settings, in place of the layout''s';
   rsOptUrl = 'check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com';

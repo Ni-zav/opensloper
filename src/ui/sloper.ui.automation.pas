@@ -16,11 +16,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 }
 
-// The design window's automation mode: Claude, through opensloper-cli serve
-// --connect, works on the pattern open in the window. The user turns it on,
-// is asked before Claude first reads or changes anything, and before a file
-// is written outside the pattern's folder; each change is one undo step
-// labelled "Claude: ...", and the user can disconnect at any time.
+// The design window's automation mode: an AI assistant, any MCP client such
+// as Claude Code, works through opensloper-cli serve --connect on the
+// pattern open in the window. The user turns it on, is asked before the
+// assistant first reads or changes anything, and before a file is written
+// outside the pattern's folder; each change is one undo step labelled
+// "Assistant: ...", and the user can disconnect at any time.
 unit Sloper.UI.Automation;
 
 {$mode ObjFPC}{$H+}
@@ -55,24 +56,28 @@ type
     // Drops the client; it may connect again, and is asked again
     procedure Disconnect;
     function State: TAutomationState;
-    // After the state changes, and after each request Claude makes
+    // After the state changes, and after each request the assistant makes
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
   end;
 
-// Asks before Claude writes Path outside the folder of the pattern open in Document
-function ConfirmClaudeWrite(Document: TPatternDocument; const Path: string): boolean;
+// Asks before Who (Claude in the side panel, or an assistant connected)
+// writes Path outside the folder of the pattern open in Document
+function ConfirmAssistantWrite(Document: TPatternDocument; const Who, Path: string): boolean;
 
 resourcestring
+  // Undo steps of the in-app Claude, and of an assistant connected
   rsClaudeChange = 'Claude: ';
-  rsClaudeConsentTitle = 'Claude';
-  rsClaudeConsent = 'Allow Claude to read and edit this pattern?' + LineEnding + LineEnding +
-    'Each change is one step you can undo, labelled "Claude".';
-  rsClaudeAllowOnce = 'Allow Once';
-  rsClaudeAllowSession = 'Allow Until I Close OpenSloper';
-  rsClaudeDeny = 'Don''t Allow';
-  rsClaudeDenied = 'The user did not allow Claude to work on this pattern';
-  rsClaudeWriteTitle = 'Claude wants to write a file';
-  rsClaudeWrite = 'Claude wants to write' + LineEnding + '%s' + LineEnding + 'outside the pattern''s folder. Allow it?';
+  rsConnectedChange = 'Assistant: ';
+  rsConnectedWho = 'An assistant';
+  rsConnectedConsentTitle = 'AI Assistant';
+  rsConnectedConsent = 'Allow the AI assistant connected through opensloper-cli to read and edit this pattern?' + LineEnding +
+    LineEnding + 'Each change is one step you can undo, labelled "Assistant".';
+  rsConnectedAllowOnce = 'Allow Once';
+  rsConnectedAllowSession = 'Allow Until I Close OpenSloper';
+  rsConnectedDeny = 'Don''t Allow';
+  rsConnectedDenied = 'The user did not allow the assistant to work on this pattern';
+  rsAssistantWriteTitle = '%s wants to write a file';
+  rsAssistantWrite = '%s wants to write' + LineEnding + '%s' + LineEnding + 'outside the pattern''s folder. Allow it?';
 
 implementation
 
@@ -83,7 +88,7 @@ constructor TAutomation.Create(ADocument: TPatternDocument; AWindowState: TApiWi
 begin
   inherited Create;
   FApi := TApiServer.CreateFor(ADocument);
-  FApi.ChangePrefix := rsClaudeChange;
+  FApi.ChangePrefix := rsConnectedChange;
   FApi.OpensFiles := False;
   FApi.OnConfirmWrite := @ConfirmWrite;
   FApi.OnWindowState := AWindowState;
@@ -148,8 +153,8 @@ function TAutomation.Allowed: boolean;
 begin
   if FAllowedForSession or FAllowedForClient then
     Exit(True);
-  case QuestionDlg(rsClaudeConsentTitle, rsClaudeConsent, mtConfirmation, [mrYes, rsClaudeAllowOnce, mrAll,
-      rsClaudeAllowSession, mrNo, rsClaudeDeny, 'IsDefault'], 0) of
+  case QuestionDlg(rsConnectedConsentTitle, rsConnectedConsent, mtConfirmation, [mrYes, rsConnectedAllowOnce, mrAll,
+      rsConnectedAllowSession, mrNo, rsConnectedDeny, 'IsDefault'], 0) of
     mrYes: FAllowedForClient := True;
     mrAll: FAllowedForSession := True;
   end;
@@ -168,7 +173,7 @@ begin
     if ParseJSONObject(Line, Request, Err) then
     try
       if Assigned(Request.Find('id')) then
-        Result := RpcErrorResponse(Request.Find('id'), RPC_REFUSED, rsClaudeDenied);
+        Result := RpcErrorResponse(Request.Find('id'), RPC_REFUSED, rsConnectedDenied);
     finally
       FreeAndNil(Request);
     end;
@@ -180,19 +185,20 @@ begin
 end;
 
 // Writing beside the pattern is what saving it means; anywhere else is asked
-function ConfirmClaudeWrite(Document: TPatternDocument; const Path: string): boolean;
+function ConfirmAssistantWrite(Document: TPatternDocument; const Who, Path: string): boolean;
 var
   PatternFile: string;
 begin
   PatternFile := Document.FileName;
   if (PatternFile <> '') and SameFileName(ExtractFileDir(ExpandFileName(PatternFile)), ExtractFileDir(Path)) then
     Exit(True);
-  Result := QuestionDlg(rsClaudeWriteTitle, Format(rsClaudeWrite, [Path]), mtWarning, [mrYes, mrNo, 'IsDefault'], 0) = mrYes;
+  Result := QuestionDlg(Format(rsAssistantWriteTitle, [Who]), Format(rsAssistantWrite, [Who, Path]), mtWarning,
+    [mrYes, mrNo, 'IsDefault'], 0) = mrYes;
 end;
 
 function TAutomation.ConfirmWrite(const Path: string): boolean;
 begin
-  Result := ConfirmClaudeWrite(FApi.Document, Path);
+  Result := ConfirmAssistantWrite(FApi.Document, rsConnectedWho, Path);
 end;
 
 end.

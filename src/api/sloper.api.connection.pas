@@ -48,8 +48,8 @@ type
   end;
 
 resourcestring
-  rsConnectNoWindow = 'No OpenSloper design window is accepting Claude. Open the pattern in the design window and ' +
-    'choose Tools → Allow Claude to Connect, or start it with --automation.';
+  rsConnectNoWindow = 'No OpenSloper design window is accepting assistants. Open the pattern in the design window and ' +
+    'choose Assistance → Allow Assistants to Connect, or start it with --automation.';
   rsConnectLost = 'The design window closed the connection';
 
 implementation

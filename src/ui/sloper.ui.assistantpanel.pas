@@ -75,6 +75,11 @@ type
     FTranscript, FInput: TMemo;
     FSendButton, FStopButton, FNewButton: TButton;
     FWindowState: TApiWindowState;
+    // An API key is set, in Preferences or ANTHROPIC_API_KEY
+    FHasKey: boolean;
+    // The transcript is still the opening text, with nothing asked
+    FFresh: boolean;
+    procedure ShowOpening;
     procedure SetDocument(Value: TPatternDocument);
     procedure MakeApi;
     procedure SendClick(Sender: TObject);
@@ -97,6 +102,12 @@ type
     procedure ShowText(const AText: string);
     procedure ShowNote(const AText: string);
     procedure QuestionDone(Answered: boolean; const Problem: string);
+    // Reads again whether a key is set, after Preferences; without one the
+    // question and buttons are off and the panel says where to set it
+    procedure KeyChanged;
+    // Puts the cursor in the question, when one can be asked
+    procedure FocusQuestion;
+    property HasKey: boolean read FHasKey;
     // nil stops any conversation in progress
     property Document: TPatternDocument read FDocument write SetDocument;
     // Answers ui_state
@@ -109,9 +120,12 @@ resourcestring
   rsAssistantNew = 'New Conversation';
   rsAssistantWelcome = 'Ask Claude to draft or change the pattern, or why something is wrong: "add 2 cm ease at the hip", ' +
     '"why is point C invalid?". Each change is one step you can undo. Your questions and the pattern go to Anthropic.';
-  rsAssistantNoKeyYet = 'Set your Anthropic API key in Edit → Preferences, Design, to ask Claude.';
+  rsAssistantNoKeyYet = 'Claude needs your Anthropic API key. Set it in Assistance → Anthropic API Key..., or in ' +
+    'Edit → Preferences, Design.';
   rsAssistantYou = 'You: %s';
   rsAssistantClaude = 'Claude: ';
+  // Who asks to write a file
+  rsAssistantWho = 'Claude';
   rsAssistantTool = '  › %s';
   rsAssistantProblem = '(%s)';
   rsAssistantNoPattern = 'No pattern is open';
@@ -278,8 +292,36 @@ begin
   FTranscript.ReadOnly := True;
   FTranscript.WordWrap := True;
   FTranscript.ScrollBars := ssAutoVertical;
-  FTranscript.Text := rsAssistantWelcome;
+  KeyChanged;
+end;
+
+// What to ask, or where to set the key first
+procedure TAssistantPanel.ShowOpening;
+begin
+  if FHasKey then
+    FTranscript.Text := rsAssistantWelcome
+  else
+    FTranscript.Text := rsAssistantNoKeyYet;
+  FFresh := True;
+end;
+
+procedure TAssistantPanel.KeyChanged;
+var
+  Source: TKeySource;
+begin
+  FHasKey := AssistantKey(Source) <> '';
+  if not Assigned(FTranscript) then
+    Exit;
+  // A conversation stays on screen; only the opening text changes
+  if FFresh or (FTranscript.Text = '') then
+    ShowOpening;
   UpdateButtons;
+end;
+
+procedure TAssistantPanel.FocusQuestion;
+begin
+  if Assigned(FInput) and FInput.Enabled and FInput.CanFocus then
+    FInput.SetFocus;
 end;
 
 destructor TAssistantPanel.Destroy;
@@ -313,7 +355,7 @@ end;
 
 function TAssistantPanel.ConfirmWrite(const Path: string): boolean;
 begin
-  Result := ConfirmClaudeWrite(FDocument, Path);
+  Result := ConfirmAssistantWrite(FDocument, rsAssistantWho, Path);
 end;
 
 function TAssistantPanel.Running: boolean;
@@ -325,9 +367,11 @@ procedure TAssistantPanel.UpdateButtons;
 begin
   if not Assigned(FSendButton) then
     Exit;
-  FSendButton.Enabled := not Running and Assigned(FDocument);
+  FSendButton.Enabled := FHasKey and not Running and Assigned(FDocument);
   FStopButton.Enabled := Running;
-  FNewButton.Enabled := not Running;
+  FNewButton.Enabled := FHasKey and not Running;
+  // A question in progress keeps going if the key is removed meanwhile
+  FInput.Enabled := FHasKey or Running;
   FInput.ReadOnly := Running;
 end;
 
@@ -359,9 +403,13 @@ begin
   Key := AssistantKey(Source);
   if Key = '' then
   begin
-    Append(LineEnding + LineEnding + rsAssistantNoKeyYet);
+    // Removed since the panel last looked; the opening text says so already
+    KeyChanged;
+    if not FFresh then
+      Append(LineEnding + LineEnding + rsAssistantNoKeyYet);
     Exit;
   end;
+  FFresh := False;
   StopWorker;
   if Assigned(FConversation) and (FGeneration <> FDocument.Generation) then
   begin
@@ -396,7 +444,7 @@ begin
     Exit;
   StopWorker;
   FreeAndNil(FConversation);
-  FTranscript.Text := rsAssistantWelcome;
+  ShowOpening;
 end;
 
 // Enter asks; Shift+Enter starts a new line

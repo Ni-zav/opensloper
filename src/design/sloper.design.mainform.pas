@@ -92,11 +92,12 @@ type
     procedure StartApp(const ProgramFile, Missing, Failed: string; const Args: array of string);
   private
     FDocument: TPatternDocument;
-    // Claude working on the pattern through opensloper-cli serve --connect
+    // An assistant (an MCP client such as Claude Code) working on the pattern
+    // through opensloper-cli serve --connect
     FAutomation: TAutomation;
     // Claude in the side panel, with the user's own API key
     FAssistant: TAssistantPanel;
-    FAutomationAction, FDisconnectClaudeAction: TAction;
+    FAutomationAction, FDisconnectAssistantAction, FAskClaudeAction: TAction;
     FSettings: TAppSettings;
     // The clipboard format of copied objects, registered on first use
     FFragmentFormat: TClipboardFormat;
@@ -186,6 +187,7 @@ type
     procedure MeasurementsEditSet(Sender: TObject);
     procedure MeasurementWatchTick(Sender: TObject);
     procedure CreateToolCommands;
+    procedure CreateAssistanceCommands;
     procedure ToolClick(Sender: TObject);
     procedure SplitClick(Sender: TObject);
     procedure MergeClick(Sender: TObject);
@@ -212,7 +214,10 @@ type
     procedure StatusBarResize(Sender: TObject);
     procedure StatusBarMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: integer);
     procedure AutomationClick(Sender: TObject);
-    procedure DisconnectClaudeClick(Sender: TObject);
+    procedure DisconnectAssistantClick(Sender: TObject);
+    procedure AskClaudeClick(Sender: TObject);
+    // Ask Claude and the Claude tab follow whether an API key is set
+    procedure AssistantKeyChanged;
     procedure AutomationChanged(Sender: TObject);
     procedure StartAutomation;
     // For ui_state: the file, the selection, the label mode and the view
@@ -247,6 +252,8 @@ uses
   Sloper.API.Endpoint;
 
 const
+  // The Claude tab's key in the side panel, and in the settings
+  CLAUDE_SECTION = 'claude';
   MARKING_ICONS: array[TMarkingKind] of TAppIcon = (aiHole, aiPlacement, aiStitchHoles);
   TRANSFORM_ICONS: array[TTransformKind] of TAppIcon = (aiRotate, aiMirror, aiMove);
   CURSOR_DECIMALS: array[TMeasureUnit] of integer = (1, 2, 3);
@@ -339,11 +346,16 @@ resourcestring
   rsLabelsAll = '&All (hold N)';
   rsLabelsNone = '&None';
   rsMenuTools = '&Tools';
-  rsMenuToolsAllowClaude = 'Allow &Claude to Connect';
-  rsMenuToolsDisconnectClaude = '&Disconnect Claude';
-  rsClaudeListening = 'Claude can connect';
-  rsClaudeConnected = 'Claude connected · click to disconnect';
-  rsClaudeCannotStart = 'Claude cannot connect: %s';
+  // The Assistance menu: Claude in the side panel, with the user's key, and
+  // any MCP client through opensloper-cli serve --connect
+  rsMenuAssistance = '&Assistance';
+  rsMenuAssistanceAskClaude = 'Ask &Claude';
+  rsMenuAssistanceApiKey = 'Anthropic API &Key...';
+  rsMenuAssistanceAllow = '&Allow Assistants to Connect';
+  rsMenuAssistanceDisconnect = '&Disconnect Assistant';
+  rsAssistantListening = 'An assistant can connect';
+  rsAssistantConnected = 'Assistant connected · click to disconnect';
+  rsAssistantCannotStart = 'Assistants cannot connect: %s';
 
   rsMenuToolsSplit = 'Sp&lit Edge';
   rsMenuToolsArc = 'A&rc';
@@ -426,6 +438,7 @@ begin
   CreateSidePanel;
   CreateViewCommands;
   CreateToolCommands;
+  CreateAssistanceCommands;
   CreateDrawRoleBox;
   LoadSettings;
   FCanvasPanel := TPanel.Create(Self);
@@ -529,6 +542,8 @@ begin
     Exit;
   FPreferences := Preferences;
   ApplyPreferences;
+  // The key is saved with them
+  AssistantKeyChanged;
   TellApps(APP_LINK_PREFERENCES, FAppLink);
 end;
 
@@ -540,6 +555,8 @@ begin
     Exit;
   FPreferences := UserPreferences;
   ApplyPreferences;
+  // Another design window may have saved the key with them
+  AssistantKeyChanged;
 end;
 
 procedure TMainForm.SetLabelMode(Mode: TLabelMode);
@@ -596,7 +613,7 @@ begin
   FMaterials.Document := FDocument;
   FMaterials.OnMessage := @ListPanelMessage;
   FMaterials.OnEdit := @MaterialsEditClick;
-  FAssistant := TAssistantPanel(AddSection('claude', rsTabClaude, TAssistantPanel.Create(Self)));
+  FAssistant := TAssistantPanel(AddSection(CLAUDE_SECTION, rsTabClaude, TAssistantPanel.Create(Self)));
   FAssistant.Document := FDocument;
   FAssistant.WindowState := @UIStateJSON;
   FSideSplitter := TSplitter.Create(Self);
@@ -1202,15 +1219,48 @@ begin
   ConvertAction := FCommands.NewAction(rsMenuToolsConvertUnits, aiSuggestSeams, @ConvertUnitsClick);
   ConvertAction.ImageIndex := -1;
   FCommands.AddMenuItem(MenuTools, ConvertAction);
-  MenuTools.Add(NewLine);
-  FAutomationAction := FCommands.NewAction(rsMenuToolsAllowClaude, aiSuggestSeams, @AutomationClick);
-  FAutomationAction.ImageIndex := -1;
+end;
+
+// Between Tools and Help. Menu only, with no icons: none of them draws.
+procedure TMainForm.CreateAssistanceCommands;
+var
+  MenuAssistance: TMenuItem;
+
+  function MenuAction(const ACaption: string; AHandler: TNotifyEvent): TAction;
+  begin
+    Result := FCommands.NewAction(ACaption, aiSuggestSeams, AHandler);
+    Result.ImageIndex := -1;
+    FCommands.AddMenuItem(MenuAssistance, Result);
+  end;
+
+begin
+  MenuAssistance := TMenuItem.Create(MainMenu);
+  MenuAssistance.Caption := rsMenuAssistance;
+  MainMenu.Items.Insert(MainMenu.Items.IndexOf(MenuHelp), MenuAssistance);
+  FAskClaudeAction := MenuAction(rsMenuAssistanceAskClaude, @AskClaudeClick);
+  // The key is in Preferences, on the Design tab this app opens on
+  MenuAction(rsMenuAssistanceApiKey, @PreferencesClick);
+  MenuAssistance.Add(NewLine);
+  FAutomationAction := MenuAction(rsMenuAssistanceAllow, @AutomationClick);
   FAutomationAction.AutoCheck := False;
-  FCommands.AddMenuItem(MenuTools, FAutomationAction);
-  FDisconnectClaudeAction := FCommands.NewAction(rsMenuToolsDisconnectClaude, aiSuggestSeams, @DisconnectClaudeClick);
-  FDisconnectClaudeAction.ImageIndex := -1;
-  FDisconnectClaudeAction.Enabled := False;
-  FCommands.AddMenuItem(MenuTools, FDisconnectClaudeAction);
+  FDisconnectAssistantAction := MenuAction(rsMenuAssistanceDisconnect, @DisconnectAssistantClick);
+  FDisconnectAssistantAction.Enabled := False;
+  AssistantKeyChanged;
+end;
+
+// Opens the Claude tab with the cursor in the question
+procedure TMainForm.AskClaudeClick(Sender: TObject);
+begin
+  SetSideShown(True);
+  FSidePanel.ActiveKey := CLAUDE_SECTION;
+  FAssistant.FocusQuestion;
+end;
+
+procedure TMainForm.AssistantKeyChanged;
+begin
+  FAssistant.KeyChanged;
+  if Assigned(FAskClaudeAction) then
+    FAskClaudeAction.Enabled := FAssistant.HasKey;
 end;
 
 procedure TMainForm.MarkingClick(Sender: TObject);
@@ -1410,7 +1460,7 @@ var
   Err: string;
 begin
   if not FAutomation.Start(Err) then
-    MessageDlg(Format(rsClaudeCannotStart, [Err]), mtError, [mbOK], 0);
+    MessageDlg(Format(rsAssistantCannotStart, [Err]), mtError, [mbOK], 0);
 end;
 
 procedure TMainForm.AutomationClick(Sender: TObject);
@@ -1421,7 +1471,7 @@ begin
     FAutomation.Stop;
 end;
 
-procedure TMainForm.DisconnectClaudeClick(Sender: TObject);
+procedure TMainForm.DisconnectAssistantClick(Sender: TObject);
 begin
   FAutomation.Disconnect;
 end;
@@ -1439,10 +1489,10 @@ begin
   if not Assigned(FAutomationAction) then
     Exit;
   FAutomationAction.Checked := FAutomation.State <> asOff;
-  FDisconnectClaudeAction.Enabled := FAutomation.State = asConnected;
+  FDisconnectAssistantAction.Enabled := FAutomation.State = asConnected;
   case FAutomation.State of
-    asListening: Shown := rsClaudeListening;
-    asConnected: Shown := rsClaudeConnected;
+    asListening: Shown := rsAssistantListening;
+    asConnected: Shown := rsAssistantConnected;
     else
       Shown := '';
   end;

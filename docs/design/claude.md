@@ -19,12 +19,19 @@ Claude needs an Anthropic API key, which you get from the
 [Claude Console](https://platform.claude.com). Requests are billed to that key's
 account.
 
-1. Choose **Edit → Preferences**, open the **Design** tab and paste the key
-   into **Anthropic API key**. It is kept in a file of its own that only you
-   can read, not in the settings file. If the `ANTHROPIC_API_KEY` environment
-   variable is set, that key is used instead.
-2. Open the **Claude** tab, type your question and press ++enter++
-   (++shift+enter++ starts a new line), or click **Ask**.
+1. Choose **Assistance → Anthropic API Key…** (the Design tab of
+   **Edit → Preferences**) and paste the key into **Anthropic API key**. It is
+   kept in a file of its own that only you can read, not in the settings file.
+   If the `ANTHROPIC_API_KEY` environment variable is set, that key is used
+   instead. Until there is a key, the Claude tab's question box and buttons
+   are off, and **Assistance → Ask Claude** with them.
+2. Choose **Assistance → Ask Claude**, or open the **Claude** tab, type your
+   question and press ++enter++ (++shift+enter++ starts a new line), or click
+   **Ask**.
+
+Other AI assistants can work on the pattern too, through MCP, with
+**Assistance → Allow Assistants to Connect** (see
+[Scripting](../scripting/index.md#an-assistant-in-the-design-window)).
 
 ### If it cannot connect
 
@@ -60,4 +67,4 @@ are sent to Anthropic. Text in a pattern someone else made is treated as data,
 not as instructions to Claude.
 
 To have Claude work on the pattern from Claude Code or Claude Desktop instead,
-see [Claude in the design window](../scripting/index.md#claude-in-the-design-window).
+see [An assistant in the design window](../scripting/index.md#an-assistant-in-the-design-window).

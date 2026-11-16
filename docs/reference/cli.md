@@ -111,7 +111,7 @@ opensloper-cli doc
 | `--labels` |  | export-draft: name the points and pieces |
 | `--upto` | name | export-draft: draw only this object and those before it, as the pattern was when it was added |
 | `--width` | pixels | export-draft: the width of a png in pixels, from 16 to 4096; default: 1600 |
-| `--connect` |  | serve: work on the pattern open in the design window, which must allow Claude to connect (Tools menu, or --automation) |
+| `--connect` |  | serve: work on the pattern open in the design window, which must allow assistants to connect (Assistance menu, or --automation) |
 | `--url` | url | check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com |
 | `--ca-file` | file | check-connection: trust the certificates in this PEM file, in place of those OpenSloper uses |
 

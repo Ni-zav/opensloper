@@ -81,7 +81,7 @@ uses
   Classes, ssockets, {$IFDEF UNIX} BaseUnix, {$ENDIF} Sloper.Core.JSON, Sloper.Core.Version, Sloper.API.Endpoint, Sloper.API.MCP;
 
 const
-  CLAUDE_PREFIX = 'Claude: ';
+  ASSISTANT_PREFIX = 'Assistant: ';
   EVENT_WAIT_MS = 3000;
   EVENT_STEP_MS = 10;
 
@@ -91,7 +91,7 @@ begin
   UseAutomationFolder(FFolder);
   FDocument := TPatternDocument.Create;
   FApi := TApiServer.CreateFor(FDocument);
-  FApi.ChangePrefix := CLAUDE_PREFIX;
+  FApi.ChangePrefix := ASSISTANT_PREFIX;
   FApi.OpensFiles := False;
   FApi.OnConfirmWrite := @ConfirmWrite;
   FWriteAllowed := True;
@@ -231,7 +231,7 @@ procedure TTestAutomation.TestChangesAreLabelled;
 begin
   Listen;
   Call('add_variable', '{"name": "ease", "formula": "12"}');
-  AssertTrue(FDocument.UndoDescription, FDocument.UndoDescription.StartsWith(CLAUDE_PREFIX));
+  AssertTrue(FDocument.UndoDescription, FDocument.UndoDescription.StartsWith(ASSISTANT_PREFIX));
 end;
 
 procedure TTestAutomation.TestWrongTokenRefused;
@@ -301,7 +301,7 @@ begin
     Reply := Mcp.HandleLine('{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "add_variable", ' +
       '"arguments": {"name": "ease", "formula": "5"}}}');
     AssertTrue(Reply, Pos('"isError"', Reply) = 0);
-    AssertTrue(FDocument.UndoDescription.StartsWith(CLAUDE_PREFIX));
+    AssertTrue(FDocument.UndoDescription.StartsWith(ASSISTANT_PREFIX));
     // The handshake is answered here, without the window
     AssertTrue(Pos(APP_NAME_LOWER, Mcp.HandleLine('{"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {}}')) > 0);
   finally

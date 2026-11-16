@@ -71,6 +71,12 @@ Changed, Fixed and Removed under each version.
 - The design form's `ui_state` answer is named `UIStateJSON`, so it no longer
   hides the form's own `WindowState`.
 
+- The design app's Claude commands are in a new Assistance menu: Ask Claude,
+  Anthropic API Key…, Allow Assistants to Connect and Disconnect Assistant.
+  Any MCP client can connect, so the window, its consent prompt and its undo
+  steps say "assistant" for them; the Claude tab keeps Claude's name, and its
+  question box and buttons are off until an API key is set (#37).
+
 ### Fixed
 
 - An API edit left open by a method that fails is cancelled.

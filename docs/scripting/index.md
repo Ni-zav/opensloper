@@ -168,12 +168,14 @@ For one-off jobs the command line may be enough:
 exits with 1 when it has any, so it suits a build or a test, and `export-draft`
 draws a pattern as SVG, or as PNG with `--format=png`.
 
-## With Claude
+## With an AI assistant
 
 `serve` is also a [Model Context Protocol](https://modelcontextprotocol.io)
-server, so Claude can use the methods above as tools: draft, check and fix a
-pattern, and look at `render` with `"format": "png"`, which Claude receives as
-an image, to see what it made. To add it to Claude Code:
+server, so an AI assistant that speaks MCP, such as Claude, can use the
+methods above as tools: draft, check and fix a pattern, and look at `render`
+with `"format": "png"`, which it receives as an image, to see what it made.
+The examples here use Claude; other MCP clients take the same command. To add
+it to Claude Code:
 
 ```
 $ claude mcp add opensloper -- /path/to/opensloper-cli serve
@@ -193,37 +195,42 @@ For Claude Desktop, add it to `claude_desktop_config.json`:
 ```
 
 Each method is a tool of the same name, with the parameters on the
-[reference page](../reference/api.md). A refused call comes back to Claude as
-the error above, so it can read why and try again. Claude works on its own copy
-of the pattern, as a script does, and changes your file only when it calls
-`save`; open the file in the design window afterwards to see the result.
+[reference page](../reference/api.md). A refused call comes back to the
+assistant as the error above, so it can read why and try again. The assistant
+works on its own copy of the pattern, as a script does, and changes your file
+only when it calls `save`; open the file in the design window afterwards to
+see the result.
 
-### Claude in the design window
+### An assistant in the design window
 
-To watch Claude work on the pattern you have open, and undo what you don't
-like, let it connect to the design window:
+To watch an assistant work on the pattern you have open, and undo what you
+don't like, let it connect to the design window:
 
-1. Open the pattern and choose **Tools → Allow Claude to Connect**, or start
-   the window with `opensloper-design --automation pattern.sloper`. The status
-   bar says *Claude can connect*.
+1. Open the pattern and choose **Assistance → Allow Assistants to Connect**,
+   or start the window with `opensloper-design --automation pattern.sloper`.
+   The status bar says *An assistant can connect*.
 2. Add the window as a second server, with `--connect`:
 
     ```
     $ claude mcp add opensloper-window -- /path/to/opensloper-cli serve --connect
     ```
 
-3. Ask Claude for a change. The first time it reads or changes the pattern,
-   the window asks whether to allow it: once, until you close OpenSloper, or
-   not at all.
+3. Ask the assistant for a change. The first time it reads or changes the
+   pattern, the window asks whether to allow it: once, until you close
+   OpenSloper, or not at all.
 
-Each change Claude makes appears at once and is one step on the undo history,
-labelled *Claude*, such as **Edit → Undo Claude: Add variable**. Claude cannot
-open another pattern in the window, waits while you are dragging, and asks
-before it writes a file outside the pattern's folder. `ui_state` tells it what
-you have selected and which part of the draft is in view, so you can say "move
-the selected point" or "look at this area". Click *Claude connected* in the
-status bar, or choose **Tools → Disconnect Claude**, to stop it; turn
-**Allow Claude to Connect** off to stop listening.
+Each change the assistant makes appears at once and is one step on the undo
+history, labelled *Assistant*, such as **Edit → Undo Assistant: Add
+variable**. It cannot open another pattern in the window, waits while you are
+dragging, and asks before it writes a file outside the pattern's folder.
+`ui_state` tells it what you have selected and which part of the draft is in
+view, so you can say "move the selected point" or "look at this area". Click
+*Assistant connected* in the status bar, or choose **Assistance → Disconnect
+Assistant**, to stop it; turn **Allow Assistants to Connect** off to stop
+listening.
+
+To ask Claude without setting up MCP, use the Claude tab in the design window
+instead (see [Asking Claude](../design/claude.md)).
 
 The [File formats](../reference/files.md) page and its schemas describe the
-files, so Claude can also read and write them directly.
+files, so an assistant can also read and write them directly.

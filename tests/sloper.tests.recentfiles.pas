@@ -53,6 +53,7 @@ type
     procedure TestForgetAndClear;
     procedure TestRememberLeavesNewerVersionAlone;
     procedure TestRememberReplacesBrokenFile;
+    procedure TestPortableFilesFollowTheDrive;
   end;
 
 implementation
@@ -252,6 +253,33 @@ begin
   AssertTrue(Err, WriteTextFile(StoreFile, '{ not json', Err));
   RememberRecentFile(StoreFile, rlPatterns, Path('a.sloper'));
   AssertEquals(1, Length(ReadRecentFiles(StoreFile, rlPatterns)));
+end;
+
+// A portable install's files are kept relative to its folder, so they are
+// found when the drive comes back at another place; others keep their path
+procedure TTestRecentFiles.TestPortableFilesFollowTheDrive;
+var
+  Stick, Moved, Inside, Outside, Text, Err: string;
+  Again: TRecentFiles;
+begin
+  Stick := Path('stick');
+  Moved := Path('moved');
+  Inside := ConcatPaths([Stick, 'documents', 'a.sloper']);
+  Outside := Path('b.sloper');
+  FRecent.Base := Stick;
+  FRecent.Add(rlPatterns, Outside);
+  FRecent.Add(rlPatterns, Inside);
+  Text := FRecent.SaveToText;
+  AssertTrue('relative, with / between folders', Pos('"documents/a.sloper"', Text) > 0);
+  Again := TRecentFiles.Create;
+  try
+    Again.Base := Moved;
+    AssertTrue(Err, Again.LoadFromText(Text, Err));
+    AssertEquals('inside, at its new place', ConcatPaths([Moved, 'documents', 'a.sloper']), Again.Files[rlPatterns][0]);
+    AssertEquals('outside, as it was', Outside, Again.Files[rlPatterns][1]);
+  finally
+    FreeAndNil(Again);
+  end;
 end;
 
 initialization

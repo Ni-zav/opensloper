@@ -19,6 +19,17 @@ measurement files (`.slm`) and layouts (`.slayout`) in their apps when you
 double-click them. This guide comes with every download: choose
 Help → User Guide in any of the apps.
 
+### Portable
+
+To run OpenSloper from a USB stick or a folder of its own, leaving nothing on
+the computer, unpack the `.zip` (Windows) or `.tar.gz` (Linux) and put an
+empty file named `portable.ini` beside the programs. On macOS, put it beside
+`OpenSloper.app`. The apps then keep everything they write beside it: your
+settings, recent files and cache in a `user` folder, and patterns in
+`documents` unless you save them elsewhere. Recent files kept on the stick
+are found again when it gets another drive letter. Your Claude API key, if you
+enter one, is kept in `user` too, so keep the stick safe.
+
 The programs are not signed yet. If macOS says OpenSloper cannot be opened or
 is damaged, run `xattr -cr /Applications/OpenSloper.app` once in Terminal. On
 Windows, if SmartScreen asks, choose More info, then Run anyway.
@@ -71,4 +82,6 @@ spacing and the printer calibration. The three apps share them. A new pattern
 takes the unit from Preferences; a pattern keeps the unit it was made in, and
 Tools → Convert Pattern Units… changes it.
 
-Settings are kept in `~/.config/opensloper/` on Linux.
+Settings are kept in `~/.config/opensloper/` on Linux, `%APPDATA%\OpenSloper`
+on Windows and `~/Library/Application Support/OpenSloper` on macOS, or in the
+`user` folder of a [portable](#portable) copy.

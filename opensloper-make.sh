@@ -410,6 +410,9 @@ write_readme() {
         echo "(then run update-mime-database ~/.local/share/mime), with the programs on"
         echo "your PATH, to start OpenSloper from the desktop menu and open its files."
         echo "On Debian and Ubuntu the .deb download does all this."
+        echo
+        echo "To keep settings and recent files in this folder rather than your home"
+        echo "folder, to run from a USB stick, put an empty file named portable.ini here."
         ;;
       macOS)
         echo "Drag OpenSloper.app to Applications and open it: it is the pattern editor,"
@@ -425,6 +428,9 @@ write_readme() {
         echo "or opensloper-publish.exe from this folder; keep the data folder beside"
         echo "them. opensloper-cli.exe is the command-line tool. The setup.exe download"
         echo "installs the same programs, with Start menu entries and file types."
+        echo
+        echo "To keep settings and recent files in this folder rather than in AppData,"
+        echo "to run from a USB stick, put an empty file named portable.ini here."
         echo
         echo "The programs are not signed, so Windows SmartScreen may ask before the"
         echo "first run: choose More info, then Run anyway."

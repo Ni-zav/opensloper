@@ -130,7 +130,7 @@ var
   Entry: TMenuItem;
 begin
   FItem.Clear;
-  FFiles := ReadRecentFiles(TAppPaths.RecentFilesFile, FList);
+  FFiles := ReadRecentFiles(TAppPaths.RecentFilesFile, FList, TAppPaths.PortableRoot);
   for Index := 0 to High(FFiles) do
   begin
     Entry := TMenuItem.Create(FItem);
@@ -153,7 +153,7 @@ end;
 
 procedure TRecentMenu.Remember(const FileName: string);
 begin
-  RememberRecentFile(TAppPaths.RecentFilesFile, FList, FileName);
+  RememberRecentFile(TAppPaths.RecentFilesFile, FList, FileName, TAppPaths.PortableRoot);
   QueueRefresh;
 end;
 
@@ -165,7 +165,7 @@ begin
   if not FileExists(FileName) then
   begin
     MessageDlg(Format(rsRecentMissing, [FileName]), mtWarning, [mbOK], 0);
-    ForgetRecentFile(TAppPaths.RecentFilesFile, FList, FileName);
+    ForgetRecentFile(TAppPaths.RecentFilesFile, FList, FileName, TAppPaths.PortableRoot);
     QueueRefresh;
     Exit;
   end;
@@ -175,7 +175,7 @@ end;
 
 procedure TRecentMenu.ClearClick(Sender: TObject);
 begin
-  ClearRecentFiles(TAppPaths.RecentFilesFile, FList);
+  ClearRecentFiles(TAppPaths.RecentFilesFile, FList, TAppPaths.PortableRoot);
   QueueRefresh;
 end;
 

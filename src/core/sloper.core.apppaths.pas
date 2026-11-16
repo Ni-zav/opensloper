@@ -17,7 +17,11 @@
 }
 
 // Platform folders for config, data, state, cache and user documents.
-// All other code gets its folders from TAppPaths. No LCL dependency.
+// All other code gets its folders from TAppPaths. A portable install, with
+// portable.ini beside the programs (or beside the macOS app bundle), keeps
+// them all beside it instead: config, data, state and cache in user/, apart
+// from the data/ the programs ship with, and documents in documents/.
+// No LCL dependency.
 unit Sloper.Core.AppPaths;
 
 {$mode ObjFPC}{$H+}
@@ -43,8 +47,16 @@ type
     class function SettingsFile: string;
     // File → Open Recent's lists, which are state rather than settings
     class function RecentFilesFile: string;
-    // True when portable.ini sits beside the executable
+    // True when portable.ini sits beside the executable, or beside the macOS
+    // app bundle it is in
     class function IsPortable: boolean;
+    // The folder a portable install keeps its files in: the one holding
+    // portable.ini. '' when the install is not portable.
+    class function PortableRoot: string;
+    // The same for programs in ProgramFolder
+    class function PortableRootIn(const ProgramFolder: string): string;
+    // Where a portable install in Root keeps Kind (config, data, state, cache)
+    class function PortableDirIn(const Root, Kind: string): string;
     // The publish app beside this program, or in the source tree in publish/
     // below it or beside its folder. Empty when it is in none of these.
     class function PublishProgram: string;
@@ -85,6 +97,12 @@ uses
 
 const
   PORTABLE_FILE_NAME = 'portable.ini';
+  // A portable install's own files, kept apart from the data it ships with
+  PORTABLE_USER_FOLDER = 'user';
+  PORTABLE_DOCUMENTS_FOLDER = 'documents';
+  // A macOS app bundle's programs, three folders below where it lies
+  BUNDLE_SUFFIX = '.app';
+  BUNDLE_PROGRAM_FOLDERS: array[0..1] of string = ('Contents', 'MacOS');
   SETTINGS_FILE_NAME = 'settings.json';
   RECENT_FILES_FILE_NAME = 'recent-files.json';
   PUBLISH_FOLDER = 'publish';
@@ -116,9 +134,9 @@ begin
   Result := ExcludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0)));
 end;
 
-function PortableDir(const Sub: string): string;
+function PortableDir(const Kind: string): string;
 begin
-  Result := ConcatPaths([ExeDir, Sub]);
+  Result := TAppPaths.PortableDirIn(TAppPaths.PortableRoot, Kind);
 end;
 
 {$IFDEF WINDOWS}
@@ -215,7 +233,7 @@ end;
 class function TAppPaths.DefaultDocumentsDir: string;
 begin
   if IsPortable then
-    Exit(PortableDir('documents'));
+    Exit(ConcatPaths([PortableRoot, PORTABLE_DOCUMENTS_FOLDER]));
   Result := ConcatPaths([HomeDir, 'Documents', APP_NAME]);
 end;
 
@@ -337,7 +355,36 @@ end;
 
 class function TAppPaths.IsPortable: boolean;
 begin
-  Result := FileExists(ConcatPaths([ExeDir, PORTABLE_FILE_NAME]));
+  Result := PortableRoot <> '';
+end;
+
+class function TAppPaths.PortableRoot: string;
+begin
+  Result := PortableRootIn(ExeDir);
+end;
+
+// Code signing takes nothing new inside a bundle, so its portable.ini lies
+// beside it. Looked for on every platform, so tests can check it.
+class function TAppPaths.PortableRootIn(const ProgramFolder: string): string;
+var
+  Folder, Bundle: string;
+begin
+  Folder := ExcludeTrailingPathDelimiter(ProgramFolder);
+  if FileExists(ConcatPaths([Folder, PORTABLE_FILE_NAME])) then
+    Exit(Folder);
+  Result := '';
+  if not SameText(ExtractFileName(Folder), BUNDLE_PROGRAM_FOLDERS[1]) or not SameText(ExtractFileName(ExtractFileDir(Folder)), BUNDLE_PROGRAM_FOLDERS[0]) then
+    Exit;
+  Bundle := ExtractFileDir(ExtractFileDir(Folder));
+  if not SameText(ExtractFileExt(Bundle), BUNDLE_SUFFIX) then
+    Exit;
+  if FileExists(ConcatPaths([ExtractFileDir(Bundle), PORTABLE_FILE_NAME])) then
+    Result := ExtractFileDir(Bundle);
+end;
+
+class function TAppPaths.PortableDirIn(const Root, Kind: string): string;
+begin
+  Result := ConcatPaths([Root, PORTABLE_USER_FOLDER, Kind]);
 end;
 
 class function TAppPaths.ForceDir(const Dir: string): string;

@@ -34,6 +34,10 @@ type
     procedure TestFoldersEndWithAppName;
     procedure TestSettingsFileIsInConfigDir;
     procedure TestRecentFilesFileIsInStateDir;
+    procedure TestNotPortableWithoutIni;
+    procedure TestPortableBesideTheProgram;
+    procedure TestPortableBesideTheBundle;
+    procedure TestPortableFilesApartFromShippedData;
   end;
 
 implementation
@@ -78,6 +82,96 @@ end;
 procedure TTestAppPaths.TestRecentFilesFileIsInStateDir;
 begin
   AssertEquals(ConcatPaths([TAppPaths.StateDir, 'recent-files.json']), TAppPaths.RecentFilesFile);
+end;
+
+// Where the tests below make their folders
+function TestRoot: string;
+begin
+  Result := ConcatPaths([GetTempDir, 'opensloper-portable-test-' + IntToStr(GetProcessID)]);
+end;
+
+// A folder in TestRoot, with portable.ini in it when WithIni
+function PortableFolder(const Name: string; WithIni: boolean): string;
+var
+  Ini: TextFile;
+begin
+  Result := ConcatPaths([TestRoot, Name]);
+  ForceDirectories(Result);
+  if not WithIni then
+    Exit;
+  AssignFile(Ini, ConcatPaths([Result, 'portable.ini']));
+  Rewrite(Ini);
+  CloseFile(Ini);
+end;
+
+procedure RemoveTree(const Folder: string);
+var
+  Found: TSearchRec;
+begin
+  if FindFirst(ConcatPaths([Folder, AllFilesMask]), faAnyFile or faDirectory, Found) = 0 then
+  try
+    repeat
+      if (Found.Name = '.') or (Found.Name = '..') then
+        Continue;
+      if (Found.Attr and faDirectory) <> 0 then
+        RemoveTree(ConcatPaths([Folder, Found.Name]))
+      else
+        DeleteFile(ConcatPaths([Folder, Found.Name]));
+    until FindNext(Found) <> 0;
+  finally
+    FindClose(Found);
+  end;
+  RemoveDir(Folder);
+end;
+
+procedure TTestAppPaths.TestNotPortableWithoutIni;
+begin
+  try
+    AssertEquals('', TAppPaths.PortableRootIn(PortableFolder('plain', False)));
+  finally
+    RemoveTree(TestRoot);
+  end;
+end;
+
+procedure TTestAppPaths.TestPortableBesideTheProgram;
+var
+  Folder: string;
+begin
+  try
+    Folder := PortableFolder('stick', True);
+    AssertEquals(Folder, TAppPaths.PortableRootIn(Folder));
+    AssertEquals('a trailing delimiter', Folder, TAppPaths.PortableRootIn(Folder + PathDelim));
+  finally
+    RemoveTree(TestRoot);
+  end;
+end;
+
+// Signing takes nothing new inside the bundle, so portable.ini lies beside it
+procedure TTestAppPaths.TestPortableBesideTheBundle;
+var
+  Folder, Programs: string;
+begin
+  try
+    Folder := PortableFolder('mac', True);
+    Programs := ConcatPaths([Folder, 'OpenSloper.app', 'Contents', 'MacOS']);
+    ForceDirectories(Programs);
+    AssertEquals(Folder, TAppPaths.PortableRootIn(Programs));
+    Programs := ConcatPaths([Folder, 'Other', 'Contents', 'MacOS']);
+    ForceDirectories(Programs);
+    AssertEquals('not a bundle', '', TAppPaths.PortableRootIn(Programs));
+  finally
+    RemoveTree(TestRoot);
+  end;
+end;
+
+// The data folder beside the programs is what they ship with
+procedure TTestAppPaths.TestPortableFilesApartFromShippedData;
+var
+  Root: string;
+begin
+  Root := PathDelim + 'stick';
+  AssertEquals(ConcatPaths([Root, 'user', 'config']), TAppPaths.PortableDirIn(Root, 'config'));
+  AssertEquals(ConcatPaths([Root, 'user', 'data']), TAppPaths.PortableDirIn(Root, 'data'));
 end;
 
 initialization

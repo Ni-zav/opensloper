@@ -152,6 +152,8 @@ OpenSloper follows each platform's conventions and never writes app files into t
 
 `XDG_*_HOME` is respected on Linux. The catalogue, body figures, icons and fonts ship in `data/` beside the programs, and in the downloads the offline user guide in `data/help` (`TAppPaths.UserGuideFile`; Help → User Guide opens the website when it is missing, as in the source tree) (a folder up in the source tree, and in `Contents/Resources` of the macOS app bundle, since code signing takes only programs in `Contents/MacOS`). Folders are created on first use.
 
+**Portable install** (built 2026-11-16, issue #30). An empty `portable.ini` beside the programs makes the install portable: everything the apps write goes beside it, so a copy on a USB stick leaves nothing on the computer. Config, data, state and cache go in `user/` (`user/config` and so on), apart from the `data/` the programs ship with, and the first save defaults to `documents/`. On macOS `portable.ini` lies beside `OpenSloper.app`, since code signing takes nothing new inside the bundle. Recent files inside the portable folder are kept relative to it, with `/` between folders, so they are found again when the drive comes back under another letter or mount point; files elsewhere keep their full path. The runtime folder (the automation socket and the apps' link) is never portable, since a USB stick's file system may not hold a socket. The Claude API key is in `user/config` with the settings, which the user guide warns of. `TAppPaths.PortableRoot` gives the folder, '' when not portable.
+
 **User documents** (`.sloper`, `.slm`, `.slayout`) belong to the user, never in hidden folders: the first save defaults to `Documents/OpenSloper/`, then the last-used folder.
 
 **Implementation.** `TAppPaths` gives `ConfigDir`, `DataDir`, `StateDir`, `CacheDir` and `DefaultDocumentsDir`; no other code builds these paths. The three apps share `settings.json` and `recent-files.json` and run side by side, so every save reads the file again first and changes only its own part. A missing settings file is a first run; an unreadable one leaves the defaults, and saving preferences over it is refused with the reason, rather than lose a newer version's file. File → Open Recent lists each app's last 10 files (`Sloper.Core.RecentFiles`, `Sloper.UI.RecentMenu`); a missing file is taken off when chosen.
@@ -962,7 +964,6 @@ Agreed, but not built. Each line is meant to become one issue.
 
 **General**
 
-- **Portable install.** (Issue #30) A `portable.ini` beside the executable keeps settings, state and cache next to it (see File locations).
 - **Translation**, for the community release (see Translation).
 - **Release signing** (Issue #17), for the community release: macOS notarisation, Intel macOS builds and signed Windows programs. The installers and the offline guide are done (see Release builds).
 - **The assistant on Windows and macOS.** (Issue #31) On Windows FPC 3.2.2 loads OpenSSL only as the 1.1 DLLs, which are not shipped, so the assistant cannot connect; on macOS it is untried (see Platforms).

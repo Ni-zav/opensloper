@@ -20,6 +20,12 @@ Changed, Fixed and Removed under each version.
   for running from a folder; the macOS `.zip` is replaced by the `.dmg`.
 - Every download has the user guide to read offline, and Help → User Guide in
   each app opens it, or the website when the guide is not there (#17).
+- A change of preferences reaches the apps already open, without a restart
+  (#29).
+- A portable install: with a `portable.ini` beside the programs (beside
+  `OpenSloper.app` on macOS), settings, recent files and cache are kept in a
+  `user` folder beside them and documents in `documents`, and recent files
+  there are still found when the drive gets another letter (#30).
 
 ### Changed
 

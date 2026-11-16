@@ -78,6 +78,16 @@ type
     // downloads ship in data/help; '' when there is none, as in the source tree
     class function UserGuideFile: string;
     class function UserGuideFileIn(const Folder: string): string;
+    // Libraries a download ships for its programs: the programs' own folder
+    // on Windows, Contents/Frameworks of a macOS app bundle, lib beside the
+    // programs elsewhere. The folder may not exist.
+    class function LibraryDir: string;
+    class function LibraryDirIn(const Folder: string): string;
+    // The certificates the assistant trusts where OpenSSL cannot read the
+    // system's, data/cacert.pem in the Windows and macOS downloads; '' when
+    // there is none, as on Linux, where the system's are used
+    class function TrustedCertificatesFile: string;
+    class function TrustedCertificatesFileIn(const Folder: string): string;
     // The folders the system and the user install fonts in, which may not
     // exist; PDF export looks there for a note's font
     class function SystemFontDirs: TStringArray;
@@ -113,6 +123,9 @@ const
   FONT_FOLDER = 'fonts';
   USER_GUIDE_FOLDER = 'help';
   USER_GUIDE_PAGE = 'index.html';
+  TRUSTED_CERTIFICATES_FILE_NAME = 'cacert.pem';
+  LIBRARY_FOLDER = 'lib';
+  BUNDLE_LIBRARY_FOLDER = 'Frameworks';
   {$IFDEF WINDOWS}
   PUBLISH_FILE_NAME = 'opensloper-publish.exe';
   MEASUREMENTS_FILE_NAME = 'opensloper-measurements.exe';
@@ -326,6 +339,32 @@ end;
 class function TAppPaths.UserGuideFileIn(const Folder: string): string;
 begin
   Result := DataPathIn(Folder, ConcatPaths([USER_GUIDE_FOLDER, USER_GUIDE_PAGE]), False);
+end;
+
+class function TAppPaths.LibraryDir: string;
+begin
+  Result := LibraryDirIn(ExeDir);
+end;
+
+class function TAppPaths.LibraryDirIn(const Folder: string): string;
+begin
+  {$IF DEFINED(WINDOWS)}
+  Result := ExcludeTrailingPathDelimiter(Folder);
+  {$ELSEIF DEFINED(DARWIN)}
+  Result := ExpandFileName(ConcatPaths([Folder, '..', BUNDLE_LIBRARY_FOLDER]));
+  {$ELSE}
+  Result := ConcatPaths([Folder, LIBRARY_FOLDER]);
+  {$ENDIF}
+end;
+
+class function TAppPaths.TrustedCertificatesFile: string;
+begin
+  Result := TrustedCertificatesFileIn(ExeDir);
+end;
+
+class function TAppPaths.TrustedCertificatesFileIn(const Folder: string): string;
+begin
+  Result := DataPathIn(Folder, TRUSTED_CERTIFICATES_FILE_NAME, False);
 end;
 
 class function TAppPaths.SystemFontDirs: TStringArray;

@@ -65,6 +65,11 @@ resourcestring
   // Material, size, what is needed, pieces
   rsMaterialsEntry = '%s%s: %s (%d pieces)';
   rsMaterialsNone = 'No pieces';
+  rsConnectionUsing = 'Using %s';
+  rsConnectionTrustFile = 'Trusting the certificates in %s';
+  rsConnectionTrustSystem = 'Trusting the system''s certificates';
+  rsConnectionAnswered = 'Connected to %s: its certificate is trusted, and it answered with HTTP %d';
+  rsConnectionFailed = 'Could not connect to %s: %s';
 
 implementation
 
@@ -72,7 +77,8 @@ uses
   SysUtils, fpjson, ConsoleTools, Sloper.CLI.Arguments, Sloper.Docs.Reference, Sloper.Core.Version, Sloper.Core.JSON,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
   Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout,
-  Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection;
+  Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection,
+  Sloper.Assistant.Http;
 
 var
   // Where the command being run writes, set by RunCli
@@ -642,6 +648,41 @@ begin
   end;
 end;
 
+// What the assistant needs to reach the API, step by step, so a failure says
+// which step. Any answer counts, as no key is sent: the API's own says so.
+function RunCheckConnection(const UrlOption, CaFile: string): integer;
+var
+  Url, Trusted, Err: string;
+  Status: integer;
+begin
+  if UrlOption <> '' then
+    Url := MessagesUrlAt(UrlOption)
+  else
+    Url := MessagesUrl;
+  if (CaFile <> '') and not CheckFileExists(CaFile) then
+    Exit(EXIT_FAILURE);
+  if not LoadOpenSSL(Err) then
+  begin
+    WriteLn(CliErr^, Err);
+    Exit(EXIT_FAILURE);
+  end;
+  WriteLn(CliOut^, Format(rsConnectionUsing, [OpenSSLVersionText]));
+  Trusted := CaFile;
+  if Trusted = '' then
+    Trusted := DefaultTrustedFile;
+  if Trusted <> '' then
+    WriteLn(CliOut^, Format(rsConnectionTrustFile, [Trusted]))
+  else
+    WriteLn(CliOut^, rsConnectionTrustSystem);
+  if not CheckConnection(Url, Trusted, Status, Err) then
+  begin
+    WriteLn(CliErr^, Format(rsConnectionFailed, [Url, Err]));
+    Exit(EXIT_FAILURE);
+  end;
+  WriteLn(CliOut^, Format(rsConnectionAnswered, [Url, Status]));
+  Result := EXIT_SUCCESS;
+end;
+
 // A reference page, to the file given or to standard output
 // With no topic, lists the topics, one a line, for opensloper-make.sh docs
 function RunDoc(const Topic, OutputFile: string): integer;
@@ -729,6 +770,11 @@ begin
         WriteLn(CliErr^, rsMeasurementsUsage);
         Result := EXIT_FAILURE;
       end;
+      Exit;
+    end;
+    if CommandName = 'check-connection' then
+    begin
+      Result := RunCheckConnection(Parser.GetOptionValueAsString('url'), Parser.GetOptionValueAsString('ca-file'));
       Exit;
     end;
     if CommandName = 'doc' then

@@ -76,13 +76,17 @@ type
     procedure TestDocTopics;
     procedure TestDocUnknownTopic;
     procedure TestDocToFile;
+    procedure TestCheckConnectionAnswered;
+    procedure TestCheckConnectionUntrusted;
+    procedure TestCheckConnectionMissingCaFile;
   end;
 
 implementation
 
 uses
   Classes, StreamIO, fpjson, jsonparser, Sloper.Core.Version, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Units,
-  Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout, Sloper.Output.LayoutExport;
+  Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout, Sloper.Output.LayoutExport,
+  Sloper.Tests.TlsServer;
 
 function ExamplesFolder: string;
 begin
@@ -530,6 +534,45 @@ begin
   Page := InFolder('cli.md');
   AssertEquals(FErr, 0, Run(['doc', 'cli', '-o', Page]));
   AssertTrue('names the materials command', Pos('materials LAYOUT|PATTERN', ReadWholeFile(Page)) > 0);
+end;
+
+// Through the test server, whose certificate is trusted only when given
+procedure TTestCLI.TestCheckConnectionAnswered;
+var
+  Server: TTlsTestServer;
+begin
+  Server := TTlsTestServer.Create(TlsTestFile('localhost.pem'));
+  try
+    AssertEquals(FErr, EXIT_SUCCESS, Run(['check-connection', Format('--url=https://localhost:%d', [Server.Port]),
+      '--ca-file=' + TlsTestFile('localhost.pem')]));
+    AssertTrue('which OpenSSL', Pos('Using OpenSSL', FOut) > 0);
+    AssertTrue('which certificates', Pos(TlsTestFile('localhost.pem'), FOut) > 0);
+    AssertTrue(FOut, Pos('answered with HTTP 200', FOut) > 0);
+    AssertTrue('no key sent', Pos('x-api-key: ' + #13#10, Server.LastRequest) > 0);
+  finally
+    FreeAndNil(Server);
+  end;
+end;
+
+procedure TTestCLI.TestCheckConnectionUntrusted;
+var
+  Server: TTlsTestServer;
+begin
+  Server := TTlsTestServer.Create(TlsTestFile('localhost.pem'));
+  try
+    AssertEquals(EXIT_FAILURE, Run(['check-connection', Format('--url=https://localhost:%d', [Server.Port]),
+      '--ca-file=' + TlsTestFile('otherhost.pem')]));
+    AssertTrue(FErr, Pos('Could not connect to https://localhost', FErr) > 0);
+    AssertEquals('no request was read', 0, Server.Requests);
+  finally
+    FreeAndNil(Server);
+  end;
+end;
+
+procedure TTestCLI.TestCheckConnectionMissingCaFile;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['check-connection', '--ca-file=' + InFolder('none.pem')]));
+  AssertTrue(FErr, Pos('none.pem', FErr) > 0);
 end;
 
 initialization

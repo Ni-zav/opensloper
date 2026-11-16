@@ -338,6 +338,11 @@ cmd_docs() {
 # On Linux, BUNDLE_LIBS lists libraries to ship in lib/ beside the programs
 # (the release workflow ships the Qt6 Pascal bindings, libQt6Pas.so.6, which
 # few distributions package); the GUI programs then look there first.
+# The Windows and macOS downloads ship OpenSSL 3 for the Claude assistant,
+# with Mozilla's root certificates from curl.se, which OpenSSL there cannot
+# read from the system: on Windows the DLLs in OPENSSL_DLL_DIR (default
+# /mingw64/bin, Git for Windows' own), on macOS the dylibs of OPENSSL_PREFIX
+# (default Homebrew's openssl@3). Linux uses the system's OpenSSL.
 
 # The bundle's file types: the design app opens them all, and hands
 # measurement files and layouts to the apps beside it
@@ -413,6 +418,9 @@ write_readme() {
         echo
         echo "To keep settings and recent files in this folder rather than your home"
         echo "folder, to run from a USB stick, put an empty file named portable.ini here."
+        echo
+        echo "The Claude assistant needs OpenSSL 3 (libssl3), which most systems have;"
+        echo "opensloper-cli check-connection says whether it can reach the API."
         ;;
       macOS)
         echo "Drag OpenSloper.app to Applications and open it: it is the pattern editor,"
@@ -432,11 +440,88 @@ write_readme() {
         echo "To keep settings and recent files in this folder rather than in AppData,"
         echo "to run from a USB stick, put an empty file named portable.ini here."
         echo
+        echo "opensloper-cli.exe check-connection says whether the Claude assistant can"
+        echo "reach the API. THIRD-PARTY.txt lists the parts that are not OpenSloper's."
+        echo
         echo "The programs are not signed, so Windows SmartScreen may ask before the"
         echo "first run: choose More info, then Run anyway."
         ;;
     esac
   } > "$file"
+}
+
+CA_BUNDLE_URL=https://curl.se/ca/cacert.pem
+
+# Mozilla's root certificates as curl publishes them, checked against the
+# checksum published beside them, into a download's data folder
+fetch_ca_bundle() {
+  local data=$1 expected actual
+  curl -sfL "$CA_BUNDLE_URL" -o "$data/cacert.pem"
+  expected=$(curl -sfL "$CA_BUNDLE_URL.sha256" | cut -d' ' -f1)
+  if command -v sha256sum >/dev/null; then
+    actual=$(sha256sum "$data/cacert.pem" | cut -d' ' -f1)
+  else
+    actual=$(shasum -a 256 "$data/cacert.pem" | cut -d' ' -f1)
+  fi
+  if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+    echo "The certificates from $CA_BUNDLE_URL do not match their checksum" >&2
+    exit 1
+  fi
+}
+
+# What a Windows or macOS download ships that is not OpenSloper's, with the
+# licence OpenSSL asks to go with it
+write_third_party() {
+  local folder=$1 where=$2
+  cp resources/licenses/Apache-2.0.txt "$folder/OpenSSL-LICENSE.txt"
+  {
+    echo "Besides OpenSloper itself, this download contains:"
+    echo
+    echo "OpenSSL 3 ($where), which the Claude assistant reaches the API with."
+    echo "  Copyright the OpenSSL Project Authors. Apache License 2.0, in"
+    echo "  OpenSSL-LICENSE.txt. https://www.openssl.org"
+    echo
+    echo "Mozilla's root certificates (data/cacert.pem), as published by the curl"
+    echo "  project, which the assistant trusts in place of the system's. Mozilla"
+    echo "  Public License 2.0. https://curl.se/docs/caextract.html"
+  } > "$folder/THIRD-PARTY.txt"
+}
+
+# The OpenSSL 3 DLLs, beside the programs
+copy_openssl_windows() {
+  local root=$1 dir=${OPENSSL_DLL_DIR:-/mingw64/bin} dll
+  for dll in libssl-3-x64.dll libcrypto-3-x64.dll; do
+    if [ ! -f "$dir/$dll" ]; then
+      echo "No $dll in $dir; set OPENSSL_DLL_DIR to the folder of the OpenSSL 3 DLLs" >&2
+      exit 1
+    fi
+    cp "$dir/$dll" "$root/"
+  done
+}
+
+# The OpenSSL 3 dylibs, in the bundle's Frameworks, finding each other there
+# rather than where Homebrew put them; the bundle is signed after
+copy_openssl_macos() {
+  local bundle=$1 prefix=${OPENSSL_PREFIX:-} frameworks crypto
+  [ -n "$prefix" ] || prefix=$(brew --prefix openssl@3 2>/dev/null || true)
+  if [ ! -f "$prefix/lib/libssl.3.dylib" ]; then
+    echo "No OpenSSL 3 in ${prefix:-Homebrew}; run brew install openssl@3, or set OPENSSL_PREFIX" >&2
+    exit 1
+  fi
+  frameworks="$bundle/Contents/Frameworks"
+  mkdir -p "$frameworks"
+  cp -L "$prefix/lib/libssl.3.dylib" "$prefix/lib/libcrypto.3.dylib" "$frameworks/"
+  chmod u+w "$frameworks"/*.dylib
+  install_name_tool -id @loader_path/libcrypto.3.dylib "$frameworks/libcrypto.3.dylib"
+  install_name_tool -id @loader_path/libssl.3.dylib "$frameworks/libssl.3.dylib"
+  crypto=$(otool -L "$frameworks/libssl.3.dylib" | awk 'NR > 1 && /libcrypto/ {print $1; exit}')
+  install_name_tool -change "$crypto" @loader_path/libcrypto.3.dylib "$frameworks/libssl.3.dylib"
+  if otool -L "$frameworks"/*.dylib | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)'; then
+    echo "The bundled OpenSSL still names libraries outside the bundle" >&2
+    exit 1
+  fi
+  # Homebrew builds for the runner's macOS, which may be later than the bundle's minimum
+  echo "Bundled OpenSSL needs macOS $(otool -l "$frameworks/libssl.3.dylib" | awk '/minos/ {print $2; exit}')"
 }
 
 # The offline user guide, into a download's data folder
@@ -498,7 +583,7 @@ Version: $VERSION
 Architecture: $arch
 Maintainer: The OpenSloper authors <contact@opensloper.com>
 Installed-Size: $size
-Depends: libc6, libqt6core6t64 (>= 6.4) | libqt6core6 (>= 6.4), libqt6gui6t64 | libqt6gui6, libqt6widgets6t64 | libqt6widgets6, libqt6printsupport6t64 | libqt6printsupport6, qt6-qpa-plugins
+Depends: libc6, libssl3t64 | libssl3, libqt6core6t64 (>= 6.4) | libqt6core6 (>= 6.4), libqt6gui6t64 | libqt6gui6, libqt6widgets6t64 | libqt6widgets6, libqt6printsupport6t64 | libqt6printsupport6, qt6-qpa-plugins
 Section: graphics
 Priority: optional
 Homepage: https://github.com/opensloper/opensloper
@@ -595,6 +680,8 @@ cmd_package() {
       # Code signing takes only programs in MacOS, so the data is a resource
       cp -R data "$bundle/Contents/Resources/data"
       copy_user_guide "$bundle/Contents/Resources/data"
+      fetch_ca_bundle "$bundle/Contents/Resources/data"
+      copy_openssl_macos "$bundle"
       if command -v rsvg-convert >/dev/null && command -v iconutil >/dev/null; then
         iconset="$stage/OpenSloper.iconset"
         mkdir -p "$iconset"
@@ -644,6 +731,7 @@ EOF
       # to run once the download's quarantine is cleared
       codesign --force --deep --sign - "$bundle"
       cp LICENSE CHANGELOG.md "$stage/$name/"
+      write_third_party "$stage/$name" "in OpenSloper.app/Contents/Frameworks"
       write_readme "$stage/$name/README.txt" macOS
       package_dmg "$stage/$name" "$name"
       ;;
@@ -659,6 +747,9 @@ EOF
       strip_programs "${programs[@]}"
       cp -R data "$root/data"
       copy_user_guide "$root/data"
+      fetch_ca_bundle "$root/data"
+      copy_openssl_windows "$root"
+      write_third_party "$root" "libssl-3-x64.dll and libcrypto-3-x64.dll"
       cp LICENSE "$root/LICENSE.txt"
       cp CHANGELOG.md "$root/CHANGELOG.md"
       write_readme "$root/README.txt" Windows
@@ -769,7 +860,7 @@ my %allowed = (
   'src/document' => [qw(Core Document)],
   'src/api'      => [qw(Core Document Output API)],
   'src/output'   => [qw(Core Output)],
-  'src/cli'      => [qw(Core Document Output API CLI Docs)],
+  'src/cli'      => [qw(Core Document Output API Assistant CLI Docs)],
   'src/docs'     => [qw(Core API CLI Docs)],
   'src/assistant' => [qw(Core API Assistant)],
 );

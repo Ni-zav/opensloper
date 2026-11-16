@@ -147,6 +147,8 @@ jobs:
           ./opensloper-cli --version
           ./opensloper-cli check "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt-block.sloper" \
             -m "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt.slm"
+          # The assistant's HTTPS: OpenSSL loads and the API's certificate is trusted
+          ./opensloper-cli check-connection
           # Still running after 15 seconds means it started
           status=0
           timeout 15 xvfb-run -a ./opensloper-design || status=$?
@@ -168,6 +170,7 @@ jobs:
           opensloper-cli --version
           opensloper-cli check "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt-block.sloper" \
             -m "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt.slm"
+          opensloper-cli check-connection
           status=0
           timeout 15 xvfb-run -a opensloper-design || status=$?
           if [ "$status" -ne 124 ]; then
@@ -290,7 +293,14 @@ jobs:
           codesign --verify --deep --strict ../..
           plutil -lint ../Info.plist
           test -f ../Resources/data/help/index.html
+          test -f ../Resources/data/cacert.pem
           ./opensloper-cli --version
+          # The bundled OpenSSL and certificates, not Homebrew's
+          status=0
+          ./opensloper-cli check-connection > "$RUNNER_TEMP/connection.txt" || status=$?
+          cat "$RUNNER_TEMP/connection.txt"
+          test "$status" -eq 0
+          grep -q "data/cacert.pem" "$RUNNER_TEMP/connection.txt"
           ./opensloper-cli check "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt-block.sloper" \
             -m "$GITHUB_WORKSPACE/docs/examples/skirt-block/skirt.slm"
           ./opensloper-design &
@@ -397,6 +407,11 @@ jobs:
         shell: pwsh
         run: |
           $folder = Get-ChildItem "$env:RUNNER_TEMP\try" -Directory | Select-Object -First 1
+          # Here rather than in Git Bash, whose PATH has Git's own OpenSSL
+          $said = & (Join-Path $folder.FullName 'opensloper-cli.exe') check-connection
+          $said
+          if ($LASTEXITCODE -ne 0) { throw 'The download cannot reach the Claude API' }
+          if (-not ($said -match 'cacert\.pem')) { throw 'The download does not trust its own certificates' }
           $app = Start-Process -FilePath (Join-Path $folder.FullName 'opensloper-design.exe') -PassThru
           Start-Sleep -Seconds 15
           if ($app.HasExited) { throw "opensloper-design exited with $($app.ExitCode) during start-up" }
@@ -416,6 +431,8 @@ jobs:
           if ($command -notlike '*opensloper-design.exe*') { throw "Patterns open with $command" }
           & (Join-Path $dir 'opensloper-cli.exe') --version
           if ($LASTEXITCODE -ne 0) { throw 'opensloper-cli did not run' }
+          & (Join-Path $dir 'opensloper-cli.exe') check-connection
+          if ($LASTEXITCODE -ne 0) { throw 'The installed programs cannot reach the Claude API' }
           $app = Start-Process -FilePath (Join-Path $dir 'opensloper-design.exe') -PassThru
           Start-Sleep -Seconds 15
           if ($app.HasExited) { throw "The installed opensloper-design exited with $($app.ExitCode) during start-up" }

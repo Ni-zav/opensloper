@@ -19,7 +19,9 @@
 // How the assistant reaches the Claude API: a POST of the request body with
 // the response streamed into a sink. Raw HTTPS through FPC's HTTP client and
 // OpenSSL, since Pascal has no Anthropic SDK; tests put a transport of their
-// own in its place. No LCL dependency.
+// own in its place. FPC 3.2.2 looks only for OpenSSL 1.1 and older, so
+// OpenSSL 3 is named before it loads: the libraries the Windows and macOS
+// downloads ship, and libssl.so.3 on Linux. No LCL dependency.
 unit Sloper.Assistant.Http;
 
 {$mode ObjFPC}{$H+}
@@ -63,7 +65,8 @@ type
     // Shuts the connection's socket down, so a read waiting on a server that
     // has gone quiet ends now rather than at the read timeout
     procedure Abort; override;
-    // A PEM file of the certificates to trust in place of the system's, for tests
+    // A PEM file of the certificates to trust in place of the system's;
+    // DefaultTrustedFile at first, '' for the system's
     property TrustedFile: string read FTrustedFile write FTrustedFile;
     // Read at each Post; not while one runs
     property Key: string read FKey write FKey;
@@ -71,6 +74,20 @@ type
 
 // The Messages endpoint: ANTHROPIC_BASE_URL, as the SDKs take it for a proxy, or the API's own
 function MessagesUrl: string;
+// The Messages endpoint of the API at BaseUrl, such as https://api.anthropic.com
+function MessagesUrlAt(const BaseUrl: string): string;
+// Names OpenSSL 3 and loads it, if not loaded already; False with the reason
+// when it cannot be loaded. A transport does this on its first connection.
+function LoadOpenSSL(out ErrorMessage: string): boolean;
+// The OpenSSL loaded, such as "OpenSSL 3.0.13 30 Jan 2024"; '' before it is
+function OpenSSLVersionText: string;
+// The certificates to trust: the file the download ships, unless
+// SSL_CERT_FILE or SSL_CERT_DIR names others; '' for the system's
+function DefaultTrustedFile: string;
+// Posts an empty request to Url, without a key, to see that OpenSSL loads,
+// the server's certificate is trusted and it answers; Status is its HTTP
+// status. False with the reason when there was no answer.
+function CheckConnection(const Url, TrustedFile: string; out Status: integer; out ErrorMessage: string): boolean;
 
 const
   API_VERSION = '2026-10-21';
@@ -78,10 +95,14 @@ const
   // model chosen for the reason, in the same call
   API_BETAS = 'server-side-fallback-2026-07-01';
 
+resourcestring
+  rsHttpNoOpenSSL = 'OpenSSL 3 could not be loaded (%s), so the Claude API cannot be reached';
+
 implementation
 
 uses
-  {$IFDEF UNIX} BaseUnix, {$ENDIF} dynlibs, ctypes, Sockets, SysConst, fphttpclient, openssl, opensslsockets;
+  {$IFDEF UNIX} BaseUnix, {$ENDIF} dynlibs, ctypes, Sockets, SysConst, fphttpclient, openssl, opensslsockets,
+  Sloper.Core.AppPaths;
 
 // A write to a connection the server has reset raises SIGPIPE, which ends
 // the program, and OpenSSL writes to the socket itself, so no send flag can
@@ -110,6 +131,104 @@ const
   READ_TIMEOUT_MS = 60000;
   HTTP_OK_LOW = 200;
   HTTP_OK_HIGH = 299;
+  CERT_FILE_ENVIRONMENT = 'SSL_CERT_FILE';
+  CERT_DIR_ENVIRONMENT = 'SSL_CERT_DIR';
+  // OpenSSL_version's argument for the version text
+  OPENSSL_VERSION_TEXT = 0;
+  {$IF DEFINED(WINDOWS)}
+  SSL_LIBRARY = {$IFDEF WIN64}'libssl-3-x64.dll'{$ELSE}'libssl-3.dll'{$ENDIF};
+  CRYPTO_LIBRARY = {$IFDEF WIN64}'libcrypto-3-x64.dll'{$ELSE}'libcrypto-3.dll'{$ENDIF};
+  {$ELSE}
+  SSL_LIBRARY = 'libssl';
+  CRYPTO_LIBRARY = 'libcrypto';
+  OPENSSL3_SUFFIX = '.3';
+  {$ENDIF}
+  {$IFDEF DARWIN}
+  // Homebrew's OpenSSL 3, for programs run from the source tree
+  HOMEBREW_OPENSSL_DIRS: array[0..1] of string = ('/opt/homebrew/opt/openssl@3/lib', '/usr/local/opt/openssl@3/lib');
+  {$ENDIF}
+
+var
+  // The library looked for, for the message when it is not there
+  OpenSSLSought: string;
+
+// FPC 3.2.2 tries only OpenSSL 1.1 and older, which are past their end of
+// life, and on macOS a libcrypto.1.1 no Mac has; the system's unversioned
+// one there ends the program when loaded
+procedure NameOpenSSL3;
+var
+  Folder: string;
+  {$IFNDEF WINDOWS}
+  Index: integer;
+  {$ENDIF}
+begin
+  Folder := TAppPaths.LibraryDir;
+  {$IF DEFINED(WINDOWS)}
+  // Beside the program in the downloads; otherwise wherever Windows finds it
+  if FileExists(ConcatPaths([Folder, SSL_LIBRARY])) then
+  begin
+    DLLSSLName := ConcatPaths([Folder, SSL_LIBRARY]);
+    DLLUtilName := ConcatPaths([Folder, CRYPTO_LIBRARY]);
+  end
+  else
+  begin
+    DLLSSLName := SSL_LIBRARY;
+    DLLUtilName := CRYPTO_LIBRARY;
+  end;
+  OpenSSLSought := DLLSSLName;
+  {$ELSEIF DEFINED(DARWIN)}
+  // In the app bundle's Frameworks, else Homebrew's
+  if not FileExists(ConcatPaths([Folder, SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib'])) then
+  begin
+    Folder := '';
+    for Index := Low(HOMEBREW_OPENSSL_DIRS) to High(HOMEBREW_OPENSSL_DIRS) do
+      if (Folder = '') and FileExists(ConcatPaths([HOMEBREW_OPENSSL_DIRS[Index], SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib'])) then
+        Folder := HOMEBREW_OPENSSL_DIRS[Index];
+  end;
+  if Folder <> '' then
+  begin
+    DLLSSLName := ConcatPaths([Folder, SSL_LIBRARY]);
+    DLLUtilName := ConcatPaths([Folder, CRYPTO_LIBRARY]);
+  end;
+  for Index := Low(DLLVersions) to High(DLLVersions) do
+    DLLVersions[Index] := OPENSSL3_SUFFIX;
+  OpenSSLSought := DLLSSLName + OPENSSL3_SUFFIX + '.dylib';
+  {$ELSE}
+  // The system's: libssl.so.3 first, which is there without the development
+  // files that give libssl.so, then those, then 1.1. Older ones lack
+  // SSL_set1_host, so they could never connect.
+  Index := Low(DLLVersions);
+  DLLVersions[Index] := OPENSSL3_SUFFIX;
+  DLLVersions[Index + 1] := '';
+  DLLVersions[Index + 2] := '.1.1';
+  OpenSSLSought := SSL_LIBRARY + '.so' + OPENSSL3_SUFFIX;
+  {$ENDIF}
+end;
+
+function LoadOpenSSL(out ErrorMessage: string): boolean;
+begin
+  ErrorMessage := '';
+  if IsSSLloaded then
+    Exit(True);
+  NameOpenSSL3;
+  Result := InitSSLInterface;
+  if not Result then
+    ErrorMessage := Format(rsHttpNoOpenSSL, [OpenSSLSought]);
+end;
+
+function OpenSSLVersionText: string;
+begin
+  Result := '';
+  if IsSSLloaded then
+    Result := OpenSSLGetVersion(OPENSSL_VERSION_TEXT);
+end;
+
+function DefaultTrustedFile: string;
+begin
+  Result := '';
+  if (GetEnvironmentVariable(CERT_FILE_ENVIRONMENT) = '') and (GetEnvironmentVariable(CERT_DIR_ENVIRONMENT) = '') then
+    Result := TAppPaths.TrustedCertificatesFile;
+end;
 
 type
   // OpenSSL with the server's certificate checked, which FPC 3.2's handler
@@ -233,18 +352,56 @@ begin
   Result := GetEnvironmentVariable(BASE_URL_ENVIRONMENT);
   if Result = '' then
     Result := DEFAULT_BASE_URL;
+  Result := MessagesUrlAt(Result);
+end;
+
+function MessagesUrlAt(const BaseUrl: string): string;
+begin
+  Result := BaseUrl;
   while Result.EndsWith('/') do
     SetLength(Result, Length(Result) - 1);
   Result := Result + MESSAGES_PATH;
+end;
+
+function CheckConnection(const Url, TrustedFile: string; out Status: integer; out ErrorMessage: string): boolean;
+var
+  Transport: THttpsTransport;
+  Sink: TStringStream;
+  RetryAfter: integer;
+begin
+  Status := 0;
+  Transport := THttpsTransport.Create('', Url);
+  Sink := TStringStream.Create('');
+  try
+    Transport.TrustedFile := TrustedFile;
+    try
+      Status := Transport.Post('{}', Sink, ErrorMessage, RetryAfter);
+      ErrorMessage := '';
+      Result := True;
+    except
+      on Failure: Exception do
+      begin
+        ErrorMessage := Failure.Message;
+        Result := False;
+      end;
+    end;
+  finally
+    FreeAndNil(Sink);
+    FreeAndNil(Transport);
+  end;
 end;
 
 procedure THttpsTransport.GetSocketHandler(Sender: TObject; const UseSSL: boolean; out AHandler: TSocketHandler);
 var
   Secure: TVerifyingSSLHandler;
   Plain: TPlainHandler;
+  Err: string;
 begin
   if UseSSL then
   begin
+    // Rather than FPC's own message, which does not say what is missing
+    if not LoadOpenSSL(Err) then
+      raise EInOutError.Create(Err);
     Secure := TVerifyingSSLHandler.Create;
     Secure.FTrustedFile := FTrustedFile;
     Secure.FOwner := Self;
@@ -302,6 +459,7 @@ begin
   FUrl := AUrl;
   if FUrl = '' then
     FUrl := MessagesUrl;
+  FTrustedFile := DefaultTrustedFile;
 end;
 
 function THttpsTransport.Aborted: boolean;

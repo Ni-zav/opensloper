@@ -26,6 +26,19 @@ account.
 2. Open the **Claude** tab, type your question and press ++enter++
    (++shift+enter++ starts a new line), or click **Ask**.
 
+### If it cannot connect
+
+Run `opensloper-cli check-connection` (in the downloads it is beside the apps;
+on macOS in `OpenSloper.app/Contents/MacOS`). It says whether OpenSSL loads,
+which certificates it trusts and whether the API answers; it sends no key.
+
+- **Linux** uses the system's OpenSSL 3 (`libssl3`, which most systems have).
+- **Windows and macOS** downloads bring their own OpenSSL 3 and trust the root
+  certificates in `data/cacert.pem`, not the system's. If your network checks
+  HTTPS through a proxy with a certificate of its own, set the `SSL_CERT_FILE`
+  environment variable to a file with that certificate, or try it with
+  `check-connection --ca-file=FILE`.
+
 ## Working with it
 
 - Claude can see what you have selected and which part of the draft is in

@@ -27,6 +27,14 @@ Changed, Fixed and Removed under each version.
   `user` folder beside them and documents in `documents`, and recent files
   there are still found when the drive gets another letter (#30).
 
+- The Claude assistant works on Windows and macOS: their downloads bring
+  OpenSSL 3 and Mozilla's root certificates (#31). On Linux it finds the
+  system's OpenSSL 3 without the development files, and the `.deb` depends on
+  it.
+- `opensloper-cli check-connection` says whether the assistant can reach the
+  API: that OpenSSL loads, the server's certificate is trusted and it answers
+  (#31). The release jobs run it from each download.
+
 ### Changed
 
 - The Automation API's `export` refuses to replace a file already there, and

@@ -70,6 +70,8 @@ resourcestring
     '(Tools menu, or --automation)';
   rsOptWidth = 'export-draft: the width of a png in pixels, from 16 to 4096; default: 1600';
   rsOptProfile = 'export: a machine profile from the settings, in place of the layout''s';
+  rsOptUrl = 'check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com';
+  rsOptCaFile = 'check-connection: trust the certificates in this PEM file, in place of those OpenSloper uses';
   rsArgCommand = 'Command to run';
   rsArgPattern = 'Pattern file (.sloper), layout file (.slayout) to export or estimate, for measurements: list, set or missing, ' +
     'or for doc: the topic';
@@ -84,15 +86,17 @@ resourcestring
   rsCmdPack = 'Pack a layout''s pieces and rewrite the layout file';
   rsCmdMaterials = 'Estimate how much of each material a layout''s patterns, or one pattern, need to cut';
   rsCmdServe = 'Answer JSON-RPC 2.0 on stdin and stdout, one message per line, as the Automation API and as an MCP server';
+  rsCmdCheckConnection = 'See whether the Claude assistant can reach the API: that OpenSSL loads, the server''s ' +
+    'certificate is trusted and it answers. No API key is sent.';
   rsCmdDoc = 'Write a page of the reference documentation as Markdown, or a file format''s JSON Schema; with no ' +
     'topic, list the topics';
   rsExitSuccess = 'Success';
   rsExitProblems = 'check: the pattern has problems';
-  rsExitFailure = 'A usage error, or a file that could not be read or written';
+  rsExitFailure = 'A usage error, a file that could not be read or written, or check-connection: no answer';
 
 const
   CLI_TITLE = 'opensloper-cli';
-  CLI_COMMANDS: array[0..8] of TCliCommand = (
+  CLI_COMMANDS: array[0..9] of TCliCommand = (
     (Name: 'check'; Usage: 'check PATTERN [-m FILE] [-s SIZE] [--json]'; Description: rsCmdCheck),
     (Name: 'export'; Usage: 'export LAYOUT [-o FILE] [--format=FORMAT] [--profile=NAME]'; Description: rsCmdExport),
     (Name: 'export-draft'; Usage: 'export-draft PATTERN [-o FILE] [-m FILE] [-s SIZE] [--format=FORMAT] [--width=PIXELS] [--labels] [--upto=NAME]';
@@ -103,8 +107,9 @@ const
     (Name: 'pack'; Usage: 'pack LAYOUT'; Description: rsCmdPack),
     (Name: 'materials'; Usage: 'materials LAYOUT|PATTERN [--json]'; Description: rsCmdMaterials),
     (Name: 'serve'; Usage: 'serve [--connect]'; Description: rsCmdServe),
+    (Name: 'check-connection'; Usage: 'check-connection [--url=URL] [--ca-file=FILE]'; Description: rsCmdCheckConnection),
     (Name: 'doc'; Usage: 'doc TOPIC [-o FILE]' + LineEnding + 'doc'; Description: rsCmdDoc));
-  CLI_OPTIONS: array[0..12] of TCliOption = (
+  CLI_OPTIONS: array[0..14] of TCliOption = (
     (Name: 'help'; Short: '-h'; Long: '--help'; Parameter: ''; Description: rsOptHelp),
     (Name: 'version'; Short: '-V'; Long: '--version'; Parameter: ''; Description: rsOptVersion),
     (Name: 'measurements'; Short: '-m'; Long: '--measurements'; Parameter: 'file'; Description: rsOptMeasurements),
@@ -117,7 +122,9 @@ const
     (Name: 'labels'; Short: ''; Long: '--labels'; Parameter: ''; Description: rsOptLabels),
     (Name: 'upto'; Short: ''; Long: '--upto'; Parameter: 'name'; Description: rsOptUpTo),
     (Name: 'width'; Short: ''; Long: '--width'; Parameter: 'pixels'; Description: rsOptWidth),
-    (Name: 'connect'; Short: ''; Long: '--connect'; Parameter: ''; Description: rsOptConnect));
+    (Name: 'connect'; Short: ''; Long: '--connect'; Parameter: ''; Description: rsOptConnect),
+    (Name: 'url'; Short: ''; Long: '--url'; Parameter: 'url'; Description: rsOptUrl),
+    (Name: 'ca-file'; Short: ''; Long: '--ca-file'; Parameter: 'file'; Description: rsOptCaFile));
   // After the command, in order; all optional, as each command takes its own
   CLI_ARGUMENTS: array[0..3] of TCliArgument = (
     (Name: 'pattern'; Description: rsArgPattern),

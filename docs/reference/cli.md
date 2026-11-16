@@ -78,6 +78,14 @@ Answer JSON-RPC 2.0 on stdin and stdout, one message per line, as the Automation
 opensloper-cli serve [--connect]
 ```
 
+### check-connection
+
+See whether the Claude assistant can reach the API: that OpenSSL loads, the server's certificate is trusted and it answers. No API key is sent.
+
+```
+opensloper-cli check-connection [--url=URL] [--ca-file=FILE]
+```
+
 ### doc
 
 Write a page of the reference documentation as Markdown, or a file format's JSON Schema; with no topic, list the topics
@@ -104,6 +112,8 @@ opensloper-cli doc
 | `--upto` | name | export-draft: draw only this object and those before it, as the pattern was when it was added |
 | `--width` | pixels | export-draft: the width of a png in pixels, from 16 to 4096; default: 1600 |
 | `--connect` |  | serve: work on the pattern open in the design window, which must allow Claude to connect (Tools menu, or --automation) |
+| `--url` | url | check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com |
+| `--ca-file` | file | check-connection: trust the certificates in this PEM file, in place of those OpenSloper uses |
 
 ## Arguments
 
@@ -122,4 +132,4 @@ After the command, in this order; each command takes the ones it needs.
 | --- | --- |
 | 0 | Success |
 | 1 | check: the pattern has problems |
-| 2 | A usage error, or a file that could not be read or written |
+| 2 | A usage error, a file that could not be read or written, or check-connection: no answer |

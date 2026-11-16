@@ -119,7 +119,7 @@ begin
   Action := Default(SigActionRec);
   Action.sa_handler := SigActionHandler(SIG_IGN);
   fpSigAction(SIGPIPE, @Action, nil);
-  {$ENDIF}
+{$ENDIF}
 end;
 
 const
@@ -138,33 +138,100 @@ const
   {$IF DEFINED(WINDOWS)}
   SSL_LIBRARY = {$IFDEF WIN64}'libssl-3-x64.dll'{$ELSE}'libssl-3.dll'{$ENDIF};
   CRYPTO_LIBRARY = {$IFDEF WIN64}'libcrypto-3-x64.dll'{$ELSE}'libcrypto-3.dll'{$ENDIF};
-  {$ELSE}
+{$ELSE}
   SSL_LIBRARY = 'libssl';
   CRYPTO_LIBRARY = 'libcrypto';
   OPENSSL3_SUFFIX = '.3';
-  {$ENDIF}
+{$ENDIF}
   {$IFDEF DARWIN}
   // Homebrew's OpenSSL 3, for programs run from the source tree
   HOMEBREW_OPENSSL_DIRS: array[0..1] of string = ('/opt/homebrew/opt/openssl@3/lib', '/usr/local/opt/openssl@3/lib');
-  {$ENDIF}
+{$ENDIF}
 
 var
   // The library looked for, for the message when it is not there
   OpenSSLSought: string;
 
+{$IFDEF DARWIN}
+// The folder of OpenSSL 3: the app bundle's Frameworks, else Homebrew's;
+// '' when neither has it
+function OpenSSL3Folder: string;
+var
+  Index: integer;
+begin
+  Result := TAppPaths.LibraryDir;
+  if not FileExists(ConcatPaths([Result, SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib'])) then
+  begin
+    Result := '';
+    for Index := Low(HOMEBREW_OPENSSL_DIRS) to High(HOMEBREW_OPENSSL_DIRS) do
+      if (Result = '') and FileExists(ConcatPaths([HOMEBREW_OPENSSL_DIRS[Index], SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib'])) then
+        Result := HOMEBREW_OPENSSL_DIRS[Index];
+  end;
+end;
+{$ENDIF}
+
+{$IF FPC_FULLVERSION >= 30204}
+// FPC 3.2.4 and later load the pair of libraries named. Without names they
+// would try LibreSSL and OpenSSL versions too old to connect, and on macOS
+// whatever a library search finds, so OpenSSL 3 is named.
+function LoadOpenSSLPair(const SSLName, CryptoName: string): boolean;
+begin
+  OpenSSLSought := SSLName;
+  Result := InitSSLInterface(SSLName, CryptoName);
+end;
+
+function LoadOpenSSL3: boolean;
+{$IF DEFINED(WINDOWS)}
+var
+  Folder: string;
+begin
+  // Beside the program in the downloads; otherwise wherever Windows finds it
+  Folder := TAppPaths.LibraryDir;
+  if FileExists(ConcatPaths([Folder, SSL_LIBRARY])) then
+    Result := LoadOpenSSLPair(ConcatPaths([Folder, SSL_LIBRARY]), ConcatPaths([Folder, CRYPTO_LIBRARY]))
+  else
+    Result := LoadOpenSSLPair(SSL_LIBRARY, CRYPTO_LIBRARY);
+end;
+  {$ELSEIF DEFINED(DARWIN)}
+var
+  Folder, SSLName, CryptoName: string;
+begin
+  Folder := OpenSSL3Folder;
+  SSLName := SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib';
+  CryptoName := CRYPTO_LIBRARY + OPENSSL3_SUFFIX + '.dylib';
+  if Folder <> '' then
+    Result := LoadOpenSSLPair(ConcatPaths([Folder, SSLName]), ConcatPaths([Folder, CryptoName]))
+  else
+    Result := LoadOpenSSLPair(SSLName, CryptoName);
+end;
+  {$ELSE}
+begin
+  // The system's: libssl.so.3 first, which is there without the development
+  // files that give libssl.so, then those, then 1.1. Older ones lack
+  // SSL_set1_host, so they could never connect.
+  Result := LoadOpenSSLPair(SSL_LIBRARY + '.so' + OPENSSL3_SUFFIX, CRYPTO_LIBRARY + '.so' + OPENSSL3_SUFFIX) or
+    LoadOpenSSLPair(SSL_LIBRARY + '.so', CRYPTO_LIBRARY + '.so') or
+    LoadOpenSSLPair(SSL_LIBRARY + '.so.1.1', CRYPTO_LIBRARY + '.so.1.1');
+  if not Result then
+    OpenSSLSought := SSL_LIBRARY + '.so' + OPENSSL3_SUFFIX;
+end;
+{$ENDIF}
+{$ELSE}
 // FPC 3.2.2 tries only OpenSSL 1.1 and older, which are past their end of
 // life, and on macOS a libcrypto.1.1 no Mac has; the system's unversioned
 // one there ends the program when loaded
-procedure NameOpenSSL3;
+function LoadOpenSSL3: boolean;
 var
+  {$IF DEFINED(WINDOWS) OR DEFINED(DARWIN)}
   Folder: string;
+  {$ENDIF}
   {$IFNDEF WINDOWS}
   Index: integer;
   {$ENDIF}
 begin
-  Folder := TAppPaths.LibraryDir;
   {$IF DEFINED(WINDOWS)}
   // Beside the program in the downloads; otherwise wherever Windows finds it
+  Folder := TAppPaths.LibraryDir;
   if FileExists(ConcatPaths([Folder, SSL_LIBRARY])) then
   begin
     DLLSSLName := ConcatPaths([Folder, SSL_LIBRARY]);
@@ -177,14 +244,7 @@ begin
   end;
   OpenSSLSought := DLLSSLName;
   {$ELSEIF DEFINED(DARWIN)}
-  // In the app bundle's Frameworks, else Homebrew's
-  if not FileExists(ConcatPaths([Folder, SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib'])) then
-  begin
-    Folder := '';
-    for Index := Low(HOMEBREW_OPENSSL_DIRS) to High(HOMEBREW_OPENSSL_DIRS) do
-      if (Folder = '') and FileExists(ConcatPaths([HOMEBREW_OPENSSL_DIRS[Index], SSL_LIBRARY + OPENSSL3_SUFFIX + '.dylib'])) then
-        Folder := HOMEBREW_OPENSSL_DIRS[Index];
-  end;
+  Folder := OpenSSL3Folder;
   if Folder <> '' then
   begin
     DLLSSLName := ConcatPaths([Folder, SSL_LIBRARY]);
@@ -203,15 +263,16 @@ begin
   DLLVersions[Index + 2] := '.1.1';
   OpenSSLSought := SSL_LIBRARY + '.so' + OPENSSL3_SUFFIX;
   {$ENDIF}
+  Result := InitSSLInterface;
 end;
+{$ENDIF}
 
 function LoadOpenSSL(out ErrorMessage: string): boolean;
 begin
   ErrorMessage := '';
   if IsSSLloaded then
     Exit(True);
-  NameOpenSSL3;
-  Result := InitSSLInterface;
+  Result := LoadOpenSSL3;
   if not Result then
     ErrorMessage := Format(rsHttpNoOpenSSL, [OpenSSLSought]);
 end;

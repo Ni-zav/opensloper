@@ -167,6 +167,8 @@ type
     function VariableNameTaken(const AName: string): boolean;
     function ResolverFor(Node: TEvalNode): TNameResolver;
     function ParseFields(Node: TEvalNode; const Names, Texts: array of string): boolean;
+    // False, with LastError at the number, when the formula puts a unit where none belongs
+    function CheckUnits(Node: TEvalNode; const AField: string; Formula: TFormula): boolean;
     // A point or repeat that can take a marker
     function CheckMarkerTarget(const Id: string): boolean;
     function AddPointObject(APoint: TDraftObject; const AName: string;
@@ -598,7 +600,7 @@ resourcestring
 implementation
 
 uses
-  Math, StrUtils, Sloper.Core.JSON, Sloper.Core.Names, Sloper.Core.TypeChange, Sloper.Core.PointMerge;
+  Math, StrUtils, Sloper.Core.JSON, Sloper.Core.Names, Sloper.Core.TypeChange, Sloper.Core.PointMerge, Sloper.Core.UnitCheck;
 
 const
   CHAIN_TOLERANCE = 0.01;
@@ -1440,8 +1442,25 @@ begin
     FieldFormula := Node.Field(Names[Index]);
     if not FieldFormula.Parse(Texts[Index], ResolverFor(Node)) then
       Exit(SetError(FieldFormula.ErrorMessage, Names[Index], FieldFormula.ErrorPos));
+    if not CheckUnits(Node, Names[Index], FieldFormula) then
+      Exit(False);
   end;
   Result := True;
+end;
+
+// A unit where none belongs is refused as it is typed, not when a file loads
+function TPattern.CheckUnits(Node: TEvalNode; const AField: string; Formula: TFormula): boolean;
+var
+  Reason: string;
+  Token, Start, Size: integer;
+begin
+  Result := CheckFormulaUnits(Formula, Node.FieldUnitKind(AField), Reason, Token);
+  if Result then
+    Exit;
+  Start := 0;
+  if not Formula.DisplayTokenSpan(ResolverFor(Node), Token, Start, Size) then
+    Start := 0;
+  SetError(Reason, AField, Start);
 end;
 
 function TPattern.CheckPoint(const Id: string): boolean;
@@ -3374,9 +3393,12 @@ begin
   if not Assigned(Node.Field(AField)) then
     Exit(SetError(Format(rsPatternNoField, [Node.DisplayName, AField]), AField));
   NewFormula := TFormula.Create;
-  if NewFormula.Parse(Text, ResolverFor(Node)) then
+  if NewFormula.Parse(Text, ResolverFor(Node)) and CheckUnits(Node, AField, NewFormula) then
     Exit(InstallFormula(Node, AField, NewFormula));
-  Result := SetError(NewFormula.ErrorMessage, AField, NewFormula.ErrorPos);
+  // CheckUnits gave its own reason
+  Result := False;
+  if not NewFormula.Valid then
+    SetError(NewFormula.ErrorMessage, AField, NewFormula.ErrorPos);
   FreeAndNil(NewFormula);
 end;
 

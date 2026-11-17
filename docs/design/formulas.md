@@ -65,6 +65,11 @@ formulas is in that unit: in an inch pattern, `@waist / 4 + 1` adds one inch.
 A new pattern takes the unit set in Edit → Preferences. A number can carry its
 own unit, `400mm`, `1.5cm` or `2in`, and then means the same in any pattern.
 
+A unit makes a number a length, so it belongs only where a length does. An
+angle or a ratio is a plain number: `45mm` as an angle, or `@waist / 4 + 1in`
+as a share along an edge, is refused with the reason. Lengths that cancel out
+are fine, as in `Hem.length / 10cm` or `atan2(5cm, Hem.length)`.
+
 Tools → Convert Pattern Units… changes a pattern's unit. It rewrites only the
 numbers that are lengths, not counts, ratios or angles, and asks about any
 number it cannot tell, such as `400 * 2`.

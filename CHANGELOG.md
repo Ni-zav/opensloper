@@ -38,6 +38,10 @@ Changed, Fixed and Removed under each version.
 
 ### Changed
 
+- A unit is refused where no unit belongs (#33): `45mm` as an angle, or
+  `@waist / 4 + 1in` as a share along an edge, now says why instead of being
+  taken. Lengths that cancel out, such as `Hem.length / 10cm`, are still fine,
+  and patterns already saved open as before.
 - Pattern, measurement and layout files are versioned (#42): the apps read a
   file of any older version, bringing it up to date as it loads, and save it
   at the current version. A file claiming a version below 1 is refused with

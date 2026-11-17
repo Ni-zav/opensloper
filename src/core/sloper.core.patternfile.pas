@@ -27,16 +27,21 @@ unit Sloper.Core.PatternFile;
 interface
 
 uses
-  SysUtils, Generics.Collections, fpjson, Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.Pattern, Sloper.Core.Variables;
+  SysUtils, Generics.Collections, fpjson, Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.Pattern, Sloper.Core.Variables,
+  Sloper.Core.FileVersions;
 
 const
   PATTERN_FORMAT = 'pattern';
+  // Raising it needs an upgrade step from the version before, in
+  // PatternFileVersions, and a file of that version in tests/files
   PATTERN_VERSION = 1;
 
 type
   // IDs as the model keeps them, as text: the ID in a file to the ID it takes
   TPatternIdMap = specialize TDictionary<string, string>;
 
+// The version files are written at, and the steps that bring older files up to it
+function PatternFileVersions: TFormatVersions;
 // WithNextId False leaves out the ID counter and the view state, for undo
 // snapshots, which restore definitions but neither of those
 function SavePatternToText(Pattern: TPattern; WithNextId: boolean = True): string;
@@ -77,7 +82,6 @@ function MeasurementFilePath(Pattern: TPattern; const PatternFileName: string): 
 
 resourcestring
   rsPatternFileWrongFormat = 'This is not a pattern file';
-  rsPatternFileNewerVersion = 'This file was made by a newer version of OpenSloper (file version %d)';
   rsPatternFileUnits = 'Units "%s" are not supported; use mm, cm or in';
   rsPatternFileList = 'The file has no valid "%s" list';
   rsPatternFileBadId = 'Item %d of "%s" has a missing, invalid or repeated ID';
@@ -2169,10 +2173,17 @@ begin
   Result := True;
 end;
 
+function PatternFileVersions: TFormatVersions;
+begin
+  Result.Current := PATTERN_VERSION;
+  // No older version yet; a step from version 1 to 2 goes first
+  Result.Steps := [];
+end;
+
 function TPatternLoader.Load(const Text: string): boolean;
 var
   Root: TJSONObject;
-  TextValue: string;
+  TextValue, Reason: string;
   Version, NextId: integer;
   Units: TMeasureUnit;
 begin
@@ -2182,8 +2193,8 @@ begin
   try
     if not GetJSONString(Root, 'format', TextValue) or (TextValue <> PATTERN_FORMAT) or not GetJSONInteger(Root, 'version', Version) then
       Exit(Fail(rsPatternFileWrongFormat));
-    if Version > PATTERN_VERSION then
-      Exit(Fail(Format(rsPatternFileNewerVersion, [Version])));
+    if not (UpgradeFile(Root, Version, PatternFileVersions, Reason) in [vcCurrent, vcUpgraded]) then
+      Exit(Fail(Reason));
     if GetJSONString(Root, 'units', TextValue) then
     begin
       if not MeasureUnitFromName(TextValue, Units) then

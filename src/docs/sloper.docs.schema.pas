@@ -211,6 +211,9 @@ begin
     Schema.Add('title', Format(rsSchemaTitle, [LowerCase(Info.Title), Info.Extension]));
     Schema.Add('description', Info.Summary);
     AddObjectSchema(Schema, Info.Members, '');
+    // A file of any version up to the current one can be read
+    Schema.Objects['properties'].Objects['version'].Add('minimum', 1);
+    Schema.Objects['properties'].Objects['version'].Add('maximum', Info.Version);
     if HasObjects(Info) then
       Schema.Add('$defs', PatternObjectDefs);
     Text := JSONToText(Schema);

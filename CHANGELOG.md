@@ -29,6 +29,10 @@ Changed, Fixed and Removed under each version.
 
 ### Changed
 
+- Pattern, measurement and layout files are versioned (#42): the apps read a
+  file of any older version, bringing it up to date as it loads, and save it
+  at the current version. A file claiming a version below 1 is refused with
+  the reason. All three formats are still at version 1.
 - The user guide has moved to <https://docs.opensloper.com>; Help → User
   Guide, the Python client and the file schemas link there (#43).
 

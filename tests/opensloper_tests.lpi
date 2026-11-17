@@ -381,6 +381,11 @@
         <UnitName Value="Sloper.Tests.Suggestion"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.fileversions.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.FileVersions"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.api.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.API"/>

@@ -15,17 +15,18 @@ The apps keep their files as JSON text, so other programs, scripts and assistant
 - The apps write every member in a fixed order, two spaces to a level, with numbers in the shortest form that reads back exactly and `.` as the decimal point, so files compare well in version control.
 - Members marked required must be there for the file to load. Others may be left out of a file written by hand, and take their defaults. A file that does not load says why, and nothing of it is used.
 - The schemas list exactly the members the apps write. The apps also read a few members older files have, which the schemas leave out.
+- Every file has a `version`. The apps read a file of any version from 1 up to the one they write, bringing an older file up to date as they load it, and save it at the current version; they refuse a file newer than they know, made by a later release.
 
 ## Pattern (`.sloper`)
 
 Made by opensloper-design. It holds the definitions only: the formula for each point and line, and which edges make each piece. Positions are worked out again every time it opens.
 
-Version 1. JSON Schema: [pattern.schema.json](schemas/pattern.schema.json).
+Version 1. JSON Schema, for files of this version: [pattern.schema.json](schemas/pattern.schema.json).
 
 | Member | Value | Required | Description |
 | --- | --- | --- | --- |
 | `format` | one of: `pattern` | yes | What the file is; a file with another value does not load |
-| `version` | whole number | yes | The version of the format; a program refuses a file newer than it knows |
+| `version` | whole number | yes | The version of the format, from 1. The apps read every older version and always write the current one; they refuse a file newer than they know |
 | `units` | one of: `mm`, `cm`, `in` |  | The unit of the numbers in formulas |
 | `notes` | text |  | Notes about the pattern |
 | `measurementFile` | text |  | The measurement file last used with it, relative to the pattern's folder unless absolute, with / between folders; empty when there is none |
@@ -116,12 +117,12 @@ Each entry in `objects` is an object whose members depend on its `type`; they ar
 
 Made by opensloper-measurements: one person's measurements, with a value each, or a size table, with a value for each size. Patterns refer to a measurement by its key, as @waist.
 
-Version 1. JSON Schema: [measurements.schema.json](schemas/measurements.schema.json).
+Version 1. JSON Schema, for files of this version: [measurements.schema.json](schemas/measurements.schema.json).
 
 | Member | Value | Required | Description |
 | --- | --- | --- | --- |
 | `format` | one of: `measurements` | yes | What the file is; a file with another value does not load |
-| `version` | whole number | yes | The version of the format; a program refuses a file newer than it knows |
+| `version` | whole number | yes | The version of the format, from 1. The apps read every older version and always write the current one; they refuse a file newer than they know |
 | `units` | one of: `mm` |  | Always mm: values in this file are millimetres |
 | `name` | text |  | Whose measurements, or the name of the size table |
 | `notes` | text |  | Notes, such as how they were taken |
@@ -170,12 +171,12 @@ Version 1. JSON Schema: [measurements.schema.json](schemas/measurements.schema.j
 
 Made by opensloper-publish: where the pieces of one or more patterns go on the pages, roll or material, and how they print. Positions are plain numbers in mm, from the top left, y down.
 
-Version 1. JSON Schema: [layout.schema.json](schemas/layout.schema.json).
+Version 1. JSON Schema, for files of this version: [layout.schema.json](schemas/layout.schema.json).
 
 | Member | Value | Required | Description |
 | --- | --- | --- | --- |
 | `format` | one of: `layout` | yes | What the file is; a file with another value does not load |
-| `version` | whole number | yes | The version of the format; a program refuses a file newer than it knows |
+| `version` | whole number | yes | The version of the format, from 1. The apps read every older version and always write the current one; they refuse a file newer than they know |
 | `units` | one of: `mm` |  | Always mm: values in this file are millimetres |
 | `name` | text |  | The layout's name, for the title block |
 | `nextId` | whole number |  | The next source ID to hand out |

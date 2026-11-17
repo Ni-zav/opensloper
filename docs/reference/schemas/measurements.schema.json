@@ -11,8 +11,10 @@
       "const": "measurements"
     },
     "version": {
-      "description": "The version of the format; a program refuses a file newer than it knows",
-      "type": "integer"
+      "description": "The version of the format, from 1. The apps read every older version and always write the current one; they refuse a file newer than they know",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
     },
     "units": {
       "description": "Always mm: values in this file are millimetres",

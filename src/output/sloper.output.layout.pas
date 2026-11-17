@@ -32,10 +32,12 @@ uses
   SysUtils, Generics.Collections, Sloper.Core.Geometry, Sloper.Core.Materials, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles,
   Sloper.Core.Measurements,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Settings, Sloper.Core.Draft, Sloper.Core.TextFields, Sloper.Core.Note,
-  Sloper.Output.Tiling;
+  Sloper.Core.FileVersions, Sloper.Output.Tiling;
 
 const
   LAYOUT_FORMAT = 'layout';
+  // Raising it needs an upgrade step from the version before, in
+  // LayoutFileVersions, and a file of that version in tests/files
   LAYOUT_VERSION = 1;
   LAYOUT_EXTENSION = '.slayout';
   // The paper name for a size given by hand
@@ -328,11 +330,12 @@ function PublishTargetFor(const PatternFile: string): string;
 function PaperSize(const AName: string; out AWidth, AHeight: double): boolean;
 // False with the reason when the file cannot be written
 function WriteBytesToFile(const FileName: string; const Bytes: rawbytestring; out ErrorMessage: string): boolean;
+// The version files are written at, and the steps that bring older files up to it
+function LayoutFileVersions: TFormatVersions;
 
 resourcestring
   rsLayoutRefused = 'The layout cannot be exported:';
   rsLayoutWrongFormat = 'This is not a layout file';
-  rsLayoutNewerVersion = 'This file was made by a newer version of OpenSloper (file version %d)';
   rsLayoutUnits = 'Units "%s" are not supported; use mm';
   rsLayoutList = 'The file has no valid "%s" list';
   rsLayoutBadSource = 'Source %d has a missing, invalid or repeated ID, or no pattern';
@@ -1096,6 +1099,13 @@ begin
   Result := True;
 end;
 
+function LayoutFileVersions: TFormatVersions;
+begin
+  Result.Current := LAYOUT_VERSION;
+  // No older version yet; a step from version 1 to 2 goes first
+  Result.Steps := [];
+end;
+
 function TLayout.LoadFromText(const Text: string; out ErrorMessage: string): boolean;
 var
   Root, Item: TJSONObject;
@@ -1121,8 +1131,8 @@ begin
   try
     if not GetJSONString(Root, 'format', TextValue) or (TextValue <> LAYOUT_FORMAT) or not GetJSONInteger(Root, 'version', Version) then
       Exit(Fail(rsLayoutWrongFormat));
-    if Version > LAYOUT_VERSION then
-      Exit(Fail(Format(rsLayoutNewerVersion, [Version])));
+    if not (UpgradeFile(Root, Version, LayoutFileVersions, TextValue) in [vcCurrent, vcUpgraded]) then
+      Exit(Fail(TextValue));
     if GetJSONString(Root, 'units', TextValue) and (TextValue <> 'mm') then
       Exit(Fail(Format(rsLayoutUnits, [TextValue])));
     GetJSONString(Root, 'name', Name);

@@ -182,6 +182,11 @@
         <UnitName Value="Sloper.Core.PatternFile"/>
       </Unit>
       <Unit>
+        <Filename Value="../core/sloper.core.fileversions.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Core.FileVersions"/>
+      </Unit>
+      <Unit>
         <Filename Value="../core/sloper.core.patterncheck.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Core.PatternCheck"/>

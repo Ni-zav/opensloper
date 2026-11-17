@@ -193,7 +193,8 @@ type
 implementation
 
 uses
-  Classes, Math, Sloper.Core.AppPaths, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.Measurements, Sloper.Core.PatternFile, Sloper.Core.PieceDetect,
+  Classes, Math, Sloper.Core.AppPaths, Sloper.Core.JSON, Sloper.Core.FileVersions, Sloper.Core.Draft, Sloper.Core.Measurements,
+  Sloper.Core.PatternFile, Sloper.Core.PieceDetect,
   Sloper.Output.LayoutDocument, Sloper.Output.LayoutPDF, Sloper.Output.PDFWriter, Sloper.Output.Preview, Sloper.Output.LayoutSVG,
   Sloper.Core.Note, Sloper.Core.Settings, Sloper.Output.TitleBlock;
 
@@ -439,7 +440,8 @@ var
 
 begin
   Refused('format', '{"format": "pattern", "version": 1}', rsLayoutWrongFormat);
-  Refused('newer', '{"format": "layout", "version": 99}', Format(rsLayoutNewerVersion, [99]));
+  Refused('newer', '{"format": "layout", "version": 99}', Format(rsFileVersionNewer, [99]));
+  Refused('below 1', '{"format": "layout", "version": 0}', Format(rsFileVersionInvalid, [0]));
   Refused('sources', '{"format": "layout", "version": 1}', Format(rsLayoutList, ['sources']));
   Refused('repeated id', '{"format": "layout", "version": 1, "sources": [{"id": 1, "pattern": "a"}, {"id": 1, "pattern": "b"}]}',
     Format(rsLayoutBadSource, [2]));

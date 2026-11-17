@@ -70,7 +70,8 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Names, Sloper.Core.Evaluator, Sloper.Core.PatternFile;
+  SysUtils, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Names, Sloper.Core.Evaluator, Sloper.Core.PatternFile,
+  Sloper.Core.FileVersions;
 
 const
   FILE_TYPES: array[0..9] of string = ('freePoint', 'offsetPoint', 'alongEdgePoint', 'intersectPoint',
@@ -422,7 +423,9 @@ var
 begin
   CheckText('{"format": "measurements", "version": 1}', rsPatternFileWrongFormat);
   CheckText('{"format": "pattern"}', rsPatternFileWrongFormat);
-  CheckText('{"format": "pattern", "version": 2}', Format(rsPatternFileNewerVersion, [2]));
+  CheckText('{"format": "pattern", "version": 2}', Format(rsFileVersionNewer, [2]));
+  CheckText('{"format": "pattern", "version": 0}', Format(rsFileVersionInvalid, [0]));
+  CheckText('{"format": "pattern", "version": -1}', Format(rsFileVersionInvalid, [-1]));
   CheckText('{"format": "pattern", "version": 1, "units": "ft"}', Format(rsPatternFileUnits, ['ft']));
   CheckText('{"format": "pattern", "version": 1, "objects": {}}', Format(rsPatternFileList, ['objects']));
   CheckText('{"format": "pattern", "version": 1, "objects": [1]}', Format(rsPatternFileList, ['objects']));

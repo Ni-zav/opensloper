@@ -1,0 +1,43 @@
+{
+  "format": "layout",
+  "version": 1,
+  "units": "mm",
+  "name": "Skirt, A4",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "skirt.sloper",
+      "measurementFile": "sizes.slm",
+      "size": "38"
+    }
+  ],
+  "output": {
+    "kind": "tiled",
+    "rollWidth": 914,
+    "paper": "A4",
+    "margin": 6,
+    "overlap": 10,
+    "marks": "diamond"
+  },
+  "placements": [
+    {
+      "source": 1,
+      "piece": 42,
+      "copy": 1,
+      "x": 20,
+      "y": 20,
+      "rotation": 0,
+      "flipped": false
+    }
+  ],
+  "titleBlock": {
+    "corner": "bottomRight",
+    "fields": [
+      "pattern.name",
+      "measurements.name",
+      "date"
+    ],
+    "everyPage": false
+  }
+}

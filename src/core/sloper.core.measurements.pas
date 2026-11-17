@@ -27,10 +27,12 @@ unit Sloper.Core.Measurements;
 interface
 
 uses
-  SysUtils, Generics.Collections, fpjson, Sloper.Core.Units;
+  SysUtils, Generics.Collections, fpjson, Sloper.Core.Units, Sloper.Core.FileVersions;
 
 const
   MEASUREMENT_FORMAT = 'measurements';
+  // Raising it needs an upgrade step from the version before, in
+  // MeasurementFileVersions, and a file of that version in tests/files
   MEASUREMENT_VERSION = 1;
 
 type
@@ -182,9 +184,11 @@ procedure MergeMeasurementSets(Base, Mine, Theirs: TMeasurementSet; const TakeTh
 // A new, empty measurement file
 function CreateMeasurementFile(const FileName: string; out ErrorMessage: string): boolean;
 
+// The version files are written at, and the steps that bring older files up to it
+function MeasurementFileVersions: TFormatVersions;
+
 resourcestring
   rsMeasurementWrongFormat = 'This is not a measurements file';
-  rsMeasurementNewerVersion = 'This file was made by a newer version of OpenSloper (file version %d)';
   rsMeasurementUnits = 'Units "%s" are not supported; use mm';
   rsMeasurementMissing = 'A measurement has no "%s"';
   rsMeasurementBadValue = 'Measurement "%s" has no valid value';
@@ -622,6 +626,13 @@ begin
   Result := True;
 end;
 
+function MeasurementFileVersions: TFormatVersions;
+begin
+  Result.Current := MEASUREMENT_VERSION;
+  // No older version yet; a step from version 1 to 2 goes first
+  Result.Steps := [];
+end;
+
 function TMeasurementSet.LoadFromText(const Text: string; out ErrorMessage: string): boolean;
 var
   Obj, Item: TJSONObject;
@@ -646,8 +657,8 @@ begin
       Exit(Fail(rsMeasurementWrongFormat));
     if not GetJSONInteger(Obj, 'version', Version) then
       Exit(Fail(rsMeasurementWrongFormat));
-    if Version > MEASUREMENT_VERSION then
-      Exit(Fail(Format(rsMeasurementNewerVersion, [Version])));
+    if not (UpgradeFile(Obj, Version, MeasurementFileVersions, ValueError) in [vcCurrent, vcUpgraded]) then
+      Exit(Fail(ValueError));
     if GetJSONString(Obj, 'units', TextValue) and (TextValue <> 'mm') then
       Exit(Fail(Format(rsMeasurementUnits, [TextValue])));
     GetJSONString(Obj, 'name', Name);

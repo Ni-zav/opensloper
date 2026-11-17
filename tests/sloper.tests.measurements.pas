@@ -89,7 +89,7 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.Names, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Draft;
+  SysUtils, Sloper.Core.Names, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Draft, Sloper.Core.FileVersions;
 
 const
   SAMPLE_TEXT =
@@ -719,7 +719,8 @@ procedure TTestMeasurements.TestLoadErrors;
 begin
   AssertLoadFails('{"format": "pattern", "version": 1, "measurements": []}', rsMeasurementWrongFormat);
   AssertLoadFails('{"format": "measurements", "version": 2, "measurements": []}',
-    Format(rsMeasurementNewerVersion, [2]));
+    Format(rsFileVersionNewer, [2]));
+  AssertLoadFails('{"format": "measurements", "version": 0, "measurements": []}', Format(rsFileVersionInvalid, [0]));
   AssertLoadFails('{"format": "measurements", "version": 1, "units": "cm", "measurements": []}',
     Format(rsMeasurementUnits, ['cm']));
   AssertLoadFails('{"format": "measurements", "version": 1}', rsMeasurementList);

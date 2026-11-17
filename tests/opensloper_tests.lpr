@@ -54,6 +54,7 @@ uses
   Sloper.Tests.PanelEdits,
   Sloper.Tests.Completion,
   Sloper.Tests.Suggestion,
+  Sloper.Tests.FileVersions,
   Sloper.Tests.API,
   Sloper.Tests.DraftSVG,
   Sloper.Tests.Fonts,

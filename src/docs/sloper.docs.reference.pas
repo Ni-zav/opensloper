@@ -128,8 +128,11 @@ resourcestring
     '- Members marked required must be there for the file to load. Others may be left out of a file written by hand, ' +
     'and take their defaults. A file that does not load says why, and nothing of it is used.' + LineEnding +
     '- The schemas list exactly the members the apps write. The apps also read a few members older files have, which ' +
-    'the schemas leave out.';
-  rsDocFilesVersion = 'Version %d. JSON Schema: [%s](schemas/%s).';
+    'the schemas leave out.' + LineEnding +
+    '- Every file has a `version`. The apps read a file of any version from 1 up to the one they write, bringing an ' +
+    'older file up to date as they load it, and save it at the current version; they refuse a file newer than they ' +
+    'know, made by a later release.';
+  rsDocFilesVersion = 'Version %d. JSON Schema, for files of this version: [%s](schemas/%s).';
   rsDocFilesObjects = 'Each entry in `objects` is an object whose members depend on its `type`; they are listed on ' +
     '[Operations and objects](operations.md).';
   rsDocExample = 'Example';

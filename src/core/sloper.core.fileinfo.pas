@@ -53,7 +53,8 @@ function FindFileMember(const Info: TFileFormatInfo; const AName: string; out Me
 
 resourcestring
   rsFileFormat = 'What the file is; a file with another value does not load';
-  rsFileVersion = 'The version of the format; a program refuses a file newer than it knows';
+  rsFileVersion = 'The version of the format, from 1. The apps read every older version and always write the current one; ' +
+    'they refuse a file newer than they know';
   rsFileUnitsMM = 'Always mm: values in this file are millimetres';
 
   rsFilePatternTitle = 'Pattern';

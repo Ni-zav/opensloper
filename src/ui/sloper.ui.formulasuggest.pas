@@ -47,6 +47,9 @@ type
     FOnChoose: TNotifyEvent;
     FOnHover: TSuggestHoverEvent;
     procedure DrawRow(Control: TWinControl; Index: integer; ARect: TRect; State: TOwnerDrawState);
+    function ColumnGap: integer;
+    function FormulaWidth(RowWidth: integer): integer;
+    function Graded: boolean;
     procedure SetHover(Index: integer);
     procedure Choose;
   protected
@@ -75,11 +78,13 @@ type
 resourcestring
   // The tolerance: 5 mm
   rsSuggestNone = 'No formulas within %s; the nearest:';
+  // The first and last sizes, and the formula's values at them: S–L: 450–510
+  rsSuggestSizeRange = '%s–%s: %s';
 
 implementation
 
 uses
-  Math, Forms;
+  Math, Forms, Sloper.UI.GridColumns;
 
 const
   // Rows shown before the list scrolls
@@ -95,7 +100,6 @@ const
   // Text for the width of the value and difference columns
   VALUE_COLUMN_SAMPLE = '0000.00';
   DELTA_COLUMN_SAMPLE = '+00.00';
-  RANGE_COLUMN_SAMPLE = '0000.0–0000.0';
 
 constructor TFormulaSuggestList.Create(AOwner: TComponent);
 begin
@@ -143,8 +147,11 @@ begin
   for Index := 0 to High(FRows) do
     if (Chosen <> '') and (Index <> FNoneRow) and (FRows[Index].Text = Chosen) then
       ItemIndex := Index;
-  // An owner-drawn list has no row height of its own
+  // An owner-drawn list has no row height of its own; a size table's range
+  // takes a second line
   ItemHeight := Scale96ToForm(ROW_HEIGHT96);
+  if Graded then
+    ItemHeight := 2 * ItemHeight;
   Rows := Max(MIN_VISIBLE_ROWS, Min(Length(FRows), MAX_VISIBLE_ROWS));
   FShownRows := Max(FShownRows, Rows);
   Height := FShownRows * ItemHeight + FRAME_PIXELS;
@@ -161,17 +168,40 @@ begin
 end;
 
 // Formula on the left; value and difference in columns on the right
+// The formula's column: what the value and difference leave of a row
+function TFormulaSuggestList.FormulaWidth(RowWidth: integer): integer;
+begin
+  Result := RowWidth - Canvas.TextWidth(DELTA_COLUMN_SAMPLE) - Canvas.TextWidth(VALUE_COLUMN_SAMPLE) - 3 * ColumnGap;
+end;
+
+function TFormulaSuggestList.ColumnGap: integer;
+begin
+  Result := Scale96ToForm(COLUMN_GAP96) div 2;
+end;
+
+function TFormulaSuggestList.Graded: boolean;
+begin
+  Result := Assigned(FGrade) and FGrade.Available;
+end;
+
+// Formula on the left, cut short with an ellipsis when it does not fit, and
+// its value and difference in columns on the right. With a size table, its
+// values at the first and last sizes go on a second line, so they take no
+// room from the formula.
 procedure TFormulaSuggestList.DrawRow(Control: TWinControl; Index: integer; ARect: TRect; State: TOwnerDrawState);
 var
-  Gap, DeltaWidth, ValueWidth, RangeWidth, TextTop: integer;
+  Gap, LineHeight, TextTop: integer;
   Row: TSuggestion;
   ValueText, DeltaText, RangeText: string;
 begin
   Canvas.FillRect(ARect);
   if (Index < 0) or (Index > High(FRows)) then
     Exit;
-  Gap := Scale96ToForm(COLUMN_GAP96) div 2;
-  TextTop := ARect.Top + (ARect.Height - Canvas.TextHeight('Ag')) div 2;
+  Gap := ColumnGap;
+  LineHeight := ARect.Height;
+  if Graded then
+    LineHeight := ARect.Height div 2;
+  TextTop := ARect.Top + (LineHeight - Canvas.TextHeight('Ag')) div 2;
   if Index = FNoneRow then
   begin
     if not (odSelected in State) then
@@ -180,25 +210,20 @@ begin
     Exit;
   end;
   Row := FRows[Index];
-  DeltaWidth := Canvas.TextWidth(DELTA_COLUMN_SAMPLE);
-  ValueWidth := Canvas.TextWidth(VALUE_COLUMN_SAMPLE);
-  RangeWidth := 0;
-  RangeText := '';
-  if Assigned(FGrade) and FGrade.Available then
-  begin
-    RangeWidth := Canvas.TextWidth(RANGE_COLUMN_SAMPLE) + Gap;
-    RangeText := SizeRangeText(FGrade.Values(Row.Text), FKind, FUnits);
-  end;
   ValueText := SuggestionValueText(Row.Value, FKind, FUnits);
   DeltaText := SuggestionDeltaText(Row.Delta, FKind, FUnits);
-  Canvas.TextRect(Rect(ARect.Left, ARect.Top, ARect.Right - DeltaWidth - ValueWidth - RangeWidth - 3 * Gap, ARect.Bottom),
-    ARect.Left + Gap, TextTop, Row.Text);
-  Canvas.TextOut(ARect.Right - DeltaWidth - 2 * Gap - Canvas.TextWidth(ValueText), TextTop, ValueText);
+  Canvas.TextOut(ARect.Left + Gap, TextTop, FitText(Row.Text, FormulaWidth(ARect.Width), @Canvas.TextWidth));
+  Canvas.TextOut(ARect.Right - Canvas.TextWidth(DELTA_COLUMN_SAMPLE) - 2 * Gap - Canvas.TextWidth(ValueText), TextTop, ValueText);
   if not (odSelected in State) then
     Canvas.Font.Color := clGrayText;
   Canvas.TextOut(ARect.Right - Gap - Canvas.TextWidth(DeltaText), TextTop, DeltaText);
-  if RangeText <> '' then
-    Canvas.TextOut(ARect.Right - DeltaWidth - ValueWidth - 3 * Gap - Canvas.TextWidth(RangeText), TextTop, RangeText);
+  if not Graded then
+    Exit;
+  RangeText := SizeRangeText(FGrade.Values(Row.Text), FKind, FUnits);
+  if RangeText = '' then
+    RangeText := rsGradeNoValue;
+  Canvas.TextOut(ARect.Left + 2 * Gap, TextTop + LineHeight, FitText(Format(rsSuggestSizeRange,
+    [FGrade.Sizes[0], FGrade.Sizes[FGrade.SizeCount - 1], RangeText]), ARect.Width - 3 * Gap, @Canvas.TextWidth));
 end;
 
 procedure TFormulaSuggestList.SetHover(Index: integer);
@@ -208,11 +233,18 @@ begin
   if Index = FHoverIndex then
     Exit;
   FHoverIndex := Index;
-  // The tooltip gives the row's value at every size
+  // The tooltip gives a formula cut short in full, and the row's value at every size
   Application.CancelHint;
   Hint := '';
-  if Assigned(FGrade) and FGrade.Available and RowSuggestion(Index, Suggestion) then
-    Hint := SizeValuesText(FGrade, FGrade.Values(Suggestion.Text), FKind, FUnits);
+  if RowSuggestion(Index, Suggestion) then
+  begin
+    if Canvas.TextWidth(Suggestion.Text) > FormulaWidth(ClientWidth) then
+      Hint := Suggestion.Text;
+    if Graded and (Hint <> '') then
+      Hint := Hint + LineEnding;
+    if Graded then
+      Hint := Hint + SizeValuesText(FGrade, FGrade.Values(Suggestion.Text), FKind, FUnits);
+  end;
   ShowHint := Hint <> '';
   if Assigned(FOnHover) then
     FOnHover(Self, Index);

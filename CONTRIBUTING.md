@@ -17,7 +17,13 @@ cd opensloper
 
 ## Before you open a pull request
 
-Run all four of these and fix anything they report:
+Run this and fix anything it reports:
+
+```
+./opensloper-make.sh pr-check
+```
+
+It runs these four in turn and stops at the first that fails:
 
 ```
 ./opensloper-make.sh format  # format the sources (./opensloper-make.sh format --check lists files only)
@@ -25,6 +31,8 @@ Run all four of these and fix anything they report:
 ./opensloper-make.sh test    # tests, with the heaptrc leak check
 ./opensloper-make.sh build   # the GUI apps and the CLI
 ```
+
+Formatting changes files in place, so when all four pass, `pr-check` lists the files it reformatted: commit them with your change.
 
 CI runs the same checks on every pull request, and they must pass before a merge. `opensloper-make.sh check` also prints warnings, such as single-letter names. Warnings don't fail the check, but please fix them in code you add.
 

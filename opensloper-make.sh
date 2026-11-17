@@ -35,6 +35,9 @@ Commands:
   format [--check] [FILE...]
                          format the sources with jcfsettings.cfg; --check lists
                          the files that need it and changes nothing
+  pr-check               format, check, test and build, as before a pull
+                         request; stops at the first that fails, and lists
+                         the files format changed, to commit
   docs [--serve] [--offline] [--reinstall]
                          regenerate docs/reference/ and build the site into
                          release/site_docs; --serve previews it, --offline
@@ -232,6 +235,52 @@ cmd_format() {
     format_file "$f"
   done
   echo "Formatted ${#files[@]} files."
+}
+
+# Each source file's content hash and path, to see what formatting changed;
+# git's hash works the same on every platform
+source_hashes() {
+  local list
+  list="$(source_files | sort)"
+  [ -n "$list" ] || return 0
+  paste -d ' ' <(printf '%s\n' "$list" | git hash-object --stdin-paths) <(printf '%s\n' "$list")
+}
+
+# pr-check: what a pull request needs (CONTRIBUTING.md), in one go: format,
+# check, test and build, each run as its own command, since several of them
+# end the shell they run in. The first that fails stops it with its exit
+# status. Formatting changes files in place, so the files it changed are
+# listed at the end: they need committing, or CI's formatting check fails.
+cmd_pr_check() {
+  local step status before after changed
+  if [ $# -gt 0 ]; then
+    echo "pr-check takes no options" >&2
+    exit 2
+  fi
+  before="$(mktemp)"
+  after="$(mktemp)"
+  # Expanded now: the trap runs after this function's locals are gone
+  trap "rm -f '$before' '$after'" EXIT
+  source_hashes > "$before"
+  for step in format check test build; do
+    echo "== pr-check: $step"
+    set +e
+    "$SELF" "$step"
+    status=$?
+    set -e
+    if [ "$status" -ne 0 ]; then
+      echo "pr-check: $step failed (exit $status)" >&2
+      exit "$status"
+    fi
+  done
+  source_hashes > "$after"
+  # diff exits 1 when they differ, which pipefail would take as a failure
+  changed="$({ diff "$before" "$after" || true; } | sed -n 's/^> [0-9a-f]* //p')"
+  echo "== pr-check: format, check, test and build all passed"
+  if [ -n "$changed" ]; then
+    echo "Formatting changed these files; review and commit them:"
+    echo "$changed" | sed 's/^/  /'
+  fi
 }
 
 # docs: the user documentation, into release/site_docs.
@@ -838,6 +887,7 @@ case "$COMMAND" in
   build) cmd_build "$@" ;;
   check) cmd_check "$@" ;;
   format) cmd_format "$@" ;;
+  pr-check) cmd_pr_check "$@" ;;
   docs) cmd_docs "$@" ;;
   package) cmd_package "$@" ;;
   release) cmd_release "$@" ;;

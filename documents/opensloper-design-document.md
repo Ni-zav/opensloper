@@ -242,6 +242,7 @@ Testing runs throughout development; the LCL-free core means most logic is teste
 - UI kept thin, so what matters can be tested without it
 - End-to-end checks drive `opensloper-cli serve` through the Automation API and its renders; the GUI is checked by hand on a private Xvfb display
 - `opensloper-make.sh test` and `opensloper-make.sh check` before every commit
+- `opensloper-make.sh pr-check` before a pull request: format, check, test and build in turn, stopping at the first that fails (issue #40)
 
 ### Documentation
 

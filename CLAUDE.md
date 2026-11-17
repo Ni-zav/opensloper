@@ -36,6 +36,7 @@ git submodule update --init --recursive
 ./opensloper-make.sh release  # a release's notes: APP_VERSION's CHANGELOG.md section, else its commits since the last release
 ./opensloper-make.sh format   # format sources with jcfsettings.cfg (--check to list only)
 ./opensloper-make.sh check    # rules the formatter cannot check (errors fail, warnings advise)
+./opensloper-make.sh pr-check # format, check, test and build in turn, stopping at the first failure; lists files format changed
 ./opensloper-make.sh docs     # regenerate docs/reference/ and build the site into release/site_docs (--serve to preview)
 ./venv/bin/python check-schemas.py  # check example and regression files against the file schemas (opensloper-make.sh docs runs it)
 ```

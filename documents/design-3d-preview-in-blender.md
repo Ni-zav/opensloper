@@ -30,8 +30,7 @@ The Assembly tab and the instructions come first and stand on their own (decided
 
 | Part | Size | Notes |
 |---|---|---|
-| **Placement**: the definition, file format, commands, guesses, API | Medium | See Placement below. The first step. |
-| **Assembly tab** in the design app | Medium–large | See Assembly tab below. Projection and drawing are simple (flat pieces, no OpenGL); handling moves and turns well is the work. |
+| **Placement and the Assembly tab**: the definition, file format, commands, guesses, API, and the tab in the design app to set it | Large | See Placement and the Assembly tab below. The first step. Projection and drawing are simple (flat pieces, no OpenGL); handling moves and turns well is the work. |
 | **Assembly steps**: the definition, closing sewn seams, guesses, the step list in the tab | Medium | See Assembly steps below. |
 | **Assembly instructions** in the publish app | Medium–large | See Assembly instructions below. Line-art step diagrams, parts list, pages laid out in panels. |
 | **Body from measurements** | Medium | See Body below. A simple form lofted from measured rings, not an anatomical body. Shown in the Assembly tab, exported to Blender as the collider. |
@@ -69,45 +68,30 @@ Blender's cloth sewing pulls together vertices joined by loose edges, so both si
 - An edge in several seams (a neckline to a collar and a facing) gets the union of their points.
 - A piece on a fold is exported whole, opened out. Its fold edge is not a seam; mirrored seams pair on both halves.
 
-## Placement (the first step)
+## Placement and the Assembly tab (the first step)
 
-Planned 2026-11-17. Placement is the start of the Blender work, not the end: every later step (assembly steps, the printed instructions, the Blender script) reads it, and it is worth having on its own as a way to show how the pieces go together.
+Planned 2026-11-17. Placement is the start of the Blender work, not the end: every later step (assembly steps, the printed instructions, the Blender script) reads it, and it is worth having on its own as a way to show how the pieces go together. The user sets it in an **Assembly** tab of the design app's side panel, after Garment, since placement is part of the pattern; a window of its own can come later if the tab proves too small.
 
 **Why not front and back.** Labelling pieces front or back, as most pattern software does, is really an ordering in depth, and too coarse for it: a garment wraps round a body, so side panels, sleeves and gussets sit between front and back, a lining lies inside its shell, and a piece cut twice mirrored is a left and a right. What a piece needs is where it sits in 3D and which way it faces. The app cannot work this out (the reason the Garment tab dropped front and back views on 2026-11-09), so the user sets it, starting from a guess. This takes back the 2026-11-09 objection to a setting on every piece: the setting is optional, guessed, and only the assembly sheet and Blender export need it; the Garment tab stays as it is.
 
-**Pieces relative to each other, not to a body.** Placement does not need a body: bags, hats, cases and other accessories have none, and a garment's pieces are placed the same way. The user arranges the pieces as an exploded view of the finished item: each piece a gap away from the pieces it is sewn to, facing the way it is sewn, right side out, in the right order in depth (front over side over back, shell over lining). The seams say which edges come together; the arrangement says from which direction. That is all Blender needs: the sewing springs close the gaps. A body, when the pattern has one (see Body), is a reference to arrange garment pieces round, never required.
+**Pieces relative to each other, not to a body.** Placement does not need a body: bags, hats, cases and other accessories have none, and a garment's pieces are placed the same way. The user moves each flat piece in 3D until the arrangement is an exploded view of the finished item: each piece a gap away from the pieces it is sewn to, facing the way it is sewn, right side out, in the right order in depth (front over side over back, shell over lining). The seams say which edges come together; the arrangement says from which direction. That is all Blender needs: the sewing springs close the gaps. A body, when the pattern has one (see Body), is a reference to arrange garment pieces round, never required.
 
 **What is stored.** Each piece copy gets a placement: a rigid transform of the flat piece into 3D. A piece cut ×2 with `cut.mirrored` has two placements, the second drawn mirrored (a left and a right); a piece on a fold is placed once, opened out.
 
 - **The assembly frame** has Blender's axes, so the export needs only a scale: X to the viewer's right as seen from the front, Y away from the viewer (towards the back), Z up, in mm. The front faces −Y. The origin is the middle of the finished item; when a body is shown, it stands with its centre line on the Z axis and its feet at Z = 0.
 - **The piece frame.** The piece lies in its own plane with its drafted x along X and its drafted y (down) along −Z, the right side of the fabric facing −Y, so with no rotation a piece stands upright facing the viewer as it does on the canvas. Its origin is an **anchor**: the middle of the grainline, else the centre of the seam line's bounding box. The anchor is computed, so the placement survives measurement changes as a layout placement survives them.
 - **The numbers**: `position` (x, y, z of the anchor in the assembly frame) and `rotation` (three angles in degrees, applied in a fixed order and stated in the schema; a quaternion was considered and rejected as unreadable in the file and the API). Plain numbers, not formulas, as layout placements are: placing is arranging finished pieces, not drafting. Saved with the pattern, as `placements[]` on the piece, one per copy; a piece without them is unplaced.
-- **Layer**, for a lining inside its shell or interfacing on a facing, is not a separate field: it is an offset along the piece's normal, which the editor offers as a nudge ("one layer in", by the gap) so it stays one position.
+- **Layer**, for a lining inside its shell or interfacing on a facing, is not a separate field: it is an offset along the piece's normal, which the tab offers as a nudge ("one layer in", by the gap) so it stays one position.
+- **The gap** is a pattern setting (20 mm by default), used by the guesses, Align to Seam and the layer nudge, so the arrangement keeps an even look and Blender's springs have the same distance to close everywhere.
 
 **Defaults.** An unplaced piece is shown at a guess, not stored until the user changes it (or accepts all guesses with one command, one undo step). The guess follows the seams, not a body:
 
 1. The piece with the largest area is placed first, upright by its grainline, facing front, at the origin.
-2. Each piece sewn to a placed piece is placed as Align to Seam would place it (see Assembly tab): beside that seam, the set gap away, facing the same way; pieces are taken in order of the longest seam to a placed piece. Where a piece is sewn to two placed pieces (a side panel between front and back), it is folded to sit between them.
+2. Each piece sewn to a placed piece is placed as Align to Seam would place it (see Moving a piece): beside that seam, the gap away, facing the same way; pieces are taken in order of the longest seam to a placed piece. Where a piece is sewn to two placed pieces (a side panel between front and back), it is folded to sit between them.
 3. A mirrored copy is placed as the mirror image of its original across the YZ plane.
 4. Pieces with no seams are placed in a row below the rest, to be placed by hand.
 
 Laid out flat this way the guess is a strip of pieces, not a closed item: it puts every piece beside its partner, and the user folds the strip round (a back behind the front, a bag's gusset round its sides). It only has to be near enough that a few moves fix it.
-
-**What it needs**, as any new definition:
-
-- the file format and its schema, with loading of older files (no placements: all unplaced)
-- document commands with undo, one drag one step (`TSetPlacementCommand`)
-- the Assembly tab to set it (below)
-- API and MCP tools (`set_placement`, `guess_placements`), and placements in `get_object`
-- design document and user documentation
-
-The placement maths (piece to assembly frame, anchors, guesses, Align to Seam, projection) goes in a core unit (`Sloper.Core.Assembly`), without the LCL, unit-tested, so the design app, the publish app, the CLI and the exporters share it.
-
-## Assembly tab (placing pieces in 3D)
-
-Decided 2026-11-17: an **Assembly** tab of the design app's side panel, after Garment, since placement is part of the pattern. A window of its own can come later if the tab proves too small.
-
-The user moves each flat piece in 3D until the arrangement is an exploded view of the finished item: every piece facing the way it is sewn, a gap from its partners, in the right order in depth.
 
 **Drawing.** The pieces are flat polygons, so no OpenGL is needed: each piece is projected to the screen with one affine transform (orthographic view) or per vertex (perspective), sorted back to front by the depth of its anchor and drawn with BGRABitmap, as the Garment tab draws. The back of a piece (wrong side towards the viewer) is drawn paler with its material's hatching, so a piece facing the wrong way shows at once. Each seam is drawn as a few thin connector lines between its sides (at its ends and middle, as the sheet's arrows), so the user sees what joins what, and a piece placed far from its partner, or with a seam that would cross over itself to close, stands out. The body, when shown (a toggle, on by default when the pattern has the measurements for one), is drawn faintly behind and through the pieces. Pieces overlapping in depth are allowed; the sort is per piece, and intersecting pieces may draw in the wrong order, which is acceptable for a placing tool.
 
@@ -123,9 +107,17 @@ The user moves each flat piece in 3D until the arrangement is an exploded view o
 - **Fields** in Properties give position and rotation as numbers, for exact placing.
 - **Align to Seam**: select a seam and one of its pieces; the piece moves so its side of the seam lies along the other side, the gap apart, so the seam closes without crossing over and the piece faces the way its partner does across the seam. A second click on Align to Seam folds it the other way (inward or outward about the seam). This places most pieces in a click or two once one is placed.
 
-**The gap** is a pattern setting (20 mm by default), used by the guesses, Align to Seam and the layer nudge, so the arrangement keeps an even look and Blender's springs have the same distance to close everywhere.
-
 Each drag is one undo step; Reset Placement returns a piece to its guess. Keys and menu entries follow the design app's conventions.
+
+**What it needs**, as any new definition:
+
+- the file format and its schema, with loading of older files (no placements: all unplaced)
+- document commands with undo, one drag one step (`TSetPlacementCommand`)
+- the Assembly tab: drawing, camera, moving and turning
+- API and MCP tools (`set_placement`, `guess_placements`), and placements in `get_object`
+- design document and user documentation
+
+The placement maths (piece to assembly frame, anchors, guesses, Align to Seam, projection) goes in a core unit (`Sloper.Core.Assembly`), without the LCL, unit-tested, so the design app, the publish app, the CLI and the exporters share it.
 
 ## Assembly steps
 

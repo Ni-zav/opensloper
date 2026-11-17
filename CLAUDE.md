@@ -34,6 +34,7 @@ git submodule update --init --recursive
 ./opensloper-make.sh build    # GUI apps and CLI, into release/ (not in git)
 ./opensloper-make.sh package  # pack the built apps and installer for this platform into release/dist, with the offline guide from docs --offline (the release workflow runs it)
 ./opensloper-make.sh release  # a release's notes: APP_VERSION's CHANGELOG.md section, else its commits since the last release
+./opensloper-make.sh bump minor  # next version (major|minor|patch|X.Y.Z): sets APP_VERSION, starts its CHANGELOG.md section; commits nothing
 ./opensloper-make.sh format   # format sources with jcfsettings.cfg (--check to list only)
 ./opensloper-make.sh check    # rules the formatter cannot check (errors fail, warnings advise)
 ./opensloper-make.sh pr-check # format, check, test and build in turn, stopping at the first failure; lists files format changed

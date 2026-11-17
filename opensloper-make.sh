@@ -49,6 +49,10 @@ Commands:
   release [VERSION]      print a release's notes: its CHANGELOG.md section, else
                          its commits since the last release
   version                print the current version
+  bump major|minor|patch|VERSION
+                         set APP_VERSION to the next version and start its
+                         section in CHANGELOG.md; commits nothing (the release
+                         workflow tags the release)
   help                   show this help
 EOF
 }
@@ -67,6 +71,65 @@ app_version() {
 cmd_version() {
   app_version;
 }
+
+# bump: set APP_VERSION to the next major, minor or patch version, or to the
+# version given, and add an empty "## VERSION" section at the top of
+# CHANGELOG.md for the changes to come. Leaves the commit to you.
+cmd_bump() {
+  local current next major minor patch
+  if [ $# -ne 1 ]; then
+    echo "Usage: ./opensloper-make.sh bump major|minor|patch|VERSION" >&2
+    exit 2
+  fi
+  if ! git diff-index --quiet HEAD --; then
+    echo "There are uncommitted changes: commit or stash them before bumping the version" >&2
+    exit 1
+  fi
+  current=$(app_version)
+  if ! [[ $current =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    echo "APP_VERSION $current is not MAJOR.MINOR.PATCH" >&2
+    exit 1
+  fi
+  major=${BASH_REMATCH[1]}
+  minor=${BASH_REMATCH[2]}
+  patch=${BASH_REMATCH[3]}
+  case "$1" in
+    major) next="$((major + 1)).0.0" ;;
+    minor) next="$major.$((minor + 1)).0" ;;
+    patch) next="$major.$minor.$((patch + 1))" ;;
+    *)
+      if ! [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Not major, minor, patch or a MAJOR.MINOR.PATCH version: $1" >&2
+        exit 2
+      fi
+      next="$1"
+      ;;
+  esac
+  if [ "$next" = "$current" ]; then
+    echo "The version is already $current" >&2
+    exit 1
+  fi
+  if awk -v version="$next" '/^## / && $2 == version { found = 1 } END { exit !found }' CHANGELOG.md; then
+    echo "CHANGELOG.md already has a section for $next" >&2
+    exit 1
+  fi
+
+  sed -i.bak "s/^\( *APP_VERSION = '\)$current\(';.*\)/\1$next\2/" src/core/sloper.core.version.pas
+  rm -f src/core/sloper.core.version.pas.bak
+  # The new section goes before the first version heading
+  awk -v version="$next" '
+    !done && /^## / { print "## " version "\n"; done = 1 }
+    { print }
+  ' CHANGELOG.md > CHANGELOG.md.new
+  mv CHANGELOG.md.new CHANGELOG.md
+
+  if [ "$(app_version)" != "$next" ]; then
+    echo "APP_VERSION was not changed" >&2
+    exit 1
+  fi
+  echo "Version $current -> $next: src/core/sloper.core.version.pas and CHANGELOG.md changed, not committed"
+}
+
 # The Pascal sources the formatter and the standards check look at:
 # src/packages/ and the Lazarus-generated package unit osclipper2.pas are left alone
 source_files() {
@@ -892,6 +955,7 @@ case "$COMMAND" in
   package) cmd_package "$@" ;;
   release) cmd_release "$@" ;;
   version) cmd_version "$@" ;;
+  bump) cmd_bump "$@" ;;
   help | -h | --help) usage ;;
   "")
     usage >&2

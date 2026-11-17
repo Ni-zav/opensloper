@@ -230,6 +230,14 @@ type
     procedure FocusName;
     // Puts the cursor in a note's text, with the text selected, ready to replace
     procedure FocusNoteText;
+    // Commits what is being typed in a field, as leaving it would, so that
+    // selecting another object does not lose it. False when it was refused,
+    // with the reason under the field. FieldName says which field had the
+    // focus, for FocusField: '' when none did.
+    function CommitFocused(out FieldName: string): boolean;
+    // Puts the cursor in the field CommitFocused named, with its text selected,
+    // or, when this object has no such field, in its first formula, or its name
+    procedure FocusField(const FieldName: string);
     // The part of a row's width given to names; kept between sessions by the main form
     property NameShare: double read FNameShare write SetNameShare;
     // Says why a change was refused
@@ -447,7 +455,8 @@ type
     FNoteBoxCheck, FNoteBoldCheck, FNoteItalicCheck: TCheckBox;
     procedure AddTextRow;
     procedure AddRows(Note: TNoteObject);
-    procedure CommitText;
+    // False when the text was refused, with the reason under it
+    function CommitText: boolean;
     procedure TextExit(Sender: TObject);
     procedure TextKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     procedure SizeChange(Sender: TObject);
@@ -460,6 +469,7 @@ type
     procedure Refresh(Node: TEvalNode); override;
     function OwnsField(Node: TEvalNode; const FieldName: string): boolean; override;
     procedure FocusText;
+    function TextFocused: boolean;
   end;
 
 function RoleCaption(Role: TEdgeRole): string;
@@ -484,6 +494,10 @@ const
   // A note's text field, at 96 pixels per inch
   NOTE_TEXT_HEIGHT96 = 64;
   NOTE_SIZE_STEP = 1;
+  // What CommitFocused names the name field and a note's text by; neither
+  // can be a formula field's name
+  FOCUS_NAME = ':name';
+  FOCUS_NOTE_TEXT = ':text';
   // The suggestions button and its icon, at 96 pixels per inch
   WAND_WIDTH96 = 24;
   WAND_ICON96 = 16;
@@ -1514,6 +1528,61 @@ begin
     TNoteSection(Section).FocusText;
 end;
 
+function TPropertiesPanel.CommitFocused(out FieldName: string): boolean;
+var
+  Row: TFieldRow;
+  Section: TPropertySection;
+begin
+  FieldName := '';
+  for Row in FRows do
+    if Row.Edit.Focused then
+    begin
+      if Row.Kind = frName then
+        FieldName := FOCUS_NAME
+      else
+        FieldName := Row.FieldName;
+      if Assigned(FCompleter) then
+        FCompleter.Hide;
+      CommitEdit(Row.Edit);
+      Exit(not Row.Refusal.Visible);
+    end;
+  Section := FindSection(TNoteSection);
+  if Assigned(Section) and TNoteSection(Section).TextFocused then
+  begin
+    FieldName := FOCUS_NOTE_TEXT;
+    Exit(TNoteSection(Section).CommitText);
+  end;
+  Result := True;
+end;
+
+procedure TPropertiesPanel.FocusField(const FieldName: string);
+var
+  Row: TFieldRow;
+  Target: TEdit;
+begin
+  if (FieldName = FOCUS_NOTE_TEXT) and Assigned(FindSection(TNoteSection)) then
+  begin
+    FocusNoteText;
+    Exit;
+  end;
+  Target := nil;
+  for Row in FRows do
+    if ((FieldName = FOCUS_NAME) and (Row.Kind = frName)) or ((Row.Kind = frFormula) and (Row.FieldName = FieldName)) then
+      Target := Row.Edit;
+  for Row in FRows do
+    if not Assigned(Target) and (Row.Kind = frFormula) then
+      Target := Row.Edit;
+  for Row in FRows do
+    if not Assigned(Target) and (Row.Kind = frName) then
+      Target := Row.Edit;
+  // A hidden tab or side panel cannot take the focus, and SetFocus would raise
+  if Assigned(Target) and Target.CanFocus then
+  begin
+    Target.SetFocus;
+    Target.SelectAll;
+  end;
+end;
+
 procedure TPropertiesPanel.FocusName;
 var
   Row: TFieldRow;
@@ -2067,12 +2136,18 @@ begin
 end;
 
 // A draft value that does not parse keeps the text as typed, with the reason
-procedure TNoteSection.CommitText;
+function TNoteSection.TextFocused: boolean;
+begin
+  Result := FNoteText.Focused;
+end;
+
+function TNoteSection.CommitText: boolean;
 var
   Node: TEvalNode;
   NewText, Reason: string;
   Done: boolean;
 begin
+  Result := True;
   Node := Panel.SelectedNode;
   if not (Node is TNoteObject) then
     Exit;
@@ -2089,6 +2164,7 @@ begin
   if not Done then
     FNoteRefusal.Caption := Reason;
   FNoteRefusal.Visible := not Done;
+  Result := Done;
 end;
 
 procedure TNoteSection.TextExit(Sender: TObject);

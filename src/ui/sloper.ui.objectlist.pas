@@ -101,6 +101,11 @@ function MeasurementChangeText(const Change: TMeasurementChange; const FileName:
 // when Anchor is not listed.
 function SelectionAfterClick(const Visible, Selected: TStringArray; const Anchor, Clicked: string;
   Toggle, Extend: boolean): TStringArray;
+// The object to step to from the selection (issue #39): the one after the
+// last selected in Listed, the keys in list order, or before it when
+// Backwards, going round at the ends. With nothing selected that is listed,
+// the first, or the last when Backwards; '' when nothing is listed.
+function StepKey(const Listed, Selected: TStringArray; Backwards: boolean): string;
 
 resourcestring
   rsObjectPosition = '%s, %s %s';
@@ -580,6 +585,28 @@ begin
     if Keys[Result] = Key then
       Exit;
   Result := -1;
+end;
+
+function StepKey(const Listed, Selected: TStringArray; Backwards: boolean): string;
+var
+  From, Index: integer;
+begin
+  if Length(Listed) = 0 then
+    Exit('');
+  From := -1;
+  for Index := High(Selected) downto 0 do
+    if From < 0 then
+      From := KeyIndex(Listed, Selected[Index]);
+  if From < 0 then
+  begin
+    if Backwards then
+      Exit(Listed[High(Listed)]);
+    Exit(Listed[0]);
+  end;
+  if Backwards then
+    Result := Listed[(From + High(Listed)) mod Length(Listed)]
+  else
+    Result := Listed[(From + 1) mod Length(Listed)];
 end;
 
 function SelectionAfterClick(const Visible, Selected: TStringArray; const Anchor, Clicked: string;

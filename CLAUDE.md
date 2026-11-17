@@ -59,7 +59,7 @@ Requires FPC 3.2.0 or later; CI (`.github/workflows/ci.yml`) uses the release La
 - File paths go through `TAppPaths`; build paths with `ConcatPaths` / `PathDelim`, never a hard-coded `/`.
 - Every program lists `Sloper.Core.CodePage` first in its uses clause and is compiled with `-FcUTF8`, so strings are UTF-8 throughout.
 - Files are written through `Sloper.Core.JSON` (`JSONToText`, `JSONFloat`) for a stable layout; loading reports errors as messages, never exceptions.
-- Shortcuts use `ssModifier`, not a hard-coded Ctrl.
+- Shortcuts use `ssModifier`, not a hard-coded Ctrl. A key macOS keeps for itself with Cmd (Cmd+Tab) is written `Ctrl` in `Sloper.Core.Shortcuts` and becomes the Control key on every platform, through `CONTROL_KEY` in `Sloper.UI.Commands`, the one `ssCtrl` the check allows.
 
 ## Testing
 

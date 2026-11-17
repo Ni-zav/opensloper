@@ -4,7 +4,7 @@
 
     This page is generated from the program by `opensloper-cli doc shortcuts`; do not edit it by hand.
 
-On macOS, Cmd takes the place of Ctrl. Keys on the canvas work while the canvas has the focus: click it first if you were typing in a panel.
+On macOS, Cmd takes the place of Ctrl, except in Ctrl+Tab and Ctrl+Shift+Tab, which are Control there too, since macOS keeps Cmd+Tab for switching apps. Keys on the canvas work while the canvas has the focus: click it first if you were typing in a panel.
 
 ## Design app
 
@@ -29,6 +29,8 @@ On macOS, Cmd takes the place of Ctrl. Keys on the canvas work while the canvas 
 | ++ctrl+x++ | Cut the selection, or text in a field |
 | ++ctrl+c++ | Copy the selection, or text in a field |
 | ++ctrl+v++ | Paste |
+| ++ctrl+tab++ | Select the next object the Objects tab lists, keeping the field being edited |
+| ++ctrl+shift+tab++ | Select the object before, the same way |
 | ++ctrl+comma++ | Preferences |
 
 ### View

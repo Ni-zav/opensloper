@@ -86,6 +86,9 @@ uses
   SysUtils, StrUtils, Graphics, LCLProc, LCLType, Sloper.UI.Icons;
 
 const
+  // The Control key itself, for shortcuts the table writes with Ctrl: on
+  // macOS ssModifier is Cmd, and Cmd+Tab belongs to the system
+  CONTROL_KEY = ssCtrl;
   TOOL_ICON_SIZE = 24;
   MENU_ICON_SIZE = 16;
   BUTTON_PADDING = 8;
@@ -191,6 +194,8 @@ begin
   Shift := [];
   if smMod in Modifiers then
     Include(Shift, ssModifier);
+  if smCtrl in Modifiers then
+    Include(Shift, CONTROL_KEY);
   if smShift in Modifiers then
     Include(Shift, ssShift);
   if smAlt in Modifiers then

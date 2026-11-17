@@ -30,6 +30,11 @@ Changed, Fixed and Removed under each version.
   empty pattern file to open, in a chosen unit and with a measurement file,
   so a script no longer writes the file's JSON itself (#44).
 
+- Ctrl+Tab and Ctrl+Shift+Tab, also Edit → Select Next and Select
+  Previous, step through the objects the Objects tab lists, keeping the
+  cursor in the field being edited, so formulas can be looked through
+  without the mouse (#39).
+
 ### Changed
 
 - Pattern, measurement and layout files are versioned (#42): the apps read a

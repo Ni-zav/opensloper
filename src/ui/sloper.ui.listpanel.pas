@@ -90,7 +90,6 @@ type
     function GetSearchText: string;
     function GetEditable: boolean;
     function IsSelected(const Key: string): boolean;
-    function VisibleKeys: TStringArray;
     function RowOfKey(const Key: string): integer;
     function RefusalIndex(const Key: string; Column: integer): integer;
     procedure DropRefusal(const Key: string; Column: integer);
@@ -149,6 +148,8 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // The keys of the rows listed, filter and search applied, in list order
+    function VisibleKeys: TStringArray;
     // Follows a selection made elsewhere; does not raise OnSelect
     procedure ShowSelection(const Keys: TStringArray);
     // Selects as the user would, raising OnSelect

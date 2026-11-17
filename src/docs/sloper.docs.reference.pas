@@ -137,7 +137,8 @@ resourcestring
     '[Operations and objects](operations.md).';
   rsDocExample = 'Example';
   rsDocShortcutsTitle = 'Keyboard shortcuts';
-  rsDocShortcutsIntro = 'On macOS, Cmd takes the place of Ctrl. Keys on the canvas work while the canvas has the focus: ' +
+  rsDocShortcutsIntro = 'On macOS, Cmd takes the place of Ctrl, except in Ctrl+Tab and Ctrl+Shift+Tab, which are Control there ' +
+    'too, since macOS keeps Cmd+Tab for switching apps. Keys on the canvas work while the canvas has the focus: ' +
     'click it first if you were typing in a panel.';
   rsDocKeys = 'Keys';
   rsDocWhatItDoes = 'What it does';

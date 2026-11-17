@@ -39,7 +39,7 @@ type
 
   TKeyCommand = (
     kcNew, kcOpen, kcSave, kcSaveAs, kcImport, kcExportMeasurements, kcExportPDF, kcPrint, kcOpenMeasurements, kcPublish, kcQuit,
-    kcUndo, kcRedo, kcCut, kcCopy, kcPaste, kcPreferences,
+    kcUndo, kcRedo, kcCut, kcCopy, kcPaste, kcSelectNext, kcSelectPrevious, kcPreferences,
     kcZoomIn, kcZoomOut, kcFit, kcTrueSize, kcRulers, kcReload,
     kcToolSelect, kcToolZoom, kcToolPoint, kcToolLine, kcToolCurve, kcToolCircle, kcToolRectangle, kcToolPiece, kcToolNotch,
     kcToolSeam, kcToolText, kcToolCallout,
@@ -49,7 +49,9 @@ type
     kcScroll, kcScrollSideways, kcWheelZoom, kcPublishWheelZoom, kcPanMiddle, kcPanSpace, kcCycle, kcExtendCurve, kcPickList,
     kcExcludePage);
 
-  TShortcutModifier = (smMod, smShift, smAlt);
+  // smMod is Ctrl, or Cmd on macOS; smCtrl is the Control key on every
+  // platform, for the few keys macOS keeps for itself with Cmd (Cmd+Tab)
+  TShortcutModifier = (smMod, smCtrl, smShift, smAlt);
   TShortcutModifiers = set of TShortcutModifier;
 
   TShortcutInfo = record
@@ -90,6 +92,8 @@ resourcestring
   rsKeyCut = 'Cut the selection, or text in a field';
   rsKeyCopy = 'Copy the selection, or text in a field';
   rsKeyPaste = 'Paste';
+  rsKeySelectNext = 'Select the next object the Objects tab lists, keeping the field being edited';
+  rsKeySelectPrevious = 'Select the object before, the same way';
   rsKeyPreferences = 'Preferences';
   rsKeyZoomIn = 'Zoom in';
   rsKeyZoomOut = 'Zoom out';
@@ -171,6 +175,8 @@ begin
     kcCut: Result := Info('Mod+X', skCommand, sgEdit, [saDesign], rsKeyCut);
     kcCopy: Result := Info('Mod+C', skCommand, sgEdit, [saDesign], rsKeyCopy);
     kcPaste: Result := Info('Mod+V', skCommand, sgEdit, [saDesign], rsKeyPaste);
+    kcSelectNext: Result := Info('Ctrl+Tab', skCommand, sgEdit, [saDesign], rsKeySelectNext);
+    kcSelectPrevious: Result := Info('Ctrl+Shift+Tab', skCommand, sgEdit, [saDesign], rsKeySelectPrevious);
     kcPreferences: Result := Info('Mod+Comma', skCommand, sgEdit, ALL_APPS, rsKeyPreferences);
     kcZoomIn: Result := Info('Mod+Plus', skCommand, sgView, [saDesign, saPublish], rsKeyZoomIn);
     kcZoomOut: Result := Info('Mod+Minus', skCommand, sgView, [saDesign, saPublish], rsKeyZoomOut);
@@ -225,6 +231,8 @@ begin
   for Part in Keys.Split(['+']) do
     if (Part = 'Mod') and not (smMod in Modifiers) then
       Include(Modifiers, smMod)
+    else if (Part = 'Ctrl') and not (smCtrl in Modifiers) then
+      Include(Modifiers, smCtrl)
     else if (Part = 'Shift') and not (smShift in Modifiers) then
       Include(Modifiers, smShift)
     else if (Part = 'Alt') and not (smAlt in Modifiers) then

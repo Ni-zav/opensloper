@@ -40,7 +40,9 @@ implementation
 uses
   SysUtils, Sloper.Core.Shortcuts;
 
-// Keys in one form however they were written: Shift+Mod+S is Mod+Shift+S
+// Keys in one form however they were written: Shift+Mod+S is Mod+Shift+S.
+// Ctrl is the same key as Mod outside macOS, so it is written Mod, and a
+// clash on Linux and Windows shows.
 function KeyPress(const Keys: string): string;
 var
   Key: string;
@@ -49,7 +51,7 @@ begin
   if not ParseShortcut(Keys, Key, Modifiers) then
     Exit('');
   Result := '';
-  if smMod in Modifiers then
+  if (smMod in Modifiers) or (smCtrl in Modifiers) then
     Result := Result + 'Mod+';
   if smShift in Modifiers then
     Result := Result + 'Shift+';
@@ -111,6 +113,11 @@ begin
   AssertFalse('not a key', ParseShortcut('Arrows', Key, Modifiers));
   AssertFalse('a mouse action', ParseShortcut('Alt+Click', Key, Modifiers));
   AssertFalse('lower case', ParseShortcut('Mod+s', Key, Modifiers));
+  AssertTrue('the Control key', ParseShortcut('Ctrl+Shift+Tab', Key, Modifiers));
+  AssertEquals('Tab', Key);
+  AssertTrue(Modifiers = [smCtrl, smShift]);
+  AssertFalse('twice', ParseShortcut('Ctrl+Ctrl+Tab', Key, Modifiers));
+  AssertEquals('Ctrl clashes with Mod outside macOS', 'Mod+Tab', KeyPress('Ctrl+Tab'));
 end;
 
 initialization

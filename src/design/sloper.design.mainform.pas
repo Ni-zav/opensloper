@@ -198,6 +198,9 @@ type
     procedure TransformClick(Sender: TObject);
     procedure GoToSourceClick(Sender: TObject);
     procedure EditLockClick(Sender: TObject);
+    procedure SelectNextClick(Sender: TObject);
+    procedure SelectPreviousClick(Sender: TObject);
+    procedure StepSelection(Backwards: boolean);
     procedure EditUnlockClick(Sender: TObject);
     procedure ArcClick(Sender: TObject);
     procedure OffsetClick(Sender: TObject);
@@ -247,7 +250,7 @@ var
 implementation
 
 uses
-  Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.Core.JSON, Sloper.Output.DraftSVG,
+  Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.UI.ObjectList, Sloper.Core.JSON, Sloper.Output.DraftSVG,
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.Evaluator, Sloper.API.Server,
@@ -307,6 +310,9 @@ resourcestring
   rsMenuEditPaste = '&Paste';
   rsMenuEditDelete = '&Delete';
   rsMenuEditLock = '&Lock';
+  rsMenuEditSelectNext = 'Select Ne&xt';
+  rsMenuEditSelectPrevious = 'Select Pre&vious';
+  rsStepNothingListed = 'The Objects tab lists nothing to step through; clear its filter or search';
   rsMenuEditUnlock = 'U&nlock';
   rsMenuEditPreferences = 'Pre&ferences...';
   rsMenuEditMaterials = '&Materials...';
@@ -837,6 +843,10 @@ begin
   // The canvas handles the Delete key, so typing in a field can still delete text
   FDeleteAction := FCommands.NewAction(rsMenuEditDelete, aiDelete, @MenuEditDeleteClick);
   MenuEditDelete.Action := FDeleteAction;
+  MenuEdit.AddSeparator;
+  FCommands.AddMenuItem(MenuEdit, FCommands.NewAction(rsMenuEditSelectNext, aiSelectNext, @SelectNextClick, CommandShortCut(kcSelectNext)));
+  FCommands.AddMenuItem(MenuEdit, FCommands.NewAction(rsMenuEditSelectPrevious, aiSelectPrevious, @SelectPreviousClick,
+    CommandShortCut(kcSelectPrevious)));
   MenuEdit.AddSeparator;
   FLockAction := FCommands.NewAction(rsMenuEditLock, aiLock, @EditLockClick);
   FCommands.AddMenuItem(MenuEdit, FLockAction);
@@ -1952,6 +1962,40 @@ end;
 procedure TMainForm.MenuEditDeleteClick(Sender: TObject);
 begin
   FCanvas.DeleteSelection;
+end;
+
+procedure TMainForm.SelectNextClick(Sender: TObject);
+begin
+  StepSelection(False);
+end;
+
+procedure TMainForm.SelectPreviousClick(Sender: TObject);
+begin
+  StepSelection(True);
+end;
+
+// Ctrl+Tab and Ctrl+Shift+Tab (issue #39): the next or previous object the
+// Objects tab lists, in its properties, so formulas can be looked through
+// without leaving the field being edited. That field is committed first, as
+// leaving it would be, and a refusal keeps the object.
+procedure TMainForm.StepSelection(Backwards: boolean);
+var
+  Key, FieldName: string;
+begin
+  if not FProperties.CommitFocused(FieldName) then
+    Exit;
+  Key := StepKey(FObjects.VisibleKeys, FCanvas.Selection, Backwards);
+  if Key = '' then
+  begin
+    StatusBar.Panels[PANEL_MESSAGE].Text := rsStepNothingListed;
+    Exit;
+  end;
+  FCanvas.SelectObjects([Key]);
+  FCanvas.RevealSelection;
+  if FSidePanel.Visible then
+    FSidePanel.ActiveContent := FProperties.Parent;
+  if FieldName <> '' then
+    FProperties.FocusField(FieldName);
 end;
 
 procedure TMainForm.EditLockClick(Sender: TObject);

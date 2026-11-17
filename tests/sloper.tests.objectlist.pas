@@ -57,6 +57,11 @@ type
     procedure TestMissingMeasurements;
     procedure TestNoMeasurementSet;
     procedure TestMeasurementChangeText;
+    procedure TestStepNext;
+    procedure TestStepBack;
+    procedure TestStepFromNothing;
+    procedure TestStepFromSeveral;
+    procedure TestStepNothingListed;
   end;
 
 implementation
@@ -164,6 +169,41 @@ begin
   FPattern.AddFreePoint('C', 'Line_A_B.length', '0');
   FPattern.Evaluate;
   AssertRows('finds the object reading a name', 'Line_A_B C', Ord(ofAll), 'line_a_b');
+end;
+
+// Ctrl+Tab and Ctrl+Shift+Tab (issue #39)
+procedure TTestObjectList.TestStepNext;
+begin
+  AssertEquals('the next', 'b', StepKey(['a', 'b', 'c'], ['a'], False));
+  AssertEquals('round from the last', 'a', StepKey(['a', 'b', 'c'], ['c'], False));
+end;
+
+procedure TTestObjectList.TestStepBack;
+begin
+  AssertEquals('the one before', 'a', StepKey(['a', 'b', 'c'], ['b'], True));
+  AssertEquals('round from the first', 'c', StepKey(['a', 'b', 'c'], ['a'], True));
+end;
+
+procedure TTestObjectList.TestStepFromNothing;
+begin
+  AssertEquals('the first', 'a', StepKey(['a', 'b', 'c'], [], False));
+  AssertEquals('the last', 'c', StepKey(['a', 'b', 'c'], [], True));
+  // A selection the list leaves out, by its filter or search, counts as none
+  AssertEquals('not listed', 'a', StepKey(['a', 'b', 'c'], ['x'], False));
+end;
+
+// From the last selected that is listed
+procedure TTestObjectList.TestStepFromSeveral;
+begin
+  AssertEquals('after the last', 'c', StepKey(['a', 'b', 'c', 'd'], ['a', 'b'], False));
+  AssertEquals('before the last', 'a', StepKey(['a', 'b', 'c', 'd'], ['c', 'b'], True));
+  AssertEquals('the last listed', 'c', StepKey(['a', 'b', 'c', 'd'], ['b', 'x'], False));
+  AssertEquals('one object', 'a', StepKey(['a'], ['a'], False));
+end;
+
+procedure TTestObjectList.TestStepNothingListed;
+begin
+  AssertEquals('', StepKey([], ['a'], False));
 end;
 
 procedure TTestObjectList.TestPlainClick;

@@ -44,7 +44,9 @@ type
     // Locked objects
     aiLock, aiUnlock,
     // Formula suggestions
-    aiWand);
+    aiWand,
+    // Stepping through the objects
+    aiSelectNext, aiSelectPrevious);
 
 const
   APP_ICON_NAMES: array[TAppIcon] of string = ('file-plus', 'folder-open', 'device-floppy', 'file-pencil',
@@ -61,7 +63,8 @@ const
     'ruler-2', 'settings',
     'typography', 'notes', 'message',
     'eye-off', 'eye', 'focus-2', 'stack-front', 'stack-back', 'lock', 'lock-open',
-    'wand');
+    'wand',
+    'arrow-narrow-right', 'arrow-narrow-left');
 
 function IconFileName(const Dir: string; Icon: TAppIcon): string;
 // Tabler draws in currentColor; this gives it Color, such as #202020

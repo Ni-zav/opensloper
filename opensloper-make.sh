@@ -1043,9 +1043,13 @@ for my $file (@ARGV) {
     }
   }
 
-  # Shortcuts use ssModifier
+  # Shortcuts use ssModifier. The one exception is CONTROL_KEY in
+  # Sloper.UI.Commands, for the shortcuts the table writes with Ctrl, which
+  # are the Control key on macOS too.
   while ($code =~ /\bssCtrl\b/g) {
-    report('error', $file, line_of($code, $-[0]), 'use ssModifier for shortcuts, not ssCtrl');
+    my $line = line_of($code, $-[0]);
+    next if $file =~ m{(^|/)src/ui/sloper\.ui\.commands\.pas$} && (split /\n/, $code)[$line - 1] =~ /^\s*CONTROL_KEY = ssCtrl;/;
+    report('error', $file, $line, 'use ssModifier for shortcuts, not ssCtrl');
   }
 
   next if $is_test;

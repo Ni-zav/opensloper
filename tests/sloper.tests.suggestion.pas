@@ -60,6 +60,7 @@ type
     procedure TestAngles;
     procedure TestAngleWrapsRound;
     procedure TestRatios;
+    procedure TestNotePositionIsARatio;
     procedure TestCentimetres;
     procedure TestTexts;
     procedure TestDragField;
@@ -77,7 +78,7 @@ type
 implementation
 
 uses
-  Math, Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units, Sloper.UI.SuggestionGrade;
+  Math, Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units, Sloper.Core.Note, Sloper.UI.SuggestionGrade;
 
 procedure TTestSuggestion.SetUp;
 begin
@@ -300,6 +301,23 @@ begin
   Found := Suggested(FAlong, 'value', 0.33);
   AssertEquals('a third', '1/3', Found.Items[0].Text);
   AssertEquals('no 2/6', 0, Pos('2/6', Texts(Found)));
+end;
+
+// A note hanging from an edge sits a share of the way along it (issue #41)
+procedure TTestSuggestion.TestNotePositionIsARatio;
+var
+  Note: TNoteObject;
+  Found: TSuggestions;
+begin
+  Note := FPattern.AddNote('Label', 'Hem', naEdge, FHem.Key, '0.495', '0', '0');
+  AssertTrue('added: ' + FPattern.LastError, Assigned(Note));
+  FPattern.Evaluate;
+  AssertTrue('a ratio', SuggestionKind(Note, 'position') = skRatio);
+  AssertTrue('a plain number', CanSuggest(FPattern, Note, 'position'));
+  Found := Suggested(Note, 'position', 0.495);
+  AssertTrue('some', Length(Found.Items) > 0);
+  AssertEquals('a half', '1/2', Found.Items[0].Text);
+  AssertTrue('its offset is a length', SuggestionKind(Note, 'dx') = skLength);
 end;
 
 procedure TTestSuggestion.TestCentimetres;

@@ -112,7 +112,7 @@ implementation
 
 uses
   SysUtils, Math, Generics.Collections, Sloper.Core.EvalTypes, Sloper.Core.Formula, Sloper.Core.Draft, Sloper.Core.Drag,
-  Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Core.Variables;
+  Sloper.Core.JSON, Sloper.Core.Note, Sloper.Core.Measurements, Sloper.Core.Variables;
 
 const
   LENGTH_TOLERANCE = 5; // mm
@@ -215,9 +215,10 @@ begin
     fkLength: Result := skLength;
     fkAngle: Result := skAngle;
     fkNumber:
-      // Only the ratio along an edge or between points is a share; other
-      // plain numbers are counts
-      if (FieldName = 'value') and ((Node is TAlongEdgePoint) or (Node is TBetweenPoint)) then
+      // Only the ratio along an edge or between points, and where a note
+      // hangs along its edge, is a share; other plain numbers are counts
+      if ((FieldName = 'value') and ((Node is TAlongEdgePoint) or (Node is TBetweenPoint))) or
+        ((FieldName = NOTE_POSITION_FIELD) and (Node is TNoteObject)) then
         Result := skRatio;
   end;
 end;

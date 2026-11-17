@@ -44,7 +44,7 @@ uses
   SysUtils, fpjson, Sloper.Core.JSON, Sloper.Core.OperationInfo, Sloper.Core.FileInfo;
 
 const
-  SCHEMA_BASE_URL = 'https://billbsing.github.io/opensloper/reference/schemas/';
+  SCHEMA_BASE_URL = 'https://docs.opensloper.com/reference/schemas/';
   OBJECT_DEF = 'object';
 
 function IsListOfValues(const Member: TOperationMember): boolean;

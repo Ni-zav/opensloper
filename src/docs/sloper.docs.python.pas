@@ -44,7 +44,7 @@ uses
   SysUtils, StrUtils, Sloper.API.Server, Sloper.API.Rpc, Sloper.API.Methods;
 
 const
-  REFERENCE_URL = 'https://billbsing.github.io/opensloper/reference/';
+  REFERENCE_URL = 'https://docs.opensloper.com/reference/';
   INDENT = '    ';
   LINE_WIDTH = 100;
   // Words Python reserves, which a parameter name gets an underscore after

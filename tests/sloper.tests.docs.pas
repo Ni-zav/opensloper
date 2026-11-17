@@ -133,7 +133,7 @@ end;
 
 procedure TTestDocs.TestDocTextLinks;
 const
-  URL = 'https://billbsing.github.io/opensloper/reference/';
+  URL = 'https://docs.opensloper.com/reference/';
 begin
   AssertEquals('See formulas (' + URL + 'formulas/).', DocText('See [formulas](formulas.md).'));
   AssertEquals('A list[str], see formulas (' + URL + 'formulas/).',

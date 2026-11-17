@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://billbsing.github.io/opensloper/reference/schemas/layout.schema.json",
+  "$id": "https://docs.opensloper.com/reference/schemas/layout.schema.json",
   "$comment": "Generated from the program by opensloper-cli doc layout.schema.json; do not edit it by hand.",
   "title": "OpenSloper layout file (.slayout)",
   "description": "Made by opensloper-publish: where the pieces of one or more patterns go on the pages, roll or material, and how they print. Positions are plain numbers in mm, from the top left, y down.",

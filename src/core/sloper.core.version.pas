@@ -33,7 +33,7 @@ const
   MEASUREMENT_FILE_EXT = '.slm';
 
   // The user guide on the web, for builds without its offline copy
-  USER_GUIDE_URL = 'https://opensloper.github.io/opensloper/';
+  USER_GUIDE_URL = 'https://docs.opensloper.com/';
 
 implementation
 

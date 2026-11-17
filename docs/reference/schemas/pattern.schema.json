@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://billbsing.github.io/opensloper/reference/schemas/pattern.schema.json",
+  "$id": "https://docs.opensloper.com/reference/schemas/pattern.schema.json",
   "$comment": "Generated from the program by opensloper-cli doc pattern.schema.json; do not edit it by hand.",
   "title": "OpenSloper pattern file (.sloper)",
   "description": "Made by opensloper-design. It holds the definitions only: the formula for each point and line, and which edges make each piece. Positions are worked out again every time it opens.",

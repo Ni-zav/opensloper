@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://billbsing.github.io/opensloper/reference/schemas/measurements.schema.json",
+  "$id": "https://docs.opensloper.com/reference/schemas/measurements.schema.json",
   "$comment": "Generated from the program by opensloper-cli doc measurements.schema.json; do not edit it by hand.",
   "title": "OpenSloper measurements file (.slm)",
   "description": "Made by opensloper-measurements: one person's measurements, with a value each, or a size table, with a value for each size. Patterns refer to a measurement by its key, as @waist.",

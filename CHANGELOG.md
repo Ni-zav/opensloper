@@ -13,6 +13,11 @@ Changed, Fixed and Removed under each version.
 
 ## 0.4.0
 
+### Changed
+
+- The user guide has moved to <https://docs.opensloper.com>; Help → User
+  Guide, the Python client and the file schemas link there (#43).
+
 
 ## 0.3.0
 

@@ -29,7 +29,7 @@ Example::
         sloper.add_point("freePoint", name="A", x="0", y="0")
         print(sloper.evaluate())
 
-See https://billbsing.github.io/opensloper/reference/api/ for every method.
+See https://docs.opensloper.com/reference/api/ for every method.
 """
 
 from __future__ import annotations
@@ -379,8 +379,8 @@ class OpenSloper:
             type: The point's type.
             name: Its name; by default the next free one.
             **members: The type's members, as on the operations page
-                (https://billbsing.github.io/opensloper/reference/operations/); points and edges are
-                given by ID or name.
+                (https://docs.opensloper.com/reference/operations/); points and edges are given by
+                ID or name.
 
         Returns:
             The object, as `get_object` gives it.
@@ -405,9 +405,8 @@ class OpenSloper:
             name: Its name; by default the next free one.
             role: Its role; by default construction.
             **members: The type's members, as on the operations page
-                (https://billbsing.github.io/opensloper/reference/operations/); points and edges are
-                given by ID or name. An offset edge's `side` may also be `inside` or `outside` a
-                `piece`.
+                (https://docs.opensloper.com/reference/operations/); points and edges are given by
+                ID or name. An offset edge's `side` may also be `inside` or `outside` a `piece`.
 
         Returns:
             The object, as `get_object` gives it.

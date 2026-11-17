@@ -32,8 +32,8 @@ unit Sloper.UI.Properties;
 interface
 
 uses
-  Classes, SysUtils, Generics.Collections, Controls, StdCtrls, Forms, Graphics, LCLType, Sloper.Core.Draft,
-  Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter;
+  Classes, SysUtils, Generics.Collections, Controls, StdCtrls, Forms, Graphics, LCLType, Buttons, Sloper.Core.Geometry, Sloper.Core.Draft,
+  Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter, Sloper.UI.FormulaSuggest, Sloper.UI.Suggestion;
 
 type
   // One line of text that cuts itself to the label's width with an ellipsis
@@ -50,6 +50,9 @@ type
 
   TColumnDragEvent = procedure(Sender: TObject; NewLeft: integer) of object;
   TPropertiesMessageEvent = procedure(Sender: TObject; const AText: string) of object;
+  // Where a hovered formula suggestion would put the selected point; Shown
+  // is False when no suggestion is hovered
+  TSuggestPreviewEvent = procedure(Sender: TObject; Shown: boolean; const Position: TVec2) of object;
 
   // The draggable strip between the name and value columns
   TColumnDivider = class(TGraphicControl)
@@ -77,6 +80,10 @@ type
     Kind: TFieldRowKind;
     // The formula's field; empty for the name
     FieldName: string;
+    // A formula row's button for formula suggestions, shown while it holds
+    // a plain number, and the list of them under the row
+    Wand: TSpeedButton;
+    List: TFormulaSuggestList;
   end;
 
   // Where a section's rows go, top to bottom: every section adds its rows
@@ -147,6 +154,32 @@ type
     FRefreshFocused: boolean;
     // The Locked box, which stays usable while the rest is read-only
     FLockBox: TCheckBox;
+    // The row whose formula suggestions are open, or -1, with its object and field
+    FSuggestRow: integer;
+    FSuggestKey, FSuggestField: string;
+    FSuggestSource: TSuggestionSource;
+    // The list is due to follow the field's value when the app is idle
+    FSuggestPending: boolean;
+    FWandImages: TImageList;
+    FOnSuggestChange: TNotifyEvent;
+    FOnSuggestPreview: TSuggestPreviewEvent;
+    procedure RebuildRows;
+    procedure AddWand(RowIndex: integer);
+    procedure AddSuggestList(RowIndex: integer);
+    procedure UpdateWands;
+    procedure OpenSuggestions(RowIndex: integer);
+    // Notify tells the canvas the drag is no longer locked to the field
+    procedure CloseSuggestions(Notify: boolean = True);
+    // After a rebuild: open again on the same field, or say it closed
+    procedure ReopenSuggestions(const WasKey, WasField: string);
+    procedure ShowSuggestions;
+    procedure QueueSuggestions;
+    procedure SuggestionsDue(Data: PtrInt);
+    procedure SuggestChanged;
+    procedure WandClick(Sender: TObject);
+    procedure SuggestChoose(Sender: TObject);
+    procedure SuggestHover(Sender: TObject; Index: integer);
+    procedure SuggestListKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     procedure SetDocument(ADocument: TPatternDocument);
     procedure DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
     procedure QueuedChangeDue(Data: PtrInt);
@@ -196,6 +229,13 @@ type
     property NameShare: double read FNameShare write SetNameShare;
     // Says why a change was refused
     property OnMessage: TPropertiesMessageEvent read FOnMessage write FOnMessage;
+    // The object and field whose formula suggestions are open; empty when none.
+    // While they are, a drag of the point changes only that field.
+    property SuggestKey: string read FSuggestKey;
+    property SuggestField: string read FSuggestField;
+    // The suggestions opened or closed
+    property OnSuggestChange: TNotifyEvent read FOnSuggestChange write FOnSuggestChange;
+    property OnSuggestPreview: TSuggestPreviewEvent read FOnSuggestPreview write FOnSuggestPreview;
 
     { For the sections }
 
@@ -311,13 +351,16 @@ resourcestring
   rsPropLockedHint = 'A locked object cannot be moved, edited or deleted, but its formulas still run';
   rsPropLock = 'Lock';
   rsPropUnlock = 'Unlock';
+  rsPropSuggestHint = 'Suggest formulas that give this value (Alt+Down)';
+  // On the suggestions button when the icons are missing
+  rsPropSuggestCaption = 'f';
 
 implementation
 
 uses
   Math, Spin, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Transform,
   Sloper.Core.Note, Sloper.Core.Settings, Sloper.UI.GridColumns, Sloper.UI.ObjectList, Sloper.UI.PieceProperties, Sloper.UI.PropertyText, Sloper.UI.Spacing,
-  Sloper.UI.FontBox, Sloper.UI.Completion;
+  Sloper.UI.FontBox, Sloper.UI.Completion, Sloper.UI.Icons, Sloper.UI.IconSet, Sloper.Core.Drag;
 
 type
   // Rows every object has: type, name and formula fields first; what made a
@@ -436,6 +479,9 @@ const
   // A note's text field, at 96 pixels per inch
   NOTE_TEXT_HEIGHT96 = 64;
   NOTE_SIZE_STEP = 1;
+  // The suggestions button and its icon, at 96 pixels per inch
+  WAND_WIDTH96 = 24;
+  WAND_ICON96 = 16;
   // The edge and marker sections' queued changes
   QUEUED_CONVERT_TYPE = 0;
   QUEUED_MARKER = 1;
@@ -568,6 +614,7 @@ begin
   inherited Create(AOwner);
   BorderStyle := bsNone;
   FNameShare := DEFAULT_NAME_COLUMN_SHARE;
+  FSuggestRow := -1;
   HorzScrollBar.Visible := False;
   FSections := TPropertySectionList.Create(True);
   Rebuild;
@@ -580,6 +627,7 @@ begin
   SetDocument(nil);
   inherited Destroy;
   FreeAndNil(FSections);
+  FreeAndNil(FSuggestSource);
 end;
 
 procedure TPropertiesPanel.SetDocument(ADocument: TPatternDocument);
@@ -749,6 +797,9 @@ var
 begin
   if Assigned(FCompleter) then
     FCompleter.Hide;
+  // Its list goes with the rows; Rebuild opens it again or says it closed
+  FSuggestRow := -1;
+  FreeAndNil(FSuggestSource);
   for Index := 0 to ControlCount - 1 do
     if Controls[Index] is TEdit then
       TEdit(Controls[Index]).OnExit := nil
@@ -875,9 +926,236 @@ begin
   Result.OnChange := @EditChange;
   Result.OnClick := @EditClick;
   AddRow(ACaption, Result);
+  if Kind = frFormula then
+    AddWand(Index);
   FRows[Index].Refusal := AddLabel('');
   FRows[Index].Refusal.Font.Color := clRed;
   FRows[Index].Refusal.Visible := False;
+  if Kind = frFormula then
+    AddSuggestList(Index);
+end;
+
+// At the right of the value column; the field gives it room only while it shows
+procedure TPropertiesPanel.AddWand(RowIndex: integer);
+var
+  Wand: TSpeedButton;
+  Edit: TEdit;
+begin
+  Edit := FRows[RowIndex].Edit;
+  Wand := TSpeedButton.Create(Self);
+  Wand.Visible := False;
+  Wand.Parent := Self;
+  Wand.Flat := True;
+  Wand.Tag := RowIndex;
+  Wand.Hint := rsPropSuggestHint;
+  Wand.ShowHint := True;
+  Wand.OnClick := @WandClick;
+  if IconsFound then
+  begin
+    if not Assigned(FWandImages) then
+      FWandImages := CreateIconImages(Self, Scale96ToForm(WAND_ICON96), clWindowText, [aiWand]);
+    Wand.Images := FWandImages;
+    Wand.ImageIndex := 0;
+  end
+  else
+    Wand.Caption := rsPropSuggestCaption;
+  Wand.Width := Scale96ToForm(WAND_WIDTH96);
+  Wand.Anchors := [akTop, akRight, akBottom];
+  Wand.AnchorSideTop.Control := Edit;
+  Wand.AnchorSideTop.Side := asrTop;
+  Wand.AnchorSideBottom.Control := Edit;
+  Wand.AnchorSideBottom.Side := asrBottom;
+  Wand.AnchorSideRight.Control := Self;
+  Wand.AnchorSideRight.Side := asrBottom;
+  Wand.BorderSpacing.Right := ControlGap;
+  Edit.AnchorSideRight.Control := Wand;
+  Edit.AnchorSideRight.Side := asrLeft;
+  FRows[RowIndex].Wand := Wand;
+end;
+
+// Under the row and its refusal, across both columns, hidden until opened
+procedure TPropertiesPanel.AddSuggestList(RowIndex: integer);
+var
+  List: TFormulaSuggestList;
+begin
+  List := TFormulaSuggestList.Create(Self);
+  List.Visible := False;
+  List.Tag := RowIndex;
+  List.OnChoose := @SuggestChoose;
+  List.OnHover := @SuggestHover;
+  List.OnKeyDown := @SuggestListKeyDown;
+  Stack(List);
+  FRows[RowIndex].List := List;
+end;
+
+// A wand shows on a field holding a plain number, on an object that can be edited
+procedure TPropertiesPanel.UpdateWands;
+var
+  Node: TEvalNode;
+  Row: TFieldRow;
+begin
+  Node := SelectedNode;
+  for Row in FRows do
+    if Assigned(Row.Wand) then
+      Row.Wand.Visible := Assigned(Node) and CanSuggest(FDocument.Pattern, Node, Row.FieldName);
+end;
+
+procedure TPropertiesPanel.SuggestChanged;
+begin
+  if Assigned(FOnSuggestPreview) then
+    FOnSuggestPreview(Self, False, Vec2(0, 0));
+  if Assigned(FOnSuggestChange) then
+    FOnSuggestChange(Self);
+end;
+
+procedure TPropertiesPanel.OpenSuggestions(RowIndex: integer);
+var
+  Node: TEvalNode;
+  FieldName: string;
+begin
+  Node := SelectedNode;
+  FieldName := FRows[RowIndex].FieldName;
+  if not Assigned(Node) or not Assigned(FRows[RowIndex].List) or not CanSuggest(FDocument.Pattern, Node, FieldName) then
+    Exit;
+  CloseSuggestions(False);
+  if Assigned(FCompleter) then
+    FCompleter.Hide;
+  FSuggestRow := RowIndex;
+  FSuggestKey := FKey;
+  FSuggestField := FieldName;
+  FSuggestSource := TSuggestionSource.Create(FDocument.Pattern, Node, FieldName);
+  FRows[RowIndex].List.Restart;
+  FRows[RowIndex].List.ItemIndex := -1;
+  ShowSuggestions;
+  if FSuggestRow < 0 then
+    Exit;
+  FRows[RowIndex].List.Visible := True;
+  SuggestChanged;
+end;
+
+procedure TPropertiesPanel.CloseSuggestions(Notify: boolean);
+begin
+  if FSuggestRow < 0 then
+    Exit;
+  FRows[FSuggestRow].List.Visible := False;
+  FSuggestRow := -1;
+  FSuggestKey := '';
+  FSuggestField := '';
+  FreeAndNil(FSuggestSource);
+  if Notify then
+    SuggestChanged;
+end;
+
+procedure TPropertiesPanel.ReopenSuggestions(const WasKey, WasField: string);
+var
+  RowIndex: integer;
+begin
+  RowIndex := FormulaRowOf(WasField);
+  if (WasKey = FKey) and (RowIndex >= 0) then
+    OpenSuggestions(RowIndex);
+  if FSuggestRow < 0 then
+  begin
+    FSuggestKey := '';
+    FSuggestField := '';
+    SuggestChanged;
+  end;
+end;
+
+// The candidates are worked out again unless a drag is under way, when only
+// the field's object changes and no candidate reads it
+procedure TPropertiesPanel.ShowSuggestions;
+var
+  Node: TEvalNode;
+  Target: double;
+begin
+  Node := SelectedNode;
+  if not Assigned(Node) or not CanSuggest(FDocument.Pattern, Node, FSuggestField) or not SuggestionTarget(FDocument.Pattern, Node, FSuggestField, Target) then
+  begin
+    CloseSuggestions;
+    Exit;
+  end;
+  if not FDocument.ChangeOpen or not Assigned(FSuggestSource) then
+  begin
+    FreeAndNil(FSuggestSource);
+    FSuggestSource := TSuggestionSource.Create(FDocument.Pattern, Node, FSuggestField);
+  end;
+  FRows[FSuggestRow].List.ShowSuggestions(FSuggestSource.Match(Target), FSuggestSource.Kind, FDocument.Pattern.Units);
+end;
+
+procedure TPropertiesPanel.QueueSuggestions;
+begin
+  if FSuggestPending then
+    Exit;
+  FSuggestPending := True;
+  Application.QueueAsyncCall(@SuggestionsDue, 0);
+end;
+
+procedure TPropertiesPanel.SuggestionsDue(Data: PtrInt);
+begin
+  FSuggestPending := False;
+  if (FSuggestRow >= 0) and Assigned(FDocument) then
+    ShowSuggestions;
+end;
+
+procedure TPropertiesPanel.WandClick(Sender: TObject);
+var
+  RowIndex: integer;
+begin
+  RowIndex := TControl(Sender).Tag;
+  if RowIndex = FSuggestRow then
+    CloseSuggestions
+  else
+    OpenSuggestions(RowIndex);
+end;
+
+// Closed before the commit, which makes the field a formula
+procedure TPropertiesPanel.SuggestChoose(Sender: TObject);
+var
+  Edit: TEdit;
+  Node: TEvalNode;
+  Suggestion: TSuggestion;
+  FieldName: string;
+  Done: boolean;
+begin
+  Node := SelectedNode;
+  if (FSuggestRow < 0) or not Assigned(Node) or not FRows[FSuggestRow].List.RowSuggestion(FRows[FSuggestRow].List.ItemIndex, Suggestion) then
+    Exit;
+  FieldName := FSuggestField;
+  Edit := FRows[FSuggestRow].Edit;
+  CloseSuggestions;
+  BeginEdit(Format(rsPropEdit, [FieldCaption(FieldName)]));
+  Done := FDocument.Pattern.SetFormula(Node, FieldName, Suggestion.Text);
+  if not Done then
+    Report(FDocument.Pattern.LastError);
+  EndEdit(Done);
+  // The field keeps what was typed in it while it has the focus
+  SetEditText(Edit, OriginalText(Edit));
+  ClearRefusal(Edit);
+end;
+
+procedure TPropertiesPanel.SuggestHover(Sender: TObject; Index: integer);
+var
+  Node: TEvalNode;
+  Suggestion: TSuggestion;
+  Position: TVec2;
+begin
+  if not Assigned(FOnSuggestPreview) or (FSuggestRow < 0) then
+    Exit;
+  Node := SelectedNode;
+  if (Node is TPointObject) and FRows[FSuggestRow].List.RowSuggestion(Index, Suggestion) and
+    FieldPosition(FDocument.Pattern, TPointObject(Node), FSuggestField, Suggestion.Value, Position) then
+    FOnSuggestPreview(Self, True, Position)
+  else
+    FOnSuggestPreview(Self, False, Vec2(0, 0));
+end;
+
+procedure TPropertiesPanel.SuggestListKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
+begin
+  if Key = VK_ESCAPE then
+  begin
+    CloseSuggestions;
+    Key := 0;
+  end;
 end;
 
 function TPropertiesPanel.FormulaRowOf(const FieldName: string): integer;
@@ -962,6 +1240,22 @@ end;
 
 procedure TPropertiesPanel.Rebuild;
 var
+  WasKey, WasField: string;
+begin
+  WasKey := '';
+  WasField := '';
+  if FSuggestRow >= 0 then
+  begin
+    WasKey := FSuggestKey;
+    WasField := FSuggestField;
+  end;
+  RebuildRows;
+  if WasKey <> '' then
+    ReopenSuggestions(WasKey, WasField);
+end;
+
+procedure TPropertiesPanel.RebuildRows;
+var
   Node: TEvalNode;
   Place: TSectionPlace;
   Section: TPropertySection;
@@ -1034,6 +1328,12 @@ begin
   for Section in FSections do
     Section.Refresh(Node);
   ApplyLock(Node);
+  UpdateWands;
+  if FSuggestRow >= 0 then
+    if CanSuggest(FDocument.Pattern, Node, FSuggestField) then
+      QueueSuggestions
+    else
+      CloseSuggestions;
 end;
 
 procedure TPropertiesPanel.ApplyLock(Node: TEvalNode);
@@ -1114,6 +1414,26 @@ begin
   FSwallowEnterUp := (Key = VK_RETURN) and Assigned(FCompleter) and FCompleter.Visible;
   if Assigned(FCompleter) and FCompleter.HandleKey(Key) then
     Exit;
+  if (Key = VK_DOWN) and (ssAlt in Shift) then
+  begin
+    OpenSuggestions(Edit.Tag);
+    Key := 0;
+    Exit;
+  end;
+  // The open list takes Up, Down, Escape, and Enter once a row is chosen
+  if (FSuggestRow = Edit.Tag) and ((Key = VK_UP) or (Key = VK_DOWN) or (Key = VK_RETURN) or (Key = VK_ESCAPE)) then
+  begin
+    if Key = VK_ESCAPE then
+    begin
+      CloseSuggestions;
+      Key := 0;
+      Exit;
+    end;
+    FSwallowEnterUp := Key = VK_RETURN;
+    if FRows[Edit.Tag].List.HandleKey(Key) then
+      Exit;
+    FSwallowEnterUp := False;
+  end;
   case Key of
     VK_RETURN:
     begin

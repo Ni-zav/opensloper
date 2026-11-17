@@ -45,6 +45,9 @@ type
 // Moves the selected points and notes by Offset (mm); a run of nudges to
 // the same objects is one undo step
 function NudgeSelection(Document: TPatternDocument; const Selection: TStringArray; const Offset: TVec2): TSelectionEdit;
+// Nudges the point with Key by changing only FieldName, as a drag locked to
+// that field does: an arrow across the field's direction does nothing
+function NudgeField(Document: TPatternDocument; const Key, FieldName: string; const Offset: TVec2): TSelectionEdit;
 // Description names the undo step: Delete, or Cut
 function DeleteSelection(Document: TPatternDocument; const Selection: TStringArray; const Description: string): TSelectionEdit;
 // Copied.Text is empty when nothing selected can be copied
@@ -259,6 +262,27 @@ begin
     Moved := True;
   end;
   Result.Done := Document.Commit(Moved, MergeKey);
+  if Document.ChangeRefused then
+    Result.Message := Document.Pattern.LastError;
+end;
+
+function NudgeField(Document: TPatternDocument; const Key, FieldName: string; const Offset: TVec2): TSelectionEdit;
+var
+  Node: TEvalNode;
+  Reason: string;
+begin
+  Result := Default(TSelectionEdit);
+  Node := Document.Pattern.FindNode(Key);
+  if not (Node is TPointObject) then
+    Exit;
+  Document.BeginChange(rsSelectionNudge);
+  if not DragPointField(Document.Pattern, TPointObject(Node), FieldName, TPointObject(Node).Position + Offset, Reason) then
+  begin
+    Document.CancelChange;
+    Exit(Refused(Reason));
+  end;
+  // An arrow that changes nothing leaves no undo step
+  Result.Done := Document.EndChange('nudge:' + Key);
   if Document.ChangeRefused then
     Result.Message := Document.Pattern.LastError;
 end;

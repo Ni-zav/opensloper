@@ -25,18 +25,20 @@ unit Sloper.UI.Icons;
 interface
 
 uses
-  Classes, Controls, Graphics;
+  Classes, Controls, Graphics, Sloper.UI.IconSet;
 
 // One image per TAppIcon, in its order, Size pixels square and drawn in
 // Color. An icon that cannot be read stays blank, so the indices still line
 // up; IconsFound says whether the folder was there at all.
 function CreateIconList(AOwner: TComponent; Size: integer; Color: TColor): TImageList;
+// Just these icons, in this order, for a control that shows a few
+function CreateIconImages(AOwner: TComponent; Size: integer; Color: TColor; const Icons: array of TAppIcon): TImageList;
 function IconsFound: boolean;
 
 implementation
 
 uses
-  SysUtils, BGRABitmap, BGRABitmapTypes, BGRASVG, Sloper.Core.AppPaths, Sloper.Core.JSON, Sloper.UI.IconSet;
+  SysUtils, BGRABitmap, BGRABitmapTypes, BGRASVG, Sloper.Core.AppPaths, Sloper.Core.JSON;
 
 function IconsFound: boolean;
 begin
@@ -72,7 +74,7 @@ begin
   end;
 end;
 
-function CreateIconList(AOwner: TComponent; Size: integer; Color: TColor): TImageList;
+function CreateIconImages(AOwner: TComponent; Size: integer; Color: TColor; const Icons: array of TAppIcon): TImageList;
 var
   Dir, Hex: string;
   Icon: TAppIcon;
@@ -83,7 +85,7 @@ begin
   Result.Height := Size;
   Dir := TAppPaths.IconDir;
   Hex := ColorText(Color);
-  for Icon := Low(TAppIcon) to High(TAppIcon) do
+  for Icon in Icons do
   begin
     Image := TBGRABitmap.Create(Size, Size, BGRAPixelTransparent);
     try
@@ -94,6 +96,17 @@ begin
       FreeAndNil(Image);
     end;
   end;
+end;
+
+function CreateIconList(AOwner: TComponent; Size: integer; Color: TColor): TImageList;
+var
+  Icons: array of TAppIcon;
+  Icon: TAppIcon;
+begin
+  Icons := nil;
+  for Icon := Low(TAppIcon) to High(TAppIcon) do
+    Insert(Icon, Icons, Length(Icons));
+  Result := CreateIconImages(AOwner, Size, Color, Icons);
 end;
 
 end.

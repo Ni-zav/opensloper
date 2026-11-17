@@ -287,6 +287,16 @@
         <UnitName Value="Sloper.UI.FormulaCompleter"/>
       </Unit>
       <Unit>
+        <Filename Value="../ui/sloper.ui.suggestion.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.UI.Suggestion"/>
+      </Unit>
+      <Unit>
+        <Filename Value="../ui/sloper.ui.formulasuggest.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.UI.FormulaSuggest"/>
+      </Unit>
+      <Unit>
         <Filename Value="../ui/sloper.ui.listpanel.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.UI.ListPanel"/>

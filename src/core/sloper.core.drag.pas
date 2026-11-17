@@ -66,6 +66,38 @@ function CanDrag(Pattern: TPattern; Point: TPointObject; out ErrorMessage: strin
 // change and evaluate afterwards. False, with ErrorMessage, when the point
 // cannot be dragged.
 function DragPoint(Pattern: TPattern; Point: TPointObject; const Target: TVec2; out ErrorMessage: string): boolean;
+// The fields a drag of Point writes; empty when its type cannot be dragged
+function DragFields(Point: TPointObject): TStringArray;
+// True when a drag changing only FieldName can move Point: it can be dragged
+// apart from its other fields, and FieldName is one a drag writes and a
+// plain number. Otherwise ErrorMessage says why.
+function CanDragField(Pattern: TPattern; Point: TPointObject; const FieldName: string; out ErrorMessage: string): boolean;
+// Sets only FieldName so Point comes as near Target as that field allows: x or
+// dx moves it across, y or dy up and down, an offset's length along its angle,
+// its angle round its base, and a value along its edge. Call inside a
+// document change and evaluate afterwards.
+function DragPointField(Pattern: TPattern; Point: TPointObject; const FieldName: string; const Target: TVec2;
+  out ErrorMessage: string): boolean;
+// Where Point would be with FieldName worked out to Value (mm, degrees or a
+// ratio, as the field takes it) and its other fields as they are. False for a
+// field that does not place the point.
+function FieldPosition(Pattern: TPattern; Point: TPointObject; const FieldName: string; Value: double; out Position: TVec2): boolean;
+
+type
+  TFieldGuideKind = (fgNone, fgLine, fgCircle);
+
+  // The path a drag of one field keeps the point on, to draw while dragging
+  TFieldGuide = record
+    Kind: TFieldGuideKind;
+    // A line through Start towards Finish, drawn past both; or a circle
+    Start, Finish: TVec2;
+    Centre: TVec2;
+    Radius: double;
+  end;
+
+// None for a value along an edge, whose edge is already drawn
+function FieldGuide(Pattern: TPattern; Point: TPointObject; const FieldName: string): TFieldGuide;
+
 // True when the note is not locked and its offset, or a free note's place, is plain numbers
 function CanDragNote(Note: TNoteObject; out ErrorMessage: string): boolean;
 // Sets the note's offset, or a free note's place, so its top left lies at
@@ -118,7 +150,6 @@ begin
   Result := RoundLengthFormulaText(Millimetres, Units) + NUMBER_SUFFIX_NAMES[Suffix];
 end;
 
-// The fields a drag of Point writes; empty when its type cannot be dragged
 function DragFields(Point: TPointObject): TStringArray;
 begin
   Result := nil;
@@ -267,6 +298,182 @@ begin
     Result := SetFields(Pattern, Point, ['value'], [RoundedText(Distance / EdgeLength, DRAG_RATIO_DECIMALS)], ErrorMessage)
   else
     Result := True;
+end;
+
+function CanDragField(Pattern: TPattern; Point: TPointObject; const FieldName: string; out ErrorMessage: string): boolean;
+var
+  Fields: TStringArray;
+  Known: string;
+  Found: boolean;
+begin
+  if Pattern.IsLocked(Point) then
+  begin
+    ErrorMessage := Format(rsDragLocked, [Point.DisplayName]);
+    Exit(False);
+  end;
+  ErrorMessage := CopyRefusal(Pattern, Point);
+  if ErrorMessage <> '' then
+    Exit(False);
+  Fields := DragFields(Point);
+  Found := False;
+  for Known in Fields do
+    Found := Found or (Known = FieldName);
+  if not Found then
+  begin
+    ErrorMessage := Format(rsDragPlaced, [Point.DisplayName]);
+    Exit(False);
+  end;
+  if not Point.Field(FieldName).IsLiteral then
+  begin
+    ErrorMessage := Format(rsDragFormula, [Point.DisplayName]);
+    Exit(False);
+  end;
+  Result := True;
+end;
+
+function OffsetBase(Pattern: TPattern; Point: TOffsetPoint): TVec2;
+begin
+  Result := TPointObject(Pattern.FindNode(Point.Base)).Position;
+end;
+
+// The unit vector of an offset point's current angle; to the right when it
+// sits on its base
+function OffsetDirection(Pattern: TPattern; Point: TOffsetPoint): TVec2;
+var
+  Base: TVec2;
+begin
+  Base := OffsetBase(Pattern, Point);
+  if Sloper.Core.Geometry.Distance(Base, Point.Position) > DEFAULT_TOLERANCE then
+    Result := (Point.Position - Base).Normalized
+  else
+    Result := Vec2(1, 0);
+end;
+
+function DragPointField(Pattern: TPattern; Point: TPointObject; const FieldName: string; const Target: TVec2;
+  out ErrorMessage: string): boolean;
+var
+  Base: TVec2;
+begin
+  if not CanDragField(Pattern, Point, FieldName, ErrorMessage) then
+    Exit(False);
+  if Point is TAlongEdgePoint then
+    Exit(DragPoint(Pattern, Point, Target, ErrorMessage));
+  if Point is TFreePoint then
+  begin
+    if FieldName = 'x' then
+      Exit(SetFields(Pattern, Point, ['x'], [DraggedLength(Point, 'x', Target.X, Pattern.Units)], ErrorMessage));
+    Exit(SetFields(Pattern, Point, ['y'], [DraggedLength(Point, 'y', Target.Y, Pattern.Units)], ErrorMessage));
+  end;
+  Base := OffsetBase(Pattern, TOffsetPoint(Point));
+  case FieldName of
+    'dx': Result := SetFields(Pattern, Point, ['dx'], [DraggedLength(Point, 'dx', Target.X - Base.X, Pattern.Units)], ErrorMessage);
+    'dy': Result := SetFields(Pattern, Point, ['dy'], [DraggedLength(Point, 'dy', Target.Y - Base.Y, Pattern.Units)], ErrorMessage);
+    'length': Result := SetFields(Pattern, Point, ['length'],
+        [DraggedLength(Point, 'length', Dot(Target - Base, OffsetDirection(Pattern, TOffsetPoint(Point))), Pattern.Units)], ErrorMessage);
+    else
+      if Sloper.Core.Geometry.Distance(Base, Target) <= DEFAULT_TOLERANCE then
+        Result := True
+      else
+        Result := SetFields(Pattern, Point, ['angle'], [RoundedText(AngleBetween(Base, Target), DRAG_ANGLE_DECIMALS)], ErrorMessage);
+  end;
+end;
+
+function FieldPosition(Pattern: TPattern; Point: TPointObject; const FieldName: string; Value: double; out Position: TVec2): boolean;
+var
+  Base, First, Last: TVec2;
+  Edge: TEvalNode;
+  Along: TAlongEdgePoint;
+  EdgeLength, DistanceAlong: double;
+begin
+  Position := Point.Position;
+  Result := Point.HasResult;
+  if not Result then
+    Exit;
+  if Point is TFreePoint then
+  begin
+    if FieldName = 'x' then
+      Position.X := Value
+    else if FieldName = 'y' then
+      Position.Y := Value
+    else
+      Result := False;
+  end
+  else if Point is TOffsetPoint then
+  begin
+    Base := OffsetBase(Pattern, TOffsetPoint(Point));
+    case FieldName of
+      'dx': Position.X := Base.X + Value;
+      'dy': Position.Y := Base.Y + Value;
+      'length': Position := Base + OffsetDirection(Pattern, TOffsetPoint(Point)) * Value;
+      'angle': Position := PolarPoint(Base, Sloper.Core.Geometry.Distance(Base, Point.Position), Value);
+      else
+        Result := False;
+    end;
+  end
+  else if (Point is TAlongEdgePoint) and (FieldName = 'value') then
+  begin
+    Along := TAlongEdgePoint(Point);
+    Edge := Pattern.FindNode(Along.Edge);
+    if not (Edge is TEdgeObject) or not Edge.HasResult then
+      Exit(False);
+    EdgeLength := TEdgeObject(Edge).Length;
+    DistanceAlong := Value;
+    if Along.Mode = amRatio then
+      DistanceAlong := Value * EdgeLength;
+    if Along.FromEnd then
+      DistanceAlong := EdgeLength - DistanceAlong;
+    Position := TEdgeObject(Edge).PointAtLength(EnsureRange(DistanceAlong, 0, EdgeLength));
+  end
+  else if (Point is TBetweenPoint) and (FieldName = 'value') then
+  begin
+    First := TPointObject(Pattern.FindNode(TBetweenPoint(Point).PointA)).Position;
+    Last := TPointObject(Pattern.FindNode(TBetweenPoint(Point).PointB)).Position;
+    if TBetweenPoint(Point).Mode = amRatio then
+      Position := Lerp(First, Last, Value)
+    else if Sloper.Core.Geometry.Distance(First, Last) > DEFAULT_TOLERANCE then
+      Position := First + (Last - First).Normalized * Value
+    else
+      Result := False;
+  end
+  else
+    Result := False;
+end;
+
+function FieldGuide(Pattern: TPattern; Point: TPointObject; const FieldName: string): TFieldGuide;
+var
+  Base: TVec2;
+begin
+  Result := Default(TFieldGuide);
+  if not Point.HasResult then
+    Exit;
+  Result.Start := Point.Position;
+  case FieldName of
+    'x', 'dx':
+    begin
+      Result.Kind := fgLine;
+      Result.Finish := Point.Position + Vec2(1, 0);
+    end;
+    'y', 'dy':
+    begin
+      Result.Kind := fgLine;
+      Result.Finish := Point.Position + Vec2(0, 1);
+    end;
+  end;
+  if not (Point is TOffsetPoint) or (TOffsetPoint(Point).Mode <> omPolar) then
+    Exit;
+  Base := OffsetBase(Pattern, TOffsetPoint(Point));
+  if FieldName = 'length' then
+  begin
+    Result.Kind := fgLine;
+    Result.Start := Base;
+    Result.Finish := Base + OffsetDirection(Pattern, TOffsetPoint(Point));
+  end
+  else if FieldName = 'angle' then
+  begin
+    Result.Kind := fgCircle;
+    Result.Centre := Base;
+    Result.Radius := Sloper.Core.Geometry.Distance(Base, Point.Position);
+  end;
 end;
 
 function MakeHandle(Edge: TEdgeObject; const Anchor, Position: TVec2; const AngleField, LengthField: string;

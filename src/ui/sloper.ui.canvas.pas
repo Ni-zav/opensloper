@@ -100,6 +100,12 @@ type
     FOnMessage: TCanvasMessageEvent;
     FOnSelectionChange: TNotifyEvent;
     FOnNoteAdded: TNotifyEvent;
+    // The point and field a drag is locked to while its formula suggestions
+    // are open, and where a suggestion being hovered would put the point
+    FLockKey, FLockField: string;
+    FGhostShown: boolean;
+    FGhost: TVec2;
+    function DragLocked: boolean;
     procedure TakeFocus;
     function NoteValues: TFieldValues;
     function NotesHere(X, Y: integer): TStringArray;
@@ -198,6 +204,12 @@ type
     procedure GoToSource;
     // Locks or unlocks the selected objects
     procedure LockSelection(Lock: boolean);
+    // While a field's formula suggestions are open, dragging or nudging the
+    // point changes only that field; empty strings unlock
+    procedure SetFieldLock(const Key, FieldName: string);
+    // A dashed ghost of the point where a suggestion would put it
+    procedure ShowGhost(const Position: TVec2);
+    procedure HideGhost;
     // mkPoint makes the selected points and repeats holes, which join the
     // pieces they lie in; the others add a marking to the selected piece
     // from the edge (or, for mkLine, the marked point) selected with it
@@ -678,7 +690,8 @@ begin
     Exit;
   end;
   Point := TPointObject(Node);
-  if not CanDrag(FDocument.Pattern, Point, Reason) then
+  if (DragLocked and not CanDragField(FDocument.Pattern, Point, FLockField, Reason)) or
+    (not DragLocked and not CanDrag(FDocument.Pattern, Point, Reason)) then
   begin
     ShowMessageText(Reason);
     FInput.Mode := cmRefused;
@@ -710,6 +723,7 @@ var
   Node: TEvalNode;
   Point: TPointObject;
   Reason: string;
+  Done: boolean;
 begin
   if FDraggingHandle then
   begin
@@ -729,10 +743,49 @@ begin
     Exit;
   end;
   Point := TPointObject(Node);
-  if DragPoint(FDocument.Pattern, Point, ModelAt(X, Y) + FDragOffset, Reason) then
-    FDocument.LiveUpdate
+  if DragLocked then
+    Done := DragPointField(FDocument.Pattern, Point, FLockField, ModelAt(X, Y) + FDragOffset, Reason)
+  else
+    Done := DragPoint(FDocument.Pattern, Point, ModelAt(X, Y) + FDragOffset, Reason);
+  if Done then
+  begin
+    FDocument.LiveUpdate;
+    // The guide follows the point
+    if DragLocked then
+      Invalidate;
+  end
   else
     ShowMessageText(Reason);
+end;
+
+// The point being pressed or dragged is the one whose field is locked
+function TPatternCanvas.DragLocked: boolean;
+begin
+  Result := (FLockKey <> '') and (FPressKey = FLockKey);
+end;
+
+procedure TPatternCanvas.SetFieldLock(const Key, FieldName: string);
+begin
+  FLockKey := Key;
+  FLockField := FieldName;
+  if Key = '' then
+    FGhostShown := False;
+  Invalidate;
+end;
+
+procedure TPatternCanvas.ShowGhost(const Position: TVec2);
+begin
+  FGhostShown := True;
+  FGhost := Position;
+  Invalidate;
+end;
+
+procedure TPatternCanvas.HideGhost;
+begin
+  if not FGhostShown then
+    Exit;
+  FGhostShown := False;
+  Invalidate;
 end;
 
 procedure TPatternCanvas.CancelDrag;
@@ -779,7 +832,11 @@ end;
 
 procedure TPatternCanvas.Nudge(DX, DY: double);
 begin
-  if Assigned(FDocument) then
+  if not Assigned(FDocument) then
+    Exit;
+  if (FLockKey <> '') and (Length(FSelection) = 1) and (FSelection[0] = FLockKey) then
+    ApplyEdit(NudgeField(FDocument, FLockKey, FLockField, Vec2(DX, DY)))
+  else
     ApplyEdit(NudgeSelection(FDocument, FSelection, Vec2(DX, DY)));
 end;
 
@@ -1625,6 +1682,10 @@ begin
       FPainter.DrawSnap(FTipSnap, spNone, FTipSnap.Position);
     if FInput.Mode = cmBoxing then
       FPainter.DrawBox(FPressPos, FLastPos);
+    if (FInput.Mode = cmDragging) and DragLocked and (FDocument.Pattern.FindNode(FLockKey) is TPointObject) then
+      FPainter.DrawFieldGuide(FieldGuide(FDocument.Pattern, TPointObject(FDocument.Pattern.FindNode(FLockKey)), FLockField));
+    if FGhostShown then
+      FPainter.DrawGhost(FGhost);
   end;
   FPainter.EndFrame(Canvas);
   UpdateScrollBars;

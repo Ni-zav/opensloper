@@ -176,6 +176,8 @@ type
     procedure SetSideShown(Shown: boolean);
     procedure SideItemClick(Sender: TObject);
     procedure ListPanelMessage(Sender: TObject; const AText: string);
+    procedure PropertiesSuggestChange(Sender: TObject);
+    procedure PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2);
     procedure GarmentHoverPiece(Sender: TObject; const PieceKey: string);
     procedure GarmentSelectPiece(Sender: TObject; const PieceKey: string);
     procedure ObjectsSelect(Sender: TObject);
@@ -591,6 +593,8 @@ begin
   FProperties := TPropertiesPanel(AddSection('properties', rsTabProperties, TPropertiesPanel.Create(Self)));
   FProperties.Document := FDocument;
   FProperties.OnMessage := @ListPanelMessage;
+  FProperties.OnSuggestChange := @PropertiesSuggestChange;
+  FProperties.OnSuggestPreview := @PropertiesSuggestPreview;
   FObjects := TObjectsPanel(AddList('objects', rsTabObjects, TObjectsPanel.Create(Self)));
   FObjects.OnSelect := @ObjectsSelect;
   FObjects.OnZoom := @ObjectsZoom;
@@ -651,6 +655,20 @@ end;
 procedure TMainForm.ListPanelMessage(Sender: TObject; const AText: string);
 begin
   StatusBar.Panels[PANEL_MESSAGE].Text := AText;
+end;
+
+// While a field's formula suggestions are open, dragging its point changes only that field
+procedure TMainForm.PropertiesSuggestChange(Sender: TObject);
+begin
+  FCanvas.SetFieldLock(FProperties.SuggestKey, FProperties.SuggestField);
+end;
+
+procedure TMainForm.PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2);
+begin
+  if Shown then
+    FCanvas.ShowGhost(GhostAt)
+  else
+    FCanvas.HideGhost;
 end;
 
 procedure TMainForm.ObjectsSelect(Sender: TObject);

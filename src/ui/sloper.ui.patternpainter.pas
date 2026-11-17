@@ -28,7 +28,7 @@ interface
 
 uses
   Classes, SysUtils, Graphics, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam,
-  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.UI.View, Sloper.UI.Snap, Sloper.UI.Scene;
+  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.UI.View, Sloper.UI.Snap, Sloper.UI.Scene;
 
 type
   // What a drawing tool's second click would make, drawn from its first
@@ -97,6 +97,10 @@ type
     procedure DrawSnap(const Snap: TSnap; Preview: TSnapPreview; const StartAt: TVec2);
     // The selection box between two screen corners
     procedure DrawBox(const Corner, OtherCorner: TPoint);
+    // The path a drag locked to one field keeps the point on (formula suggestions)
+    procedure DrawFieldGuide(const Guide: TFieldGuide);
+    // Where a suggested formula would put the point
+    procedure DrawGhost(const Position: TVec2);
   end;
 
 // Draws text from here on in a note's font, or in DefaultFont when it names none
@@ -105,7 +109,7 @@ procedure UseNoteFont(Bitmap: TBGRABitmap; const Style: TTextStyle; const Defaul
 implementation
 
 uses
-  Math, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Drag, Sloper.Core.Transform,
+  Math, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Transform,
   Sloper.Core.Materials, Sloper.UI.RulerTicks;
 
 const
@@ -140,6 +144,10 @@ const
   // Text smaller than this many pixels is drawn as a faint bar
   MIN_NOTE_PIXELS = 3;
   DASH_PIXELS_PER_MILLIMETRE = 2.5;
+  // A drag's guide, and the ghost of a suggestion's point, in pixels
+  FIELD_GUIDE_WIDTH = 1;
+  GHOST_RADIUS = 6;
+  GHOST_WIDTH = 1.5;
 
 function Paper: TBGRAPixel;
 begin
@@ -206,6 +214,12 @@ end;
 function HoverHalo: TBGRAPixel;
 begin
   Result := BGRA(37, 116, 214, 60);
+end;
+
+// The faint line a drag locked to one field follows
+function GuideInk: TBGRAPixel;
+begin
+  Result := BGRA(37, 116, 214, 90);
 end;
 
 // From a transform copy to its source
@@ -978,6 +992,47 @@ begin
   FBitmap.PenStyle := psDot;
   FBitmap.RectangleAntialias(X1, Y1, X2, Y2, SelectedInk, 1);
   FBitmap.PenStyle := psSolid;
+end;
+
+procedure TPatternPainter.DrawFieldGuide(const Guide: TFieldGuide);
+var
+  Start, Finish, Direction, Centre: TVec2;
+  Reach: double;
+begin
+  FBitmap.PenStyle := psDash;
+  case Guide.Kind of
+    fgLine:
+    begin
+      Start := FState.View.ToScreen(Guide.Start);
+      Finish := FState.View.ToScreen(Guide.Finish);
+      if Distance(Start, Finish) > 0 then
+      begin
+        // Past both edges of the canvas from anywhere on it
+        Reach := 2 * (FBitmap.Width + FBitmap.Height) + Distance(Start, Vec2(FBitmap.Width / 2, FBitmap.Height / 2));
+        Direction := (Finish - Start).Normalized * Reach;
+        FBitmap.DrawLineAntialias(Start.X - Direction.X, Start.Y - Direction.Y, Start.X + Direction.X, Start.Y + Direction.Y,
+          GuideInk, FIELD_GUIDE_WIDTH);
+      end;
+    end;
+    fgCircle:
+    begin
+      Centre := FState.View.ToScreen(Guide.Centre);
+      Reach := Guide.Radius * FState.View.Scale;
+      FBitmap.EllipseAntialias(Centre.X, Centre.Y, Reach, Reach, GuideInk, FIELD_GUIDE_WIDTH);
+    end;
+  end;
+  FBitmap.PenStyle := psSolid;
+end;
+
+procedure TPatternPainter.DrawGhost(const Position: TVec2);
+var
+  Screen: TVec2;
+begin
+  Screen := FState.View.ToScreen(Position);
+  FBitmap.PenStyle := psDash;
+  FBitmap.EllipseAntialias(Screen.X, Screen.Y, GHOST_RADIUS, GHOST_RADIUS, SelectedInk, GHOST_WIDTH);
+  FBitmap.PenStyle := psSolid;
+  FBitmap.FillEllipseAntialias(Screen.X, Screen.Y, POINT_RADIUS, POINT_RADIUS, HoverHalo);
 end;
 
 end.

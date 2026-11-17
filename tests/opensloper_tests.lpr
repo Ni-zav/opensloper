@@ -53,6 +53,7 @@ uses
   Sloper.Tests.ObjectList,
   Sloper.Tests.PanelEdits,
   Sloper.Tests.Completion,
+  Sloper.Tests.Suggestion,
   Sloper.Tests.API,
   Sloper.Tests.DraftSVG,
   Sloper.Tests.Fonts,

@@ -1,0 +1,397 @@
+{
+  OpenSloper - parametric sewing pattern drafting
+  Copyright (C) 2026 The OpenSloper authors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+}
+
+// Formula suggestions (issue #26), and dragging a point by one field
+unit Sloper.Tests.Suggestion;
+
+{$mode ObjFPC}{$H+}
+
+interface
+
+uses
+  SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Evaluator, Sloper.Core.Measurements, Sloper.Core.Pattern,
+  Sloper.Core.Draft, Sloper.UI.Suggestion;
+
+type
+  TTestSuggestion = class(TOSTestCase)
+  private
+    FSet: TMeasurementSet;
+    FPattern: TPattern;
+    FBase, FFree: TFreePoint;
+    FOffset, FPolar: TOffsetPoint;
+    FAlong: TAlongEdgePoint;
+    FHem: TLineObject;
+    function Suggested(Node: TEvalNode; const FieldName: string; Target: double): TSuggestions;
+    function Texts(const Found: TSuggestions): string;
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestKinds;
+    procedure TestOnlyPlainNumbers;
+    procedure TestTarget;
+    procedure TestTargetInPatternUnit;
+    procedure TestQuarterWaistFirst;
+    procedure TestClosestFirst;
+    procedure TestWithinTolerance;
+    procedure TestNothingClose;
+    procedure TestNegative;
+    procedure TestDirectionRanks;
+    procedure TestDifference;
+    procedure TestAmountAdded;
+    procedure TestVariable;
+    procedure TestEdgeLength;
+    procedure TestLeavesOutDependents;
+    procedure TestAngles;
+    procedure TestAngleWrapsRound;
+    procedure TestRatios;
+    procedure TestCentimetres;
+    procedure TestTexts;
+    procedure TestDragField;
+    procedure TestDragPolarLength;
+    procedure TestDragPolarAngle;
+    procedure TestDragFieldOtherIsFormula;
+    procedure TestFieldPosition;
+    procedure TestFieldGuide;
+  end;
+
+implementation
+
+uses
+  Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units;
+
+procedure TTestSuggestion.SetUp;
+begin
+  FSet := TMeasurementSet.Create;
+  FSet.Add('waist', 720);
+  FSet.Add('hip', 960);
+  FSet.Add('height_waist', 1040);
+  FPattern := TPattern.Create;
+  FPattern.Measurements := FSet;
+  FPattern.AddVariable('ease', '20');
+  FBase := FPattern.AddFreePoint('A', '0', '0');
+  FFree := FPattern.AddFreePoint('B', '400', '300');
+  FOffset := FPattern.AddOffsetPoint('C', FBase.Key, omCartesian, '175', '30');
+  FPolar := FPattern.AddOffsetPoint('D', FBase.Key, omPolar, '100', '0');
+  FHem := FPattern.AddLine(FBase.Key, FFree.Key, erOutline, 'Hem');
+  FAlong := FPattern.AddAlongEdgePoint('E', FHem.Key, False, amRatio, '0.33');
+  FPattern.Evaluate;
+end;
+
+procedure TTestSuggestion.TearDown;
+begin
+  FreeAndNil(FPattern);
+  FreeAndNil(FSet);
+end;
+
+function TTestSuggestion.Suggested(Node: TEvalNode; const FieldName: string; Target: double): TSuggestions;
+var
+  Source: TSuggestionSource;
+begin
+  Source := TSuggestionSource.Create(FPattern, Node, FieldName);
+  try
+    Result := Source.Match(Target);
+  finally
+    FreeAndNil(Source);
+  end;
+end;
+
+function TTestSuggestion.Texts(const Found: TSuggestions): string;
+var
+  Item: TSuggestion;
+begin
+  Result := '';
+  for Item in Found.Items do
+    Result := Result + Item.Text + ';';
+end;
+
+procedure TTestSuggestion.TestKinds;
+begin
+  AssertTrue('dx', SuggestionKind(FOffset, 'dx') = skLength);
+  AssertTrue('x', SuggestionKind(FFree, 'x') = skLength);
+  AssertTrue('angle', SuggestionKind(FPolar, 'angle') = skAngle);
+  AssertTrue('ratio along an edge', SuggestionKind(FAlong, 'value') = skRatio);
+  AssertTrue('no such field', SuggestionKind(FOffset, 'radius') = skNone);
+end;
+
+procedure TTestSuggestion.TestOnlyPlainNumbers;
+begin
+  AssertTrue('a number', CanSuggest(FPattern, FOffset, 'dx'));
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist/4'));
+  AssertFalse('a formula', CanSuggest(FPattern, FOffset, 'dx'));
+  AssertTrue('locked', FPattern.SetLocked(FFree, True));
+  AssertFalse('locked', CanSuggest(FPattern, FFree, 'x'));
+end;
+
+procedure TTestSuggestion.TestTarget;
+var
+  Value: double;
+begin
+  AssertTrue('dx', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+  AssertNear('dx', 175, Value);
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '2cm'));
+  AssertTrue('with a unit', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+  AssertNear('with a unit, in mm', 20, Value);
+  AssertTrue('angle', SuggestionTarget(FPattern, FPolar, 'angle', Value));
+  AssertNear('angle', 0, Value);
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist/4'));
+  AssertFalse('a formula', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+end;
+
+procedure TTestSuggestion.TestTargetInPatternUnit;
+var
+  Value: double;
+begin
+  FPattern.Units := muCentimetre;
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '18'));
+  AssertTrue('dx', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+  AssertNear('in mm', 180, Value);
+end;
+
+procedure TTestSuggestion.TestQuarterWaistFirst;
+var
+  Found: TSuggestions;
+begin
+  Found := Suggested(FOffset, 'dx', 180);
+  AssertTrue('some', Length(Found.Items) > 0);
+  AssertEquals('first', '@waist/4', Found.Items[0].Text);
+  AssertNear('value', 180, Found.Items[0].Value);
+  AssertNear('exact', 0, Found.Items[0].Delta);
+end;
+
+procedure TTestSuggestion.TestClosestFirst;
+var
+  Found: TSuggestions;
+  Index: integer;
+begin
+  Found := Suggested(FOffset, 'dx', 179.6);
+  AssertEquals('first', '@waist/4', Found.Items[0].Text);
+  AssertNear('over by 0.4', 0.4, Found.Items[0].Delta);
+  for Index := 1 to High(Found.Items) do
+    AssertTrue('not much closer than the one before', Abs(Found.Items[Index].Delta) >= Abs(Found.Items[Index - 1].Delta) - 0.5);
+end;
+
+procedure TTestSuggestion.TestWithinTolerance;
+var
+  Found: TSuggestions;
+  Item: TSuggestion;
+begin
+  Found := Suggested(FOffset, 'dx', 175);
+  AssertTrue('some', Length(Found.Items) > 0);
+  AssertTrue('at most the limit', Length(Found.Items) <= MAX_SUGGESTIONS);
+  for Item in Found.Items do
+    AssertTrue(Item.Text + ' within 5 mm', Abs(Item.Delta) <= 5 + 1e-9);
+  AssertTrue('a quarter waist is 5 off', Pos('@waist/4;', Texts(Found)) > 0);
+end;
+
+procedure TTestSuggestion.TestNothingClose;
+var
+  Found: TSuggestions;
+begin
+  Found := Suggested(FPolar, 'length', 100000);
+  AssertEquals('none', 0, Length(Found.Items));
+  AssertTrue('the nearest', Found.HasNearest);
+  AssertTrue('the nearest is short', Found.Nearest.Delta < 0);
+end;
+
+procedure TTestSuggestion.TestNegative;
+var
+  Found: TSuggestions;
+begin
+  Found := Suggested(FOffset, 'dx', -180);
+  AssertEquals('first', '-@waist/4', Found.Items[0].Text);
+  AssertNear('value', -180, Found.Items[0].Value);
+  Found := Suggested(FOffset, 'dx', -185);
+  AssertTrue('brackets round a sum', Pos('-(@waist/4 + 5);', Texts(Found)) > 0);
+end;
+
+// Across, a share of a girth comes before a height with an amount added,
+// though both land as close
+procedure TTestSuggestion.TestDirectionRanks;
+var
+  Found: string;
+begin
+  // @hip/4 - 20 and @height_waist/4 - 20 are 220 and 240; @height_waist + ... is not
+  FSet.Add('waist_to_hip', 200);
+  Found := Texts(Suggested(FOffset, 'dx', 220));
+  AssertTrue('a girth share', Pos('@hip/4 - 20;', Found) > 0);
+  AssertTrue('a length', Pos('@waist_to_hip + 20;', Found) > 0);
+  AssertTrue('the girth first', Pos('@hip/4 - 20;', Found) < Pos('@waist_to_hip + 20;', Found));
+  // Down, the other way round
+  Found := Texts(Suggested(FOffset, 'dy', 220));
+  AssertTrue('the length first', Pos('@waist_to_hip + 20;', Found) < Pos('@hip/4 - 20;', Found));
+end;
+
+procedure TTestSuggestion.TestDifference;
+begin
+  AssertTrue('a difference', Pos('(@hip - @waist)/4;', Texts(Suggested(FOffset, 'dx', 60))) > 0);
+  AssertTrue('a whole difference', Pos('@hip - @waist;', Texts(Suggested(FOffset, 'dx', 240))) > 0);
+end;
+
+procedure TTestSuggestion.TestAmountAdded;
+begin
+  AssertTrue('a round amount', Pos('@waist/4 + 30;', Texts(Suggested(FOffset, 'dx', 210))) > 0);
+  AssertTrue('a variable', Pos('@waist/4 + #ease;', Texts(Suggested(FOffset, 'dx', 200))) > 0);
+  AssertTrue('taken off', Pos('@waist/4 - #ease;', Texts(Suggested(FOffset, 'dx', 160))) > 0);
+end;
+
+procedure TTestSuggestion.TestVariable;
+begin
+  AssertTrue('alone', Pos('#ease;', Texts(Suggested(FOffset, 'dx', 20))) > 0);
+  AssertTrue('a share', Pos('#ease/2;', Texts(Suggested(FOffset, 'dx', 10))) > 0);
+end;
+
+procedure TTestSuggestion.TestEdgeLength;
+begin
+  // Hem runs from A to B, 500 mm
+  AssertTrue('an edge', Pos('Hem.length/2;', Texts(Suggested(FOffset, 'dx', 250))) > 0);
+end;
+
+procedure TTestSuggestion.TestLeavesOutDependents;
+begin
+  // Hem ends at B, so B cannot read it
+  AssertEquals('its own edge', 0, Pos('Hem.', Texts(Suggested(FFree, 'x', 250))));
+end;
+
+procedure TTestSuggestion.TestAngles;
+var
+  Found: TSuggestions;
+begin
+  Found := Suggested(FPolar, 'angle', 90.4);
+  AssertEquals('round', '90', Found.Items[0].Text);
+  AssertNear('under', -0.4, Found.Items[0].Delta);
+  // Hem is at -36.87°: 90 less is square to it
+  AssertTrue('square', Pos('Hem.angle + 90;', Texts(Suggested(FPolar, 'angle', 53.13))) > 0);
+  AssertTrue('along', Pos('Hem.angle;', Texts(Suggested(FPolar, 'angle', -36.87))) > 0);
+end;
+
+procedure TTestSuggestion.TestAngleWrapsRound;
+var
+  Found: TSuggestions;
+begin
+  Found := Suggested(FPolar, 'angle', 359.5);
+  AssertEquals('0 is half a degree on', '0', Found.Items[0].Text);
+  AssertNear('the short way', 0.5, Found.Items[0].Delta);
+end;
+
+procedure TTestSuggestion.TestRatios;
+var
+  Found: TSuggestions;
+begin
+  Found := Suggested(FAlong, 'value', 0.33);
+  AssertEquals('a third', '1/3', Found.Items[0].Text);
+  AssertEquals('no 2/6', 0, Pos('2/6', Texts(Found)));
+end;
+
+procedure TTestSuggestion.TestCentimetres;
+var
+  Found: TSuggestions;
+begin
+  FPattern.Units := muCentimetre;
+  Found := Suggested(FOffset, 'dx', 190);
+  AssertTrue('an amount in cm', Pos('@waist/4 + 1;', Texts(Found)) > 0);
+end;
+
+procedure TTestSuggestion.TestTexts;
+begin
+  AssertEquals('exact', rsSuggestExact, SuggestionDeltaText(0.01, skLength, muMillimetre));
+  AssertEquals('over', '+0.4', SuggestionDeltaText(0.4, skLength, muMillimetre));
+  AssertEquals('under, in cm', '-0.12', SuggestionDeltaText(-1.2, skLength, muCentimetre));
+  AssertEquals('angle', '+0.5', SuggestionDeltaText(0.5, skAngle, muMillimetre));
+  AssertEquals('value in cm', '18', SuggestionValueText(180, skLength, muCentimetre));
+  AssertEquals('tolerance', '5 mm', SuggestionToleranceText(skLength, muMillimetre));
+end;
+
+procedure TTestSuggestion.TestDragField;
+var
+  Reason: string;
+begin
+  AssertTrue('dx', DragPointField(FPattern, FOffset, 'dx', Vec2(200, 80), Reason));
+  FPattern.Evaluate;
+  AssertEquals('dx follows', '200', FPattern.FormulaText(FOffset, 'dx'));
+  AssertEquals('dy stays', '30', FPattern.FormulaText(FOffset, 'dy'));
+  AssertTrue('y', DragPointField(FPattern, FFree, 'y', Vec2(10, 20), Reason));
+  FPattern.Evaluate;
+  AssertEquals('x stays', '400', FPattern.FormulaText(FFree, 'x'));
+  AssertEquals('y follows', '20', FPattern.FormulaText(FFree, 'y'));
+  AssertFalse('not a drag field', DragPointField(FPattern, FOffset, 'length', Vec2(0, 0), Reason));
+end;
+
+procedure TTestSuggestion.TestDragPolarLength;
+var
+  Reason: string;
+begin
+  // Along the angle, whatever the sideways part
+  AssertTrue('length', DragPointField(FPattern, FPolar, 'length', Vec2(150, 40), Reason));
+  FPattern.Evaluate;
+  AssertEquals('length', '150', FPattern.FormulaText(FPolar, 'length'));
+  AssertEquals('angle stays', '0', FPattern.FormulaText(FPolar, 'angle'));
+end;
+
+procedure TTestSuggestion.TestDragPolarAngle;
+var
+  Reason: string;
+begin
+  AssertTrue('angle', DragPointField(FPattern, FPolar, 'angle', Vec2(0, -300), Reason));
+  FPattern.Evaluate;
+  AssertEquals('angle', '90', FPattern.FormulaText(FPolar, 'angle'));
+  AssertEquals('length stays', '100', FPattern.FormulaText(FPolar, 'length'));
+end;
+
+procedure TTestSuggestion.TestDragFieldOtherIsFormula;
+var
+  Reason: string;
+begin
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dy', '@waist/10'));
+  FPattern.Evaluate;
+  AssertFalse('a whole drag is refused', CanDrag(FPattern, FOffset, Reason));
+  AssertTrue('the plain field can be dragged', DragPointField(FPattern, FOffset, 'dx', Vec2(120, 0), Reason));
+  AssertFalse('the formula field cannot', DragPointField(FPattern, FOffset, 'dy', Vec2(120, 0), Reason));
+end;
+
+procedure TTestSuggestion.TestFieldPosition;
+var
+  Position: TVec2;
+begin
+  AssertTrue('dx', FieldPosition(FPattern, FOffset, 'dx', 180, Position));
+  AssertPointsNear('dx', Vec2(180, 30), Position);
+  AssertTrue('angle', FieldPosition(FPattern, FPolar, 'angle', 90, Position));
+  AssertPointsNear('angle', Vec2(0, -100), Position);
+  AssertTrue('length', FieldPosition(FPattern, FPolar, 'length', 50, Position));
+  AssertPointsNear('length', Vec2(50, 0), Position);
+  AssertTrue('ratio', FieldPosition(FPattern, FAlong, 'value', 0.5, Position));
+  AssertPointsNear('ratio', Vec2(200, 150), Position);
+end;
+
+procedure TTestSuggestion.TestFieldGuide;
+var
+  Guide: TFieldGuide;
+begin
+  Guide := FieldGuide(FPattern, FOffset, 'dx');
+  AssertTrue('a line', Guide.Kind = fgLine);
+  AssertNear('across', 0, Guide.Finish.Y - Guide.Start.Y);
+  Guide := FieldGuide(FPattern, FPolar, 'angle');
+  AssertTrue('a circle', Guide.Kind = fgCircle);
+  AssertNear('round the base', 100, Guide.Radius);
+  Guide := FieldGuide(FPattern, FAlong, 'value');
+  AssertTrue('the edge is drawn', Guide.Kind = fgNone);
+end;
+
+initialization
+  RegisterTest(TTestSuggestion);
+end.

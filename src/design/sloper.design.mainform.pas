@@ -27,7 +27,7 @@ interface
 uses
   Classes, SysUtils, StrUtils, Forms, Controls, Menus, Dialogs, ComCtrls, ExtCtrls, StdCtrls, LCLType, ActnList, Sloper.Core.Geometry, Sloper.Core.Draft,
   Sloper.Core.Piece,
-  Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties,
+  Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties, Sloper.UI.SuggestionGrade,
   Sloper.UI.ListPanel, Sloper.UI.ObjectsPanel, Sloper.UI.VariablesPanel,
   Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
   Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.UI.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
@@ -177,7 +177,7 @@ type
     procedure SideItemClick(Sender: TObject);
     procedure ListPanelMessage(Sender: TObject; const AText: string);
     procedure PropertiesSuggestChange(Sender: TObject);
-    procedure PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2);
+    procedure PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2; const Sizes: TGradeGhostArray);
     procedure GarmentHoverPiece(Sender: TObject; const PieceKey: string);
     procedure GarmentSelectPiece(Sender: TObject; const PieceKey: string);
     procedure ObjectsSelect(Sender: TObject);
@@ -663,10 +663,10 @@ begin
   FCanvas.SetFieldLock(FProperties.SuggestKey, FProperties.SuggestField);
 end;
 
-procedure TMainForm.PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2);
+procedure TMainForm.PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2; const Sizes: TGradeGhostArray);
 begin
   if Shown then
-    FCanvas.ShowGhost(GhostAt)
+    FCanvas.ShowGhost(GhostAt, Sizes)
   else
     FCanvas.HideGhost;
 end;

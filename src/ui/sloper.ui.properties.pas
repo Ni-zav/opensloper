@@ -33,7 +33,8 @@ interface
 
 uses
   Classes, SysUtils, Generics.Collections, Controls, StdCtrls, Forms, Graphics, LCLType, Buttons, Sloper.Core.Geometry, Sloper.Core.Draft,
-  Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter, Sloper.UI.FormulaSuggest, Sloper.UI.Suggestion;
+  Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter, Sloper.UI.FormulaSuggest, Sloper.UI.Suggestion,
+  Sloper.UI.SuggestionGrade;
 
 type
   // One line of text that cuts itself to the label's width with an ellipsis
@@ -50,9 +51,10 @@ type
 
   TColumnDragEvent = procedure(Sender: TObject; NewLeft: integer) of object;
   TPropertiesMessageEvent = procedure(Sender: TObject; const AText: string) of object;
-  // Where a hovered formula suggestion would put the selected point; Shown
-  // is False when no suggestion is hovered
-  TSuggestPreviewEvent = procedure(Sender: TObject; Shown: boolean; const Position: TVec2) of object;
+  // Where a hovered formula suggestion would put the selected point, and with
+  // a size table, its object at the smallest and largest sizes; Shown is
+  // False when no suggestion is hovered
+  TSuggestPreviewEvent = procedure(Sender: TObject; Shown: boolean; const Position: TVec2; const Sizes: TGradeGhostArray) of object;
 
   // The draggable strip between the name and value columns
   TColumnDivider = class(TGraphicControl)
@@ -158,12 +160,15 @@ type
     FSuggestRow: integer;
     FSuggestKey, FSuggestField: string;
     FSuggestSource: TSuggestionSource;
+    // The suggestions' values at other sizes, made with the source
+    FGrade: TGradeCheck;
     // The list is due to follow the field's value when the app is idle
     FSuggestPending: boolean;
     FWandImages: TImageList;
     FOnSuggestChange: TNotifyEvent;
     FOnSuggestPreview: TSuggestPreviewEvent;
     procedure RebuildRows;
+    procedure MakeSuggestionSource(Node: TEvalNode);
     procedure AddWand(RowIndex: integer);
     procedure AddSuggestList(RowIndex: integer);
     procedure UpdateWands;
@@ -628,6 +633,7 @@ begin
   inherited Destroy;
   FreeAndNil(FSections);
   FreeAndNil(FSuggestSource);
+  FreeAndNil(FGrade);
 end;
 
 procedure TPropertiesPanel.SetDocument(ADocument: TPatternDocument);
@@ -800,6 +806,7 @@ begin
   // Its list goes with the rows; Rebuild opens it again or says it closed
   FSuggestRow := -1;
   FreeAndNil(FSuggestSource);
+  FreeAndNil(FGrade);
   for Index := 0 to ControlCount - 1 do
     if Controls[Index] is TEdit then
       TEdit(Controls[Index]).OnExit := nil
@@ -1003,7 +1010,7 @@ end;
 procedure TPropertiesPanel.SuggestChanged;
 begin
   if Assigned(FOnSuggestPreview) then
-    FOnSuggestPreview(Self, False, Vec2(0, 0));
+    FOnSuggestPreview(Self, False, Vec2(0, 0), nil);
   if Assigned(FOnSuggestChange) then
     FOnSuggestChange(Self);
 end;
@@ -1023,7 +1030,7 @@ begin
   FSuggestRow := RowIndex;
   FSuggestKey := FKey;
   FSuggestField := FieldName;
-  FSuggestSource := TSuggestionSource.Create(FDocument.Pattern, Node, FieldName);
+  MakeSuggestionSource(Node);
   FRows[RowIndex].List.Restart;
   FRows[RowIndex].List.ItemIndex := -1;
   ShowSuggestions;
@@ -1038,10 +1045,12 @@ begin
   if FSuggestRow < 0 then
     Exit;
   FRows[FSuggestRow].List.Visible := False;
+  FRows[FSuggestRow].List.Grade := nil;
   FSuggestRow := -1;
   FSuggestKey := '';
   FSuggestField := '';
   FreeAndNil(FSuggestSource);
+  FreeAndNil(FGrade);
   if Notify then
     SuggestChanged;
 end;
@@ -1075,11 +1084,21 @@ begin
     Exit;
   end;
   if not FDocument.ChangeOpen or not Assigned(FSuggestSource) then
-  begin
-    FreeAndNil(FSuggestSource);
-    FSuggestSource := TSuggestionSource.Create(FDocument.Pattern, Node, FSuggestField);
-  end;
+    MakeSuggestionSource(Node);
   FRows[FSuggestRow].List.ShowSuggestions(FSuggestSource.Match(Target), FSuggestSource.Kind, FDocument.Pattern.Units);
+end;
+
+// The grade check copies the pattern once for each size, so it is made
+// with the source, never while a drag is under way
+procedure TPropertiesPanel.MakeSuggestionSource(Node: TEvalNode);
+begin
+  FRows[FSuggestRow].List.Grade := nil;
+  FreeAndNil(FSuggestSource);
+  FreeAndNil(FGrade);
+  FSuggestSource := TSuggestionSource.Create(FDocument.Pattern, Node, FSuggestField);
+  FGrade := TGradeCheck.Create(FDocument.Pattern, Node, FSuggestField);
+  FRows[FSuggestRow].List.Grade := FGrade;
+  FRows[FSuggestRow].List.Invalidate;
 end;
 
 procedure TPropertiesPanel.QueueSuggestions;
@@ -1138,15 +1157,23 @@ var
   Node: TEvalNode;
   Suggestion: TSuggestion;
   Position: TVec2;
+  Ghosts: TGradeGhostArray;
 begin
   if not Assigned(FOnSuggestPreview) or (FSuggestRow < 0) then
     Exit;
   Node := SelectedNode;
-  if (Node is TPointObject) and FRows[FSuggestRow].List.RowSuggestion(Index, Suggestion) and
-    FieldPosition(FDocument.Pattern, TPointObject(Node), FSuggestField, Suggestion.Value, Position) then
-    FOnSuggestPreview(Self, True, Position)
+  if not FRows[FSuggestRow].List.RowSuggestion(Index, Suggestion) then
+  begin
+    FOnSuggestPreview(Self, False, Vec2(0, 0), nil);
+    Exit;
+  end;
+  Ghosts := nil;
+  if Assigned(FGrade) then
+    Ghosts := FGrade.Ghosts(Suggestion.Text);
+  if (Node is TPointObject) and FieldPosition(FDocument.Pattern, TPointObject(Node), FSuggestField, Suggestion.Value, Position) then
+    FOnSuggestPreview(Self, True, Position, Ghosts)
   else
-    FOnSuggestPreview(Self, False, Vec2(0, 0));
+    FOnSuggestPreview(Self, Length(Ghosts) > 0, Vec2(NaN, NaN), Ghosts);
 end;
 
 procedure TPropertiesPanel.SuggestListKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);

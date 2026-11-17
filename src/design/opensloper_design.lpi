@@ -297,6 +297,11 @@
         <UnitName Value="Sloper.UI.FormulaSuggest"/>
       </Unit>
       <Unit>
+        <Filename Value="../ui/sloper.ui.suggestiongrade.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.UI.SuggestionGrade"/>
+      </Unit>
+      <Unit>
         <Filename Value="../ui/sloper.ui.listpanel.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.UI.ListPanel"/>

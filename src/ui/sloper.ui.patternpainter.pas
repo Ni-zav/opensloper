@@ -28,7 +28,8 @@ interface
 
 uses
   Classes, SysUtils, Graphics, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam,
-  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.UI.View, Sloper.UI.Snap, Sloper.UI.Scene;
+  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.UI.View,
+  Sloper.UI.SuggestionGrade, Sloper.UI.Snap, Sloper.UI.Scene;
 
 type
   // What a drawing tool's second click would make, drawn from its first
@@ -101,6 +102,8 @@ type
     procedure DrawFieldGuide(const Guide: TFieldGuide);
     // Where a suggested formula would put the point
     procedure DrawGhost(const Position: TVec2);
+    // What a suggested formula would make of its object at another size
+    procedure DrawGradeGhost(const Ghost: TGradeGhost);
   end;
 
 // Draws text from here on in a note's font, or in DefaultFont when it names none
@@ -214,6 +217,12 @@ end;
 function HoverHalo: TBGRAPixel;
 begin
   Result := BGRA(37, 116, 214, 60);
+end;
+
+// A suggestion's object at the smallest and largest sizes
+function GradeGhostInk: TBGRAPixel;
+begin
+  Result := BGRA(196, 48, 140, 160);
 end;
 
 // The faint line a drag locked to one field follows
@@ -1033,6 +1042,30 @@ begin
   FBitmap.EllipseAntialias(Screen.X, Screen.Y, GHOST_RADIUS, GHOST_RADIUS, SelectedInk, GHOST_WIDTH);
   FBitmap.PenStyle := psSolid;
   FBitmap.FillEllipseAntialias(Screen.X, Screen.Y, POINT_RADIUS, POINT_RADIUS, HoverHalo);
+end;
+
+procedure TPatternPainter.DrawGradeGhost(const Ghost: TGradeGhost);
+var
+  Line: TVec2Array;
+  Screen: array of TPointF;
+  Index: integer;
+  Spot: TVec2;
+begin
+  FBitmap.PenStyle := psDash;
+  for Line in Ghost.Lines do
+  begin
+    Screen := nil;
+    SetLength(Screen, Length(Line));
+    for Index := 0 to High(Line) do
+      Screen[Index] := ScreenPoint(FState.View.ToScreen(Line[Index]));
+    FBitmap.DrawPolyLineAntialias(Screen, GradeGhostInk, GHOST_WIDTH);
+  end;
+  if Ghost.HasPoint then
+  begin
+    Spot := FState.View.ToScreen(Ghost.Point);
+    FBitmap.EllipseAntialias(Spot.X, Spot.Y, GHOST_RADIUS, GHOST_RADIUS, GradeGhostInk, GHOST_WIDTH);
+  end;
+  FBitmap.PenStyle := psSolid;
 end;
 
 end.

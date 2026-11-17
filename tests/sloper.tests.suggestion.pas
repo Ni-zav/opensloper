@@ -68,12 +68,16 @@ type
     procedure TestDragFieldOtherIsFormula;
     procedure TestFieldPosition;
     procedure TestFieldGuide;
+    procedure TestEvaluateText;
+    procedure TestGradeNeedsSizes;
+    procedure TestGradeValues;
+    procedure TestGradeGhosts;
   end;
 
 implementation
 
 uses
-  Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units;
+  Math, Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units, Sloper.UI.SuggestionGrade;
 
 procedure TTestSuggestion.SetUp;
 begin
@@ -390,6 +394,102 @@ begin
   AssertNear('round the base', 100, Guide.Radius);
   Guide := FieldGuide(FPattern, FAlong, 'value');
   AssertTrue('the edge is drawn', Guide.Kind = fgNone);
+end;
+
+procedure TTestSuggestion.TestEvaluateText;
+var
+  Value: double;
+begin
+  AssertTrue('a measurement', FPattern.EvaluateText('@waist/4', Value));
+  AssertNear('a measurement', 180, Value);
+  AssertTrue('an edge', FPattern.EvaluateText('Hem.length + #ease', Value));
+  AssertNear('an edge', 520, Value);
+  AssertFalse('no such name', FPattern.EvaluateText('@nothing', Value));
+  AssertTrue('a reason', FPattern.LastError <> '');
+end;
+
+procedure TTestSuggestion.TestGradeNeedsSizes;
+var
+  Grade: TGradeCheck;
+begin
+  Grade := TGradeCheck.Create(FPattern, FOffset, 'dx');
+  try
+    AssertFalse('one size', Grade.Available);
+    AssertEquals('no ghosts', 0, Length(Grade.Ghosts('@waist/4')));
+  finally
+    FreeAndNil(Grade);
+  end;
+end;
+
+// Sizes S, M and L, the waist 40 mm apart, and the hip missing at L; M is shown
+procedure AddSizes(MeasurementSet: TMeasurementSet);
+var
+  Waist: TMeasurement;
+begin
+  MeasurementSet.AddSize('S');
+  MeasurementSet.AddSize('M');
+  MeasurementSet.AddSize('L');
+  Waist := MeasurementSet.Find('waist');
+  Waist.SetValueFor(0, 680);
+  Waist.SetValueFor(1, 720);
+  Waist.SetValueFor(2, 760);
+  MeasurementSet.Find('hip').SetValueFor(1, 960);
+  MeasurementSet.SelectSize('M');
+end;
+
+procedure TTestSuggestion.TestGradeValues;
+var
+  Grade: TGradeCheck;
+  Values: TSizeValues;
+begin
+  AddSizes(FSet);
+  FPattern.Evaluate;
+  Grade := TGradeCheck.Create(FPattern, FOffset, 'dx');
+  try
+    AssertTrue('sizes', Grade.Available);
+    AssertEquals('three', 3, Grade.SizeCount);
+    Values := Grade.Values('@waist/4');
+    AssertNear('S', 170, Values[0]);
+    AssertNear('M', 180, Values[1]);
+    AssertNear('L', 190, Values[2]);
+    AssertEquals('range', '170–190', SizeRangeText(Values, skLength, muMillimetre));
+    AssertEquals('each size', 'S: 170, M: 180, L: 190', SizeValuesText(Grade, Values, skLength, muMillimetre));
+    // The hip has no value at L: the first size took the set's values
+    Values := Grade.Values('@hip/4');
+    AssertNear('M', 240, Values[1]);
+    AssertTrue('missing at L', IsNan(Values[2]));
+    AssertEquals('no range', '', SizeRangeText(Values, skLength, muMillimetre));
+  finally
+    FreeAndNil(Grade);
+  end;
+  AssertEquals('the pattern keeps its size', 'M', FSet.SizeName);
+end;
+
+procedure TTestSuggestion.TestGradeGhosts;
+var
+  Grade: TGradeCheck;
+  Ghosts: TGradeGhostArray;
+begin
+  AddSizes(FSet);
+  FPattern.AddLine(FOffset.Key, FFree.Key, erOutline, 'Side');
+  FPattern.Evaluate;
+  Grade := TGradeCheck.Create(FPattern, FOffset, 'dx');
+  try
+    Ghosts := Grade.Ghosts('@waist/4');
+    AssertEquals('smallest and largest', 2, Length(Ghosts));
+    AssertTrue('a point', Ghosts[0].HasPoint);
+    AssertPointsNear('smallest', Vec2(170, 30), Ghosts[0].Point);
+    AssertPointsNear('largest', Vec2(190, 30), Ghosts[1].Point);
+    AssertEquals('the edge it ends', 1, Length(Ghosts[1].Lines));
+    AssertPointsNear('the edge starts there', Vec2(190, 30), Ghosts[1].Lines[0][0]);
+    // The copy is put back each time
+    Ghosts := Grade.Ghosts('@waist/8');
+    AssertPointsNear('again', Vec2(85, 30), Ghosts[0].Point);
+  finally
+    FreeAndNil(Grade);
+  end;
+  AssertEquals('the pattern is not changed', '175', FPattern.FormulaText(FOffset, 'dx'));
+  AssertPointsNear('nor its geometry', Vec2(175, 30), FOffset.Position);
 end;
 
 initialization

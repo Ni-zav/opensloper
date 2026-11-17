@@ -32,7 +32,7 @@ uses
   Sloper.Core.Draft, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.Pattern, Sloper.Core.Transform, Sloper.Core.Settings,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.TextFields, Sloper.Core.Fragment,
   Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap,
-  Sloper.UI.Scene, Sloper.UI.CanvasInput, Sloper.UI.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools;
+  Sloper.UI.Scene, Sloper.UI.CanvasInput, Sloper.UI.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools, Sloper.UI.SuggestionGrade;
 
 type
   TCursorMoveEvent = procedure(Sender: TObject; const ModelPos: TVec2) of object;
@@ -105,6 +105,8 @@ type
     FLockKey, FLockField: string;
     FGhostShown: boolean;
     FGhost: TVec2;
+    // The suggestion's object at the smallest and largest sizes
+    FGradeGhosts: TGradeGhostArray;
     function DragLocked: boolean;
     procedure TakeFocus;
     function NoteValues: TFieldValues;
@@ -207,8 +209,10 @@ type
     // While a field's formula suggestions are open, dragging or nudging the
     // point changes only that field; empty strings unlock
     procedure SetFieldLock(const Key, FieldName: string);
-    // A dashed ghost of the point where a suggestion would put it
-    procedure ShowGhost(const Position: TVec2);
+    // A dashed ghost of the point where a suggestion would put it, with
+    // what it would make of its object at other sizes; a NaN position has
+    // no point to show
+    procedure ShowGhost(const Position: TVec2; const Sizes: TGradeGhostArray);
     procedure HideGhost;
     // mkPoint makes the selected points and repeats holes, which join the
     // pieces they lie in; the others add a marking to the selected piece
@@ -773,10 +777,11 @@ begin
   Invalidate;
 end;
 
-procedure TPatternCanvas.ShowGhost(const Position: TVec2);
+procedure TPatternCanvas.ShowGhost(const Position: TVec2; const Sizes: TGradeGhostArray);
 begin
   FGhostShown := True;
   FGhost := Position;
+  FGradeGhosts := Sizes;
   Invalidate;
 end;
 
@@ -1664,6 +1669,7 @@ end;
 procedure TPatternCanvas.Paint;
 var
   Pattern: TPattern;
+  Ghost: TGradeGhost;
 begin
   Pattern := nil;
   if Assigned(FDocument) then
@@ -1685,7 +1691,12 @@ begin
     if (FInput.Mode = cmDragging) and DragLocked and (FDocument.Pattern.FindNode(FLockKey) is TPointObject) then
       FPainter.DrawFieldGuide(FieldGuide(FDocument.Pattern, TPointObject(FDocument.Pattern.FindNode(FLockKey)), FLockField));
     if FGhostShown then
-      FPainter.DrawGhost(FGhost);
+    begin
+      for Ghost in FGradeGhosts do
+        FPainter.DrawGradeGhost(Ghost);
+      if not IsNan(FGhost.X) then
+        FPainter.DrawGhost(FGhost);
+    end;
   end;
   FPainter.EndFrame(Canvas);
   UpdateScrollBars;

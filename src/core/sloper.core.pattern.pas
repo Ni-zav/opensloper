@@ -381,6 +381,10 @@ type
     function SetFormula(Node: TEvalNode; const AField, Text: string): boolean;
     // The same, for text in stored form ({12}.x), which does not go by names
     function SetStoredFormula(Node: TEvalNode; const AField, Text: string): boolean;
+    // Works out formula text as a field would, with the pattern as it was
+    // last evaluated: a number in the pattern's unit for a length. False, with
+    // LastError, when it does not parse or cannot be worked out.
+    function EvaluateText(const Text: string; out Value: double): boolean;
     // Change a point's operation. It keeps its ID, name and users, so what
     // reads it carries on; Point is freed. Formulas are in stored form. Nil
     // with LastError set on failure, when Point is left as it was.
@@ -3374,6 +3378,23 @@ begin
     Exit(InstallFormula(Node, AField, NewFormula));
   Result := SetError(NewFormula.ErrorMessage, AField, NewFormula.ErrorPos);
   FreeAndNil(NewFormula);
+end;
+
+function TPattern.EvaluateText(const Text: string; out Value: double): boolean;
+var
+  Formula: TFormula;
+begin
+  Value := 0;
+  Formula := TFormula.Create;
+  try
+    if not Formula.Parse(Text, FResolver) then
+      Exit(SetError(Formula.ErrorMessage, '', Formula.ErrorPos));
+    Result := Formula.Evaluate(FContext, Value);
+    if not Result then
+      SetError(Formula.ErrorMessage);
+  finally
+    FreeAndNil(Formula);
+  end;
 end;
 
 function TPattern.SetStoredFormula(Node: TEvalNode; const AField, Text: string): boolean;

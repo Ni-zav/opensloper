@@ -27,7 +27,7 @@ unit Sloper.UI.FormulaSuggest;
 interface
 
 uses
-  Classes, SysUtils, Controls, StdCtrls, Graphics, LCLType, Sloper.Core.Units, Sloper.UI.Suggestion;
+  Classes, SysUtils, Controls, StdCtrls, Graphics, LCLType, Sloper.Core.Units, Sloper.UI.Suggestion, Sloper.UI.SuggestionGrade;
 
 type
   // Index is a row of the list, or -1 when the pointer is on none
@@ -43,6 +43,7 @@ type
     // The most rows shown since it opened: it does not shrink while dragging
     FShownRows: integer;
     FHoverIndex: integer;
+    FGrade: TGradeCheck;
     FOnChoose: TNotifyEvent;
     FOnHover: TSuggestHoverEvent;
     procedure DrawRow(Control: TWinControl; Index: integer; ARect: TRect; State: TOwnerDrawState);
@@ -66,6 +67,9 @@ type
     // A row was clicked, or Enter pressed on one: ItemIndex says which
     property OnChoose: TNotifyEvent read FOnChoose write FOnChoose;
     property OnHover: TSuggestHoverEvent read FOnHover write FOnHover;
+    // With a size table, each row also shows its values at the first and last
+    // sizes, and its tooltip the value at every size; nil for none. The panel owns it.
+    property Grade: TGradeCheck read FGrade write FGrade;
   end;
 
 resourcestring
@@ -75,7 +79,7 @@ resourcestring
 implementation
 
 uses
-  Math;
+  Math, Forms;
 
 const
   // Rows shown before the list scrolls
@@ -91,6 +95,7 @@ const
   // Text for the width of the value and difference columns
   VALUE_COLUMN_SAMPLE = '0000.00';
   DELTA_COLUMN_SAMPLE = '+00.00';
+  RANGE_COLUMN_SAMPLE = '0000.0–0000.0';
 
 constructor TFormulaSuggestList.Create(AOwner: TComponent);
 begin
@@ -158,9 +163,9 @@ end;
 // Formula on the left; value and difference in columns on the right
 procedure TFormulaSuggestList.DrawRow(Control: TWinControl; Index: integer; ARect: TRect; State: TOwnerDrawState);
 var
-  Gap, DeltaWidth, ValueWidth, TextTop: integer;
+  Gap, DeltaWidth, ValueWidth, RangeWidth, TextTop: integer;
   Row: TSuggestion;
-  ValueText, DeltaText: string;
+  ValueText, DeltaText, RangeText: string;
 begin
   Canvas.FillRect(ARect);
   if (Index < 0) or (Index > High(FRows)) then
@@ -177,21 +182,38 @@ begin
   Row := FRows[Index];
   DeltaWidth := Canvas.TextWidth(DELTA_COLUMN_SAMPLE);
   ValueWidth := Canvas.TextWidth(VALUE_COLUMN_SAMPLE);
+  RangeWidth := 0;
+  RangeText := '';
+  if Assigned(FGrade) and FGrade.Available then
+  begin
+    RangeWidth := Canvas.TextWidth(RANGE_COLUMN_SAMPLE) + Gap;
+    RangeText := SizeRangeText(FGrade.Values(Row.Text), FKind, FUnits);
+  end;
   ValueText := SuggestionValueText(Row.Value, FKind, FUnits);
   DeltaText := SuggestionDeltaText(Row.Delta, FKind, FUnits);
-  Canvas.TextRect(Rect(ARect.Left, ARect.Top, ARect.Right - DeltaWidth - ValueWidth - 3 * Gap, ARect.Bottom), ARect.Left + Gap, TextTop,
-    Row.Text);
+  Canvas.TextRect(Rect(ARect.Left, ARect.Top, ARect.Right - DeltaWidth - ValueWidth - RangeWidth - 3 * Gap, ARect.Bottom),
+    ARect.Left + Gap, TextTop, Row.Text);
   Canvas.TextOut(ARect.Right - DeltaWidth - 2 * Gap - Canvas.TextWidth(ValueText), TextTop, ValueText);
   if not (odSelected in State) then
     Canvas.Font.Color := clGrayText;
   Canvas.TextOut(ARect.Right - Gap - Canvas.TextWidth(DeltaText), TextTop, DeltaText);
+  if RangeText <> '' then
+    Canvas.TextOut(ARect.Right - DeltaWidth - ValueWidth - 3 * Gap - Canvas.TextWidth(RangeText), TextTop, RangeText);
 end;
 
 procedure TFormulaSuggestList.SetHover(Index: integer);
+var
+  Suggestion: TSuggestion;
 begin
   if Index = FHoverIndex then
     Exit;
   FHoverIndex := Index;
+  // The tooltip gives the row's value at every size
+  Application.CancelHint;
+  Hint := '';
+  if Assigned(FGrade) and FGrade.Available and RowSuggestion(Index, Suggestion) then
+    Hint := SizeValuesText(FGrade, FGrade.Values(Suggestion.Text), FKind, FUnits);
+  ShowHint := Hint <> '';
   if Assigned(FOnHover) then
     FOnHover(Self, Index);
 end;

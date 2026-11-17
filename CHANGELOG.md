@@ -11,6 +11,8 @@ The layout follows [Keep a Changelog](https://keepachangelog.com): Added,
 Changed, Fixed and Removed under each version.
 
 
+## 0.5.0
+
 ## 0.4.0
 
 ### Added

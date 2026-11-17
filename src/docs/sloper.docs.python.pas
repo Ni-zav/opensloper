@@ -30,7 +30,7 @@ interface
 const
   PYTHON_CLIENT_TOPIC = 'opensloper.py';
   // Names the client's own methods take, which no API method may have
-  PYTHON_CLIENT_RESERVED: array[0..1] of string = ('call', 'close');
+  PYTHON_CLIENT_RESERVED: array[0..2] of string = ('call', 'close', 'create_pattern_file');
 
 // The text of opensloper.py
 function PythonClient: string;
@@ -41,7 +41,7 @@ function DocText(const Text: string): string;
 implementation
 
 uses
-  SysUtils, StrUtils, Sloper.API.Server, Sloper.API.Rpc, Sloper.API.Methods;
+  SysUtils, StrUtils, Sloper.Core.Units, Sloper.Core.PatternFile, Sloper.API.Server, Sloper.API.Rpc, Sloper.API.Methods;
 
 const
   REFERENCE_URL = 'https://docs.opensloper.com/reference/';
@@ -95,11 +95,11 @@ const
     'from typing import Any, Literal',
     '',
     '__all__ = ["OpenSloper", "OpenSloperError", "REFUSED", "PARSE_ERROR", "INVALID_REQUEST", "METHOD_NOT_FOUND",',
-    '           "INVALID_PARAMS", "INTERNAL_ERROR"]',
+    '           "INVALID_PARAMS", "INTERNAL_ERROR", "PATTERN_VERSION", "PATTERN_UNITS"]',
     '',
     '# Error codes: a call understood and refused, and the JSON-RPC 2.0 errors');
 
-  Classes: array[0..55] of string = (
+  Classes: array[0..65] of string = (
     '',
     '',
     'class OpenSloperError(Exception):',
@@ -148,6 +148,16 @@ const
     '    return merged',
     '',
     '',
+    'def _is_pattern_file(path: str) -> bool:',
+    '    """Whether the file holds an OpenSloper pattern."""',
+    '    try:',
+    '        with open(path, encoding="utf-8") as f:',
+    '            data = json.load(f)',
+    '    except (OSError, ValueError):',
+    '        return False',
+    '    return isinstance(data, dict) and data.get("format") == "pattern"',
+    '',
+    '',
     'class OpenSloper:',
     '    """A running ``opensloper-cli serve``, with one pattern open at a time.',
     '',
@@ -157,7 +167,7 @@ const
     '    """',
     '');
 
-  CLIENT_BODY: array[0..40] of string = (
+  CLIENT_BODY: array[0..38] of string = (
     '    def __init__(self, program: str | None = None, cwd: str | None = None):',
     '        program = program or os.environ.get("OPENSLOPER_CLI", "opensloper-cli")',
     '        self._next_id = 0',
@@ -196,6 +206,52 @@ const
     '',
     '    def _send(self, method: str, *parts: dict[str, Any]) -> Any:',
     '        return self.call(method, _params(*parts))',
+    '');
+
+  // A pattern file to start from, made without a server (issue #44)
+  CREATE_PATTERN_FILE: array[0..44] of string = (
+    '    @staticmethod',
+    '    def create_pattern_file(',
+    '        filename: str,',
+    '        units: Literal["mm", "cm", "in"] = "mm",',
+    '        measurement_file: str | None = None,',
+    '        encoding: str = "utf-8",',
+    '        version: int | None = None,',
+    '    ) -> None:',
+    '        """Writes a new, empty pattern file, to open and draft in.',
+    '',
+    '        Needs no server: call it on the class, before starting one. A file',
+    '        already there is replaced only when it is a pattern, as save does.',
+    '',
+    '        Args:',
+    '            filename: The pattern file to write (.sloper).',
+    '            units: The unit of the pattern''s formulas.',
+    '            measurement_file: The measurement file it uses, relative to the pattern''s folder unless',
+    '                absolute; none by default.',
+    '            encoding: The text encoding to write; the file is plain ASCII, so any that keeps',
+    '                ASCII will do.',
+    '            version: The pattern format version to write; by default PATTERN_VERSION, the version',
+    '                this client was made with.',
+    '',
+    '        Raises:',
+    '            ValueError: An unknown unit, or a version this client does not know.',
+    '            OpenSloperError: The file is there and is not a pattern; its code is REFUSED.',
+    '        """',
+    '        if units not in PATTERN_UNITS:',
+    '            raise ValueError(f"units must be one of {'', ''.join(PATTERN_UNITS)}, not {units!r}")',
+    '        if version is None:',
+    '            version = PATTERN_VERSION',
+    '        if isinstance(version, bool) or not isinstance(version, int) or not 1 <= version <= PATTERN_VERSION:',
+    '            raise ValueError(f"version must be from 1 to {PATTERN_VERSION}, not {version!r}")',
+    '        if os.path.exists(filename) and not _is_pattern_file(filename):',
+    '            raise OpenSloperError(REFUSED, f"{filename} is not a pattern file, so it is not replaced")',
+    '        pattern: dict[str, Any] = {"format": "pattern", "version": version, "units": units}',
+    '        if measurement_file is not None:',
+    '            # Pattern files separate folders with /',
+    '            pattern["measurementFile"] = measurement_file.replace(os.sep, "/")',
+    '        with open(filename, "w", encoding=encoding, newline="\n") as f:',
+    '            json.dump(pattern, f, indent=2)',
+    '            f.write("\n")',
     '',
     '    # The Automation API methods, in the order of the reference page',
     '');
@@ -417,6 +473,20 @@ begin
     Result := Result + Line + LineEnding;
 end;
 
+// "mm", "cm", "in", as a pattern's units are written
+function UnitTuple: string;
+var
+  AUnit: TMeasureUnit;
+begin
+  Result := '';
+  for AUnit := Low(TMeasureUnit) to High(TMeasureUnit) do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + '"' + MEASURE_UNIT_NAMES[AUnit] + '"';
+  end;
+end;
+
 function PythonClient: string;
 var
   Method: TApiMethod;
@@ -426,7 +496,9 @@ begin
     LineEnding + Format('INVALID_REQUEST = %d', [RPC_INVALID_REQUEST]) + LineEnding +
     Format('METHOD_NOT_FOUND = %d', [RPC_METHOD_NOT_FOUND]) + LineEnding + Format('INVALID_PARAMS = %d', [RPC_INVALID_PARAMS]) +
     LineEnding + Format('INTERNAL_ERROR = %d', [RPC_INTERNAL_ERROR]) + LineEnding;
-  Result := Result + Lines(Classes) + Lines(CLIENT_BODY);
+  Result := Result + LineEnding + '# The pattern file version this client writes, and the units a pattern can use' + LineEnding +
+    Format('PATTERN_VERSION = %d', [PATTERN_VERSION]) + LineEnding + 'PATTERN_UNITS = (' + UnitTuple + ')' + LineEnding;
+  Result := Result + Lines(Classes) + Lines(CLIENT_BODY) + Lines(CREATE_PATTERN_FILE);
   for Method in ApiMethods do
     Result := Result + MethodSignature(Method) + MethodDocstring(Method) + MethodBody(Method) + LineEnding;
   // The last method ends the file with one line end

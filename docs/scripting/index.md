@@ -46,6 +46,11 @@ nothing else.
   `field` and `position`.
 - `call("method", {...})` sends any method by name, with its parameters as a
   dictionary.
+- `OpenSloper.create_pattern_file("name.sloper", units="cm",
+  measurement_file="measurements.slm")` writes a new, empty pattern to open,
+  without starting a server. It writes the pattern file version the client came
+  with, `PATTERN_VERSION`, unless given `version`, and does not replace a file
+  that is not a pattern.
 
 Other languages talk to `serve` directly, a line of JSON each way, as
 [How it talks](#how-it-talks) shows.
@@ -58,14 +63,11 @@ Run it in a folder holding `opensloper.py` and a copy of the example
 `measurements` folder, with `opensloper-cli` on your `PATH`.
 
 ```python
-import json
-
 from opensloper import OpenSloper
 
 # A new pattern in cm that uses the example size table
-with open("gathered-skirt.sloper", "w", encoding="utf-8") as f:
-    json.dump({"format": "pattern", "version": 1, "units": "cm",
-               "measurementFile": "measurements/size-table.slm"}, f)
+OpenSloper.create_pattern_file("gathered-skirt.sloper", units="cm",
+                               measurement_file="measurements/size-table.slm")
 
 with OpenSloper() as sloper:
     sloper.open("gathered-skirt.sloper", size="12")

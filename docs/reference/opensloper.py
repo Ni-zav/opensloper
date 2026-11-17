@@ -40,7 +40,7 @@ import subprocess
 from typing import Any, Literal
 
 __all__ = ["OpenSloper", "OpenSloperError", "REFUSED", "PARSE_ERROR", "INVALID_REQUEST", "METHOD_NOT_FOUND",
-           "INVALID_PARAMS", "INTERNAL_ERROR"]
+           "INVALID_PARAMS", "INTERNAL_ERROR", "PATTERN_VERSION", "PATTERN_UNITS"]
 
 # Error codes: a call understood and refused, and the JSON-RPC 2.0 errors
 REFUSED = -32000
@@ -49,6 +49,10 @@ INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
+
+# The pattern file version this client writes, and the units a pattern can use
+PATTERN_VERSION = 1
+PATTERN_UNITS = ("mm", "cm", "in")
 
 
 class OpenSloperError(Exception):
@@ -97,6 +101,16 @@ def _params(*parts: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _is_pattern_file(path: str) -> bool:
+    """Whether the file holds an OpenSloper pattern."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get("format") == "pattern"
+
+
 class OpenSloper:
     """A running ``opensloper-cli serve``, with one pattern open at a time.
 
@@ -143,6 +157,49 @@ class OpenSloper:
 
     def _send(self, method: str, *parts: dict[str, Any]) -> Any:
         return self.call(method, _params(*parts))
+
+    @staticmethod
+    def create_pattern_file(
+        filename: str,
+        units: Literal["mm", "cm", "in"] = "mm",
+        measurement_file: str | None = None,
+        encoding: str = "utf-8",
+        version: int | None = None,
+    ) -> None:
+        """Writes a new, empty pattern file, to open and draft in.
+
+        Needs no server: call it on the class, before starting one. A file
+        already there is replaced only when it is a pattern, as save does.
+
+        Args:
+            filename: The pattern file to write (.sloper).
+            units: The unit of the pattern's formulas.
+            measurement_file: The measurement file it uses, relative to the pattern's folder unless
+                absolute; none by default.
+            encoding: The text encoding to write; the file is plain ASCII, so any that keeps
+                ASCII will do.
+            version: The pattern format version to write; by default PATTERN_VERSION, the version
+                this client was made with.
+
+        Raises:
+            ValueError: An unknown unit, or a version this client does not know.
+            OpenSloperError: The file is there and is not a pattern; its code is REFUSED.
+        """
+        if units not in PATTERN_UNITS:
+            raise ValueError(f"units must be one of {', '.join(PATTERN_UNITS)}, not {units!r}")
+        if version is None:
+            version = PATTERN_VERSION
+        if isinstance(version, bool) or not isinstance(version, int) or not 1 <= version <= PATTERN_VERSION:
+            raise ValueError(f"version must be from 1 to {PATTERN_VERSION}, not {version!r}")
+        if os.path.exists(filename) and not _is_pattern_file(filename):
+            raise OpenSloperError(REFUSED, f"{filename} is not a pattern file, so it is not replaced")
+        pattern: dict[str, Any] = {"format": "pattern", "version": version, "units": units}
+        if measurement_file is not None:
+            # Pattern files separate folders with /
+            pattern["measurementFile"] = measurement_file.replace(os.sep, "/")
+        with open(filename, "w", encoding=encoding, newline="\n") as f:
+            json.dump(pattern, f, indent=2)
+            f.write("\n")
 
     # The Automation API methods, in the order of the reference page
 

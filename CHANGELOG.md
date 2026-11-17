@@ -26,6 +26,9 @@ Changed, Fixed and Removed under each version.
   and largest sizes and, in its tooltip, at every size, and hovering it
   outlines the pieces at those two sizes, so a formula that matches only by
   chance stands out (#26).
+- The Python client has `OpenSloper.create_pattern_file`, which writes a new,
+  empty pattern file to open, in a chosen unit and with a measurement file,
+  so a script no longer writes the file's JSON itself (#44).
 
 ### Changed
 

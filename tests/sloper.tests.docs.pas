@@ -36,6 +36,7 @@ type
     procedure TestParserHasEveryOption;
     procedure TestEveryCommandListed;
     procedure TestPythonClientHasEveryMethod;
+    procedure TestPythonClientCreatesPatternFiles;
     procedure TestDocTextLinks;
     procedure TestExamplePatternsHaveNoProblems;
     procedure TestTutorialImagesDrawWhatExists;
@@ -46,7 +47,7 @@ implementation
 uses
   SysUtils, Classes, ConsoleTools, Sloper.Core.JSON, Sloper.Core.Formula, Sloper.Core.Measurements, Sloper.Core.Pattern,
   Sloper.Core.PatternFile, Sloper.Core.PatternCheck, Sloper.CLI.Arguments, Sloper.Docs.Reference,
-  Sloper.API.Methods, Sloper.Docs.Python;
+  Sloper.API.Methods, Sloper.Docs.Python, Sloper.Core.Units;
 
 function DocsFolder: string;
 begin
@@ -161,6 +162,28 @@ begin
   AssertTrue(Pos('return self._send("set_formula", _target(target), {', Python) > 0);
   AssertTrue(Pos('return self._send("add_point", members, {', Python) > 0);
   AssertTrue(Pos(#13, Python) = 0);
+end;
+
+// OpenSloper.create_pattern_file writes the version and offers the units the
+// program has (issue #44)
+procedure TTestDocs.TestPythonClientCreatesPatternFiles;
+var
+  Python, Units: string;
+  AUnit: TMeasureUnit;
+begin
+  AssertTrue(ReferencePage(PYTHON_CLIENT_TOPIC, Python));
+  Units := '';
+  for AUnit := Low(TMeasureUnit) to High(TMeasureUnit) do
+  begin
+    if Units <> '' then
+      Units := Units + ', ';
+    Units := Units + '"' + MEASURE_UNIT_NAMES[AUnit] + '"';
+  end;
+  AssertTrue('a static method', Pos('    @staticmethod' + LineEnding + '    def create_pattern_file(', Python) > 0);
+  AssertTrue('the current version', Pos(LineEnding + 'PATTERN_VERSION = ' + IntToStr(PATTERN_VERSION) + LineEnding, Python) > 0);
+  AssertTrue('the units', Pos(LineEnding + 'PATTERN_UNITS = (' + Units + ')' + LineEnding, Python) > 0);
+  AssertTrue('the units it takes', Pos('units: Literal[' + Units + '] = "mm",', Python) > 0);
+  AssertTrue('the format', Pos('{"format": "' + PATTERN_FORMAT + '", "version": version, "units": units}', Python) > 0);
 end;
 
 // Every file under Folder, in its subfolders too, with this extension

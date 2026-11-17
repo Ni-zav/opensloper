@@ -16,12 +16,13 @@ Changed, Fixed and Removed under each version.
 ### Added
 
 - Formula suggestions (#26): a wand beside a field holding a plain number
-  lists formulas that give about the same value, such as `@waist/4` for an
-  offset of 175 mm, built from measurements, variables and other edges'
-  lengths and angles, closest and simplest first. Hovering one shows where
-  it would put the point; choosing one writes it into the field. While the
-  list is open, dragging the point or nudging it with the arrow keys changes
-  only that field, along a guide line, and the list follows the value.
+  or a formula lists formulas that give about the same value, such as
+  `@waist/4` for an offset of 175 mm, built from measurements, variables and
+  other edges' lengths and angles, closest and simplest first. Hovering one
+  shows where it would put the point; choosing one writes it into the field.
+  While the list is open on a plain number, dragging the point or nudging it
+  with the arrow keys changes only that field, along a guide line, and the
+  list follows the value.
 - With a size table, each suggestion also shows its values at the smallest
   and largest sizes and, in its tooltip, at every size, and hovering it
   outlines the pieces at those two sizes, so a formula that matches only by

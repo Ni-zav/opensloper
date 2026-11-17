@@ -71,6 +71,9 @@ type
     FCandidates: TCandidateArray;
     FCount: integer;
     FUnits: TMeasureUnit;
+    // The formula the field holds, as FormulaKey gives it, which is left out;
+    // empty for a plain number
+    FCurrent: string;
     procedure Add(const Text: string; Value, Cost: double; Compound: boolean = False);
     procedure AddLengths(Pattern: TPattern; Node: TEvalNode; const FieldName: string);
     procedure AddAngles(Pattern: TPattern; Node: TEvalNode);
@@ -85,11 +88,12 @@ type
 
 // What can be suggested for the field
 function SuggestionKind(Node: TEvalNode; const FieldName: string): TSuggestionKind;
-// True when the field holds a plain number that a suggestion could replace,
-// and its object can be edited
+// True when a suggestion could replace what the field holds, a plain number
+// or a formula that works out, and its object can be edited
 function CanSuggest(Pattern: TPattern; Node: TEvalNode; const FieldName: string): boolean;
-// The plain number the field holds, as the field works it out: mm, degrees or
-// a ratio. False when it holds a formula.
+// What the field holds, as the field works it out: mm, degrees or a ratio. A
+// formula is worked out with the pattern as last evaluated; False when it
+// cannot be.
 function SuggestionTarget(Pattern: TPattern; Node: TEvalNode; const FieldName: string; out Value: double): boolean;
 // How far a suggestion may be from the field's value: mm, degrees or a ratio
 function SuggestionTolerance(Kind: TSuggestionKind): double;
@@ -224,8 +228,11 @@ begin
 end;
 
 function CanSuggest(Pattern: TPattern; Node: TEvalNode; const FieldName: string): boolean;
+var
+  Value: double;
 begin
-  Result := Assigned(Node) and (SuggestionKind(Node, FieldName) <> skNone) and Node.Field(FieldName).IsLiteral and not Pattern.IsLocked(Node);
+  Result := Assigned(Node) and (SuggestionKind(Node, FieldName) <> skNone) and not Pattern.IsLocked(Node) and
+    SuggestionTarget(Pattern, Node, FieldName, Value);
 end;
 
 function SuggestionTarget(Pattern: TPattern; Node: TEvalNode; const FieldName: string; out Value: double): boolean;
@@ -233,14 +240,19 @@ var
   Context: TLiteralContext;
 begin
   Value := 0;
-  if not Assigned(Node) or not Assigned(Node.Field(FieldName)) or not Node.Field(FieldName).IsLiteral then
+  if not Assigned(Node) or not Assigned(Node.Field(FieldName)) or not Node.Field(FieldName).Valid then
     Exit(False);
-  Context := TLiteralContext.Create(Pattern.Units);
-  try
-    Result := Node.Field(FieldName).Evaluate(Context, Value);
-  finally
-    FreeAndNil(Context);
-  end;
+  if Node.Field(FieldName).IsLiteral then
+  begin
+    Context := TLiteralContext.Create(Pattern.Units);
+    try
+      Result := Node.Field(FieldName).Evaluate(Context, Value);
+    finally
+      FreeAndNil(Context);
+    end;
+  end
+  else
+    Result := Pattern.EvaluateText(Pattern.FormulaText(Node, FieldName), Value) and not IsNan(Value) and not IsInfinite(Value);
   if Result and (SuggestionKind(Node, FieldName) = skLength) then
     Value := Value * MILLIMETRES_PER_UNIT[Pattern.Units];
 end;
@@ -381,6 +393,12 @@ begin
     Result := COST_DIVISOR;
 end;
 
+// Formula text to compare, whatever its spacing and case
+function FormulaKey(const Text: string): string;
+begin
+  Result := LowerCase(StringReplace(Text, ' ', '', [rfReplaceAll]));
+end;
+
 { TSuggestionSource }
 
 constructor TSuggestionSource.Create(Pattern: TPattern; Node: TEvalNode; const FieldName: string);
@@ -388,6 +406,8 @@ begin
   inherited Create;
   FUnits := Pattern.Units;
   FKind := SuggestionKind(Node, FieldName);
+  if Assigned(Node.Field(FieldName)) and not Node.Field(FieldName).IsLiteral then
+    FCurrent := FormulaKey(Pattern.FormulaText(Node, FieldName));
   case FKind of
     skLength: AddLengths(Pattern, Node, FieldName);
     skAngle: AddAngles(Pattern, Node);
@@ -728,7 +748,7 @@ begin
       if Kept = Length(Result.Items) then
         Break;
       Text := CandidateText(Order[Index]);
-      if Seen.Contains(Text) then
+      if Seen.Contains(Text) or ((FCurrent <> '') and (FormulaKey(Text) = FCurrent)) then
         Continue;
       Seen.Add(Text);
       Result.Items[Kept].Text := Text;

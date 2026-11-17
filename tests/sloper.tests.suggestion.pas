@@ -43,7 +43,8 @@ type
     procedure TearDown; override;
   published
     procedure TestKinds;
-    procedure TestOnlyPlainNumbers;
+    procedure TestNumbersAndFormulas;
+    procedure TestFormulaLeavesItselfOut;
     procedure TestTarget;
     procedure TestTargetInPatternUnit;
     procedure TestQuarterWaistFirst;
@@ -134,13 +135,36 @@ begin
   AssertTrue('no such field', SuggestionKind(FOffset, 'radius') = skNone);
 end;
 
-procedure TTestSuggestion.TestOnlyPlainNumbers;
+// A formula can be swapped for another too, but not one that cannot be worked out
+procedure TTestSuggestion.TestNumbersAndFormulas;
 begin
   AssertTrue('a number', CanSuggest(FPattern, FOffset, 'dx'));
   AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist/4'));
-  AssertFalse('a formula', CanSuggest(FPattern, FOffset, 'dx'));
+  FPattern.Evaluate;
+  AssertTrue('a formula', CanSuggest(FPattern, FOffset, 'dx'));
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist/(1 - 1)'));
+  FPattern.Evaluate;
+  AssertFalse('a formula that fails', CanSuggest(FPattern, FOffset, 'dx'));
   AssertTrue('locked', FPattern.SetLocked(FFree, True));
   AssertFalse('locked', CanSuggest(FPattern, FFree, 'x'));
+end;
+
+// Offering the formula the field already has would only repeat it
+procedure TTestSuggestion.TestFormulaLeavesItselfOut;
+var
+  Source: TSuggestionSource;
+  Found: string;
+begin
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist / 4'));
+  FPattern.Evaluate;
+  Source := TSuggestionSource.Create(FPattern, FOffset, 'dx');
+  try
+    Found := Texts(Source.Match(180));
+  finally
+    FreeAndNil(Source);
+  end;
+  AssertEquals('itself, however it is spaced', 0, Pos('@waist/4;', Found));
+  AssertTrue('the others', Found <> '');
 end;
 
 procedure TTestSuggestion.TestTarget;
@@ -154,8 +178,14 @@ begin
   AssertNear('with a unit, in mm', 20, Value);
   AssertTrue('angle', SuggestionTarget(FPattern, FPolar, 'angle', Value));
   AssertNear('angle', 0, Value);
-  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist/4'));
-  AssertFalse('a formula', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+  // A formula's value as it works out, in mm
+  AssertTrue('set', FPattern.SetFormula(FOffset, 'dx', '@waist/4 + Hem.length'));
+  FPattern.Evaluate;
+  AssertTrue('a formula', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+  AssertNear('a formula', 680, Value);
+  FPattern.Units := muCentimetre;
+  AssertTrue('in cm', SuggestionTarget(FPattern, FOffset, 'dx', Value));
+  AssertNear('still in mm', 680, Value);
 end;
 
 procedure TTestSuggestion.TestTargetInPatternUnit;

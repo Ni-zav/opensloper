@@ -869,7 +869,7 @@ Decided and built 2026-11-14 (issue #19, phase 2). How much of each material the
 
 ### Blender export (3D preview)
 
-Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`.
+Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`. It starts with placement (planned 2026-11-17): in an Assembly tab of the design app the user arranges the flat pieces in 3D as an exploded view of the finished item, relative to each other and the seams, with no body needed (accessories have none); the user lists assembly steps there, and the publish app prints them as flat-pack style assembly instructions (parts list, overview, numbered line-art steps with arrows between the edges sewn together); the Blender script later starts the simulation from the same arrangement. A body built from the measurements is shown for reference and used as the collider; a body the user brings comes later. This takes back, for these uses only, the 2026-11-09 decision against a per-piece setting (see Pieces side by side, not front and back).
 
 Writing a cloth simulator (triangulation, sewing constraints, body and self-collision, a parametric avatar) is a multi-year effort in commercial tools, so the app only exports what Blender needs:
 

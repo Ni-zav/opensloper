@@ -143,7 +143,7 @@ begin
   Panel.AddRow(rsPropMirrored, FMirrorBox);
   FoldNames := nil;
   Insert(rsPropNoFold, FoldNames, 0);
-  Insert('', FFoldKeys, 0);
+  FFoldKeys := [''];
   for Entry in Piece.Path do
   begin
     Edge := Pattern.FindNode(Entry.EdgeKey);
@@ -404,7 +404,7 @@ begin
       Panel.AddEditRow(FieldCaption(GRAIN_ANGLE_FIELD), frFormula, GRAIN_ANGLE_FIELD);
   PointNames := nil;
   Insert(rsPropGrainChoose, PointNames, 0);
-  Insert('', FGrainPointKeys, 0);
+  FGrainPointKeys := [''];
   for Point in Panel.Document.Pattern.AllPoints do
   begin
     Insert(Point.DisplayName, PointNames, Length(PointNames));

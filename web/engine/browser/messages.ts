@@ -5,7 +5,13 @@ export type ToWorker =
   | { kind: 'files'; files: Record<string, string> }
   | { kind: 'call'; id: number; request: string };
 
+export interface Loaded {
+  kind: 'loaded';
+  fetchMs: number;
+  compileMs: number;
+  initMs: number;
+  bytes: number;
+}
+
 export type FromWorker =
-  | { kind: 'loaded'; fetchMs: number; compileMs: number; initMs: number; bytes: number }
-  | { kind: 'reply'; id: number; reply: string; ms: number }
-  | { kind: 'failed'; message: string };
+  Loaded | { kind: 'reply'; id: number; reply: string; ms: number } | { kind: 'failed'; message: string };

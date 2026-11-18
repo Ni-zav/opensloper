@@ -1,6 +1,6 @@
 # OpenSloper coding standards
 
-How OpenSloper's Pascal code is named, laid out and formatted. Architecture rules (layers, IDs, commands, evaluation states) are in `CLAUDE.md` and the design document.
+How OpenSloper's Pascal code is named, laid out and formatted, and, at the end, its TypeScript. Architecture rules (layers, IDs, commands, evaluation states) are in `CLAUDE.md` and the design document.
 
 ## Formatting
 
@@ -89,3 +89,22 @@ The project settings are the IDE's own settings with four changes: `RemoveExpres
 - In a unit that uses `Windows`, even only under `{$IFDEF WINDOWS}`, call `SysUtils.GetEnvironmentVariable`: the `Windows` unit's own `GetEnvironmentVariable` hides it, and only a Windows build fails.
 - Don't index an array with a call that can grow it (`Tokens[Add(...)] := ...`): Free Pascal may take the array's address before the call reallocates it. Store the index first.
 - Compare floats with a tolerance, and never compare a `double` with an untyped float constant such as `MaxDouble`: on x86_64 Linux the constant is evaluated as 80-bit `Extended` and never equals the `double` (see `documents/known-issues.md`).
+
+## TypeScript
+
+The web version's code in the browser is TypeScript, so far the spike's page in `web/engine/browser`. Three tools check it, and none of their errors may be left in a commit:
+
+| Tool | Checks | Configuration |
+| --- | --- | --- |
+| `tsc` (TypeScript 7) | Types, in strict mode with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` | `tsconfig.json` |
+| Oxlint, with `oxlint-tsgolint` | Bugs the compiler lets through: correctness, suspicious and performance rules, and type-aware rules on typescript-go (promises left unawaited or misused, `any` used unchecked, needless assertions, switches that miss a case, truthiness of non-booleans, `==`) | `.oxlintrc.json` |
+| Prettier | Layout: 2-space indents, single quotes, trailing commas, lines of at most 120 characters | `.prettierrc.json` |
+
+- **Running them:** `npm run check` in the folder runs all three, `npm run format` lays the files out, and `npm run build` checks before it bundles. `./opensloper-make.sh check` and `./opensloper-make.sh format` run them too when given no files, after the Pascal; they say so and go on without them when npm or the folder's packages are missing. npm comes from the repository's `venv` through `nodeenv` (see `web/engine/README.md`).
+- **Oxlint, not ESLint** (chosen 2026-11-18): `typescript-eslint` does not support TypeScript 7 yet, and Oxlint's type-aware rules run on typescript-go, the TypeScript 7 compiler. Oxlint warnings fail too (`denyWarnings`), and a disable comment that no longer disables anything is an error. `unicorn/require-post-message-target-origin` is off: it is for `window.postMessage`, and a worker's `postMessage` takes no target origin.
+- **No `any`.** A value from outside, such as `JSON.parse` or a Wasm export, is typed `unknown` and checked before it is used (`replies.ts`): an `isRecord` guard, then each field tested for its type.
+- **Disable comments say why**, on the line above, and are for what a rule cannot see: a loop that awaits one call at a time on purpose, as a drag does, or the Wasm boundary, where a function's signature cannot be checked at run time (`exported` in `worker.ts`). Each covers one rule on one line (`oxlint-disable-next-line rule`).
+- **Names** follow TypeScript's usage rather than the Pascal rules: `camelCase` for variables and functions, `PascalCase` for types, `UPPER_CASE` for constants, and descriptive names, no single letters, as in Pascal.
+- **Messages between page and worker** are a union with a `kind` field (`messages.ts`), so `switch (message.kind)` is checked for every kind.
+- **Node scripts** are TypeScript too, run by Node as they are (`measure.ts`), and checked like the rest.
+

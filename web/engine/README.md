@@ -70,7 +70,7 @@ needed for `node:wasi`.
 `browser/` is a TypeScript page: `worker.ts` loads `engine_lib.wasm` in a Web
 Worker through the WASI shim `@bjorn3/browser_wasi_shim`, with an in-memory
 `/data` folder the page puts files in; `main.ts` fetches a regression pattern
-as text, opens, checks and draws it, then times 100 edits. `measure.mjs`
+as text, opens, checks and draws it, then times 100 edits. `measure.ts`
 opens it in headless Chromium (through `puppeteer-core`, with the system's
 Chromium) and prints the times.
 
@@ -90,6 +90,11 @@ cd web/engine/browser && npm ci && npm run build
 cd ../../.. && python3 -m http.server 8765 --bind 127.0.0.1 &
 cd web/engine/browser && npm run measure -- --pattern bodice-block.sloper --measurements bodice-small.slm
 ```
+
+`npm run build` first runs `npm run check`: `tsc` in strict mode, Oxlint
+with its type-aware rules, and Prettier, as the TypeScript section of
+`documents/coding-standards.md` describes; `npm run format` lays the files
+out. `./opensloper-make.sh check` and `format` run them as well.
 
 The page is at `http://127.0.0.1:8765/web/engine/out/browser/index.html`
 (`?pattern=` and `?measurements=` choose the case). A module worker does not

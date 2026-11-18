@@ -1,0 +1,475 @@
+{
+  "pattern": "bodice-block.sloper",
+  "measurements": "bodice-large.slm",
+  "variables": [
+    {
+      "id": 1,
+      "name": "bust_ease",
+      "state": "valid",
+      "value": 8
+    },
+    {
+      "id": 2,
+      "name": "waist_ease",
+      "state": "valid",
+      "value": 4
+    },
+    {
+      "id": 3,
+      "name": "half_width",
+      "state": "valid",
+      "value": 29
+    },
+    {
+      "id": 4,
+      "name": "scye_depth",
+      "state": "valid",
+      "value": 22.5
+    },
+    {
+      "id": 5,
+      "name": "neck_width",
+      "state": "valid",
+      "value": 8
+    },
+    {
+      "id": 6,
+      "name": "shaping",
+      "state": "valid",
+      "value": 6
+    },
+    {
+      "id": 7,
+      "name": "side_shaping",
+      "state": "valid",
+      "value": 2.4
+    },
+    {
+      "id": 8,
+      "name": "dart",
+      "state": "valid",
+      "value": 3.6
+    },
+    {
+      "id": 9,
+      "name": "shoulder_ease",
+      "state": "valid",
+      "value": 1
+    }
+  ],
+  "objects": [
+    {
+      "id": 10,
+      "name": "A",
+      "state": "valid",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": 11,
+      "name": "B",
+      "state": "valid",
+      "x": 0,
+      "y": 225
+    },
+    {
+      "id": 12,
+      "name": "C",
+      "state": "valid",
+      "x": 0,
+      "y": 440
+    },
+    {
+      "id": 13,
+      "name": "UB",
+      "state": "valid",
+      "x": 290,
+      "y": 225
+    },
+    {
+      "id": 14,
+      "name": "WB",
+      "state": "valid",
+      "x": 266,
+      "y": 440
+    },
+    {
+      "id": 15,
+      "name": "Centre_back",
+      "state": "valid",
+      "length": 440
+    },
+    {
+      "id": 16,
+      "name": "Back_chest_line",
+      "state": "valid",
+      "length": 290
+    },
+    {
+      "id": 17,
+      "name": "Back_waist_line",
+      "state": "valid",
+      "length": 266
+    },
+    {
+      "id": 18,
+      "name": "D",
+      "state": "valid",
+      "x": 80,
+      "y": 0
+    },
+    {
+      "id": 19,
+      "name": "NB",
+      "state": "valid",
+      "x": 80,
+      "y": -20
+    },
+    {
+      "id": 20,
+      "name": "SB",
+      "state": "valid",
+      "x": 217.903195,
+      "y": 24.807464
+    },
+    {
+      "id": 21,
+      "name": "Back_shoulder",
+      "state": "valid",
+      "length": 145
+    },
+    {
+      "id": 22,
+      "name": "Back_neck",
+      "state": "valid",
+      "length": 85.58976
+    },
+    {
+      "id": 23,
+      "name": "E",
+      "state": "valid",
+      "x": 0,
+      "y": 123.75
+    },
+    {
+      "id": 24,
+      "name": "XB",
+      "state": "valid",
+      "x": 195,
+      "y": 123.75
+    },
+    {
+      "id": 25,
+      "name": "Back_armhole_top",
+      "state": "valid",
+      "length": 101.940279
+    },
+    {
+      "id": 26,
+      "name": "Back_armhole_bottom",
+      "state": "valid",
+      "length": 155.303464
+    },
+    {
+      "id": 27,
+      "name": "Back_side",
+      "state": "valid",
+      "length": 216.335388
+    },
+    {
+      "id": 28,
+      "name": "DB",
+      "state": "valid",
+      "x": 145,
+      "y": 440
+    },
+    {
+      "id": 29,
+      "name": "DB1",
+      "state": "valid",
+      "x": 127,
+      "y": 440
+    },
+    {
+      "id": 30,
+      "name": "DB2",
+      "state": "valid",
+      "x": 163,
+      "y": 440
+    },
+    {
+      "id": 31,
+      "name": "PB",
+      "state": "valid",
+      "x": 145,
+      "y": 245
+    },
+    {
+      "id": 32,
+      "name": "Back_waist_centre",
+      "state": "valid",
+      "length": 127
+    },
+    {
+      "id": 33,
+      "name": "Line_DB1_PB",
+      "state": "valid",
+      "length": 195.829007
+    },
+    {
+      "id": 34,
+      "name": "Line_PB_DB2",
+      "state": "valid",
+      "length": 195.829007
+    },
+    {
+      "id": 35,
+      "name": "Back_waist_side",
+      "state": "valid",
+      "length": 103
+    },
+    {
+      "id": 36,
+      "name": "F",
+      "state": "valid",
+      "x": 680,
+      "y": 0
+    },
+    {
+      "id": 37,
+      "name": "FN",
+      "state": "valid",
+      "x": 680,
+      "y": 90
+    },
+    {
+      "id": 38,
+      "name": "FC",
+      "state": "valid",
+      "x": 680,
+      "y": 440
+    },
+    {
+      "id": 39,
+      "name": "I",
+      "state": "valid",
+      "x": 680,
+      "y": 135
+    },
+    {
+      "id": 40,
+      "name": "G",
+      "state": "valid",
+      "x": 680,
+      "y": 225
+    },
+    {
+      "id": 41,
+      "name": "UF",
+      "state": "valid",
+      "x": 390,
+      "y": 225
+    },
+    {
+      "id": 42,
+      "name": "WF",
+      "state": "valid",
+      "x": 414,
+      "y": 440
+    },
+    {
+      "id": 43,
+      "name": "Centre_front",
+      "state": "valid",
+      "length": 350
+    },
+    {
+      "id": 44,
+      "name": "Front_chest_line",
+      "state": "valid",
+      "length": 290
+    },
+    {
+      "id": 45,
+      "name": "Front_waist_line",
+      "state": "valid",
+      "length": 266
+    },
+    {
+      "id": 46,
+      "name": "H",
+      "state": "valid",
+      "x": 600,
+      "y": 0
+    },
+    {
+      "id": 47,
+      "name": "NF",
+      "state": "valid",
+      "x": 600,
+      "y": -20
+    },
+    {
+      "id": 48,
+      "name": "SF",
+      "state": "valid",
+      "x": 474.83018,
+      "y": 30.57189
+    },
+    {
+      "id": 49,
+      "name": "Front_shoulder",
+      "state": "valid",
+      "length": 135
+    },
+    {
+      "id": 50,
+      "name": "Front_neck",
+      "state": "valid",
+      "length": 142.668579
+    },
+    {
+      "id": 51,
+      "name": "XF",
+      "state": "valid",
+      "x": 495,
+      "y": 135
+    },
+    {
+      "id": 52,
+      "name": "Front_armhole_top",
+      "state": "valid",
+      "length": 106.853862
+    },
+    {
+      "id": 53,
+      "name": "Front_armhole_bottom",
+      "state": "valid",
+      "length": 156.002306
+    },
+    {
+      "id": 54,
+      "name": "Front_side",
+      "state": "valid",
+      "length": 216.335388
+    },
+    {
+      "id": 55,
+      "name": "DF",
+      "state": "valid",
+      "x": 570,
+      "y": 440
+    },
+    {
+      "id": 56,
+      "name": "DF1",
+      "state": "valid",
+      "x": 588,
+      "y": 440
+    },
+    {
+      "id": 57,
+      "name": "DF2",
+      "state": "valid",
+      "x": 552,
+      "y": 440
+    },
+    {
+      "id": 58,
+      "name": "BP",
+      "state": "valid",
+      "x": 570,
+      "y": 255
+    },
+    {
+      "id": 59,
+      "name": "Front_waist_centre",
+      "state": "valid",
+      "length": 92
+    },
+    {
+      "id": 60,
+      "name": "Line_DF1_BP",
+      "state": "valid",
+      "length": 185.873613
+    },
+    {
+      "id": 61,
+      "name": "Line_BP_DF2",
+      "state": "valid",
+      "length": 185.873613
+    },
+    {
+      "id": 62,
+      "name": "Front_waist_side",
+      "state": "valid",
+      "length": 138
+    },
+    {
+      "id": 63,
+      "name": "Back",
+      "state": "valid",
+      "area": 103553.52749,
+      "perimeter": 1765.801046,
+      "cutArea": 121952.31663
+    },
+    {
+      "id": 64,
+      "name": "Front",
+      "state": "valid",
+      "area": 96254.923079,
+      "perimeter": 1708.581805,
+      "cutArea": 115275.206941
+    },
+    {
+      "id": 65,
+      "name": "Shoulder_seam",
+      "state": "valid",
+      "lengthA": 135,
+      "lengthB": 145,
+      "ease": 10,
+      "tolerance": 1
+    },
+    {
+      "id": 66,
+      "name": "Side_seam",
+      "state": "valid",
+      "lengthA": 216.335388,
+      "lengthB": 216.335388,
+      "ease": 0,
+      "tolerance": 1
+    },
+    {
+      "id": 67,
+      "name": "Note",
+      "state": "valid",
+      "x": 177.903195,
+      "y": 64.807464
+    },
+    {
+      "id": 68,
+      "name": "Note2",
+      "state": "valid",
+      "x": 590,
+      "y": 215
+    },
+    {
+      "id": 69,
+      "name": "Back_dart",
+      "state": "valid",
+      "lengthA": 195.829007,
+      "lengthB": 195.829007,
+      "ease": 0,
+      "tolerance": 1
+    },
+    {
+      "id": 70,
+      "name": "Front_dart",
+      "state": "valid",
+      "lengthA": 185.873613,
+      "lengthB": 185.873613,
+      "ease": 0,
+      "tolerance": 1
+    }
+  ]
+}

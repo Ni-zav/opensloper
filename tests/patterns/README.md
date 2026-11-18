@@ -12,6 +12,7 @@ Current cases:
 
 - `skirt-block.sloper`: a straight skirt block, half back and front, using every point and edge operation, including split parts of split parts. Sets: `skirt-small.slm`, `skirt-large.slm`. It has no pieces, so use the next pattern to try publishing.
 - `skirt-pieces.sloper`: the same block with its pieces: Back, cut twice and mirrored, and Front, on the fold, with grainlines and a notch. `Sloper.Tests.Layout` also takes it from file to PDF. Sets: `skirt-small.slm`, `skirt-large.slm`.
+- `bodice-block.sloper`: the bodice block of the tutorial, pinned as a copy so editing the tutorial does not change it. Unlike the skirts it is in cm, with curves, Back and Front on the fold, waist darts, seams (the shoulder with ease) and notes. Sets: `bodice-small.slm` (the tutorial's measurements), `bodice-large.slm`, whose waist and back length differ so the darts and side seam change too.
 
 ## Adding or updating a case
 

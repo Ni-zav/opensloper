@@ -986,7 +986,6 @@ Agreed, but not built. Each line is meant to become one issue.
 
 - **Translation**, for the community release (see Translation).
 - **Release signing** (Issue #17), for the community release: macOS notarisation, Intel macOS builds and signed Windows programs. The installers and the offline guide are done (see Release builds).
-- **Bodice block regression pattern** (Issue #45) in `tests/patterns/`.
 - **More tutorials**: (Issue #46) moving a dart, a tote bag, a leather card wallet; and a documentation page per app's icon.
 - **Help in the apps.** (Issue #32) F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Help → User Guide already opens the offline copy's front page, with the website as fallback. Translated and versioned documentation wait for the community release.
 - **Developer documentation** (Issue #47) of the units (PasDoc), once someone else needs to read the code.
@@ -995,8 +994,6 @@ Agreed, but not built. Each line is meant to become one issue.
 
 - **More operations**: (Issue #48) a bisector, and a tangent from a point to a curve.
 - **Transforms**: (Issue #49) a live ghost while dragging, and snapping to existing angles.
-- **Separate Piece command**:(Issue #34) one command for separating front and back (see Transforms), only if the manual steps prove tedious.
-- **Piece detection**: (Issue #35) Shift-click to merge faces, and a start-edge fallback.
 - **Custom piece labels.** (Issue #50)
 - **Check pattern overlay**: (Issue #51) draw the problems on the canvas, and report dangling outline edges.
 - **Dependency arrows**: (Issue #52) hovering or selecting an object draws faint arrows to its inputs, optionally to its dependents (see Links and problem display).

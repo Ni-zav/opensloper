@@ -53,6 +53,8 @@ type
     // Centres Bounds (model) without zooming, unless all of it already shows,
     // Margin pixels clear of the edges of a Width x Height view
     procedure Reveal(const Bounds: TRect2; Width, Height, Margin: double);
+    // Reveals Bounds when it fits at this zoom, else fits it: zooms out, never in
+    procedure Show(const Bounds: TRect2; Width, Height, Margin: double);
     // Fills a Width x Height view with the box between two screen corners
     procedure ZoomToBox(const Corner, OtherCorner: TVec2; Width, Height: double);
   end;
@@ -162,6 +164,14 @@ begin
   if (Corner.X >= Margin) and (Corner.Y >= Margin) and (OtherCorner.X <= Width - Margin) and (OtherCorner.Y <= Height - Margin) then
     Exit;
   Pan(Width / 2 - (Corner.X + OtherCorner.X) / 2, Height / 2 - (Corner.Y + OtherCorner.Y) / 2);
+end;
+
+procedure TViewTransform.Show(const Bounds: TRect2; Width, Height, Margin: double);
+begin
+  if ((Bounds.MaxX - Bounds.MinX) * Scale > Width - 2 * Margin) or ((Bounds.MaxY - Bounds.MinY) * Scale > Height - 2 * Margin) then
+    Fit(Bounds, Width, Height, Margin)
+  else
+    Reveal(Bounds, Width, Height, Margin);
 end;
 
 procedure TViewTransform.ZoomToBox(const Corner, OtherCorner: TVec2; Width, Height: double);

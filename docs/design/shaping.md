@@ -79,12 +79,15 @@ changes. Each leaves the sources where they are:
 | --- | --- | --- |
 | Rotate Copy… | Click the point to turn about | Moving a dart, slash and spread |
 | Mirror Copy… | Click a straight edge, or two points on the line to reflect in | Making a half whole |
-| Move Copy… | Nothing: the copies start where the sources are | Moving a section aside to develop it: facings, yokes, pockets, the back drafted over the front |
+| Move Copy… | Nothing: the copies start just to the right of the sources | Moving a section aside to develop it: facings, yokes, pockets |
 
-The transform is selected when it is made, with no turn or movement yet: type
-its **Angle**, or **Across** and **Down**, in the properties, as formulas. A
-dart's angle, for example, is the difference between its legs' angles,
-`Dart_leg_2.angle - Dart_leg_1.angle`.
+The transform is selected when it is made, and the view moves, zooming out if
+it must, to show the sources and the copies. A rotation starts with no turn:
+type its **Angle** in the properties. A move starts with **Across** set to the
+sources' width and a 20 mm gap, rounded up to a round number in the pattern's
+unit, so the copies sit beside them; change **Across** and **Down** to put them
+where you want. Both take formulas. A dart's angle, for example, is the
+difference between its legs' angles, `Dart_leg_2.angle - Dart_leg_1.angle`.
 
 The copies are named after their sources with a suffix, such as `A_r1`.
 Copied points are drawn as diamonds rather than dots. Hover over or select a

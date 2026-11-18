@@ -77,6 +77,8 @@ type
     procedure TestObjectsBounds;
     procedure TestRevealLeavesVisibleAlone;
     procedure TestRevealCentresWithoutZooming;
+    procedure TestShowPansWhenItFits;
+    procedure TestShowZoomsOutWhenTooBig;
     procedure TestLabelModes;
     procedure TestContextualHover;
     procedure TestContextualSelection;
@@ -328,6 +330,35 @@ begin
   AssertNear('zoom kept', 2, View.Scale);
   Centre := View.ToScreen(Vec2(1050, -450));
   AssertPointsNear('centred', Vec2(400, 200), Centre);
+end;
+
+// What fits at this zoom is only panned to, as Reveal does
+procedure TTestCanvasModel.TestShowPansWhenItFits;
+var
+  View: TViewTransform;
+begin
+  View := DefaultView;
+  View.Scale := 2;
+  View.OriginX := 0;
+  View.OriginY := 400;
+  View.Show(MakeRect(1000, -500, 1100, -400), 800, 400, 5);
+  AssertNear('zoom kept', 2, View.Scale);
+  AssertPointsNear('centred', Vec2(400, 200), View.ToScreen(Vec2(1050, -450)));
+end;
+
+// Move Copy's originals and copies side by side, wider than the window: it
+// zooms out to show them all
+procedure TTestCanvasModel.TestShowZoomsOutWhenTooBig;
+var
+  View: TViewTransform;
+begin
+  View := DefaultView;
+  View.Scale := 2;
+  View.Show(MakeRect(0, 0, 980, 600), 800, 400, 5);
+  AssertTrue('zoomed out', View.Scale < 2);
+  AssertTrue('left end shows', View.ToScreen(Vec2(0, 0)).X >= 5 - 1e-6);
+  AssertTrue('right end shows', View.ToScreen(Vec2(980, 600)).X <= 795 + 1e-6);
+  AssertTrue('bottom shows', View.ToScreen(Vec2(980, 600)).Y <= 395 + 1e-6);
 end;
 
 // Square A (0, 0), B (100, 0), C (100, 100), D (0, 100), allowance 10

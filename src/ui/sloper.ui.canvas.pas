@@ -130,6 +130,7 @@ type
     procedure PickHere(X, Y: integer);
     procedure EndPicking;
     procedure MakeTransform(const Spec: TTransformSpec);
+    procedure RevealCopies(const TransformKey: string; const Sources: TStringArray);
     procedure ToggleSelected(const Key: string);
     procedure SelectBox(X, Y: integer; Adding: boolean);
     procedure ZoomClick(X, Y: integer; ZoomingOut: boolean);
@@ -982,7 +983,8 @@ begin
     Spec := Default(TTransformSpec);
     Spec.Kind := tkMove;
     Spec.Sources := Copy(FSelection);
-    Spec.DX := '0';
+    // Beside the originals, so the copies show at once
+    Spec.DX := MoveAsideText(FDocument.Pattern, FSelection);
     Spec.DY := '0';
     MakeTransform(Spec);
     Exit;
@@ -999,9 +1001,34 @@ begin
 end;
 
 procedure TPatternCanvas.MakeTransform(const Spec: TTransformSpec);
+var
+  Edit: TSelectionEdit;
 begin
   EndPicking;
-  ApplyEdit(AddTransform(FDocument, Spec));
+  Edit := AddTransform(FDocument, Spec);
+  ApplyEdit(Edit);
+  if Edit.Done and (Length(Edit.Selection) = 1) then
+    RevealCopies(Edit.Selection[0], Spec.Sources);
+end;
+
+// Brings the sources and their new copies into view, zooming out if they do
+// not fit
+procedure TPatternCanvas.RevealCopies(const TransformKey: string; const Sources: TStringArray);
+var
+  Keys: TStringArray;
+  Index: integer;
+  Bounds: TRect2;
+  Pattern: TPattern;
+begin
+  Pattern := FDocument.Pattern;
+  Keys := Copy(Sources);
+  for Index := 0 to Pattern.ObjectCount - 1 do
+    if CopyTransformKey(Pattern.Objects[Index]) = TransformKey then
+      Insert(Pattern.Objects[Index].Key, Keys, Length(Keys));
+  if not ObjectsBounds(Pattern, Keys, Bounds) then
+    Exit;
+  FView.Show(Bounds, ClientWidth, ClientHeight, FIT_MARGIN);
+  Invalidate;
 end;
 
 procedure TPatternCanvas.PickHere(X, Y: integer);

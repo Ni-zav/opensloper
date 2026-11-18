@@ -54,6 +54,11 @@ type
     procedure TestMoveCartesian;
     procedure TestMovePolar;
     procedure TestMoveAndTurn;
+    procedure TestMoveAsideIsWidthAndGap;
+    procedure TestMoveAsideRoundsUp;
+    procedure TestMoveAsideInPatternUnit;
+    procedure TestMoveAsideOnePoint;
+    procedure TestMoveAsideCopiesClearOriginals;
     procedure TestEdgeBringsItsEnds;
     procedure TestCopiedEdgeJoinsCopiedPoints;
     procedure TestCurveCopiedExactly;
@@ -84,7 +89,7 @@ type
 implementation
 
 uses
-  Math, Sloper.Core.PatternFile, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Drag, Sloper.Core.Variables;
+  Math, Sloper.Core.Bounds, Sloper.Core.Units, Sloper.Core.PatternFile, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Drag, Sloper.Core.Variables;
 
 procedure TTestTransform.SetUp;
 begin
@@ -290,6 +295,64 @@ begin
   AssertNotNull(FPattern.LastError, FPattern.AddTransform(Spec));
   FPattern.Evaluate;
   AssertPointsNear('moved', Vec2(102, -47), Copied('A_t1'));
+end;
+
+// Move Copy starts beside the originals: their width and a 20 mm gap
+procedure TTestTransform.TestMoveAsideIsWidthAndGap;
+var
+  Line: TEdgeObject;
+begin
+  Line := FPattern.AddLine(Pt('A', 0, 0).Key, Pt('B', 100, 50).Key);
+  AssertNotNull(FPattern.LastError, Line);
+  FPattern.Evaluate;
+  AssertEquals('120', MoveAsideText(FPattern, [Line.Key]));
+end;
+
+procedure TTestTransform.TestMoveAsideRoundsUp;
+begin
+  Pt('A', 0, 0);
+  Pt('B', 95, 0);
+  FPattern.Evaluate;
+  AssertEquals('to the next 10 mm', '120', MoveAsideText(FPattern, [FPattern.FindObject('A').Key, FPattern.FindObject('B').Key]));
+end;
+
+procedure TTestTransform.TestMoveAsideInPatternUnit;
+var
+  Keys: TStringArray;
+begin
+  FPattern.Units := muCentimetre;
+  Keys := [Pt('A', 0, 0).Key, Pt('B', 30.5, 0).Key];
+  FPattern.Evaluate;
+  AssertEquals('32.5 cm up to whole cm', '33', MoveAsideText(FPattern, Keys));
+  FPattern.Units := muInch;
+  FPattern.Evaluate;
+  // 30.5 in and 20 mm is 31.29 in
+  AssertEquals('up to whole inches', '32', MoveAsideText(FPattern, Keys));
+end;
+
+procedure TTestTransform.TestMoveAsideOnePoint;
+begin
+  Pt('A', 40, 40);
+  FPattern.Evaluate;
+  AssertEquals('the gap alone', '20', MoveAsideText(FPattern, [FPattern.FindObject('A').Key]));
+end;
+
+procedure TTestTransform.TestMoveAsideCopiesClearOriginals;
+var
+  Spec: TTransformSpec;
+  Line: TEdgeObject;
+begin
+  Line := FPattern.AddCurve(Pt('A', 0, 0).Key, Pt('B', 100, 0).Key, '300', '80', '240', '80');
+  AssertNotNull(FPattern.LastError, Line);
+  FPattern.Evaluate;
+  Spec := Default(TTransformSpec);
+  Spec.Kind := tkMove;
+  Spec.Sources := [Line.Key];
+  Spec.DX := MoveAsideText(FPattern, Spec.Sources);
+  Spec.DY := '0';
+  AssertNotNull(FPattern.LastError, FPattern.AddTransform(Spec));
+  FPattern.Evaluate;
+  AssertTrue('the copy starts right of the original', Copied('A_t1').X >= 100 + MOVE_ASIDE_GAP - 1e-6);
 end;
 
 procedure TTestTransform.TestMovePolar;

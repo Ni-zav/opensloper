@@ -26,18 +26,27 @@ unit Sloper.Core.Bounds;
 interface
 
 uses
-  Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern;
+  SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern;
+
+const
+  // The space, in mm, Move Copy leaves between the originals and their copies
+  MOVE_ASIDE_GAP = 20;
 
 // Extent of everything shown, notes too unless WithNotes is False; False when
 // nothing is
 function PatternBounds(Pattern: TPattern; out Bounds: TRect2; WithNotes: boolean = True): boolean;
 // Widens Bounds to take in DraftObject. Start with Empty True.
 procedure IncludeObject(var Bounds: TRect2; var Empty: boolean; DraftObject: TDraftObject);
+// How far Move Copy moves the points and edges in Keys to the right, so the
+// copies start beside them with a gap: their width and MOVE_ASIDE_GAP mm, as a
+// number in the pattern's unit rounded up to a round one. Other objects in
+// Keys are left out; with nothing computed it is the gap alone.
+function MoveAsideText(Pattern: TPattern; const Keys: TStringArray): string;
 
 implementation
 
 uses
-  Math, Sloper.Core.Bezier, Sloper.Core.Piece, Sloper.Core.Note, Sloper.Core.TextFields;
+  Math, Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Bezier, Sloper.Core.Piece, Sloper.Core.Note, Sloper.Core.TextFields;
 
 procedure Include(var Bounds: TRect2; var Empty: boolean; const Point: TVec2);
 begin
@@ -91,6 +100,35 @@ begin
         Include(Bounds, Empty, Vec2(CurveBounds.MinX, CurveBounds.MinY));
         Include(Bounds, Empty, Vec2(CurveBounds.MaxX, CurveBounds.MaxY));
       end;
+end;
+
+const
+  // What Move Copy's distance is rounded up to, in each pattern unit
+  MOVE_ASIDE_STEPS: array[TMeasureUnit] of integer = (10, 1, 1);
+
+function MoveAsideText(Pattern: TPattern; const Keys: TStringArray): string;
+var
+  Key: string;
+  Node: TEvalNode;
+  Bounds: TRect2;
+  Empty: boolean;
+  Width: double;
+  Step: integer;
+begin
+  Bounds := Default(TRect2);
+  Empty := True;
+  for Key in Keys do
+  begin
+    Node := Pattern.FindNode(Key);
+    if (Node is TPointObject) or (Node is TEdgeObject) then
+      IncludeObject(Bounds, Empty, TDraftObject(Node));
+  end;
+  Width := 0;
+  if not Empty then
+    Width := Bounds.MaxX - Bounds.MinX;
+  Step := MOVE_ASIDE_STEPS[Pattern.Units];
+  // Less a hair, so a distance that is already round is not taken up a step
+  Result := IntToStr(Ceil((Width + MOVE_ASIDE_GAP) / MILLIMETRES_PER_UNIT[Pattern.Units] / Step - 1e-9) * Step);
 end;
 
 function PatternBounds(Pattern: TPattern; out Bounds: TRect2; WithNotes: boolean): boolean;

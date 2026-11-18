@@ -73,7 +73,7 @@ Layers (dependencies point down):
 - **Document:** TPatternDocument (owns the model), undo/redo commands, change notifications
 - **Core (pure Pascal, no LCL):** geometry, expressions, model, evaluator, piece builder (Clipper2 seam allowance), storage (JSON pattern and measurement files)
 
-Three GUI apps sit on these layers: the measurements app, the drafting app and the publish app (see Measurements app and Publish app). Each owns one kind of file and only reads the ones before it (measurements → patterns → layouts). They share the core, and the publish app the output layer, but not each other's UI.
+Three GUI apps sit on these layers: the measurements app, the drafting app and the publish app (see Measurements app and Publish app); a fourth, the drape app (`opensloper-drape`), is planned (see Drape app and Blender export). Each owns one kind of file and only reads the ones before it (measurements → patterns → layouts). They share the core, and the publish app the output layer, but not each other's UI.
 
 The UI changes the model only through document commands, and exporters read computed geometry directly from the core, so a new output format never touches drafting code.
 
@@ -883,17 +883,19 @@ Decided and built 2026-11-14 (issue #19, phase 2). How much of each material the
 - **Across patterns** a material is matched by name, in each pattern's own order, leaving out materials no piece uses. Its size comes from the first pattern that gives it one, and lengths show in that pattern's unit; another size for it is noted.
 - **The tab** lists Material, Size, Pieces and Needed, with the notes and how the estimate is made under them, worked out again on each change. Title blocks ask for the field on every page, so `TLayout.MaterialNeeded` keeps the summary until the files loaded change.
 
-### Blender export (3D preview)
+### Drape app and Blender export (3D preview)
 
-Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`. It starts with placement (planned 2026-11-17): in an Assembly tab of the design app the user arranges the flat pieces in 3D as an exploded view of the finished item, relative to each other and the seams, with no body needed (accessories have none); the user lists assembly steps there, and the publish app prints them as flat-pack style assembly instructions (parts list, overview, numbered line-art steps with arrows between the edges sewn together); the Blender script later starts the simulation from the same arrangement. A body built from the measurements is shown for reference and used as the collider; a body the user brings comes later. This takes back, for these uses only, the 2026-11-09 decision against a per-piece setting (see Pieces side by side, not front and back).
+Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`.
+
+**A separate drape app** (decided 2026-11-18). The design app stays a 2D drafting app, and a garment is often made from several patterns, so placing pieces in 3D belongs to a fourth app, the drape app (`opensloper-drape`), not to a tab of the design app. Like the publish app it imports one or more patterns, each with a measurement set and size, keeps in step with their saved files and owns its own file, which holds the sources, the body and each piece copy's placement; nothing is written back to a pattern. The user places the pieces on a generic body built from a measurement set (or no body, for accessories), and the app writes the files Blender needs and runs it. This replaces the 2026-11-17 plan of an Assembly tab in the design app with assembly steps and printed flat-pack style instructions, which is set aside for later; the 2026-11-09 decision against a per-piece front or back setting stands, since no 3D data is stored in a pattern.
 
 Writing a cloth simulator (triangulation, sewing constraints, body and self-collision, a parametric avatar) is a multi-year effort in commercial tools, so the app only exports what Blender needs:
 
-- Triangulated piece meshes (OBJ)
-- A JSON or Python file with seam pairs, piece placement around the body and fabric hints
+- Triangulated piece meshes and the body (OBJ)
+- A JSON file with seam pairs, piece placements and fabric hints
 - A Blender Python script that places pieces, creates sewing springs and runs the simulation in one step
 
-The Garment tab is the quick, flat look at the finished pieces; Blender is for fit and drape. The only requirement now is the **seam** concept in the core model, which also drives 2D seam-length checks. Any 3D module stays separate and reads computed geometry only.
+The Garment tab is the quick, flat look at one pattern's finished pieces; the drape app is for fit and drape. The placement maths, body, mesher, seam pairing and writer are core and output code, so the CLI can write and run the same files.
 
 ## Automation API and command line
 
@@ -974,7 +976,7 @@ Everything not built yet, gathered from the sections above so each can become a 
 
 Save, load and undo came before the canvas, so the canvas was built on document commands from the start and saved patterns served as regression tests. The app becomes personally useful at step 9; a community release follows if it proves easy to use.
 
-1. Blender export for 3D preview, see `documents/design-3d-preview-in-blender.md`
+1. Drape app and Blender export for 3D preview, see `documents/design-3d-preview-in-blender.md`
 
 ### To do
 

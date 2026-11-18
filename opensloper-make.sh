@@ -997,7 +997,7 @@ my %allowed = (
   'src/docs'     => [qw(Core API CLI Docs)],
   'src/assistant' => [qw(Core API Assistant)],
 );
-my %no_lcl = map { $_ => 1 } qw(src/core src/document src/api src/output src/cli src/docs src/assistant);
+my %no_lcl = map { $_ => 1 } qw(src/core src/document src/api src/output src/cli src/docs src/assistant web/engine web/engine/stubs);
 
 # Units where single-letter names match the maths (coding-standards.md)
 my %math = map { $_ => 1 } qw(
@@ -1053,9 +1053,16 @@ for my $file (@ARGV) {
     (my $base = $file) =~ s{.*/}{};
     report('error', $file, line_of($code, $-[0]), "unit $unit should be in a file named " . lc($unit) . '.pas')
       unless lc($unit) . '.pas' eq $base;
-    my ($area) = $dir =~ m{^(?:src/)?([^/]+)$};
-    report('error', $file, line_of($code, $-[0]), "unit $unit should be named Sloper.<Area>.<Name> for folder $dir")
-      unless defined $area && $unit =~ /^Sloper\.\Q$area\E\./i;
+    if ($dir =~ m{/stubs$}) {
+      # A stand-in for a unit a build leaves out (web/engine/stubs): it keeps
+      # that unit's name, so the unit must exist
+      report('error', $file, line_of($code, $-[0]), "unit $unit stands in for no unit under src/")
+        unless grep { -e "$_/$base" } glob('src/*'), glob('src/*/thirdparty');
+    } else {
+      my ($area) = $dir =~ m{^(?:src/)?([^/]+)$};
+      report('error', $file, line_of($code, $-[0]), "unit $unit should be named Sloper.<Area>.<Name> for folder $dir")
+        unless defined $area && $unit =~ /^Sloper\.\Q$area\E\./i;
+    }
   }
 
   # Uses clauses: layering and Sloper.Core.CodePage first in programs

@@ -168,7 +168,8 @@ begin
 end;
 {$ENDIF}
 
-{$IF DEFINED(UNIX) AND NOT DEFINED(DARWIN)}
+// Linux and the BSDs, and WASI for the web engine, which is neither Unix nor Windows
+{$IF NOT DEFINED(WINDOWS) AND NOT DEFINED(DARWIN)}
 function XdgDir(const EnvName, Fallback: string): string;
 begin
   Result := ConcatPaths([TAppPaths.ResolveXdgDir(GetEnvironmentVariable(EnvName),
@@ -226,7 +227,7 @@ begin
   if (GetEnvironmentVariable('XDG_RUNTIME_DIR') <> '') and (GetEnvironmentVariable('XDG_RUNTIME_DIR')[1] = PathDelim) then
     Result := ConcatPaths([GetEnvironmentVariable('XDG_RUNTIME_DIR'), APP_NAME_LOWER])
   else
-    Result := ConcatPaths([ExcludeTrailingPathDelimiter(GetTempDir), APP_NAME_LOWER + '-' + IntToStr(fpGetUid)]);
+    Result := ConcatPaths([ExcludeTrailingPathDelimiter(GetTempDir), APP_NAME_LOWER {$IFDEF UNIX} + '-' + IntToStr(fpGetUid){$ENDIF}]);
   {$ENDIF}
 end;
 

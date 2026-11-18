@@ -992,7 +992,6 @@ Agreed, but not built. Each line is meant to become one issue.
 
 **Design app**
 
-- **More operations**: (Issue #48) a bisector, and a tangent from a point to a curve.
 - **Transforms**: (Issue #49) a live ghost while dragging, and snapping to existing angles.
 - **Custom piece labels.** (Issue #50)
 - **Check pattern overlay**: (Issue #51) draw the problems on the canvas, and report dangling outline edges.

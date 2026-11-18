@@ -57,6 +57,8 @@ type
     procedure TestAmountAdded;
     procedure TestVariable;
     procedure TestEdgeLength;
+    procedure TestPointCoordinates;
+    procedure TestMidpoints;
     procedure TestLeavesOutDependents;
     procedure TestAngles;
     procedure TestAngleWrapsRound;
@@ -68,6 +70,7 @@ type
     procedure TestDragPolarLength;
     procedure TestDragPolarAngle;
     procedure TestDragFieldOtherIsFormula;
+    procedure TestDragFormulaField;
     procedure TestFieldPosition;
     procedure TestFieldGuide;
     procedure TestEvaluateText;
@@ -297,6 +300,46 @@ begin
   AssertTrue('an edge', Pos('Hem.length/2;', Texts(Suggested(FOffset, 'dx', 250))) > 0);
 end;
 
+// A free point's x or y can line up with another point's
+procedure TTestSuggestion.TestPointCoordinates;
+var
+  Loose: TFreePoint;
+  Found: TSuggestions;
+begin
+  Loose := FPattern.AddFreePoint('F', '10', '10');
+  FPattern.AddFreePoint('G', '-50', '-20');
+  FPattern.Evaluate;
+  AssertTrue('across', Pos('B.x;', Texts(Suggested(Loose, 'x', 400))) > 0);
+  AssertTrue('down', Pos('C.y;', Texts(Suggested(Loose, 'y', 30))) > 0);
+  // A coordinate keeps its sign: a point left of the origin is matched as it is
+  Found := Suggested(Loose, 'x', -50);
+  AssertTrue('below 0', Pos(';G.x;', ';' + Texts(Found)) > 0);
+  AssertEquals('no minus in front', 0, Pos('-G.x', Texts(Found)));
+  AssertEquals('not its own', 0, Pos('F.x', Texts(Suggested(Loose, 'x', 10))));
+  // Not on an offset's dx, which is not a position
+  AssertEquals('only a position', 0, Pos('B.x', Texts(Suggested(FOffset, 'dx', 400))));
+end;
+
+// Halfway between two points, the ends of an edge first
+procedure TTestSuggestion.TestMidpoints;
+var
+  Loose: TFreePoint;
+  Found: string;
+begin
+  Loose := FPattern.AddFreePoint('F', '10', '10');
+  FPattern.AddFreePoint('G', '225', '0');
+  FPattern.Evaluate;
+  // Hem runs from A (0, 0) to B (400, 300); C is at (175, 30), G at (225, 0)
+  Found := Texts(Suggested(Loose, 'x', 200));
+  AssertTrue('across', Pos('(A.x + B.x)/2;', Found) > 0);
+  AssertTrue('down', Pos('(A.y + B.y)/2;', Texts(Suggested(Loose, 'y', 150))) > 0);
+  // (C.x + G.x)/2 is 200 too, but A and B are the ends of an edge
+  AssertTrue('another pair', Pos('(C.x + G.x)/2;', Found) > 0);
+  AssertTrue('the edge''s ends first', Pos('(A.x + B.x)/2;', Found) < Pos('(C.x + G.x)/2;', Found));
+  // E is on Hem, which ends at B, so B cannot read it
+  AssertEquals('leaves out dependents', 0, Pos('E.x', Texts(Suggested(FFree, 'x', 66))));
+end;
+
 procedure TTestSuggestion.TestLeavesOutDependents;
 begin
   // Hem ends at B, so B cannot read it
@@ -413,7 +456,31 @@ begin
   FPattern.Evaluate;
   AssertFalse('a whole drag is refused', CanDrag(FPattern, FOffset, Reason));
   AssertTrue('the plain field can be dragged', DragPointField(FPattern, FOffset, 'dx', Vec2(120, 0), Reason));
-  AssertFalse('the formula field cannot', DragPointField(FPattern, FOffset, 'dy', Vec2(120, 0), Reason));
+  AssertEquals('the other keeps its formula', '@waist/10', FPattern.FormulaText(FOffset, 'dy'));
+end;
+
+// With suggestions open on a formula field, a drag puts a plain number in
+// place of the formula, so a better one can be found by moving the point
+procedure TTestSuggestion.TestDragFormulaField;
+var
+  Reason: string;
+begin
+  AssertTrue('set dy', FPattern.SetFormula(FOffset, 'dy', '@waist/10'));
+  AssertTrue('set x', FPattern.SetFormula(FFree, 'x', '@waist/2'));
+  AssertTrue('set value', FPattern.SetFormula(FAlong, 'value', '1/3'));
+  FPattern.Evaluate;
+  AssertTrue('can', CanDragField(FPattern, FOffset, 'dy', Reason));
+  AssertTrue('an offset', DragPointField(FPattern, FOffset, 'dy', Vec2(0, 50), Reason));
+  AssertEquals('a number', '50', FPattern.FormulaText(FOffset, 'dy'));
+  AssertEquals('the other field is kept', '175', FPattern.FormulaText(FOffset, 'dx'));
+  AssertTrue('a free point', DragPointField(FPattern, FFree, 'y', Vec2(0, 320), Reason));
+  AssertEquals('its y', '320', FPattern.FormulaText(FFree, 'y'));
+  AssertEquals('its x keeps the formula', '@waist/2', FPattern.FormulaText(FFree, 'x'));
+  FPattern.Evaluate;
+  AssertTrue('along an edge', DragPointField(FPattern, FAlong, 'value', FHem.PointAtLength(FHem.Length / 2), Reason));
+  AssertEquals('a ratio', '0.5', FPattern.FormulaText(FAlong, 'value'));
+  // A whole drag still leaves formulas alone
+  AssertFalse('a whole drag', CanDrag(FPattern, FFree, Reason));
 end;
 
 procedure TTestSuggestion.TestFieldPosition;

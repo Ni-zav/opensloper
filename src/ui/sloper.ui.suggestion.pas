@@ -61,6 +61,9 @@ type
     Cost: double;
     // Has an operator outside brackets, so a minus in front needs them
     Compound: boolean;
+    // A position, such as B.x, matched with its own sign: a length below 0
+    // does not put a minus in front of it
+    Signed: boolean;
   end;
   TCandidateArray = array of TCandidate;
 
@@ -74,7 +77,8 @@ type
     // The formula the field holds, as FormulaKey gives it, which is left out;
     // empty for a plain number
     FCurrent: string;
-    procedure Add(const Text: string; Value, Cost: double; Compound: boolean = False);
+    procedure Add(const Text: string; Value, Cost: double; Compound: boolean = False; Signed: boolean = False);
+    procedure AddPositions(Pattern: TPattern; Node: TEvalNode; const FieldName: string);
     procedure AddLengths(Pattern: TPattern; Node: TEvalNode; const FieldName: string);
     procedure AddAngles(Pattern: TPattern; Node: TEvalNode);
     procedure AddRatios;
@@ -144,6 +148,8 @@ const
   COST_MEASUREMENT = 1;
   COST_VARIABLE = 1;
   COST_EDGE = 1.5;
+  COST_POINT = 1;
+  COST_MIDPOINT = 2;
   COST_DIFFERENCE = 2.5;
   COST_DIVISOR = 1;
   COST_ROUND_AMOUNT = 1.5;
@@ -159,6 +165,9 @@ const
   RELEVANT_DIRECTION = 0.5;
   RELEVANT_QUARTER = 0.25;
   RELEVANT_USED = 0.3;
+  // Taken off a point halfway between the ends of an edge
+  RELEVANT_EDGE_ENDS = 0.5;
+  MIDPOINT_DIVISOR = 2;
   FINE_RATIO_DENOMINATOR = 4;
   QUARTER = 4;
   // Far enough that no candidate is nearer
@@ -415,7 +424,7 @@ begin
   end;
 end;
 
-procedure TSuggestionSource.Add(const Text: string; Value, Cost: double; Compound: boolean);
+procedure TSuggestionSource.Add(const Text: string; Value, Cost: double; Compound, Signed: boolean);
 begin
   if FCount = Length(FCandidates) then
     SetLength(FCandidates, Max(64, 2 * FCount));
@@ -423,7 +432,61 @@ begin
   FCandidates[FCount].Value := Value;
   FCandidates[FCount].Cost := Cost;
   FCandidates[FCount].Compound := Compound;
+  FCandidates[FCount].Signed := Signed;
   Inc(FCount);
+end;
+
+// For a free point's x or y: another point's, such as B.x, and halfway
+// between two points, such as (B.x + C.x)/2, the ends of an edge first. Values
+// are mm, as the points' positions are.
+procedure TSuggestionSource.AddPositions(Pattern: TPattern; Node: TEvalNode; const FieldName: string);
+var
+  Points: array of TDraftObject;
+  EdgeEnds: TKeySet;
+  Other: TDraftObject;
+  Index, First, Second, PointCount: integer;
+  Cost: double;
+begin
+  if not (Node is TFreePoint) or ((FieldName <> 'x') and (FieldName <> 'y')) then
+    Exit;
+  SetLength(Points, Pattern.ObjectCount);
+  PointCount := 0;
+  EdgeEnds := TKeySet.Create;
+  try
+    for Index := 0 to Pattern.ObjectCount - 1 do
+    begin
+      Other := Pattern.Objects[Index];
+      if Other is TEdgeObject then
+      begin
+        EdgeEnds.Add(TEdgeObject(Other).StartKey + ' ' + TEdgeObject(Other).EndKey);
+        EdgeEnds.Add(TEdgeObject(Other).EndKey + ' ' + TEdgeObject(Other).StartKey);
+      end
+      else if (Other is TPointObject) and MayRead(Pattern, Node, Other) then
+      begin
+        Points[PointCount] := Other;
+        Inc(PointCount);
+      end;
+    end;
+    SetLength(Points, PointCount);
+    for First := 0 to High(Points) do
+    begin
+      Add(Points[First].DisplayName + '.' + FieldName, Points[First].PropertyValue(FieldName), COST_POINT, False, True);
+      for Second := First + 1 to High(Points) do
+      begin
+        // Halfway between two points level with each other is either of them
+        if SameValue(Points[First].PropertyValue(FieldName), Points[Second].PropertyValue(FieldName)) then
+          Continue;
+        Cost := COST_MIDPOINT;
+        if EdgeEnds.Contains(Points[First].Key + ' ' + Points[Second].Key) then
+          Cost := Cost - RELEVANT_EDGE_ENDS;
+        Add('(' + Points[First].DisplayName + '.' + FieldName + ' + ' + Points[Second].DisplayName + '.' + FieldName + ')/' +
+          IntToStr(MIDPOINT_DIVISOR), (Points[First].PropertyValue(FieldName) + Points[Second].PropertyValue(FieldName)) /
+          MIDPOINT_DIVISOR, Cost, False, True);
+      end;
+    end;
+  finally
+    FreeAndNil(EdgeEnds);
+  end;
 end;
 
 // Shares of measurements, of a measurement less another, of variables and of
@@ -584,6 +647,7 @@ begin
     AddAmounts;
     AddVariables;
     AddEdges;
+    AddPositions(Pattern, Node, FieldName);
   finally
     FreeAndNil(Used);
   end;
@@ -658,6 +722,8 @@ var
   function CandidateText(CandidateIndex: integer): string;
   begin
     Result := FCandidates[CandidateIndex].Text;
+    if FCandidates[CandidateIndex].Signed then
+      Exit;
     if Negative and FCandidates[CandidateIndex].Compound then
       Result := '-(' + Result + ')'
     else if Negative then
@@ -667,7 +733,7 @@ var
   function CandidateValue(CandidateIndex: integer): double;
   begin
     Result := FCandidates[CandidateIndex].Value;
-    if Negative then
+    if Negative and not FCandidates[CandidateIndex].Signed then
       Result := -Result;
   end;
 

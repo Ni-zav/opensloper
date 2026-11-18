@@ -69,8 +69,9 @@ function DragPoint(Pattern: TPattern; Point: TPointObject; const Target: TVec2; 
 // The fields a drag of Point writes; empty when its type cannot be dragged
 function DragFields(Point: TPointObject): TStringArray;
 // True when a drag changing only FieldName can move Point: it can be dragged
-// apart from its other fields, and FieldName is one a drag writes and a
-// plain number. Otherwise ErrorMessage says why.
+// apart from its other fields, and FieldName is one a drag writes. FieldName
+// may hold a formula, which the drag replaces with a plain number, as when
+// formula suggestions are open on it. Otherwise ErrorMessage says why.
 function CanDragField(Pattern: TPattern; Point: TPointObject; const FieldName: string; out ErrorMessage: string): boolean;
 // Sets only FieldName so Point comes as near Target as that field allows: x or
 // dx moves it across, y or dy up and down, an offset's length along its angle,
@@ -256,13 +257,31 @@ begin
     ErrorMessage);
 end;
 
+// Sets a point along an edge's value to the nearest place on the edge to Target
+function DragAlongEdge(Pattern: TPattern; Along: TAlongEdgePoint; const Target: TVec2; out ErrorMessage: string): boolean;
+var
+  Edge: TEdgeObject;
+  Position, Offset, Distance, EdgeLength: double;
+begin
+  Edge := TEdgeObject(Pattern.FindNode(Along.Edge));
+  Edge.Locate(Target, Position, Offset);
+  EdgeLength := Edge.Length;
+  if Along.FromEnd then
+    Distance := EdgeLength - Position
+  else
+    Distance := Position;
+  if Along.Mode = amLength then
+    Result := SetFields(Pattern, Along, ['value'], [DraggedLength(Along, 'value', Distance, Pattern.Units)], ErrorMessage)
+  else if EdgeLength > 0 then
+    Result := SetFields(Pattern, Along, ['value'], [RoundedText(Distance / EdgeLength, DRAG_RATIO_DECIMALS)], ErrorMessage)
+  else
+    Result := True;
+end;
+
 function DragPoint(Pattern: TPattern; Point: TPointObject; const Target: TVec2; out ErrorMessage: string): boolean;
 var
   BaseNode: TEvalNode;
   Base: TVec2;
-  Along: TAlongEdgePoint;
-  Edge: TEdgeObject;
-  Position, Offset, Distance, EdgeLength: double;
 begin
   if not CanDrag(Pattern, Point, ErrorMessage) then
     Exit(False);
@@ -283,21 +302,7 @@ begin
       ErrorMessage));
   end;
 
-  // Along an edge: the nearest place on the edge
-  Along := TAlongEdgePoint(Point);
-  Edge := TEdgeObject(Pattern.FindNode(Along.Edge));
-  Edge.Locate(Target, Position, Offset);
-  EdgeLength := Edge.Length;
-  if Along.FromEnd then
-    Distance := EdgeLength - Position
-  else
-    Distance := Position;
-  if Along.Mode = amLength then
-    Result := SetFields(Pattern, Point, ['value'], [DraggedLength(Point, 'value', Distance, Pattern.Units)], ErrorMessage)
-  else if EdgeLength > 0 then
-    Result := SetFields(Pattern, Point, ['value'], [RoundedText(Distance / EdgeLength, DRAG_RATIO_DECIMALS)], ErrorMessage)
-  else
-    Result := True;
+  Result := DragAlongEdge(Pattern, TAlongEdgePoint(Point), Target, ErrorMessage);
 end;
 
 function CanDragField(Pattern: TPattern; Point: TPointObject; const FieldName: string; out ErrorMessage: string): boolean;
@@ -321,11 +326,6 @@ begin
   if not Found then
   begin
     ErrorMessage := Format(rsDragPlaced, [Point.DisplayName]);
-    Exit(False);
-  end;
-  if not Point.Field(FieldName).IsLiteral then
-  begin
-    ErrorMessage := Format(rsDragFormula, [Point.DisplayName]);
     Exit(False);
   end;
   Result := True;
@@ -357,7 +357,7 @@ begin
   if not CanDragField(Pattern, Point, FieldName, ErrorMessage) then
     Exit(False);
   if Point is TAlongEdgePoint then
-    Exit(DragPoint(Pattern, Point, Target, ErrorMessage));
+    Exit(DragAlongEdge(Pattern, TAlongEdgePoint(Point), Target, ErrorMessage));
   if Point is TFreePoint then
   begin
     if FieldName = 'x' then

@@ -974,7 +974,7 @@ Everything not built yet, gathered from the sections above so each can become a 
 
 Save, load and undo came before the canvas, so the canvas was built on document commands from the start and saved patterns served as regression tests. The app becomes personally useful at step 9; a community release follows if it proves easy to use.
 
-1. Blender export for 3D preview
+1. Blender export for 3D preview, see `documents/design-3d-preview-in-blender.md`
 
 ### To do
 
@@ -991,26 +991,24 @@ Agreed, but not built. Each line is meant to become one issue.
 
 **Design app**
 
-- **More operations**: a bisector, and a tangent from a point to a curve.
-- **Transforms**: a live ghost while dragging, and snapping to existing angles.
+- **More operations**: (Issue #48) a bisector, and a tangent from a point to a curve.
+- **Transforms**: (Issue #49) a live ghost while dragging, and snapping to existing angles.
 - **Separate Piece command**:(Issue #34) one command for separating front and back (see Transforms), only if the manual steps prove tedious.
 - **Piece detection**: (Issue #35) Shift-click to merge faces, and a start-edge fallback.
-- **Custom piece labels.**
-- **Check pattern overlay**: draw the problems on the canvas, and report dangling outline edges.
-- **Dependency arrows**: hovering or selecting an object draws faint arrows to its inputs, optionally to its dependents (see Links and problem display).
-- **Typing note text on the canvas**, rather than in the properties.
+- **Custom piece labels.** (Issue #50)
+- **Check pattern overlay**: (Issue #51) draw the problems on the canvas, and report dangling outline edges.
+- **Dependency arrows**: (Issue #52) hovering or selecting an object draws faint arrows to its inputs, optionally to its dependents (see Links and problem display).
+- **Typing note text on the canvas**, (Issue #53) rather than in the properties.
 - **SVG stamps** (Issue #9) (annotations stage 4). A drawing from another app (a logo, a fold or assembly diagram) placed and anchored like a note, so it moves with the geometry. Paths only: `<text>` is refused with a message asking for it to be converted to paths, which keeps fonts out. Drawn at true size from the SVG's own units (px taken at 96 per inch, with a warning), and stored in the pattern as path data, so the pattern does not depend on the outside file.
-- **Rounding curved corners**, which needs a tangent found numerically (see Accessories).
-- **Pleats in the Garment tab**, drawn as lines.
-- **Role styles in Preferences**: overriding a role's colour, dash and weight.
+- **Rounding curved corners**, (Issue #54) which needs a tangent found numerically (see Accessories).
+- **Pleats in the Garment tab**, (Issue #55) drawn as lines.
+- **Role styles in Preferences**: (Issue #56) overriding a role's colour, dash and weight.
 
 **Publish app**
 
-- **A window for output and machine profiles**, which are edited in the settings file for now.
-- **True-shape nesting** for Pack Pieces, in place of bounding boxes.
-- **G-code export**, for CNC machines.
-- **Raising the publish window on Wayland**, which needs an `xdg-activation` token Qt 5 cannot use (see Finding an open window).
-- **Blender export** for fit and drape (see Blender export (3D preview)).
+- **A window for output and machine profiles**, (Issue #57) which are edited in the settings file for now.
+- **True-shape nesting** (Issue #58) for Pack Pieces, in place of bounding boxes.
+- **Raising the publish window on Wayland** (Issue #59), which needs an `xdg-activation` token Qt 5 cannot use (see Finding an open window).
 
 **To try on real hardware**
 

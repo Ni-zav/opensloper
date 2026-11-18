@@ -984,10 +984,10 @@ Agreed, but not built. Each line is meant to become one issue.
 
 - **Translation**, for the community release (see Translation).
 - **Release signing** (Issue #17), for the community release: macOS notarisation, Intel macOS builds and signed Windows programs. The installers and the offline guide are done (see Release builds).
-- **Bodice block regression pattern** in `tests/patterns/`.
-- **More tutorials**: moving a dart, a tote bag, a leather card wallet; and a documentation page per app's icon.
+- **Bodice block regression pattern** (Issue #45) in `tests/patterns/`.
+- **More tutorials**: (Issue #46) moving a dart, a tote bag, a leather card wallet; and a documentation page per app's icon.
 - **Help in the apps.** (Issue #32) F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Help → User Guide already opens the offline copy's front page, with the website as fallback. Translated and versioned documentation wait for the community release.
-- **Developer documentation** of the units (PasDoc), once someone else needs to read the code.
+- **Developer documentation** (Issue #47) of the units (PasDoc), once someone else needs to read the code.
 
 **Design app**
 

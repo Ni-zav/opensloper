@@ -77,6 +77,8 @@ Three GUI apps sit on these layers: the measurements app, the drafting app and t
 
 The UI changes the model only through document commands, and exporters read computed geometry directly from the core, so a new output format never touches drafting code.
 
+A web version (see Web version) reuses the core, document and API layers unchanged, compiled to WebAssembly, under a TypeScript UI; it is the main reason the core stays free of the LCL.
+
 ### Key design decisions
 
 The central rule: only definitions are saved and undone; computed geometry is always derived.
@@ -206,10 +208,14 @@ opensloper/
 ├── tests/             FPCUnit project and regression patterns
 ├── documents/         internal notes and this document
 ├── docs/              user documentation (Zensical)
+├── web/               TypeScript editor and the Wasm engine build (planned)
+│   ├── engine/        build script and entry unit exporting handle()
+│   └── app/           editor source
+├── server/            Django project: accounts, cloud library, marketplace (planned)
 └── release/           built programs, not in git
 ```
 
-The programs are built side by side into `release/`, so each app finds the others beside it and `data/` one folder up.
+`web/` and `server/` are planned and not created until the spike succeeds. The programs are built side by side into `release/`, so each app finds the others beside it and `data/` one folder up.
 
 ### Dependencies
 
@@ -243,6 +249,7 @@ Testing runs throughout development; the LCL-free core means most logic is teste
 - End-to-end checks drive `opensloper-cli serve` through the Automation API and its renders; the GUI is checked by hand on a private Xvfb display
 - `opensloper-make.sh test` and `opensloper-make.sh check` before every commit
 - `opensloper-make.sh pr-check` before a pull request: format, check, test and build in turn, stopping at the first that fails (issue #40)
+- Once the web build exists, `opensloper-make.sh test` also compiles the core for `wasm32-wasip1` and runs the regression patterns through the Wasm module, so the browser engine gives the same results as the desktop
 
 ### Documentation
 
@@ -968,6 +975,113 @@ Built 2026-11-11 (`Sloper.Output.DraftPNG`). The CLI and the API draw the draft 
 
 Our units that use a third-party drawing library live in `src/output/thirdparty`: every standard applies there, and `opensloper-make.sh check` allows only BGRABitmap's no-LCL units besides, so the rest of `src/output` stays vector-only and nothing below `src/ui` uses the LCL. The CLI and tests require the no-LCL package; the GUI apps keep the LCL build, which compiles the same units.
 
+## Web version
+
+Planned 2026-11-18, not designed in detail and not built yet. A web version of OpenSloper runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript UI. A Django server around it handles accounts, cloud storage, subscriptions and the marketplace.
+
+**Why it is possible.** The core has no LCL dependency, and the Automation API already exposes every document operation as JSON-RPC 2.0. So the web version needs a new UI, not a new engine. The engine behaves the same everywhere: name rules, formula checks, cycle checks and undo are the same code on the desktop, in the browser and on the server.
+
+**Layers:**
+
+| Part | Runs in | Language | Does |
+| --- | --- | --- | --- |
+| Engine | Browser (Web Worker) and server | Pascal, compiled to Wasm | Core, document and API layers: evaluation, undo, pieces, seams, exports |
+| Editor | Browser | TypeScript | Canvas, tools, panels, properties; talks to the engine through the API |
+| Server | Server | Python, Django | Accounts, cloud files, subscriptions, marketplace, server-side checks and exports |
+
+The editor must run in the browser. Sending every drag to the server would make dragging, snapping and live updates lag, so the server never takes part in interactive drafting.
+
+### Engine
+
+**Compiler.** FPC's WebAssembly target, `wasm32-wasip1`. It is mature enough that the compiler compiles itself for Wasm, but as of November 2026 it is only in the development compiler (trunk 3.3.1), not a stable release, so the web build uses a self-built cross-compiler. The desktop apps stay on the stable compiler. The core must keep compiling with both, which `opensloper-make.sh test` checks once the web build exists.
+
+**pas2js was considered and rejected** for the engine: it compiles a subset of Object Pascal without pointers, and Clipper2's Pascal code uses them. It may still be used for small glue code.
+
+**One entry point.** The module exports one function, `handle(request) → response`, taking and returning a JSON-RPC 2.0 message as text, the same messages `opensloper-cli serve` reads and writes. The editor, Claude, the CLI and the server therefore all use the same methods (`open`, `add_point`, `set_formula`, `undo`, `render`…). New methods the editor needs are added to the Automation API, so the desktop's `--automation` mode and the MCP server gain them too.
+
+**What goes in the module:** `src/core`, `src/document`, `src/api` and the parts of `src/output` that write PDF, SVG and DXF to memory. No LCL and no BGRABitmap, so the module's `render` gives SVG only: the PNG drawing (`src/output/thirdparty`, see Drawing images without the LCL) stays out.
+
+**Shared UI logic moves behind the API.** These LCL-free units in `src/ui` hold logic both front ends need, so they are reached through API methods and not rewritten in TypeScript:
+
+| Unit | API use |
+| --- | --- |
+| `Sloper.UI.Snap` | What a click at a position would make, for the snap marker, guide and status text |
+| `Sloper.UI.Scene` | Hit testing, box selection, drawing order, which labels to show |
+| `Sloper.UI.RulerTicks` | Ruler ticks and grid spacing, with `Sloper.UI.View`, the view transform it reads |
+| `Sloper.UI.Completion` | Formula autocomplete suggestions |
+| `Sloper.UI.ObjectList` | Rows, search and filters for the Objects panel |
+
+Whether they move into `src/core` or are compiled into the module where they are is decided when building. `Sloper.Core.Drag` is already in the core.
+
+**Runs in a Web Worker,** so a slow evaluation never freezes the page. Calls are asynchronous; the editor keeps its own copy of what it is drawing and updates it from responses.
+
+### Files and storage
+
+The browser has no ordinary filesystem, so the engine must stop opening files by path.
+
+- **Storage takes text.** `Sloper.Core.PatternFile`, `Sloper.Core.Measurements` and layout loading gain functions that read from and write to strings, with the path-based functions as thin wrappers for the desktop. The API gains `open` and `save` variants that pass file contents in the message.
+- **References between files** (a pattern's `measurementFile`, a layout's `sources`) stay paths, now resolved by whoever supplies the file: the filesystem on the desktop, the cloud library or the browser's local store on the web. Paths keep `/` separators and stay relative, so a set of files moves between desktop and web unchanged.
+- **Where files live on the web:** in the user's cloud library on the Django server, or, without an account, in the browser's own storage (IndexedDB or the Origin Private File System), with import and export of ordinary files so nothing is locked in.
+- **File watching** is replaced by the server telling open editors that a file changed. The rule stays the same: a file has to read the same twice before it is taken in, and saving over a changed file is refused until the change is taken in.
+- **File formats do not change.** A `.sloper`, `.slm` or `.slayout` saved on the web opens on the desktop, and the other way round.
+
+### Editor
+
+A TypeScript single-page app, one per job as on the desktop (design, measurements, publish), sharing one toolkit and one engine module. To begin with it covers drafting and the measurements tab; publish follows.
+
+- **Canvas:** Canvas2D at first, with WebGL if large patterns need it. It draws from the computed geometry the engine reports (segments, pieces, states), not from `render`'s SVG, so dragging stays smooth. `render` is used for the first prototype and for thumbnails.
+- **Behaviour matches the desktop:** the same tools, shortcuts (Cmd on macOS, Ctrl elsewhere), snapping order, undo steps, label modes and colours, following this document. Where the two differ, this document is updated so it stays the one description of the app.
+- **Panels:** objects, variables, measurements, materials and the property grid, built in plain TypeScript or a small UI library, decided when building. User text is translated with the same `.po` files (see Translation), loaded in the browser.
+- **Output:** PDF, SVG and DXF are written by the engine and downloaded; printing goes through the browser's PDF viewer, so the print-at-100% reminder and test square matter as much as on the desktop.
+
+### Django server
+
+Django serves the editor and everything around it.
+
+| Area | Notes |
+| --- | --- |
+| Serving | The editor pages, the TypeScript bundle and the `.wasm` engine file, with long-lived caching by version |
+| Accounts | Sign-up, sign-in, the Django admin as the back office |
+| Cloud library | Patterns, measurement sets and layouts per user, with folders, version history and sharing; files stored as they are, never converted |
+| Subscriptions | Payment for the cloud connection, used by the web editor and, later, the desktop apps' cloud open and save |
+| Marketplace | Listing, selling and downloading patterns; uploads checked by the engine before they are listed |
+| Simple pages | The pattern library, client list and account pages as Django templates (with htmx where it helps), not part of the single-page app |
+
+**The engine on the server.** Django runs the same engine for jobs that need no browser: checking marketplace uploads (`check`), making previews and thumbnails (`render`), and exporting PDFs. In order of preference:
+
+1. **`opensloper-cli serve` as a subprocess,** JSON-RPC over stdin and stdout. Works with the stable compiler today and suits occasional jobs.
+2. **The Wasm module through `wasmtime` for Python,** so browser and server run exactly the same build.
+3. **The core as a shared library (`.so`) through `ctypes`,** only if the first two are too slow, since it needs a C interface to maintain.
+
+Server jobs run in a task queue, not in the request, so a large export never holds up a page.
+
+**Claude.** The server can offer the Automation API as an MCP endpoint over a user's cloud files, so Claude can work on patterns stored there (see Automation API, Phase 2).
+
+### Licence
+
+The engine and editor sent to the browser are distributed, so GPLv3 applies to them as to the desktop apps: the source is offered, which it already is. The Django server code is not distributed to users, so GPLv3 does not require it to be published; AGPL would, and the project does not use AGPL. Any code in the server that is linked with the engine, as in option 3 above, is treated as GPL. This bears on the cloud service and is to be checked with a lawyer before it is sold.
+
+### First step: a spike
+
+Before anything else, prove the engine runs in a browser:
+
+1. Build the trunk cross-compiler for `wasm32-wasip1`.
+2. Compile the core, document and API layers with an exported `handle`.
+3. Load it in a minimal TypeScript page with a WASI shim, call `open` with a regression pattern passed as text, then `evaluate` and `render`, and show the SVG.
+4. Note the module's size, load time and evaluation time against the desktop.
+
+If it works, the rest is front-end and server work. If not, the blocker (compiler, a package, Clipper2) is known early.
+
+### Open questions
+
+- Does Clipper2's Pascal code, and everything else the core uses, compile and run correctly on the Wasm target? The spike answers this.
+- How large is the module, and is it fast enough to evaluate on every drag in a worker?
+- Should the shared UI units move into `src/core`, or stay in `src/ui` and be compiled into the module?
+- Plain TypeScript or a UI library for the panels?
+- Does the web version start with drafting only, or with measurements as Django forms and drafting after?
+- Can the desktop apps open and save cloud files with the same accounts, and when?
+- Offline use: should the web editor work without a connection, as an installable web app?
+
 ## Open items
 
 Everything not built yet, gathered from the sections above so each can become a GitHub issue; the sections keep only what is built and the decisions behind it. When an item becomes an issue, put its number here; when it is built, take it out and describe it in its section.
@@ -977,6 +1091,7 @@ Everything not built yet, gathered from the sections above so each can become a 
 Save, load and undo came before the canvas, so the canvas was built on document commands from the start and saved patterns served as regression tests. The app becomes personally useful at step 9; a community release follows if it proves easy to use.
 
 1. Drape app and Blender export for 3D preview, see `documents/design-3d-preview-in-blender.md`
+2. Web version: the Pascal engine compiled to WebAssembly under a TypeScript editor in the browser, with a Django server for accounts, the cloud library, subscriptions and the marketplace (see Web version). Starts with a spike that runs the engine in a browser.
 
 ### To do
 

@@ -31,7 +31,7 @@ const
   // A page is written to docs/reference/TOPIC.md, and a schema, whose topic is
   // its file name, to docs/reference/schemas/TOPIC; opensloper.py, the Python
   // client of the Automation API, to docs/reference/opensloper.py
-  DOC_TOPICS: array[0..9] of string = ('functions', 'operations', 'files', 'shortcuts', 'cli', 'api', 'pattern.schema.json',
+  DOC_TOPICS: array[0..10] of string = ('functions', 'operations', 'files', 'shortcuts', 'icons', 'cli', 'api', 'pattern.schema.json',
     'measurements.schema.json', 'layout.schema.json', 'opensloper.py');
 
 // The page or schema for Topic; False when there is no such topic
@@ -141,6 +141,17 @@ resourcestring
     'too, since macOS keeps Cmd+Tab for switching apps. Keys on the canvas work while the canvas has the focus: ' +
     'click it first if you were typing in a panel.';
   rsDocKeys = 'Keys';
+  rsDocIconsTitle = 'Icons';
+  rsDocIconsIntro = 'What each button and menu icon in the three apps does, app by app, in the order the app shows them. ' +
+    'Hover over a button in the app to see its name. The icons are from [Tabler Icons](https://tabler.io/icons), under the ' +
+    'MIT licence.';
+  rsDocIcon = 'Icon';
+  rsDocCommand = 'Command';
+  rsDocMenu = 'Menu';
+  rsDocIconsToolbar = 'Toolbar';
+  rsDocIconsTools = 'Tools, down the left of the canvas';
+  rsDocIconsMenu = 'In the menus only';
+  rsDocIconsProperties = 'In the properties';
   rsDocWhatItDoes = 'What it does';
   rsDocAppDesign = 'Design app';
   rsDocAppMeasurements = 'Measurements app';
@@ -202,7 +213,8 @@ implementation
 
 uses
   SysUtils, StrUtils, Sloper.Core.Formula, Sloper.Core.FormulaLexer, Sloper.Core.Units, Sloper.Core.OperationInfo, Sloper.Core.FileInfo,
-  Sloper.Core.PatternFile, Sloper.Core.Shortcuts, Sloper.API.Server, Sloper.API.Rpc, Sloper.API.Methods, Sloper.CLI.Arguments, Sloper.Docs.Schema,
+  Sloper.Core.PatternFile, Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Core.AppPaths, Sloper.Core.JSON, Sloper.API.Server,
+  Sloper.API.Rpc, Sloper.API.Methods, Sloper.CLI.Arguments, Sloper.Docs.Schema,
   Sloper.Docs.Python;
 
 const
@@ -217,6 +229,7 @@ const
   SHORTCUT_APP_TITLES: array[TShortcutApp] of string = (rsDocAppDesign, rsDocAppMeasurements, rsDocAppPublish);
   SHORTCUT_GROUP_TITLES: array[TShortcutGroup] of string = (rsDocShortcutFile, rsDocShortcutEdit, rsDocShortcutView, rsDocShortcutTools,
     rsDocShortcutCanvas, rsDocShortcutPanels, rsDocShortcutMouse);
+  ICON_PLACE_TITLES: array[TIconPlace] of string = (rsDocIconsToolbar, rsDocIconsTools, rsDocIconsMenu, rsDocIconsProperties);
   OPERATION_GROUP_TITLES: array[TOperationGroup] of string = (rsDocGroupPoints, rsDocGroupEdges, rsDocGroupTransforms, rsDocGroupPieces,
     rsDocGroupAnnotations);
   API_GROUP_TITLES: array[TApiMethodGroup] of string = (rsDocApiGroupFiles, rsDocApiGroupMeasurements, rsDocApiGroupObjects,
@@ -408,6 +421,60 @@ begin
   end;
 end;
 
+// The icon as SVG on one line, drawn in the text colour so it shows in light
+// and dark themes alike; its file name in code when the icons are not found
+function IconMarkdown(Icon: TAppIcon): string;
+var
+  Text, Err: string;
+  Start: integer;
+begin
+  if not ReadTextFile(IconFileName(TAppPaths.IconDir, Icon), Text, Err) then
+    Exit(Code(APP_ICON_NAMES[Icon]));
+  Text := StringReplace(StringReplace(Text, #13, '', [rfReplaceAll]), #10, ' ', [rfReplaceAll]);
+  while Pos('  ', Text) > 0 do
+    Text := StringReplace(Text, '  ', ' ', [rfReplaceAll]);
+  Text := StringReplace(Text, ' >', '>', [rfReplaceAll]);
+  Text := StringReplace(Text, '> <', '><', [rfReplaceAll]);
+  // Tabler's empty box the size of the icon, and its own class names
+  Text := StringReplace(Text, '<path stroke="none" d="M0 0h24v24H0z" fill="none" />', '', []);
+  Start := Pos(' class="', Text);
+  if Start > 0 then
+    Delete(Text, Start, Pos('"', Copy(Text, Start + 8, MaxInt)) + 8);
+  Result := StringReplace(Trim(Text), '<svg ', '<svg aria-hidden="true" ', []);
+end;
+
+function IconsPage: string;
+var
+  Commands: TIconCommandArray;
+  Command: TIconCommand;
+  App: TShortcutApp;
+  Place: TIconPlace;
+  Table, Menu: string;
+begin
+  Commands := IconCommands;
+  Result := Heading(1, rsDocIconsTitle) + Generated('icons') + Paragraph(rsDocIconsIntro);
+  for App := Low(TShortcutApp) to High(TShortcutApp) do
+  begin
+    Result := Result + Heading(2, SHORTCUT_APP_TITLES[App]);
+    for Place := Low(TIconPlace) to High(TIconPlace) do
+    begin
+      Table := '';
+      for Command in Commands do
+        if (Command.App = App) and (Command.Place = Place) then
+        begin
+          Menu := Command.Menu;
+          if Menu = '' then
+            Menu := '—';
+          Table := Table + Row([IconMarkdown(Command.Icon), Cell(Command.Name), Cell(Menu), KeysMarkdown(Command.Keys),
+            Cell(Command.Description)]);
+        end;
+      if Table <> '' then
+        Result := Result + Heading(3, ICON_PLACE_TITLES[Place]) + HeaderRow([rsDocIcon, rsDocCommand, rsDocMenu, rsDocKeys,
+          rsDocWhatItDoes]) + Table + LineEnding;
+    end;
+  end;
+end;
+
 function FilesPage: string;
 var
   Info: TFileFormatInfo;
@@ -589,6 +656,8 @@ begin
     Markdown := FilesPage
   else if Topic = 'shortcuts' then
     Markdown := ShortcutsPage
+  else if Topic = 'icons' then
+    Markdown := IconsPage
   else if Topic = PYTHON_CLIENT_TOPIC then
     Markdown := PythonClient
   else if Topic.EndsWith(SCHEMA_SUFFIX) then

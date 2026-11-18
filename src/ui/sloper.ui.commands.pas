@@ -27,7 +27,7 @@ unit Sloper.UI.Commands;
 interface
 
 uses
-  Classes, Forms, Controls, Menus, ActnList, ComCtrls, Sloper.UI.IconSet, Sloper.Core.Shortcuts;
+  Classes, Forms, Controls, Menus, ActnList, ComCtrls, Sloper.Core.IconSet, Sloper.Core.Shortcuts;
 
 type
   TCommandSet = class(TComponent)

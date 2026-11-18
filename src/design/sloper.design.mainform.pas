@@ -30,7 +30,7 @@ uses
   Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties, Sloper.UI.SuggestionGrade,
   Sloper.UI.ListPanel, Sloper.UI.ObjectsPanel, Sloper.UI.VariablesPanel,
   Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
-  Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.UI.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
+  Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.Core.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
   Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.Accordion, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
   Sloper.UI.GarmentPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
 

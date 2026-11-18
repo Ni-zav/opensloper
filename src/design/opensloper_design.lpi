@@ -207,9 +207,9 @@
         <UnitName Value="Sloper.Core.Drag"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.iconset.pas"/>
+        <Filename Value="../core/sloper.core.iconset.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.IconSet"/>
+        <UnitName Value="Sloper.Core.IconSet"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.icons.pas"/>

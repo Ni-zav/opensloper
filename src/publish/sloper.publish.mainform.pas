@@ -344,7 +344,7 @@ implementation
 
 uses
   LCLType, Math, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
-  Sloper.Core.Settings, Sloper.UI.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
+  Sloper.Core.Settings, Sloper.Core.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
   Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
   Sloper.Output.LayoutPDF, Sloper.Output.Packing, Sloper.Output.Preview, Sloper.Output.Printing, Sloper.Output.Tiling,
   Sloper.Publish.PrintDialog, Sloper.Core.JSON, Sloper.API.Endpoint, Sloper.Output.MaterialNeeded;

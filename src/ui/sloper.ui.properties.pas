@@ -373,7 +373,7 @@ implementation
 uses
   Math, Spin, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Transform,
   Sloper.Core.Note, Sloper.Core.Settings, Sloper.UI.GridColumns, Sloper.UI.ObjectList, Sloper.UI.PieceProperties, Sloper.UI.PropertyText, Sloper.UI.Spacing,
-  Sloper.UI.FontBox, Sloper.UI.Completion, Sloper.UI.Icons, Sloper.UI.IconSet, Sloper.Core.Drag;
+  Sloper.UI.FontBox, Sloper.UI.Completion, Sloper.UI.Icons, Sloper.Core.IconSet, Sloper.Core.Drag;
 
 type
   // Rows every object has: type, name and formula fields first; what made a

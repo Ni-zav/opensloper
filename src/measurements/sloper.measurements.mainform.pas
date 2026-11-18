@@ -265,7 +265,7 @@ implementation
 
 uses
   Graphics, LCLType, Math, Sloper.Core.AppPaths, Sloper.Core.RecentFiles, Sloper.Core.SeamlyFormat, Sloper.Core.Settings,
-  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.IconSet, Sloper.UI.Preferences, Sloper.UI.Spacing, Sloper.API.Endpoint;
+  Sloper.UI.About, Sloper.UI.Help, Sloper.Core.IconSet, Sloper.UI.Preferences, Sloper.UI.Spacing, Sloper.API.Endpoint;
 
 const
   SIDE_WIDTH = 430;

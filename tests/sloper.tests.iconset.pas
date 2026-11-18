@@ -24,7 +24,7 @@ unit Sloper.Tests.IconSet;
 interface
 
 uses
-  fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.AppPaths, Sloper.UI.IconSet;
+  fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.AppPaths, Sloper.Core.IconSet;
 
 type
   TTestIconSet = class(TOSTestCase)
@@ -38,6 +38,8 @@ type
     procedure TestEveryIconHasItsFile;
     procedure TestEveryIconTakesTheTextColour;
     procedure TestTintReplacesEveryCurrentColor;
+    procedure TestEveryIconIsDescribed;
+    procedure TestEveryCommandHasItsText;
   end;
 
 implementation
@@ -138,6 +140,34 @@ var
 begin
   Text := TintedSVG('<svg stroke="currentColor"><path fill="currentColor"/></svg>', '#112233');
   AssertEquals('<svg stroke="#112233"><path fill="#112233"/></svg>', Text);
+end;
+
+// The Icons reference page lists every icon, so a new one needs a row there
+procedure TTestIconSet.TestEveryIconIsDescribed;
+var
+  Icon: TAppIcon;
+  Command: TIconCommand;
+  Found: boolean;
+begin
+  for Icon := Low(TAppIcon) to High(TAppIcon) do
+  begin
+    Found := False;
+    for Command in IconCommands do
+      Found := Found or (Command.Icon = Icon);
+    AssertTrue(APP_ICON_NAMES[Icon] + ' is on the Icons page', Found);
+  end;
+end;
+
+procedure TTestIconSet.TestEveryCommandHasItsText;
+var
+  Command: TIconCommand;
+begin
+  for Command in IconCommands do
+  begin
+    AssertTrue(APP_ICON_NAMES[Command.Icon] + ' has a name', Command.Name <> '');
+    AssertTrue(Command.Name + ' has a description', Command.Description <> '');
+    AssertTrue(Command.Name + ' has a menu, unless it is in the properties', (Command.Menu <> '') = (Command.Place <> ipProperties));
+  end;
 end;
 
 initialization

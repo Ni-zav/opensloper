@@ -54,6 +54,7 @@ nav = [
     "reference/operations.md",
     "reference/files.md",
     "reference/shortcuts.md",
+    "reference/icons.md",
     "reference/cli.md",
     "reference/api.md",
   ] },

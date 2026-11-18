@@ -25,7 +25,7 @@ unit Sloper.UI.Icons;
 interface
 
 uses
-  Classes, Controls, Graphics, Sloper.UI.IconSet;
+  Classes, Controls, Graphics, Sloper.Core.IconSet;
 
 // One image per TAppIcon, in its order, Size pixels square and drawn in
 // Color. An icon that cannot be read stays blank, so the indices still line

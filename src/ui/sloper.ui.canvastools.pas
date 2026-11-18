@@ -30,7 +30,7 @@ interface
 
 uses
   Classes, SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Shortcuts,
-  Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter, Sloper.UI.IconSet;
+  Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter, Sloper.Core.IconSet;
 
 type
   // ctSelect selects and drags; ctZoom zooms to a box, or in or out a step

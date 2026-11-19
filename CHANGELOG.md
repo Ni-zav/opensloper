@@ -36,6 +36,9 @@ Changed, Fixed and Removed under each version.
 - Dependency arrows (#52): pointing at or selecting a point or edge draws
   faint arrows to the points and edges it is built from, and, with View →
   Dependents on, to those built from it.
+- A note on the canvas follows its text as it is typed, values worked out,
+  and double-clicking a note goes to its text, opening the side panel if it
+  was hidden (#53).
 
 ### Changed
 

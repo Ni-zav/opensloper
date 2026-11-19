@@ -164,6 +164,7 @@ type
     procedure CreateDrawRoleBox;
     procedure PieceFillsClick(Sender: TObject);
     procedure ProblemsClick(Sender: TObject);
+    procedure PropertiesNotePreview(Sender: TObject; const NoteKey, Typed: string);
     procedure DependentsClick(Sender: TObject);
     procedure AnnotationsClick(Sender: TObject);
     function SelectedPieces: TPieceObjectArray;
@@ -477,6 +478,8 @@ begin
   FCanvas.OnToolChange := @CanvasToolChange;
   FCanvas.OnSelectionChange := @CanvasSelectionChange;
   FCanvas.OnNoteAdded := @CanvasNoteAdded;
+  FCanvas.OnNoteEdit := @CanvasNoteAdded;
+  FProperties.OnNotePreview := @PropertiesNotePreview;
   SetLabelMode(FSettings.LabelMode);
   SetDrawRole(erOutline);
   FPieceFillsAction.Checked := FSettings.ShowPieceFills;
@@ -1088,13 +1091,19 @@ begin
   FCanvas.Invalidate;
 end;
 
-// Its text is typed in the properties, which share the side panel with the lists
+// A note placed or double-clicked: its text is typed in the properties, which
+// share the side panel with the lists, so the panel is shown if it was hidden
 procedure TMainForm.CanvasNoteAdded(Sender: TObject);
 begin
   if not FSidePanel.Visible then
-    Exit;
+    SetSideShown(True);
   FSidePanel.ActiveContent := FProperties.Parent;
   FProperties.FocusNoteText;
+end;
+
+procedure TMainForm.PropertiesNotePreview(Sender: TObject; const NoteKey, Typed: string);
+begin
+  FCanvas.PreviewNoteText(NoteKey, Typed);
 end;
 
 procedure TMainForm.PieceFillsClick(Sender: TObject);

@@ -79,6 +79,9 @@ type
     // The problems the overlay marks, worked out again after each change
     FShowProblems, FProblemsStale: boolean;
     FShowDependents: boolean;
+    // The note whose text is being typed in the properties, and what it shows
+    FPreviewNoteKey, FPreviewNoteText: string;
+    FOnNoteEdit: TNotifyEvent;
     FProblems: TPatternProblemArray;
     // The grid's spacing, in GridUnit
     FGridStep: double;
@@ -267,6 +270,11 @@ type
     property ShowProblems: boolean read FShowProblems write SetShowProblems;
     // Dependency arrows also go to what reads the hovered and selected objects
     property ShowDependents: boolean read FShowDependents write SetShowDependents;
+    // Draws the note with NoteKey showing Typed, its text in display form as
+    // it is being typed, until called with an empty key
+    procedure PreviewNoteText(const NoteKey, Typed: string);
+    // After a double-click on a note, which selected it, so its text can be typed
+    property OnNoteEdit: TNotifyEvent read FOnNoteEdit write FOnNoteEdit;
     // An object pointed at somewhere else, such as a piece in the Garment
     // tab, shown as if hovered here while the pointer is not on the canvas
     property OutsideHoverKey: string read FOutsideHoverKey write SetOutsideHoverKey;
@@ -1154,6 +1162,15 @@ begin
   Invalidate;
 end;
 
+procedure TPatternCanvas.PreviewNoteText(const NoteKey, Typed: string);
+begin
+  FPreviewNoteKey := NoteKey;
+  FPreviewNoteText := '';
+  if (NoteKey <> '') and Assigned(FDocument) then
+    FPreviewNoteText := NotePreviewText(FDocument.Pattern, Typed);
+  Invalidate;
+end;
+
 function TPatternCanvas.Problems: TPatternProblemArray;
 var
   BlockedCount: integer;
@@ -1327,6 +1344,14 @@ begin
   if (ssDouble in Shift) and (Length(FSelection) = 1) and (CopyTransformKey(FDocument.Pattern.FindNode(FSelection[0])) <> '') then
   begin
     GoToSource;
+    Exit;
+  end;
+  // Double-clicking a note, which its first click selected, goes to its text
+  if (ssDouble in Shift) and (Length(FSelection) = 1) and (FDocument.Pattern.FindNode(FSelection[0]) is TNoteObject) and
+    (ObjectKeyAt(X, Y) = FSelection[0]) then
+  begin
+    if Assigned(FOnNoteEdit) then
+      FOnNoteEdit(Self);
     Exit;
   end;
   // A callout's tip or a curve's handle lies over whatever else is there
@@ -1748,6 +1773,8 @@ begin
     Result.HoverKey := FOutsideHoverKey;
   Result.ShowPieceFills := FShowPieceFills;
   Result.ShowDependents := FShowDependents;
+  Result.PreviewNoteKey := FPreviewNoteKey;
+  Result.PreviewNoteText := FPreviewNoteText;
   if FShowProblems then
     for Problem in Problems do
       Insert(Problem.Key, Result.ProblemKeys, Length(Result.ProblemKeys));

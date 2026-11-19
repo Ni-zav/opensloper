@@ -54,6 +54,9 @@ type
     ProblemKeys: TStringArray;
     // Arrows also go to what reads the hovered and selected objects
     ShowDependents: boolean;
+    // The note whose text is being typed, drawn with PreviewNoteText, which
+    // is shown text with its draft values worked out; empty when none is
+    PreviewNoteKey, PreviewNoteText: string;
   end;
 
   TPatternPainter = class
@@ -893,6 +896,7 @@ end;
 procedure TPatternPainter.DrawNotes(const PatternValues: TFieldValues);
 var
   Values: TFieldValues;
+  Shown: string;
   Index, LineIndex: integer;
   Note: TNoteObject;
   Lines: TStringArray;
@@ -913,9 +917,12 @@ begin
       Continue;
     Note := TNoteObject(FPattern.Objects[Index]);
     Selected := IsSelected(Note.Key);
-    Values := NoteFieldValues(FPattern, Note, PatternValues);
-    Box := NoteBox(Note, Values);
-    Frame := NoteFrame(Note, Values);
+    Shown := Note.ShownText;
+    if (FState.PreviewNoteKey <> '') and (Note.Key = FState.PreviewNoteKey) then
+      Shown := FState.PreviewNoteText;
+    Values := NoteFieldValues(FPattern, Note, PatternValues, Shown);
+    Box := NoteBox(Note, Values, Shown);
+    Frame := NoteFrame(Note, Values, Shown);
     TopLeft := FState.View.ToScreen(Vec2(Box.MinX, Box.MinY));
     BottomRight := FState.View.ToScreen(Vec2(Box.MaxX, Box.MaxY));
     if Selected then
@@ -985,7 +992,7 @@ begin
     FBitmap.FontHeight := Round(EmPixels);
     UseNoteFont(FBitmap, Note.Style, DefaultFont);
     BoxPixels := BottomRight.X - TopLeft.X;
-    Lines := TextLines(ExpandFields(Note.ShownText, Values));
+    Lines := TextLines(ExpandFields(Shown, Values));
     for LineIndex := 0 to High(Lines) do
     begin
       Spot := Vec2(AlignedLeft(TopLeft.X, BoxPixels, FBitmap.TextSize(Lines[LineIndex]).cx, Note.Align), TopLeft.Y + LineIndex * LinePixels);

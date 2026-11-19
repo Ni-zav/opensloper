@@ -10,7 +10,12 @@ a notch, a dart or a seam.
 Choose the Text tool (++x++) and click. The note hangs from what the click
 snaps to, a point, a place on an edge, or a piece, and moves with it when the
 pattern changes. Clicked on nothing, it is a free note that stays where it is
-put. Its text is selected in the properties, ready to type over.
+put. Its text is selected in the properties, ready to type over, and the side
+panel opens if it was hidden. To change a note's text later, double-click it.
+
+The note on the canvas follows the text as you type, with values worked out
+once their formula does; leaving the text box keeps the change as one undo
+step, and ++escape++ puts the text back.
 
 Choose the Callout tool (++a++), click what it points at, then click where its
 text goes. The text hangs from the place it points at. ++escape++ stops either

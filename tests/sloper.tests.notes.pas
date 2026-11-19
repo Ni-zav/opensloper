@@ -44,6 +44,8 @@ type
     procedure TearDown; override;
   published
     procedure TestPointAnchorFollows;
+    procedure TestPreviewTextWorksOutValues;
+    procedure TestPreviewBoxFollowsText;
     procedure TestEdgeAnchorRatio;
     procedure TestEdgeRatioOutOfRangeIsInvalid;
     procedure TestPieceAnchorIsMiddle;
@@ -108,6 +110,34 @@ procedure TTestNotes.SetUp;
 begin
   FPattern := TPattern.Create;
   FLoaded := TPattern.Create;
+end;
+
+// While a note's text is typed, the canvas shows it with its values worked out
+procedure TTestNotes.TestPreviewTextWorksOutValues;
+begin
+  FPattern.AddFreePoint('A', '0', '0');
+  FPattern.AddFreePoint('B', '120', '0');
+  FPattern.AddLine(FPattern.FindObject('A').Key, FPattern.FindObject('B').Key);
+  FPattern.Evaluate;
+  AssertEquals('plain text', 'Hem'#10'Stay-stitch', NotePreviewText(FPattern, 'Hem'#10'Stay-stitch'));
+  AssertEquals('a value', 'Hem 120 mm', NotePreviewText(FPattern, 'Hem {=Line_A_B.length} mm'));
+  AssertEquals('two values', '120 and 60', NotePreviewText(FPattern, '{=Line_A_B.length} and {= Line_A_B.length / 2 }'));
+  AssertEquals('not worked out yet, as typed', 'Hem {=Line_A_B.len} mm', NotePreviewText(FPattern, 'Hem {=Line_A_B.len} mm'));
+  AssertEquals('not closed yet, as typed', 'Hem {=Line_A_B', NotePreviewText(FPattern, 'Hem {=Line_A_B'));
+end;
+
+procedure TTestNotes.TestPreviewBoxFollowsText;
+var
+  Note: TNoteObject;
+  Own, Longer: TRect2;
+begin
+  Note := FPattern.AddNote('', 'Hi', naFree, '', '', '0', '0');
+  FPattern.Evaluate;
+  Own := NoteBox(Note, Default(TFieldValues));
+  Longer := NoteBox(Note, Default(TFieldValues), 'Hello there'#10'Second line');
+  AssertTrue('wider', Longer.MaxX > Own.MaxX);
+  AssertTrue('taller', Longer.MaxY > Own.MaxY);
+  AssertNear('from the same place', Own.MinX, Longer.MinX);
 end;
 
 procedure TTestNotes.TearDown;

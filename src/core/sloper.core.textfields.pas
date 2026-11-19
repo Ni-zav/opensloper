@@ -81,12 +81,21 @@ function PatternFieldValues(Pattern: TPattern; const PatternFileName: string): T
 function PieceFieldValues(Pattern: TPattern; Piece: TPieceObject; const Values: TFieldValues; Whole: boolean = False): TFieldValues;
 // Values with the piece fields added when the note prints with one piece
 // only; on none or several they are left as typed
-function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues): TFieldValues;
+function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues): TFieldValues; overload;
+// The same for Shown, text the note is about to show, such as a preview
+function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues; const Shown: string): TFieldValues; overload;
+// What a note would show with Typed, in display form, as its text: each {=…}
+// worked out with the pattern as last evaluated, and one that does not work
+// out yet, or is not closed, kept as typed. For showing text while it is typed.
+function NotePreviewText(Pattern: TPattern; const Typed: string): string;
 // The rough area a note's text covers, in mm, from its top left down
-function NoteBox(Note: TNoteObject; const Values: TFieldValues): TRect2;
+function NoteBox(Note: TNoteObject; const Values: TFieldValues): TRect2; overload;
+// The same for Shown in place of the note's own text
+function NoteBox(Note: TNoteObject; const Values: TFieldValues; const Shown: string): TRect2; overload;
 // What a note draws round its text: the white box when it has one, or just
 // the text; a callout's leader leaves from its edge
-function NoteFrame(Note: TNoteObject; const Values: TFieldValues): TRect2;
+function NoteFrame(Note: TNoteObject; const Values: TFieldValues): TRect2; overload;
+function NoteFrame(Note: TNoteObject; const Values: TFieldValues; const Shown: string): TRect2; overload;
 
 implementation
 
@@ -204,25 +213,59 @@ begin
 end;
 
 function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues): TFieldValues;
+begin
+  Result := NoteFieldValues(Pattern, Note, Values, Note.ShownText);
+end;
+
+function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues; const Shown: string): TFieldValues;
 var
   Pieces: TPieceObjectArray;
 begin
   Result := Values;
   // Finding the piece costs more than filling in the text, so only when asked
-  if Pos('{piece.', Note.ShownText) = 0 then
+  if Pos('{piece.', Shown) = 0 then
     Exit;
   Pieces := Pattern.NotePieces(Note);
   if Length(Pieces) = 1 then
     Result := PieceFieldValues(Pattern, Pieces[0], Values);
 end;
 
+function NotePreviewText(Pattern: TPattern; const Typed: string): string;
+var
+  Template: string;
+  Expressions: TStringArray;
+  ErrorPos, Index, Next: integer;
+  Value: double;
+begin
+  if not SplitDraftValues(Typed, Template, Expressions, ErrorPos) then
+    Exit(Typed);
+  Result := '';
+  Next := 0;
+  for Index := 1 to Length(Template) do
+    if Template[Index] <> VALUE_MARK then
+      Result := Result + Template[Index]
+    else
+    begin
+      if Pattern.EvaluateText(Expressions[Next], Value) then
+        Result := Result + DraftValueText(Value)
+      else
+        Result := Result + '{=' + Expressions[Next] + '}';
+      Inc(Next);
+    end;
+end;
+
 function NoteBox(Note: TNoteObject; const Values: TFieldValues): TRect2;
+begin
+  Result := NoteBox(Note, Values, Note.ShownText);
+end;
+
+function NoteBox(Note: TNoteObject; const Values: TFieldValues; const Shown: string): TRect2;
 var
   Lines: TStringArray;
   Line: string;
   Widest: double;
 begin
-  Lines := TextLines(ExpandFields(Note.ShownText, Values));
+  Lines := TextLines(ExpandFields(Shown, Values));
   Widest := 0;
   for Line in Lines do
     if TextWidth(Line, Note.Size, Note.Style) > Widest then
@@ -235,7 +278,12 @@ end;
 
 function NoteFrame(Note: TNoteObject; const Values: TFieldValues): TRect2;
 begin
-  Result := NoteBox(Note, Values);
+  Result := NoteFrame(Note, Values, Note.ShownText);
+end;
+
+function NoteFrame(Note: TNoteObject; const Values: TFieldValues; const Shown: string): TRect2;
+begin
+  Result := NoteBox(Note, Values, Shown);
   if Note.Boxed then
     Result := PaddedBox(Result);
 end;

@@ -55,6 +55,9 @@ type
   // a size table, its object at the smallest and largest sizes; Shown is
   // False when no suggestion is hovered
   TSuggestPreviewEvent = procedure(Sender: TObject; Shown: boolean; const Position: TVec2; const Sizes: TGradeGhostArray) of object;
+  // A note's text as it is being typed, in display form; an empty key when
+  // typing ends, as the note then shows its own text
+  TNotePreviewEvent = procedure(Sender: TObject; const NoteKey, Typed: string) of object;
 
   // The draggable strip between the name and value columns
   TColumnDivider = class(TGraphicControl)
@@ -167,6 +170,9 @@ type
     FWandImages: TImageList;
     FOnSuggestChange: TNotifyEvent;
     FOnSuggestPreview: TSuggestPreviewEvent;
+    FOnNotePreview: TNotePreviewEvent;
+    // A note's text is being shown on the canvas as typed
+    FNotePreviewing: boolean;
     procedure RebuildRows;
     procedure MakeSuggestionSource(Node: TEvalNode);
     procedure AddWand(RowIndex: integer);
@@ -249,8 +255,12 @@ type
     // The suggestions opened or closed
     property OnSuggestChange: TNotifyEvent read FOnSuggestChange write FOnSuggestChange;
     property OnSuggestPreview: TSuggestPreviewEvent read FOnSuggestPreview write FOnSuggestPreview;
+    property OnNotePreview: TNotePreviewEvent read FOnNotePreview write FOnNotePreview;
 
     { For the sections }
+
+    // Tells the canvas what the note's text is being typed as; '' when done
+    procedure PreviewNote(const NoteKey, Typed: string);
 
     // The key of the object shown, or ''
     property SelectedKey: string read FKey;
@@ -458,6 +468,7 @@ type
     // False when the text was refused, with the reason under it
     function CommitText: boolean;
     procedure TextExit(Sender: TObject);
+    procedure TextChange(Sender: TObject);
     procedure TextKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     procedure SizeChange(Sender: TObject);
     procedure PrintClick(Sender: TObject);
@@ -825,7 +836,12 @@ begin
     if Controls[Index] is TEdit then
       TEdit(Controls[Index]).OnExit := nil
     else if Controls[Index] is TMemo then
+    begin
       TMemo(Controls[Index]).OnExit := nil;
+      TMemo(Controls[Index]).OnChange := nil;
+    end;
+  // The note text box goes without being left, so its preview ends here
+  PreviewNote('', '');
   while ControlCount > 0 do
     Controls[0].Free;
   FSections.Clear;
@@ -1519,6 +1535,17 @@ begin
   CommitEdit(TEdit(Sender));
 end;
 
+// Ending a preview that never began says nothing, so freeing the rows as the
+// window closes does not reach a canvas already gone
+procedure TPropertiesPanel.PreviewNote(const NoteKey, Typed: string);
+begin
+  if (NoteKey = '') and not FNotePreviewing then
+    Exit;
+  FNotePreviewing := NoteKey <> '';
+  if Assigned(FOnNotePreview) then
+    FOnNotePreview(Self, NoteKey, Typed);
+end;
+
 procedure TPropertiesPanel.FocusNoteText;
 var
   Section: TPropertySection;
@@ -2038,6 +2065,7 @@ begin
   FNoteText.WantReturns := True;
   FNoteText.WordWrap := False;
   FNoteText.OnExit := @TextExit;
+  FNoteText.OnChange := @TextChange;
   FNoteText.OnKeyDown := @TextKeyDown;
   FNoteText.Hint := rsPropNoteTextHint;
   FNoteText.ShowHint := True;
@@ -2167,9 +2195,26 @@ begin
   Result := Done;
 end;
 
+// The section can be freed by the commit, so the panel is kept first
 procedure TNoteSection.TextExit(Sender: TObject);
+var
+  OwnPanel: TPropertiesPanel;
 begin
+  OwnPanel := Panel;
   CommitText;
+  OwnPanel.PreviewNote('', '');
+end;
+
+// The canvas shows the text as it is typed, before it is committed
+procedure TNoteSection.TextChange(Sender: TObject);
+var
+  Node: TEvalNode;
+begin
+  if FFilling or not FNoteText.Focused then
+    Exit;
+  Node := Panel.SelectedNode;
+  if Node is TNoteObject then
+    Panel.PreviewNote(Node.Key, NoteTextFromField(FNoteText.Text));
 end;
 
 // Escape puts the text back
@@ -2180,8 +2225,14 @@ begin
   if Key <> VK_ESCAPE then
     Exit;
   Node := Panel.SelectedNode;
-  if Node is TNoteObject then
-    FNoteText.Text := TNoteObject(Node).DisplayText(Panel.Document.Pattern.Resolver);
+  FFilling := True;
+  try
+    if Node is TNoteObject then
+      FNoteText.Text := TNoteObject(Node).DisplayText(Panel.Document.Pattern.Resolver);
+  finally
+    FFilling := False;
+  end;
+  Panel.PreviewNote('', '');
   FNoteRefusal.Visible := False;
   Key := 0;
 end;

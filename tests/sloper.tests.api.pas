@@ -34,6 +34,8 @@ type
     FAskedToWrite: string;
     // An OnConfirmWrite that keeps the path and says no
     function DeclineWrite(const Path: string): boolean;
+    // A window state naming the pattern's file in full
+    function WindowWithFile: TJSONObject;
     procedure WriteFiles;
     procedure OpenTestPattern;
     // Replaces the set with a size table where waist has no value for M
@@ -84,6 +86,10 @@ type
     procedure TestCheckReportsProblems;
     procedure TestEvaluate;
     procedure TestGetMeasurements;
+    // In the design window, where what is read goes on to Claude, no folder
+    // or measurement file name is given out, as either may name the person
+    procedure TestFilesWithheld;
+    procedure TestMeasurementsWithheld;
     procedure TestSetMeasurement;
     procedure TestSetMeasurementKeepsDescription;
     // The measurement file is written only when the window allows it
@@ -795,6 +801,49 @@ begin
   Call('get_measurements');
   AssertEquals('path', FSetPath, Answer.Get('path', ''));
   AssertEquals('waist', TJSONObject(TJSONArray(Answer.Find('measurements'))[0]).Get('key', ''));
+end;
+
+function TTestAPI.WindowWithFile: TJSONObject;
+begin
+  Result := TJSONObject.Create(['file', FPatternPath, 'selection', TJSONArray.Create]);
+end;
+
+procedure TTestAPI.TestFilesWithheld;
+begin
+  FServer.WithholdsFiles := True;
+  OpenTestPattern;
+  AssertEquals('the pattern by its name alone', ExtractFileName(FPatternPath), Answer.Get('path', ''));
+  AssertEquals('the measurement file not at all', API_WITHHELD, Answer.Get('measurements', ''));
+  Call('get_measurements');
+  AssertEquals(API_WITHHELD, Answer.Get('path', ''));
+  Call('check');
+  AssertEquals('report', API_WITHHELD, TJSONObject(Answer.Find('report')).Get('measurements', ''));
+  FServer.OnWindowState := @WindowWithFile;
+  Call('ui_state');
+  AssertEquals('window', ExtractFileName(FPatternPath), Answer.Get('file', ''));
+  FServer.OnConfirmWrite := @DeclineWrite;
+  Call('set_measurement', '{"key": "waist", "value": 1000}');
+  AssertEquals(RPC_REFUSED, ErrorCode);
+  AssertEquals('the window is still told where', ExpandFileName(FSetPath), FAskedToWrite);
+  AssertEquals('the reason names no file', 0, Pos(ExtractFileName(FSetPath), ErrorText));
+end;
+
+procedure TTestAPI.TestMeasurementsWithheld;
+var
+  Before, After, Err: string;
+begin
+  FServer.SharesMeasurements := False;
+  OpenTestPattern;
+  AssertTrue(Err, ReadTextFile(FSetPath, Before, Err));
+  Call('get_measurements');
+  AssertEquals(RPC_REFUSED, ErrorCode);
+  AssertEquals(rsApiMeasurementsWithheld, ErrorText);
+  Call('set_measurement', '{"key": "waist", "value": 1000}');
+  AssertEquals(RPC_REFUSED, ErrorCode);
+  AssertTrue(Err, ReadTextFile(FSetPath, After, Err));
+  AssertEquals('the file is not written', Before, After);
+  Call('missing_measurements');
+  AssertEquals('only keys, so still answered', 0, TJSONArray(Answer.Find('missing')).Count);
 end;
 
 function TTestAPI.DeclineWrite(const Path: string): boolean;

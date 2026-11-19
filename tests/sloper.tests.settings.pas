@@ -292,6 +292,7 @@ begin
   AssertTrue('garment shaded', FSettings.Preferences.GarmentShading);
   AssertNear('light', DEFAULT_GARMENT_LIGHT_ANGLE, FSettings.Preferences.GarmentLightAngle);
   AssertNear('strength', DEFAULT_GARMENT_SHADE_STRENGTH, FSettings.Preferences.GarmentShadeStrength);
+  AssertTrue('Claude reads the measurements', FSettings.Preferences.AssistantMeasurements);
 end;
 
 procedure TTestSettings.TestPreferencesRoundTrip;
@@ -308,6 +309,7 @@ begin
   FSettings.Preferences.GarmentShading := False;
   FSettings.Preferences.GarmentLightAngle := 45;
   FSettings.Preferences.GarmentShadeStrength := 0.8;
+  FSettings.Preferences.AssistantMeasurements := False;
   Other := TAppSettings.Create;
   try
     AssertTrue(Err, Other.LoadFromText(FSettings.SaveToText, Err));
@@ -320,6 +322,7 @@ begin
     AssertFalse('garment flat', Other.Preferences.GarmentShading);
     AssertNear('light', 45, Other.Preferences.GarmentLightAngle);
     AssertNear('strength', 0.8, Other.Preferences.GarmentShadeStrength);
+    AssertFalse('measurements kept from Claude', Other.Preferences.AssistantMeasurements);
   finally
     FreeAndNil(Other);
   end;

@@ -47,6 +47,8 @@ type
     // Asks the user, once a connection or once a session
     function Allowed: boolean;
     procedure Changed;
+    function GetSharesMeasurements: boolean;
+    procedure SetSharesMeasurements(Value: boolean);
   public
     // WindowState answers ui_state
     constructor Create(ADocument: TPatternDocument; AWindowState: TApiWindowState);
@@ -58,6 +60,9 @@ type
     function State: TAutomationState;
     // After the state changes, and after each request the assistant makes
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
+    // Whether a connected assistant may read and change the measurement
+    // values, from the preferences
+    property SharesMeasurements: boolean read GetSharesMeasurements write SetSharesMeasurements;
   end;
 
 // Asks before Who (Claude in the side panel, or an assistant connected)
@@ -90,8 +95,20 @@ begin
   FApi := TApiServer.CreateFor(ADocument);
   FApi.ChangePrefix := rsConnectedChange;
   FApi.OpensFiles := False;
+  // What it reads goes on to Claude, or another assistant (see Privacy in the design)
+  FApi.WithholdsFiles := True;
   FApi.OnConfirmWrite := @ConfirmWrite;
   FApi.OnWindowState := AWindowState;
+end;
+
+function TAutomation.GetSharesMeasurements: boolean;
+begin
+  Result := FApi.SharesMeasurements;
+end;
+
+procedure TAutomation.SetSharesMeasurements(Value: boolean);
+begin
+  FApi.SharesMeasurements := Value;
 end;
 
 destructor TAutomation.Destroy;

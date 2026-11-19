@@ -69,6 +69,9 @@ type
     GarmentShading: boolean;
     GarmentLightAngle: double;
     GarmentShadeStrength: double;
+    // Whether Claude, in the window or connected to it, may read and change
+    // the measurement values (see Privacy in the design)
+    AssistantMeasurements: boolean;
   end;
 
 const
@@ -179,6 +182,7 @@ begin
   Result.GarmentShading := True;
   Result.GarmentLightAngle := DEFAULT_GARMENT_LIGHT_ANGLE;
   Result.GarmentShadeStrength := DEFAULT_GARMENT_SHADE_STRENGTH;
+  Result.AssistantMeasurements := True;
 end;
 
 function NoCalibration: TCalibration;
@@ -359,6 +363,7 @@ begin
     Obj.Add('garmentShading', Preferences.GarmentShading);
     Obj.Add('garmentLightAngle', JSONFloat(Preferences.GarmentLightAngle));
     Obj.Add('garmentShadeStrength', JSONFloat(Preferences.GarmentShadeStrength));
+    Obj.Add('assistantMeasurements', Preferences.AssistantMeasurements);
     if Length(MachineProfiles) > 0 then
       Obj.Add('machineProfiles', MachineProfilesToJSON(MachineProfiles));
     if Length(OutputProfiles) > 0 then
@@ -430,6 +435,8 @@ begin
       Preferences.GarmentLightAngle := NormalizeAngle(Number);
     if GetJSONNumber(Obj, 'garmentShadeStrength', Number) and (Number >= 0) and (Number <= 1) then
       Preferences.GarmentShadeStrength := Number;
+    if GetJSONBoolean(Obj, 'assistantMeasurements', Shown) then
+      Preferences.AssistantMeasurements := Shown;
     MachineProfiles := MachineProfilesFromJSON(Obj.Find('machineProfiles'));
     OutputProfiles := OutputProfilesFromJSON(Obj.Find('outputProfiles'));
     RolePresets := RolePresetsFromJSON(Obj.Find('rolePresets'));

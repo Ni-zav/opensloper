@@ -234,5 +234,27 @@ listening.
 To ask Claude without setting up MCP, use the Claude tab in the design window
 instead (see [Asking Claude](../design/claude.md)).
 
+### Privacy
+
+An AI assistant sends what it reads to the service behind it: Claude to
+Anthropic, another assistant to its own provider. OpenSloper sends nothing
+itself, so what leaves your computer is what the assistant reads, and it is
+kept from putting a name to the measurements:
+
+- **In the design window**, an assistant is given the pattern's file name but
+  no folder, and never the measurement file's name, since either may name the
+  person measured. With **Let AI assistants read the measurements** off in the
+  Design tab of **Edit → Preferences**, it can neither read nor change the
+  measurement values, though the pattern's points and lengths, which it still
+  reads, are worked out from them.
+- **With `serve` on its own**, the assistant opens and saves the files it
+  names, so it is given their full paths, and it can read the measurements;
+  the preference does not apply. Use the design window to keep them back.
+
+What you type into the pattern, such as notes, names and the descriptions in
+the measurement file, is sent as written, so keep people's names out of a
+pattern an assistant will read. The Claude tab follows the same rules (see
+[Privacy](../design/claude.md#privacy) under Asking Claude).
+
 The [File formats](../reference/files.md) page and its schemas describe the
 files, so an assistant can also read and write them directly.

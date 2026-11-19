@@ -68,10 +68,15 @@ resourcestring
   rsPreferencesGarmentStrength = 'Shading strength (%)';
   rsPreferencesGarmentNote = 'How the Garment tab lights the pieces. 0° is from the right and 90° from above, so 135° is the upper left.';
   rsPreferencesNotSaved = 'The preferences could not be saved: %s';
-  rsPreferencesClaude = 'Claude assistant';
+  rsPreferencesClaude = 'AI assistants';
   rsPreferencesClaudeKey = 'Anthropic API key';
   rsPreferencesClaudeNote = 'The Claude tab in the side panel sends your questions and the pattern''s names, formulas ' +
-    'and drawings to Anthropic, using this key and billed to its account. The key is kept in a file only you can read.';
+    'and drawings to Anthropic, using this key and billed to its account. Folders and the measurement file''s name are ' +
+    'never sent. The key is kept in a file only you can read.';
+  rsPreferencesClaudeMeasurements = 'Let AI assistants read the measurements';
+  rsPreferencesClaudeMeasurementsNote = 'Off, the Claude tab and any AI assistant connected to this window can neither ' +
+    'read nor change the measurement values. The pattern''s points and lengths are still sent, and they are worked out ' +
+    'from the measurements.';
   rsPreferencesClaudeFromEnvironment = 'Using the key in ANTHROPIC_API_KEY.';
   rsPreferencesKeyNotSaved = 'The API key could not be saved: %s';
 
@@ -102,6 +107,7 @@ type
     FGridEdits: array[TMeasureUnit] of TFloatSpinEdit;
     FCalibrationXEdit, FCalibrationYEdit, FMeasuredXEdit, FMeasuredYEdit: TFloatSpinEdit;
     FShadeBox: TCheckBox;
+    FShareMeasurementsBox: TCheckBox;
     FLightEdit, FStrengthEdit: TFloatSpinEdit;
     FMeasuredXLabel, FMeasuredYLabel: TLabel;
     FKeyEdit: TEdit;
@@ -317,6 +323,10 @@ begin
   if Source = ksEnvironment then
     AddNote(Group, rsPreferencesClaudeFromEnvironment);
   AddNote(Group, rsPreferencesClaudeNote);
+  FShareMeasurementsBox := TCheckBox.Create(Self);
+  FShareMeasurementsBox.Caption := rsPreferencesClaudeMeasurements;
+  StackIn(Group, FShareMeasurementsBox);
+  AddNote(Group, rsPreferencesClaudeMeasurementsNote);
 end;
 
 function TPreferencesDialog.SaveKey(out ErrorMessage: string): boolean;
@@ -427,6 +437,7 @@ begin
   FCalibrationXEdit.Value := Preferences.Calibration.X;
   FCalibrationYEdit.Value := Preferences.Calibration.Y;
   FShadeBox.Checked := Preferences.GarmentShading;
+  FShareMeasurementsBox.Checked := Preferences.AssistantMeasurements;
   FLightEdit.Value := Preferences.GarmentLightAngle;
   FStrengthEdit.Value := Preferences.GarmentShadeStrength * 100;
   FSquareBox.ItemIndex := 0;
@@ -451,6 +462,7 @@ begin
   if not CalibrationIsUsable(Result.Calibration) then
     Result.Calibration := NoCalibration;
   Result.GarmentShading := FShadeBox.Checked;
+  Result.AssistantMeasurements := FShareMeasurementsBox.Checked;
   Result.GarmentLightAngle := FLightEdit.Value;
   Result.GarmentShadeStrength := EnsureRange(FStrengthEdit.Value / 100, 0, 1);
 end;

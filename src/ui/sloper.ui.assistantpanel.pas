@@ -79,6 +79,8 @@ type
     FHasKey: boolean;
     // The transcript is still the opening text, with nothing asked
     FFresh: boolean;
+    FSharesMeasurements: boolean;
+    procedure SetSharesMeasurements(Value: boolean);
     procedure ShowOpening;
     procedure SetDocument(Value: TPatternDocument);
     procedure MakeApi;
@@ -112,6 +114,9 @@ type
     property Document: TPatternDocument read FDocument write SetDocument;
     // Answers ui_state
     property WindowState: TApiWindowState read FWindowState write FWindowState;
+    // Whether Claude may read and change the measurement values, from the
+    // preferences; True unless set. Takes effect at the next question.
+    property SharesMeasurements: boolean read FSharesMeasurements write SetSharesMeasurements;
   end;
 
 resourcestring
@@ -119,7 +124,13 @@ resourcestring
   rsAssistantStop = 'Stop';
   rsAssistantNew = 'New Conversation';
   rsAssistantWelcome = 'Ask Claude to draft or change the pattern, or why something is wrong: "add 2 cm ease at the hip", ' +
-    '"why is point C invalid?". Each change is one step you can undo. Your questions and the pattern go to Anthropic.';
+    '"why is point C invalid?". Each change is one step you can undo.';
+  rsAssistantPrivacyShared = 'What goes to Anthropic: your questions, the pattern''s names, formulas, values and drawings, ' +
+    'and the measurement values, which Claude can also change. Folders and the measurement file''s name are never sent. ' +
+    'To keep the measurement values back, turn off "Let AI assistants read the measurements" in Edit → Preferences, Design.';
+  rsAssistantPrivacyWithheld = 'What goes to Anthropic: your questions and the pattern''s names, formulas, values and ' +
+    'drawings. The measurement values are kept back, as set in Edit → Preferences, but the pattern''s sizes are worked ' +
+    'out from them. Folders and the measurement file''s name are never sent.';
   rsAssistantNoKeyYet = 'Claude needs your Anthropic API key. Set it in Assistance → Anthropic API Key..., or in ' +
     'Edit → Preferences, Design.';
   rsAssistantYou = 'You: %s';
@@ -242,6 +253,7 @@ begin
   inherited Create(AOwner);
   BevelOuter := bvNone;
   FApi := nil;
+  FSharesMeasurements := True;
 end;
 
 // Once on a form, as sizes scale with the screen
@@ -298,11 +310,22 @@ end;
 // What to ask, or where to set the key first
 procedure TAssistantPanel.ShowOpening;
 begin
-  if FHasKey then
-    FTranscript.Text := rsAssistantWelcome
+  if FHasKey and FSharesMeasurements then
+    FTranscript.Text := rsAssistantWelcome + LineEnding + LineEnding + rsAssistantPrivacyShared
+  else if FHasKey then
+    FTranscript.Text := rsAssistantWelcome + LineEnding + LineEnding + rsAssistantPrivacyWithheld
   else
     FTranscript.Text := rsAssistantNoKeyYet;
   FFresh := True;
+end;
+
+procedure TAssistantPanel.SetSharesMeasurements(Value: boolean);
+begin
+  if Value = FSharesMeasurements then
+    Exit;
+  FSharesMeasurements := Value;
+  if Assigned(FTranscript) and FFresh then
+    ShowOpening;
 end;
 
 procedure TAssistantPanel.KeyChanged;
@@ -350,6 +373,7 @@ begin
   FApi := TApiServer.CreateFor(FDocument);
   FApi.ChangePrefix := rsClaudeChange;
   FApi.OpensFiles := False;
+  FApi.WithholdsFiles := True;
   FApi.OnConfirmWrite := @ConfirmWrite;
 end;
 
@@ -423,8 +447,11 @@ begin
     FGeneration := FDocument.Generation;
     MakeApi;
   end;
-  // The key as Preferences has it now, so a corrected key works at once
+  // The key and the measurements choice as Preferences has them now, so a
+  // change works at once; no request is running between questions
   FTransport.Key := Key;
+  FConversation.SharesMeasurements := FSharesMeasurements;
+  FApi.SharesMeasurements := FSharesMeasurements;
   FInput.Clear;
   Append(LineEnding + LineEnding + Format(rsAssistantYou, [Question]) + LineEnding + LineEnding + rsAssistantClaude);
   FWorkerDone := False;

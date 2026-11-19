@@ -43,6 +43,7 @@ type
     FSystem: string;
     FCancelled: boolean;
     FRetryDelayMs: integer;
+    FSharesMeasurements: boolean;
     FOnText: TAssistantTextEvent;
     FOnTool: TAssistantToolEvent;
     FOnNote: TAssistantNoteEvent;
@@ -53,6 +54,7 @@ type
     function RunTools(Content: TJSONArray; Assembler: TMessageAssembler): TJSONArray;
     function StoppedResults(Content: TJSONArray): TJSONArray;
     procedure Wait(Milliseconds: integer);
+    procedure SetSharesMeasurements(Value: boolean);
   public
     // Takes over Transport
     constructor Create(ATransport: TAssistantTransport);
@@ -67,6 +69,9 @@ type
     property Messages: TJSONArray read FMessages;
     // Between retries; tests set 0
     property RetryDelayMs: integer read FRetryDelayMs write FRetryDelayMs;
+    // False leaves out the tools that read or write measurement values, from
+    // the next request on; True unless set
+    property SharesMeasurements: boolean read FSharesMeasurements write SetSharesMeasurements;
     property OnText: TAssistantTextEvent read FOnText write FOnText;
     property OnTool: TAssistantToolEvent read FOnTool write FOnTool;
     property OnNote: TAssistantNoteEvent read FOnNote write FOnNote;
@@ -83,8 +88,9 @@ const
   // Images of the draft kept in the history; Claude can render again
   ASSISTANT_KEPT_IMAGES = 3;
 
-// The Automation API methods as tools for the Messages API
-function AssistantTools: TJSONArray;
+// The Automation API methods as tools for the Messages API; without
+// SharesMeasurements, none that reads or writes measurement values
+function AssistantTools(SharesMeasurements: boolean): TJSONArray;
 // The instructions, formula syntax and object properties
 function AssistantSystemPrompt: string;
 // A method's reply as tool_result content: render's PNG as an image, so
@@ -135,6 +141,8 @@ uses
 const
   // Tools that make no sense in the window: patterns are opened there by the user
   LEFT_OUT_TOOLS: array[0..0] of string = ('open');
+  // Tools that give or change measurement values, left out when the user keeps them private
+  MEASUREMENT_TOOLS: array[0..1] of string = ('get_measurements', 'set_measurement');
   HTTP_UNAUTHORIZED = 401;
   HTTP_TOO_MANY = 429;
   HTTP_SERVER_ERROR = 500;
@@ -147,7 +155,7 @@ const
   HTTP_OK_LOW = 200;
   HTTP_OK_HIGH = 299;
 
-function AssistantTools: TJSONArray;
+function AssistantTools(SharesMeasurements: boolean): TJSONArray;
 var
   McpList: TJSONArray;
   Tool, Entry: TJSONObject;
@@ -164,6 +172,9 @@ begin
       Wanted := True;
       for LeftOut in LEFT_OUT_TOOLS do
         Wanted := Wanted and (Tool.Get('name', '') <> LeftOut);
+      if not SharesMeasurements then
+        for LeftOut in MEASUREMENT_TOOLS do
+          Wanted := Wanted and (Tool.Get('name', '') <> LeftOut);
       if not Wanted then
         Continue;
       Entry := TJSONObject.Create(['name', Tool.Get('name', ''), 'description', Tool.Get('description', '')]);
@@ -222,9 +233,19 @@ begin
   inherited Create;
   FTransport := ATransport;
   FMessages := TJSONArray.Create;
-  FTools := AssistantTools;
+  FSharesMeasurements := True;
+  FTools := AssistantTools(FSharesMeasurements);
   FSystem := AssistantSystemPrompt;
   FRetryDelayMs := DEFAULT_RETRY_MS;
+end;
+
+procedure TAssistantConversation.SetSharesMeasurements(Value: boolean);
+begin
+  if Value = FSharesMeasurements then
+    Exit;
+  FSharesMeasurements := Value;
+  FreeAndNil(FTools);
+  FTools := AssistantTools(FSharesMeasurements);
 end;
 
 destructor TAssistantConversation.Destroy;

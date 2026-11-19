@@ -62,6 +62,9 @@ type
     procedure FitRows;
     procedure Choose(RowIndex: integer);
     procedure SetHoverRow(RowIndex: integer);
+    // The left button is down below the last row, where the grid still moves
+    // its current row, though nothing there was chosen
+    function PressedBelowRows: boolean;
     procedure GridSelection(Sender: TObject; ACol, ARow: integer);
     procedure GridMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: integer);
     procedure GridClick(Sender: TObject);
@@ -89,7 +92,7 @@ resourcestring
 implementation
 
 uses
-  LCLIntf, LCLType, Math, Sloper.UI.Spacing;
+  Forms, LCLIntf, LCLType, Math, Sloper.UI.Spacing;
 
 const
   BLOCKING_INK = TColor($2020C0);
@@ -212,9 +215,14 @@ begin
     FOnHover(Self, RowKey(RowIndex));
 end;
 
+function TProblemsPanel.PressedBelowRows: boolean;
+begin
+  Result := (GetKeyState(VK_LBUTTON) < 0) and (FGrid.ScreenToClient(Mouse.CursorPos).Y >= FGrid.GridHeight);
+end;
+
 procedure TProblemsPanel.GridSelection(Sender: TObject; ACol, ARow: integer);
 begin
-  if not FUpdating then
+  if not FUpdating and not PressedBelowRows then
     Choose(ARow);
 end;
 
@@ -227,7 +235,7 @@ end;
 
 procedure TProblemsPanel.GridClick(Sender: TObject);
 begin
-  if (FGrid.Row = FRowBeforePress) and (FGrid.Row = FChosen) then
+  if (FGrid.Row = FRowBeforePress) and (FGrid.Row = FChosen) and (FGrid.ScreenToClient(Mouse.CursorPos).Y < FGrid.GridHeight) then
     Choose(FGrid.Row);
 end;
 

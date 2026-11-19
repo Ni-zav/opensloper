@@ -63,6 +63,8 @@ type
     FOwnsDocument: boolean;
     FChangePrefix: string;
     FOpensFiles: boolean;
+    FWithholdsFiles: boolean;
+    FSharesMeasurements: boolean;
     FOnConfirmWrite: TApiConfirmWrite;
     FOnWindowState: TApiWindowState;
     // The call's change was opened by Reference, to give a repeat point its
@@ -77,6 +79,14 @@ type
     // locked object
     procedure EndChange;
     procedure ConfirmWrite(const Path: string);
+    // As a reply gives them: in full, or with WithholdsFiles the pattern by
+    // its file name alone and the measurement file not at all
+    function ShownPatternPath(const Path: string): string;
+    function ShownMeasurementPath: string;
+    // Text that may name the measurement file, with it taken out
+    function WithoutMeasurementPath(const Text: string): string;
+    // Refuses a method that reads or writes measurement values
+    procedure CheckMeasurementsShared;
     function DoWindowState: TJSONData;
     function FindTarget(Params: TJSONObject): TEvalNode;
     function DocumentInfo: TJSONObject;
@@ -161,6 +171,13 @@ type
     property ChangePrefix: string read FChangePrefix write FChangePrefix;
     // False in the design window, where the user opens patterns
     property OpensFiles: boolean read FOpensFiles write FOpensFiles;
+    // True in the design window, whose replies go on to Claude: no folder is
+    // given out, nor the measurement file's name, as either may name the
+    // person measured (see Privacy in the design)
+    property WithholdsFiles: boolean read FWithholdsFiles write FWithholdsFiles;
+    // False refuses get_measurements and set_measurement, as the user chose
+    // in the preferences; True unless set
+    property SharesMeasurements: boolean read FSharesMeasurements write FSharesMeasurements;
     property OnConfirmWrite: TApiConfirmWrite read FOnConfirmWrite write FOnConfirmWrite;
     // Answers ui_state; without it ui_state is refused
     property OnWindowState: TApiWindowState read FOnWindowState write FOnWindowState;
@@ -169,7 +186,13 @@ type
 // An object as a selection lists it: its id, name and type
 function NodeReference(Node: TEvalNode): TJSONObject;
 
+const
+  // Given in place of a file name the reply may not give out
+  API_WITHHELD = '(withheld)';
+
 resourcestring
+  rsApiMeasurementsWithheld = 'The user keeps their measurements from assistants (Edit → Preferences → Design); ' +
+    'work from the pattern''s formulas and the measurement keys missing_measurements lists';
   rsApiNotRequest = 'The request must be a JSON-RPC 2.0 object with a method';
   rsApiNoMethod = 'There is no method "%s"';
   rsApiMissingParam = 'Parameter "%s" is missing or the wrong type';
@@ -561,6 +584,7 @@ begin
   FDocument := TPatternDocument.Create;
   FOwnsDocument := True;
   FOpensFiles := True;
+  FSharesMeasurements := True;
 end;
 
 constructor TApiServer.CreateFor(ADocument: TPatternDocument);
@@ -569,6 +593,7 @@ begin
   FDocument := ADocument;
   FOwnsDocument := False;
   FOpensFiles := True;
+  FSharesMeasurements := True;
   FGeneration := FDocument.Generation;
 end;
 
@@ -600,17 +625,65 @@ begin
     raise EApiError.Create(RPC_REFUSED, FDocument.Pattern.LastError);
 end;
 
+// The window is told the whole path, to ask the user; the reply only what it may give out
 procedure TApiServer.ConfirmWrite(const Path: string);
+var
+  Shown: string;
 begin
-  if Assigned(FOnConfirmWrite) and not FOnConfirmWrite(ExpandFileName(Path)) then
-    raise EApiError.Create(RPC_REFUSED, Format(rsApiWriteDeclined, [Path]));
+  if not Assigned(FOnConfirmWrite) or FOnConfirmWrite(ExpandFileName(Path)) then
+    Exit;
+  if not FWithholdsFiles then
+    Shown := Path
+  else if SameFileName(ExpandFileName(Path), ExpandFileName(FDocument.MeasurementPath)) then
+    Shown := API_WITHHELD
+  else
+    Shown := ExtractFileName(Path);
+  raise EApiError.Create(RPC_REFUSED, Format(rsApiWriteDeclined, [Shown]));
+end;
+
+function TApiServer.ShownPatternPath(const Path: string): string;
+begin
+  Result := Path;
+  if FWithholdsFiles then
+    Result := ExtractFileName(Path);
+end;
+
+function TApiServer.ShownMeasurementPath: string;
+begin
+  Result := FDocument.MeasurementPath;
+  if FWithholdsFiles and (Result <> '') then
+    Result := API_WITHHELD;
+end;
+
+function TApiServer.WithoutMeasurementPath(const Text: string): string;
+var
+  Path: string;
+begin
+  Result := Text;
+  Path := FDocument.MeasurementPath;
+  if not FWithholdsFiles or (Path = '') then
+    Exit;
+  Result := StringReplace(Result, ExpandFileName(Path), API_WITHHELD, [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, Path, API_WITHHELD, [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, ExtractFileName(Path), API_WITHHELD, [rfReplaceAll, rfIgnoreCase]);
+end;
+
+procedure TApiServer.CheckMeasurementsShared;
+begin
+  if not FSharesMeasurements then
+    raise EApiError.Create(RPC_REFUSED, rsApiMeasurementsWithheld);
 end;
 
 function TApiServer.DoWindowState: TJSONData;
+var
+  State: TJSONObject;
 begin
   if not Assigned(FOnWindowState) then
     raise EApiError.Create(RPC_REFUSED, rsApiNoWindow);
-  Result := FOnWindowState();
+  State := FOnWindowState();
+  if FWithholdsFiles and Assigned(State.Find('file', jtString)) then
+    State.Strings['file'] := ExtractFileName(State.Strings['file']);
+  Result := State;
 end;
 
 // The reason is read first, since cancelling can reload the pattern
@@ -701,15 +774,15 @@ function TApiServer.DocumentInfo: TJSONObject;
 begin
   Result := TJSONObject.Create;
   try
-    Result.Add('path', FDocument.FileName);
-    Result.Add('measurements', FDocument.MeasurementPath);
+    Result.Add('path', ShownPatternPath(FDocument.FileName));
+    Result.Add('measurements', ShownMeasurementPath);
     // Formulas and variable values are in this unit; reported positions and lengths are mm
     Result.Add('units', MEASURE_UNIT_NAMES[FDocument.Pattern.Units]);
     Result.Add('objects', FDocument.Pattern.ObjectCount);
     Result.Add('variables', FDocument.Pattern.VariableCount);
     Result.Add('modified', FDocument.Modified);
     if FDocument.MeasurementError <> '' then
-      Result.Add('measurementError', FDocument.MeasurementError);
+      Result.Add('measurementError', WithoutMeasurementPath(FDocument.MeasurementError));
   except
     FreeAndNil(Result);
     raise;
@@ -933,9 +1006,10 @@ var
   Item: TJSONObject;
   Index: integer;
 begin
+  CheckMeasurementsShared;
   Info := TJSONObject.Create;
   try
-    Info.Add('path', FDocument.MeasurementPath);
+    Info.Add('path', ShownMeasurementPath);
     if Assigned(FDocument.Measurements) and (FDocument.Measurements.SizeCount > 0) then
     begin
       Info.Add('size', FDocument.Measurements.SizeName);
@@ -974,6 +1048,7 @@ var
   Change: TMeasurementChange;
   Info: TJSONObject;
 begin
+  CheckMeasurementsShared;
   Key := RequireString(Params, 'key');
   if not GetJSONNumber(Params, 'value', Value) then
     raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['value']));
@@ -1198,7 +1273,7 @@ begin
       List.Add(Problem);
     Result.Add('blocked', BlockedCount);
     if WithReport then
-      Result.Add('report', PatternReport(FDocument.Pattern, ExtractFileName(FDocument.FileName), ExtractFileName(FDocument.MeasurementPath)));
+      Result.Add('report', PatternReport(FDocument.Pattern, ExtractFileName(FDocument.FileName), ExtractFileName(ShownMeasurementPath)));
   except
     FreeAndNil(Result);
     raise;

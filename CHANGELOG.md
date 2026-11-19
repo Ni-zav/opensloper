@@ -15,6 +15,14 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- Privacy for the Claude tab and any AI assistant connected to the design
+  window: they are never given a folder or the measurement file's name, so
+  nothing sent puts a name to the measurements, and **Let AI assistants read
+  the measurements** in Edit → Preferences → Design keeps the measurement
+  values back. The Claude tab says what is sent before the first question,
+  and the user guide's Asking Claude and Scripting pages have a Privacy
+  section (#60).
+
 - A Problems tab at the foot of the side panel, in the design and publish
   apps, lists every problem in full with the count on its header. Clicking
   one selects the object, piece or note it is about; in the design app

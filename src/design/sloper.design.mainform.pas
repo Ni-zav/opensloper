@@ -561,6 +561,8 @@ begin
   FRulerCorner.MeasureUnit := AUnit;
   FCanvas.SetGrid(FPreferences.GridSteps[AUnit], AUnit);
   FGarment.Light := GarmentLightOf(FPreferences);
+  FAssistant.SharesMeasurements := FPreferences.AssistantMeasurements;
+  FAutomation.SharesMeasurements := FPreferences.AssistantMeasurements;
 end;
 
 procedure TMainForm.PreferencesClick(Sender: TObject);

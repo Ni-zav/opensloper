@@ -61,6 +61,8 @@ type
     procedure TearDown; override;
   published
     procedure TestRequestBody;
+    // Turned off in the preferences, Claude is not offered the measurements
+    procedure TestMeasurementToolsLeftOut;
     procedure TestTextStreams;
     procedure TestToolLoop;
     procedure TestThinkingGoesBackUnchanged;
@@ -289,6 +291,39 @@ begin
     AssertEquals('Hello', Body.Arrays['messages'].Objects[0].Get('content', ''));
   finally
     FreeAndNil(Body);
+  end;
+end;
+
+procedure TTestAssistant.TestMeasurementToolsLeftOut;
+
+  function Offered(Tools: TJSONArray; const AName: string): boolean;
+  var
+    Index: integer;
+  begin
+    for Index := 0 to Tools.Count - 1 do
+      if Tools.Objects[Index].Get('name', '') = AName then
+        Exit(True);
+    Result := False;
+  end;
+
+var
+  Tools: TJSONArray;
+begin
+  Tools := AssistantTools(True);
+  try
+    AssertTrue('shared', Offered(Tools, 'get_measurements'));
+    AssertFalse('the user opens patterns', Offered(Tools, 'open'));
+  finally
+    FreeAndNil(Tools);
+  end;
+  Tools := AssistantTools(False);
+  try
+    AssertFalse('read', Offered(Tools, 'get_measurements'));
+    AssertFalse('written', Offered(Tools, 'set_measurement'));
+    AssertTrue('only keys', Offered(Tools, 'missing_measurements'));
+    AssertTrue('the rest', Offered(Tools, 'add_point'));
+  finally
+    FreeAndNil(Tools);
   end;
 end;
 

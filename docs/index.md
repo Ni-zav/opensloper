@@ -37,7 +37,7 @@ direct way of drawing.
 - [The publish window](publish/index.md): laying out pieces and printing them
   at true size.
 - [Scripting](scripting/index.md): drafting and checking patterns from a
-  program, or with Claude.
+  program, or with an AI assistant such as Claude.
 - [Reference](reference/index.md): formula functions, file formats, keyboard
   shortcuts and the command line.
 

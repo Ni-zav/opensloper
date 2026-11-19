@@ -59,12 +59,34 @@ which certificates it trusts and whether the API answers; it sends no key.
   before writing a file outside the pattern's folder. While you are dragging,
   it waits.
 
-## What is sent
+## Privacy
 
-Your questions, and the parts of the pattern Claude reads to answer them
-(names, formulas, values, notes and, when it looks, a picture of the draft),
-are sent to Anthropic. Text in a pattern someone else made is treated as data,
-not as instructions to Claude.
+Everything you make stays on your computer, except what Claude reads to
+answer you. Your questions, and the parts of the pattern Claude reads (names,
+formulas, values, notes and, when it looks, a picture of the draft), are sent
+to Anthropic. Text in a pattern someone else made is treated as data, not as
+instructions to Claude.
+
+Nothing that could put a name to the measurements is sent:
+
+- **No folders.** The pattern is named by its file name alone, such as
+  `bodice.sloper`, never the folder it is in.
+- **No measurement file name.** Claude is told only that there is a
+  measurement file, never what it is called, so a file named after the person
+  measured does not give them away.
+
+The measurement values themselves are sent when Claude asks for them, so it
+can say which measurement a problem comes from or add a missing one. To keep
+them back, turn off **Let AI assistants read the measurements** in the Design tab of
+**Edit → Preferences**. Claude then cannot read or change them, though it still
+sees the pattern's points and lengths, which are worked out from them. The
+setting applies to any AI assistant connected to the window too (see
+[Privacy](../scripting/index.md#privacy) under Scripting). The Claude tab says
+which way it is set before you ask your first question.
+
+What you type into the pattern is sent as written, so keep people's names out
+of a pattern Claude will read: in notes, piece and variable names, and the
+descriptions in the measurement file.
 
 To have Claude work on the pattern from Claude Code or Claude Desktop instead,
 see [An assistant in the design window](../scripting/index.md#an-assistant-in-the-design-window).

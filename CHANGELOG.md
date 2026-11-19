@@ -55,6 +55,9 @@ Changed, Fixed and Removed under each version.
   was hidden (#53).
 - The Garment tab draws fold lines, such as pleats, as lines on the pieces
   (#55).
+- Developer documentation of the code, made by PasDoc from the comments in
+  the sources with `./opensloper-make.sh devdocs`; it is built locally and
+  not yet published (#47).
 - Pack pieces nests the pieces by their shapes rather than the rectangles
   round them, so a small piece can go in the curve or notch of a larger one,
   at least 10 mm apart; the circle skirt example tiles on 20 A4 pages rather

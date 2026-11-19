@@ -4,7 +4,7 @@
 #   ./opensloper-make.sh COMMAND [OPTIONS]
 #
 # Run ./opensloper-make.sh help for the commands. Toolchain overrides
-# (LAZBUILD, LAZARUS_PCP, LCL_WIDGETSET, JCF_SOURCE) can go in build.local.sh;
+# (LAZBUILD, LAZARUS_PCP, LCL_WIDGETSET, JCF_SOURCE, PASDOC) can go in build.local.sh;
 # see build.local.sh.example. File arguments are relative to the repository
 # root, where every command runs.
 set -euo pipefail
@@ -44,6 +44,9 @@ Commands:
                          also builds the copy the downloads ship into
                          release/site_offline, --reinstall makes the Python
                          venv again
+  devdocs                build the developer documentation of the code with
+                         PasDoc into release/dev_docs (PASDOC names pasdoc
+                         when it is not on PATH); not published or packaged
   package                pack the built apps for this platform into release/dist:
                          the archive and the installer (.deb, .dmg or setup.exe)
   release [VERSION]      print a release's notes: its CHANGELOG.md section, else
@@ -435,6 +438,34 @@ cmd_docs() {
     rm -f .zensical-offline.toml
     echo "Offline copy in release/site_offline"
   fi
+}
+
+# devdocs: the developer documentation of the code, from the comments before
+# each unit and declaration, as HTML in release/dev_docs. Only our own
+# sources under src/ are read, not the submodules. It is not published, nor
+# shipped in the packages; documents/pasdoc-introduction.txt is its first page.
+cmd_devdocs() {
+  local pasdoc="${PASDOC:-pasdoc}" out=release/dev_docs list defines=()
+  if ! command -v "$pasdoc" > /dev/null 2>&1; then
+    echo "devdocs: $pasdoc not found. Build PasDoc from https://github.com/pasdoc/pasdoc" \
+      "(make build-fpc-release) and set PASDOC in build.local.sh to its bin/pasdoc" >&2
+    exit 1
+  fi
+  # The platform's own branches of {$IFDEF} are the ones documented
+  case "$(uname -s)" in
+    Linux) defines=(--define UNIX --define LINUX) ;;
+    Darwin) defines=(--define UNIX --define DARWIN) ;;
+    *) defines=(--define MSWINDOWS --define WINDOWS) ;;
+  esac
+  rm -rf "$out"
+  mkdir -p "$out"
+  list="$out/.sources"
+  source_files | grep '^src/.*\.pas$' > "$list"
+  "$pasdoc" --format html --output "$out" --title "OpenSloper $(app_version)" \
+    --introduction documents/pasdoc-introduction.txt --source "$list" \
+    --define FPC "${defines[@]}" --write-uses-list --verbosity 1
+  rm -f "$list"
+  echo "Developer documentation in $out/index.html"
 }
 
 # package: the apps that build put in release/ for this platform, as
@@ -952,6 +983,7 @@ case "$COMMAND" in
   format) cmd_format "$@" ;;
   pr-check) cmd_pr_check "$@" ;;
   docs) cmd_docs "$@" ;;
+  devdocs) cmd_devdocs "$@" ;;
   package) cmd_package "$@" ;;
   release) cmd_release "$@" ;;
   version) cmd_version "$@" ;;

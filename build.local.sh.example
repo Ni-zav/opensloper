@@ -7,3 +7,6 @@ LAZARUS_PCP="$HOME/Packages/fpc_build/config_lazarus"
 # .github/workflows/ci.yml, so only override this with a source that formats
 # the same way.
 #JCF_SOURCE="$HOME/Packages/fpc_build/lazarus/components/jcf2"
+# PasDoc for opensloper-make.sh devdocs, when it is not on PATH: built from
+# https://github.com/pasdoc/pasdoc with make build-fpc-release
+#PASDOC="$HOME/Packages/pasdoc/bin/pasdoc"

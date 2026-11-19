@@ -39,10 +39,11 @@ git submodule update --init --recursive
 ./opensloper-make.sh check    # rules the formatter cannot check (errors fail, warnings advise)
 ./opensloper-make.sh pr-check # format, check, test and build in turn, stopping at the first failure; lists files format changed
 ./opensloper-make.sh docs     # regenerate docs/reference/ and build the site into release/site_docs (--serve to preview)
+./opensloper-make.sh devdocs  # developer documentation of the code with PasDoc into release/dev_docs (not published or packaged)
 ./venv/bin/python check-schemas.py  # check example and regression files against the file schemas (opensloper-make.sh docs runs it)
 ```
 
-Toolchain overrides (`LAZBUILD`, `LAZARUS_PCP`, `LCL_WIDGETSET`, `JCF_SOURCE`) go in the gitignored `build.local.sh`; see `build.local.sh.example`.
+Toolchain overrides (`LAZBUILD`, `LAZARUS_PCP`, `LCL_WIDGETSET`, `JCF_SOURCE`, `PASDOC`) go in the gitignored `build.local.sh`; see `build.local.sh.example`.
 
 Requires FPC 3.2.0 or later; CI (`.github/workflows/ci.yml`) uses the release Lazarus 4.8 with FPC 3.2.2, and its formatter is the reference. Linux uses the Qt5/Qt6 widgetset; macOS uses Cocoa. Run `opensloper-make.sh test` and `opensloper-make.sh check` before every commit. Pull request rules are in `CONTRIBUTING.md`.
 

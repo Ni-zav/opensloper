@@ -269,6 +269,8 @@ User documentation is Markdown in `docs/`, built into a static site with Zensica
 
 **Folders:** `docs/` is the user documentation; `documents/` is internal development notes, including this document.
 
+**Developer documentation** (issue #47, built 2026-11-19) of the code is made by PasDoc from the comments before each unit and declaration: `opensloper-make.sh devdocs` writes HTML into `release/dev_docs`, from our own units under `src/` (not the submodules), with the platform's `{$IFDEF}` branches, each unit's uses list, and `documents/pasdoc-introduction.txt` (the layers and conventions) as its first page. The comments are written for readers of the source, in the plain `//` style the coding standards ask for, and PasDoc takes them as they are; no PasDoc tags are added to the code. A formula such as `@waist` in a comment reads to PasDoc as an unknown tag, a warning that leaves the text as written. PasDoc is built from source (github.com/pasdoc/pasdoc, `make build-fpc-release`) and found on PATH or through `PASDOC` in `build.local.sh`. The pages are neither published nor shipped in the packages: the plan is to move the user guide to docs.opensloper.com on the project's own server, and then put the developer documentation where GitHub Pages has the user guide now.
+
 ### Translation
 
 Planned for the community release; nothing is translated yet. Already in place: user-visible text is in `resourcestring` sections (`opensloper-make.sh check` reports message text that is not), strings are UTF-8 throughout, and names in formulas and files are stable keys and IDs, kept apart from what is shown.
@@ -1130,7 +1132,7 @@ Agreed, but not built. Each line is meant to become one issue.
 - **Release signing** (Issue #17), for the community release: macOS notarisation, Intel macOS builds and signed Windows programs. The installers and the offline guide are done (see Release builds).
 - **More tutorials**: (Issue #46) moving a dart, a tote bag, a leather card wallet. (The Icons reference page, the issue's last part, was done 2026-11-18.)
 - **Help in the apps.** (Issue #32) F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Help → User Guide already opens the offline copy's front page, with the website as fallback. Translated and versioned documentation wait for the community release.
-- **Developer documentation** (Issue #47) of the units (PasDoc), once someone else needs to read the code.
+- **Publishing the developer documentation** (Issue #47 built it locally, see Documentation) once the user guide has moved to docs.opensloper.com.
 
 **Design app**
 

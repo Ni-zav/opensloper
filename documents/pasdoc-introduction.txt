@@ -1,0 +1,28 @@
+@title(OpenSloper developer documentation)
+@shorttitle(Introduction)
+
+OpenSloper is a parametric sewing pattern drafting application in Lazarus and Free Pascal, under the GPL version 3 or later. These pages are made by PasDoc from the comments before each unit and declaration (@code(./opensloper-make.sh devdocs)). The design and the reasons behind it are in @code(documents/opensloper-design-document.md), and the code style in @code(documents/coding-standards.md).
+
+@section(1 Layers Layers)
+
+Each folder of @code(src/) is a layer, and a unit is named after its folder, as @code(Sloper.Core.Formula) is in @code(src/core/). Which layers each may use is in @code(CLAUDE.md), and @code(./opensloper-make.sh check) holds the @code(uses) clauses to it:
+
+@unorderedList(
+  @item(@bold(Core) (@code(Sloper.Core.*)): geometry, formulas, the pattern model, evaluation, piece building and files. It has no LCL dependency.)
+  @item(@bold(Document) (@code(Sloper.Document.*)): the open pattern, layout or measurement file, its undo and redo commands, and change notifications.)
+  @item(@bold(Output) (@code(Sloper.Output.*)): layouts, PDF, SVG, DXF and Blender export, packing and nesting. It reads computed geometry only.)
+  @item(@bold(API) (@code(Sloper.API.*)): the Automation API (JSON-RPC 2.0), its MCP server, the design window's automation socket and the apps' link. Every edit goes through document commands.)
+  @item(@bold(Assistant) (@code(Sloper.Assistant.*)): the in-app Claude assistant without the LCL: its key file, the streamed response, the HTTPS transport and the tool loop.)
+  @item(@bold(UI) (@code(Sloper.UI.*)): forms, the canvas, tools, snapping and panels, kept thin over the document and core.)
+  @item(@bold(Apps) (@code(Sloper.Design.*), @code(Sloper.Measurements.*), @code(Sloper.Publish.*)): the three programs' main forms.)
+  @item(@bold(CLI) (@code(Sloper.CLI.*)) and @bold(Docs) (@code(Sloper.Docs.*)): @code(opensloper-cli), and the generated pages of the user guide.)
+)
+
+@section(1 Conventions Conventions)
+
+@unorderedList(
+  @item(Internal units are millimetres. Coordinates are x right, y down, as on screen; angles are degrees, 0 pointing right, positive anticlockwise as seen.)
+  @item(Objects are referenced by stable integer IDs, never reused; names are for display. Formulas are stored in ID form and shown with names.)
+  @item(Only definitions are saved and undone; computed geometry is always derived. Every user change is a command with Execute and Undo.)
+  @item(Evaluation failures are states (error, invalid, blocked), never exceptions that reach the UI.)
+)

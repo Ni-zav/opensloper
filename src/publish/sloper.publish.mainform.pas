@@ -420,10 +420,11 @@ begin
   FTabs := TAccordion.Create(Self);
   FTabs.Parent := FColumn;
   FTabs.Align := alClient;
-  FPiecesSide := FTabs.AddSection('pieces', rsTabPieces);
+  // In the order they are used: patterns in, pieces placed, then output
   FPatternsSide := FTabs.AddSection('patterns', rsTabPatterns);
-  FMaterialsSide := FTabs.AddSection(MATERIALS_SECTION, rsTabMaterials);
+  FPiecesSide := FTabs.AddSection('pieces', rsTabPieces);
   FSide := FTabs.AddSection('output', rsTabOutput);
+  FMaterialsSide := FTabs.AddSection(MATERIALS_SECTION, rsTabMaterials);
   FInfoSide := FTabs.AddSection(INFO_SECTION, rsTabInfo);
   FNotesSide := FTabs.AddSection(NOTES_SECTION, rsTabNotes);
   // The preview and its scroll bars share a panel, so the bars stay beside it
@@ -447,10 +448,10 @@ begin
   FPreview.OnZoomAreaChange := @PreviewZoomAreaChange;
   FPreview.OnDragOver := @PreviewDragOver;
   FPreview.OnDragDrop := @PreviewDragDrop;
-  FRowParent := FPiecesSide;
-  BuildPiecesTab;
   FRowParent := FPatternsSide;
   BuildPatternsTab;
+  FRowParent := FPiecesSide;
+  BuildPiecesTab;
   FRowParent := FMaterialsSide;
   BuildMaterialsTab;
   FOutputScroll := ScrollingRows(FSide);

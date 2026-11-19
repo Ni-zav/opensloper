@@ -718,7 +718,13 @@ OpenSloper drafts accessories in fabric and leather (bags, pouches, wallets, hat
 
 **Output for machines** (line types, machine profiles, cutting a piece as it lies, material sheets) is in the publish app (see Cutting machines and material sheets).
 
-**Not included.** Fashion drawing is left to Inkscape and Krita. Hardware sizes (rings, buckles, zips) are entered as variables; the Notions library under Open items would change that.
+**Not included.** Fashion drawing is left to Inkscape and Krita. Hardware sizes (rings, buckles) are entered as variables; the Notions library under Open items would change that. Zips are a feature (below).
+
+### Features
+
+Built 2026-11-19 (issue #63). The **Features** tab of the side panel (`Sloper.UI.FeaturesPanel`, key `features`, between Materials and Claude) applies a sewing detail to the pattern in one step: a list of features, the chosen one's settings, and Apply. The name covers more than notions: zips, buttons and buttonholes, pockets, facings, waistbands, hems. **A feature is not an object.** Apply adds ordinary objects through the pattern's own methods, in one document change (one undo step, refused whole when it touches a locked object), and nothing is saved as a feature; the objects are then the user's to edit as if drawn by hand. This keeps the file format, the evaluator, the reference pages and the API as they are, and lets the Claude tab or the API do the same with the tools they have. Changing a feature's settings later means undoing it, or deleting its objects, and applying it again; a feature kept as one editable object may follow once the first ones show which settings people change. The features are LCL-free in `Sloper.Core.Features`, which the tests drive.
+
+**Zip** (`InsertZip`, `TZipSpec`): along one selected edge of one or more pieces, centred (topstitched) or invisible. It adds `ZipStop` (an along-edge point at the zip's length from the chosen end), splits the edge there (pieces and seams take the parts, `TPattern.FollowSplit`), gives the opening part its own allowance on every piece that uses it, adds a point notch at the stop to each, and for a centred zip a stitch-role offset of the opening inside each piece (`PieceRun` then `AddOffsetRun`, so the side is the piece's whichever way the edge was drawn). Its length starts as `#zip_length`, a variable the first zip adds (200 mm, 20 cm or 8 in, `STARTING_LENGTHS`), so both sides of a seam share one length; the allowance (20 mm) and topstitching distance (7 mm) also start in the pattern's unit. A zip as long as its edge or longer is refused, naming both lengths. When the edge is in a seam with an edge it is not, the status bar says the other side needs a zip too; a mirrored pair cut from one piece needs only one. Lapped and fly-front zips add a piece (an underlap or fly shield) and come next; the rest of the Notions library idea (buttons by Repeat, pockets, facings) fits the same pattern.
 
 ### Garment view
 
@@ -1167,7 +1173,7 @@ Ideas worth keeping that are deliberately outside the roadmap. Each is added onl
 
 | Idea | Notes |
 | --- | --- |
-| Notions library | A catalogue of haberdashery (zips, buttons, hooks and eyes, snaps, eyelets, elastic), placed on a pattern like KiCad footprints: markings on the seam (zip stops, button and buttonhole positions via Repeat), rules (buttonhole = button diameter + thickness; warn if a zip is longer than its opening), and an automatic notions list for the title block via live fields |
+| Notions library | More features for the Features tab (zips are the first, see Features): a catalogue of haberdashery (buttons, hooks and eyes, snaps, eyelets, elastic), placed on a pattern like KiCad footprints: markings on the seam (zip stops, button and buttonhole positions via Repeat), rules (buttonhole = button diameter + thickness; warn if a zip is longer than its opening), and an automatic notions list for the title block via live fields |
 | Multi-size output | Nested sizes on one sheet, for published patterns. Paper patterns needed it to serve every size from one print; parametric drafting makes the exact size instead. It would mean evaluating the pattern once per size and drawing the results together, with a screen-only size overlay for checking grading |
 | Scaled body figure | The measurements app's figure scaled to the entered values, so unusual proportions and likely typos stand out |
 | ISO 8559-1 check | Check catalogue definitions against the standard and add clause references, if the project gains traction |

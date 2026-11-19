@@ -38,6 +38,7 @@ nav = [
     "design/formulas.md",
     "design/pieces.md",
     "design/garment.md",
+    "design/features.md",
     "design/notes.md",
     "design/claude.md",
   ] },

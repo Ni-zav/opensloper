@@ -55,6 +55,12 @@ Changed, Fixed and Removed under each version.
   was hidden (#53).
 - The Garment tab draws fold lines, such as pleats, as lines on the pieces
   (#55).
+- A Features tab in the design app's side panel adds sewing details in one
+  step. Its first is a zip along a piece's edge: Apply adds the stop point,
+  splits the edge there, widens the opening's allowance, notches the stop and,
+  for a centred zip, adds the topstitching, as ordinary objects that one Undo
+  takes off. Its length is the `#zip_length` variable, so zips can share it
+  (#63).
 - Developer documentation of the code, made by PasDoc from the comments in
   the sources with `./opensloper-make.sh devdocs`; it is built locally and
   not yet published (#47).

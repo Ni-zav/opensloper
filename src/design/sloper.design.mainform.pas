@@ -30,7 +30,8 @@ uses
   Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties, Sloper.UI.SuggestionGrade,
   Sloper.UI.ListPanel, Sloper.UI.ObjectsPanel, Sloper.UI.VariablesPanel,
   Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
-  Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.Core.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
+  Sloper.UI.MaterialPanel, Sloper.UI.FeaturesPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.Core.IconSet,
+  Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
   Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.SideTabs, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
   Sloper.UI.GarmentPanel, Sloper.UI.ProblemsPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
 
@@ -127,6 +128,7 @@ type
     FSideSplitter: TSplitter;
     FCanvasPanel: TPanel;
     FMaterials: TMaterialsPanel;
+    FFeatures: TFeaturesPanel;
     FRoles: TRolesPanel;
     FCanvasHorzBar, FCanvasVertBar: TScrollBar;
     FObjects: TObjectsPanel;
@@ -332,6 +334,7 @@ resourcestring
   rsMenuViewFit = '&Fit Pattern';
   rsMenuViewTrueSize = '&True Size';
   rsTabMaterials = 'Materials';
+  rsTabFeatures = 'Features';
   rsTabClaude = 'Claude';
   rsTabProblems = 'Problems';
   rsTabProblemsCount = 'Problems (%d)';
@@ -647,6 +650,9 @@ begin
   FMaterials.Document := FDocument;
   FMaterials.OnMessage := @ListPanelMessage;
   FMaterials.OnEdit := @MaterialsEditClick;
+  FFeatures := TFeaturesPanel(AddSection('features', rsTabFeatures, aiFeaturesTab, TFeaturesPanel.Create(Self)));
+  FFeatures.Document := FDocument;
+  FFeatures.OnMessage := @ListPanelMessage;
   FAssistant := TAssistantPanel(AddSection(CLAUDE_SECTION, rsTabClaude, aiClaudeTab, TAssistantPanel.Create(Self)));
   FAssistant.Document := FDocument;
   FAssistant.WindowState := @UIStateJSON;
@@ -1536,6 +1542,7 @@ begin
   FObjects.ShowSelection(FCanvas.Selection);
   FProperties.ShowSelection(FCanvas.Selection);
   FGarment.ShowSelection(FCanvas.Selection);
+  FFeatures.ShowSelection(FCanvas.Selection);
   UpdateMenus;
 end;
 
@@ -1551,6 +1558,7 @@ begin
   FAssistant.Document := nil;
   FCanvas.Document := nil;
   FMaterials.Document := nil;
+  FFeatures.Document := nil;
   FGarment.Document := nil;
   FProperties.Document := nil;
   FObjects.Document := nil;

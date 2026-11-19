@@ -27,6 +27,7 @@ points and edges placed by formulas, then closed outlines become pieces.
     | Measurements | The measurement file's values, with a slider to try a size up or down |
     | Lines | Which kinds of line are shown |
     | Materials | The materials pieces are cut from |
+    | Features | Sewing details to add in one step, such as a zip, see [The Features tab](features.md) |
     | Claude | Ask Claude to change the pattern, see [Asking Claude](claude.md) |
     | Problems | Every problem in full; click one to show what it is about, see [When something goes wrong](formulas.md#when-something-goes-wrong) |
 

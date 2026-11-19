@@ -30,7 +30,7 @@ type
 
   // Lengths a new object starts with
   TStartingLength = (slPieceAllowance, slSeamTolerance, slArcRadius, slOffsetDistance, slCornerRadius, slStitchSpacing,
-    slStitchSize, slHoleSize, slButtonSize, slMatchSize);
+    slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch);
 
 const
   MEASURE_UNIT_NAMES: array[TMeasureUnit] of string = ('mm', 'cm', 'in');
@@ -49,7 +49,10 @@ const
     ('1', '0.1', '0.04'),     // stitch hole size
     ('4', '0.4', '0.125'),    // hole marker
     ('15', '1.5', '0.625'),   // button marker
-    ('3', '0.3', '0.125'));   // match dot
+    ('3', '0.3', '0.125'),    // match dot
+    ('200', '20', '8'),       // zip length
+    ('20', '2', '0.75'),      // allowance along a zip
+    ('7', '0.7', '0.25'));    // zip topstitching from the seam
 
 // The unit with this name (mm, cm or in, any case)
 function MeasureUnitFromName(const AName: string; out AUnit: TMeasureUnit): boolean;

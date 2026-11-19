@@ -337,6 +337,11 @@
         <UnitName Value="Sloper.UI.MaterialPanel"/>
       </Unit>
       <Unit>
+        <Filename Value="../ui/sloper.ui.featurespanel.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.UI.FeaturesPanel"/>
+      </Unit>
+      <Unit>
         <Filename Value="../ui/sloper.ui.materialgrid.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.UI.MaterialGrid"/>

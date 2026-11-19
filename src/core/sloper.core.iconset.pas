@@ -57,7 +57,7 @@ type
     aiDependents,
     // The side panel's tabs, those the commands above do not already give
     aiPropertiesTab, aiObjectsTab, aiGarmentTab, aiVariablesTab, aiLinesTab, aiMaterialsTab,
-    aiPatternsTab, aiPiecesTab, aiInfoTab, aiClaudeTab);
+    aiPatternsTab, aiPiecesTab, aiInfoTab, aiClaudeTab, aiFeaturesTab);
 
 const
   APP_ICON_NAMES: array[TAppIcon] of string = ('file-plus', 'folder-open', 'device-floppy', 'file-pencil',
@@ -78,7 +78,7 @@ const
     'arrow-narrow-right', 'arrow-narrow-left',
     'alert-triangle', 'sitemap',
     'adjustments-horizontal', 'list-tree', 'shirt', 'variable', 'brush', 'texture',
-    'files', 'puzzle', 'id-badge', 'message-question');
+    'files', 'puzzle', 'id-badge', 'message-question', 'components');
 
 type
   // Where a command's icon shows: on the toolbar along the top, on the design
@@ -253,6 +253,7 @@ resourcestring
   rsIconTabMeasurements = 'Measurements';
   rsIconTabLines = 'Lines';
   rsIconTabMaterials = 'Materials';
+  rsIconTabFeatures = 'Features';
   rsIconTabClaude = 'Claude';
   rsIconTabProblems = 'Problems';
   rsIconTabPatterns = 'Patterns';
@@ -267,6 +268,7 @@ resourcestring
   rsIconTabMeasurementsText = 'The measurements the pattern reads, from its measurement file';
   rsIconTabLinesText = 'Which kinds of line are shown';
   rsIconTabMaterialsText = 'The materials pieces are cut from';
+  rsIconTabFeaturesText = 'Sewing details to apply in one step, such as a zip along a piece''s edge';
   rsIconTabClaudeText = 'Ask Claude about the pattern, or to change it';
   rsIconTabProblemsText = 'Every problem in the pattern; choose one to select what it is about';
   rsIconTabPatternsText = 'The patterns the layout is made from';
@@ -441,6 +443,7 @@ begin
   Add(aiMeasurements, rsIconTabMeasurements, rsIconTabMeasurementsText);
   Add(aiLinesTab, rsIconTabLines, rsIconTabLinesText);
   Add(aiMaterialsTab, rsIconTabMaterials, rsIconTabMaterialsText);
+  Add(aiFeaturesTab, rsIconTabFeatures, rsIconTabFeaturesText);
   Add(aiClaudeTab, rsIconTabClaude, rsIconTabClaudeText);
   Add(aiProblems, rsIconTabProblems, rsIconTabProblemsText);
 

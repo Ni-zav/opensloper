@@ -13,6 +13,26 @@ Changed, Fixed and Removed under each version.
 
 ## 0.5.0
 
+### Added
+
+- Formula suggestions for a free point's x or y now offer another point's
+  coordinate (`B.x`) and the point halfway between two points
+  (`(B.x + C.x)/2`), the ends of an edge first.
+- While the suggestion list is open, a point can be dragged along a field
+  that holds a formula: the drag puts a plain number in its place, in the
+  same undo step, so moving the point finds a better formula.
+- An Icons page in the user guide's reference lists every command each app
+  shows an icon for, with its menu, keys and what it does (#46).
+- The Drawing page shows how to bisect a corner with an offset point.
+
+### Changed
+
+- Move Copy starts with the copies just right of the originals, rather than
+  hidden on top of them, and after any transform the canvas brings the
+  originals and copies into view (#49).
+- The publish app's side panel is in the order it is used: Patterns,
+  Pieces, Output, then Materials, Info and Notes.
+
 ## 0.4.0
 
 ### Added

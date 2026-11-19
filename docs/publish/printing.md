@@ -68,8 +68,8 @@ Two tabs set what prints besides the pieces.
   it on screen, so it is easy to find; click it to show its details on the
   Notes tab, and **Delete note** to remove it. Notes can fill in fields as
   they print: `{pattern.name}`,
-  `{measurements.name}`, `{date}`, `{page}`, `{pages}`, `{cutlist}`,
-  `{materials}` and `{materialneeded}`. Each has its own size, line alignment, white box, font, and
+  `{measurements.name}`, `{size}`, `{date}`, `{page}`, `{pages}`,
+  `{cutlist}`, `{materials}` and `{materialneeded}`. Each has its own size, line alignment, white box, font, and
   bold or italic, as notes on the pattern do (see
   [Notes and callouts](../design/notes.md#fonts)).
 

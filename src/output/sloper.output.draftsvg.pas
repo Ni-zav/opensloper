@@ -464,7 +464,8 @@ begin
     begin
       DraftObject := Pattern.Objects[Index];
       if (DraftObject is TNoteObject) and Shown(DraftObject) and TNoteObject(DraftObject).Print then
-        Result := Result + NoteElement(TNoteObject(DraftObject), PatternFieldValues(Pattern, Options.PatternFileName));
+        Result := Result + NoteElement(TNoteObject(DraftObject), NoteFieldValues(Pattern, TNoteObject(DraftObject),
+          PatternFieldValues(Pattern, Options.PatternFileName)));
     end;
   Result := Result + '</svg>' + #10;
 end;

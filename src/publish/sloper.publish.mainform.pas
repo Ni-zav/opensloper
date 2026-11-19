@@ -293,7 +293,7 @@ resourcestring
   rsNoteItalic = 'Italic';
   rsAddNote = 'Add note';
   rsDeleteNote = 'Delete note';
-  rsNoteHelp = 'Fields: {pattern.name} {measurements.name} {date} {page} {pages} {cutlist} {materials} {materialneeded}';
+  rsNoteHelp = 'Fields: {pattern.name} {measurements.name} {size} {date} {page} {pages} {cutlist} {materials} {materialneeded}';
   rsNewNote = 'New note';
   rsChangeTitle = 'Change title block';
   rsChangeNote = 'Change note';

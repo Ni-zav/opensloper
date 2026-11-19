@@ -433,7 +433,7 @@ begin
     DraftObject := Pattern.Objects[Index];
     if not (DraftObject is TNoteObject) or not DraftObject.HasResult or not Pattern.IsActive(DraftObject) then
       Continue;
-    Box := NoteFrame(TNoteObject(DraftObject), Values);
+    Box := NoteFrame(TNoteObject(DraftObject), NoteFieldValues(Pattern, TNoteObject(DraftObject), Values));
     if (At.X >= Box.MinX - Margin) and (At.X <= Box.MaxX + Margin) and (At.Y >= Box.MinY - Margin) and (At.Y <= Box.MaxY + Margin) then
       Insert(DraftObject.Key, Result, Length(Result));
   end;

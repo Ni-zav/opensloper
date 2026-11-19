@@ -24,6 +24,10 @@ Changed, Fixed and Removed under each version.
 - An Icons page in the user guide's reference lists every command each app
   shows an icon for, with its menu, keys and what it does (#46).
 - The Drawing page shows how to bisect a corner with an offset point.
+- Piece and size fields in note text (#50): a note that prints with a piece
+  can show `{piece.name}`, `{piece.cut}` ("cut 2 on fold") and
+  `{piece.material}`, and any note or sheet note the size chosen from a size
+  table, `{size}`, so a note can be a piece label of your own.
 
 ### Changed
 

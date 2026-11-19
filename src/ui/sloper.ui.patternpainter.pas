@@ -88,7 +88,7 @@ type
     procedure DrawGrid(Step: double; GridUnit: TMeasureUnit);
     // Pieces under edges, edges under points, with seams and markers
     procedure DrawPattern;
-    procedure DrawNotes(const Values: TFieldValues);
+    procedure DrawNotes(const PatternValues: TFieldValues);
     // Over the rest, so no edge or point crosses out a label
     procedure DrawLabels(const Keys: TStringArray);
     // Each selected curve's handles; the one at HoverField of curve HoverEdge is larger
@@ -752,8 +752,9 @@ end;
 
 // Over the pattern, at their true size for the zoom. A selected note shows a
 // faint line to what it hangs from, and a hovered one a halo.
-procedure TPatternPainter.DrawNotes(const Values: TFieldValues);
+procedure TPatternPainter.DrawNotes(const PatternValues: TFieldValues);
 var
+  Values: TFieldValues;
   Index, LineIndex: integer;
   Note: TNoteObject;
   Lines: TStringArray;
@@ -774,6 +775,7 @@ begin
       Continue;
     Note := TNoteObject(FPattern.Objects[Index]);
     Selected := IsSelected(Note.Key);
+    Values := NoteFieldValues(FPattern, Note, PatternValues);
     Box := NoteBox(Note, Values);
     Frame := NoteFrame(Note, Values);
     TopLeft := FState.View.ToScreen(Vec2(Box.MinX, Box.MinY));

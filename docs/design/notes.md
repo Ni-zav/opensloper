@@ -70,8 +70,23 @@ works out to. A formula that fails blocks the note until it is fixed, and
 renaming what it reads changes the text to match.
 
 A few names in braces are filled in when the pattern is printed:
-`{pattern.name}`, `{measurements.name}`, `{date}`, `{cutlist}` and
-`{materials}`.
+`{pattern.name}`, `{measurements.name}`, `{size}` (the size chosen from a
+size table), `{date}`, `{cutlist}` and `{materials}`.
+
+A note that prints with a piece (see below) can also name the piece, which
+makes a label of your own:
+
+```
+{piece.name}
+{piece.cut}, {piece.material}
+Size {size}
+```
+
+prints as "Front", "cut 2 on fold, Main" and "Size 38". Each copy in a layout
+fills in its own piece, and a piece opened out at the fold prints its cut
+without "on fold". A note that prints with no piece, or with more than one,
+keeps the piece fields as typed. To print only your own label, leave labels
+out in the publish app's output profile.
 
 ## Showing and printing
 

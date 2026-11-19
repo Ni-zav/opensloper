@@ -594,7 +594,7 @@ function TLayout.FieldValues(const APage, APages: string): TFieldValues;
 var
   Source: TLayoutSource;
   SetName: string;
-  MeasurementNames, MaterialNames: TStringArray;
+  MeasurementNames, MaterialNames, SizeNames: TStringArray;
   Index: integer;
 
 // Each name once, compared whole, so Jo is not taken for Joanne
@@ -611,6 +611,7 @@ var
 begin
   MeasurementNames := nil;
   MaterialNames := nil;
+  SizeNames := nil;
   Result := Default(TFieldValues);
   Result.LayoutName := Name;
   Result.Page := APage;
@@ -631,6 +632,8 @@ begin
     if Assigned(Source.Measurements) and (Source.Measurements.SizeName <> '') then
       SetName := Format(rsLayoutSetAndSize, [SetName, Source.Measurements.SizeName]);
     AddOnce(SetName, MeasurementNames, Result.MeasurementsName);
+    if Assigned(Source.Measurements) then
+      AddOnce(Source.Measurements.SizeName, SizeNames, Result.Size);
     if not Assigned(Source.Pattern) then
       Continue;
     if (Result.CutList <> '') and (Source.Pattern.CutList <> '') then
@@ -1319,9 +1322,10 @@ end;
 
 // Only what the output profile includes; with its allowance none, the seam
 // line is the cutting line, so every export, overlap check and packing agrees
-// Notes are placed upright, centred where their text's middle goes
+// Notes are placed upright, centred where their text's middle goes, with
+// the fields in Values (the piece's own and its size) filled in
 function PlaceShape(Piece: TPieceObject; const Placement: TPlacement; Whole: boolean; const Profile: TOutputProfile;
-  const Notes: TNoteObjectArray = nil): TPlacedPiece;
+  const Notes: TNoteObjectArray; const Values: TFieldValues): TPlacedPiece;
 var
   Offset: TVec2;
   Opened, Mirroring: boolean;
@@ -1539,10 +1543,10 @@ begin
   for Note in Notes do
     if Note.HasResult then
     begin
-      Box := NoteBox(Note, Default(TFieldValues));
+      Box := NoteBox(Note, Values);
       Point := Moved(Vec2((Box.MinX + Box.MaxX) / 2, (Box.MinY + Box.MaxY) / 2));
       Placed := Default(TSheetNote);
-      Placed.Text := Note.ShownText;
+      Placed.Text := ExpandFields(Note.ShownText, Values);
       Placed.Size := Note.Size;
       Placed.X := Point.X - (Box.MaxX - Box.MinX) / 2;
       Placed.Y := Point.Y - (Box.MaxY - Box.MinY) / 2;
@@ -1593,7 +1597,7 @@ begin
   begin
     if not NewPlacement(Item, Placement, Piece) then
       Continue;
-    Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile);
+    Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile, nil, Default(TFieldValues));
     if (RowX > 0) and (RowX + Shape.Bounds.MaxX - Shape.Bounds.MinX > RowLimit) then
     begin
       RowX := 0;
@@ -1623,7 +1627,7 @@ var
 begin
   if not NewPlacement(Item, Placement, Piece) then
     Exit(-1);
-  Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile);
+  Shape := PlaceShape(Piece, Placement, OpensFolds, ActiveOutputProfile, nil, Default(TFieldValues));
   Placement.X := Max(0, Round((At.X - (Shape.Bounds.MaxX - Shape.Bounds.MinX) / 2) / Step) * Step);
   Placement.Y := Max(0, Round((At.Y - (Shape.Bounds.MaxY - Shape.Bounds.MinY) / 2) / Step) * Step);
   SetLength(Placements, Length(Placements) + 1);
@@ -1642,6 +1646,7 @@ var
   Source: TLayoutSource;
   Piece: TPieceObject;
   Profile: TOutputProfile;
+  Values: TFieldValues;
 begin
   Profile := ActiveOutputProfile;
   Result := nil;
@@ -1650,7 +1655,11 @@ begin
   for Index := 0 to High(Placements) do
     if FindPiece(Placements[Index], Source, Piece) and Piece.HasResult and (Length(Piece.CutLine) > 0) and InMaterial(Source, Piece) then
     begin
-      Result[Count] := PlaceShape(Piece, Placements[Index], OpensFolds, Profile, Source.Pattern.PieceNotes(Piece));
+      Values := Default(TFieldValues);
+      if Assigned(Source.Measurements) then
+        Values.Size := Source.Measurements.SizeName;
+      Values := PieceFieldValues(Source.Pattern, Piece, Values, OpensFolds);
+      Result[Count] := PlaceShape(Piece, Placements[Index], OpensFolds, Profile, Source.Pattern.PieceNotes(Piece), Values);
       Result[Count].Placement := Index;
       Result[Count].Caption := Source.Pattern.PieceCaption(Piece, OpensFolds);
       Result[Count].Look := Source.Pattern.PieceLook(Piece);

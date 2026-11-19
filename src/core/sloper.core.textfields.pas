@@ -28,7 +28,7 @@ unit Sloper.Core.TextFields;
 interface
 
 uses
-  SysUtils, Sloper.Core.Geometry, Sloper.Core.Pattern, Sloper.Core.Note;
+  SysUtils, Sloper.Core.Geometry, Sloper.Core.Pattern, Sloper.Core.Note, Sloper.Core.Piece, Sloper.Core.Materials;
 
 const
   // The fields a title block can show; also usable as {pattern.name} in text
@@ -40,6 +40,12 @@ const
   FIELD_MATERIALS = 'materials';
   // Filled in by layouts only, from the material needed
   FIELD_MATERIAL_NEEDED = 'materialneeded';
+  // The size chosen from a size table
+  FIELD_SIZE = 'size';
+  // Filled in for a note on one piece: its name, how to cut it and its material
+  FIELD_PIECE_NAME = 'piece.name';
+  FIELD_PIECE_CUT = 'piece.cut';
+  FIELD_PIECE_MATERIAL = 'piece.material';
   POINTS_TO_MM = 25.4 / 72;
 
 type
@@ -49,7 +55,8 @@ type
 
   // What fields stand for in text; an empty value leaves the field as typed
   TFieldValues = record
-    PatternName, MeasurementsName, LayoutName, Date, Page, Pages, CutList, Materials, MaterialNeeded: string;
+    PatternName, MeasurementsName, LayoutName, Date, Page, Pages, CutList, Materials, MaterialNeeded, Size: string;
+    PieceName, PieceCut, PieceMaterial: string;
   end;
 
 // Text with its known {fields} filled in
@@ -70,6 +77,11 @@ function FieldDateText: string;
 // (empty when it has none), its measurement set and size, today's date, its
 // cut list and materials. Page and pages are left as typed.
 function PatternFieldValues(Pattern: TPattern; const PatternFileName: string): TFieldValues;
+// Values with the piece fields of Piece added; Whole as for its cut caption
+function PieceFieldValues(Pattern: TPattern; Piece: TPieceObject; const Values: TFieldValues; Whole: boolean = False): TFieldValues;
+// Values with the piece fields added when the note prints with one piece
+// only; on none or several they are left as typed
+function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues): TFieldValues;
 // The rough area a note's text covers, in mm, from its top left down
 function NoteBox(Note: TNoteObject; const Values: TFieldValues): TRect2;
 // What a note draws round its text: the white box when it has one, or just
@@ -107,6 +119,10 @@ begin
   Fill(FIELD_CUT_LIST, Values.CutList);
   Fill(FIELD_MATERIALS, Values.Materials);
   Fill(FIELD_MATERIAL_NEEDED, Values.MaterialNeeded);
+  Fill(FIELD_SIZE, Values.Size);
+  Fill(FIELD_PIECE_NAME, Values.PieceName);
+  Fill(FIELD_PIECE_CUT, Values.PieceCut);
+  Fill(FIELD_PIECE_MATERIAL, Values.PieceMaterial);
 end;
 
 function TextLines(const Text: string): TStringArray;
@@ -168,10 +184,36 @@ begin
     Result.MeasurementsName := Pattern.Measurements.Name;
     if Pattern.Measurements.SizeName <> '' then
       Result.MeasurementsName := Trim(Result.MeasurementsName + ' ' + Pattern.Measurements.SizeName);
+    Result.Size := Pattern.Measurements.SizeName;
   end;
   Result.Date := FieldDateText;
   Result.CutList := Pattern.CutList;
   Result.Materials := Pattern.MaterialNames;
+end;
+
+function PieceFieldValues(Pattern: TPattern; Piece: TPieceObject; const Values: TFieldValues; Whole: boolean): TFieldValues;
+var
+  Material: TPatternMaterial;
+begin
+  Result := Values;
+  Result.PieceName := Piece.DisplayName;
+  Result.PieceCut := Piece.CutText(Whole);
+  Material := Pattern.MaterialOf(Piece);
+  if Assigned(Material) then
+    Result.PieceMaterial := Material.Name;
+end;
+
+function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFieldValues): TFieldValues;
+var
+  Pieces: TPieceObjectArray;
+begin
+  Result := Values;
+  // Finding the piece costs more than filling in the text, so only when asked
+  if Pos('{piece.', Note.ShownText) = 0 then
+    Exit;
+  Pieces := Pattern.NotePieces(Note);
+  if Length(Pieces) = 1 then
+    Result := PieceFieldValues(Pattern, Pieces[0], Values);
 end;
 
 function NoteBox(Note: TNoteObject; const Values: TFieldValues): TRect2;

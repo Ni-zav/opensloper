@@ -206,6 +206,8 @@ type
     // The name with how to cut it: "Front, cut 2 mirrored"
     // Whole leaves out "on fold", for a piece opened out to cut flat
     function CutCaption(Whole: boolean = False): string;
+    // How to cut it, without the name: "cut 2 mirrored"
+    function CutText(Whole: boolean = False): string;
     property Path: TPiecePath read FPath;
     // Last good seam line, closed without repeating its first point
     property Outline: TVec2Array read FOutline;
@@ -261,9 +263,11 @@ resourcestring
   rsPieceStitchSpacing = 'Stitch holes need a spacing above 0';
   rsPieceNotchOffPiece = 'The notch at %s is not on the seam line';
   rsPieceNotchPastEnd = 'The notch at %s mm is off %s (%s mm long)';
-  rsPieceCaption = '%s, cut %d';
-  rsPieceCaptionMirrored = '%s, cut %d mirrored';
-  rsPieceCaptionFold = '%s, cut %d on fold';
+  // The piece's name, then how to cut it
+  rsPieceCaption = '%s, %s';
+  rsPieceCut = 'cut %d';
+  rsPieceCutMirrored = 'cut %d mirrored';
+  rsPieceCutFold = 'cut %d on fold';
 
 implementation
 
@@ -909,12 +913,17 @@ end;
 
 function TPieceObject.CutCaption(Whole: boolean): string;
 begin
+  Result := Format(rsPieceCaption, [DisplayName, CutText(Whole)]);
+end;
+
+function TPieceObject.CutText(Whole: boolean): string;
+begin
   if OnFold and not Whole then
-    Result := Format(rsPieceCaptionFold, [DisplayName, FCutCount])
+    Result := Format(rsPieceCutFold, [FCutCount])
   else if FMirrored and (FCutCount > 1) then
-    Result := Format(rsPieceCaptionMirrored, [DisplayName, FCutCount])
+    Result := Format(rsPieceCutMirrored, [FCutCount])
   else
-    Result := Format(rsPieceCaption, [DisplayName, FCutCount]);
+    Result := Format(rsPieceCut, [FCutCount]);
 end;
 
 function TPieceObject.FoldArrow: TLine2Array;

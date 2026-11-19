@@ -77,6 +77,9 @@ type
     procedure TestPlacementStaysAtTopLeft;
     procedure TestRotationHalfTurn;
     procedure TestPatternNotesPrintWithPiece;
+    procedure TestPieceFieldsInPieceNotes;
+    procedure TestPieceFieldsNeedOnePiece;
+    procedure TestSizeFieldInPieceNotes;
     procedure TestPatternNotesStayUpright;
     procedure TestPatternNotesInPDFAndSVG;
     procedure TestCalloutPrintsItsLeader;
@@ -799,6 +802,76 @@ begin
 end;
 
 // The text's middle turns with the piece; the text itself stays upright
+procedure TTestLayout.TestPieceFieldsInPieceNotes;
+var
+  Pattern: TPattern;
+  Reason: string;
+  Shapes: TPlacedPieceArray;
+begin
+  WritePattern(2, True);
+  Pattern := TPattern.Create;
+  try
+    AssertTrue(Reason, LoadPatternFromFile(Pattern, FPatternPath, Reason));
+    AssertNotNull(Pattern.AddNote('', '{piece.name}: {piece.cut}, {piece.material}', naPiece, Pattern.FindObject('Front').Key, '', '0', '0'));
+    AssertTrue(Reason, SavePatternToFile(Pattern, FPatternPath, Reason));
+  finally
+    FreeAndNil(Pattern);
+  end;
+  Prepare;
+  FLayout.PlaceNewPieces;
+  Shapes := FLayout.PlacedPieces;
+  AssertEquals('each copy', 2, Length(Shapes));
+  AssertEquals('Front: cut 2 mirrored, Main', Shapes[0].Notes[0].Text);
+  AssertEquals('Front: cut 2 mirrored, Main', Shapes[1].Notes[0].Text);
+end;
+
+procedure TTestLayout.TestPieceFieldsNeedOnePiece;
+var
+  Pattern: TPattern;
+  Reason: string;
+  Note: TNoteObject;
+  Values: TFieldValues;
+begin
+  WritePattern;
+  Pattern := TPattern.Create;
+  try
+    AssertTrue(Reason, LoadPatternFromFile(Pattern, FPatternPath, Reason));
+    Note := Pattern.AddNote('', '{piece.name} {piece.cut}', naPiece, Pattern.FindObject('Front').Key, '', '0', '0');
+    Pattern.Evaluate;
+    Values := NoteFieldValues(Pattern, Note, Default(TFieldValues));
+    AssertEquals('on the piece', 'Front cut 1', ExpandFields(Note.ShownText, Values));
+    Note := Pattern.AddNote('', '{piece.name}', naFree, '', '', '500', '500');
+    Pattern.Evaluate;
+    Values := NoteFieldValues(Pattern, Note, Default(TFieldValues));
+    AssertEquals('on no piece, as typed', '{piece.name}', ExpandFields(Note.ShownText, Values));
+  finally
+    FreeAndNil(Pattern);
+  end;
+end;
+
+procedure TTestLayout.TestSizeFieldInPieceNotes;
+var
+  Pattern: TPattern;
+  Reason: string;
+  Shapes: TPlacedPieceArray;
+begin
+  WriteSizedPattern('120');
+  Pattern := TPattern.Create;
+  try
+    AssertTrue(Reason, LoadPatternFromFile(Pattern, FPatternPath, Reason));
+    AssertNotNull(Pattern.AddNote('', 'Size {size}', naPiece, Pattern.FindObject('Front').Key, '', '0', '0'));
+    AssertTrue(Reason, SavePatternToFile(Pattern, FPatternPath, Reason));
+  finally
+    FreeAndNil(Pattern);
+  end;
+  FLayout.AddSource('front.sloper', 'sizes.slm', '38');
+  FLayout.LoadSources;
+  FLayout.PlaceNewPieces;
+  Shapes := FLayout.PlacedPieces;
+  AssertEquals('Size 38', Shapes[0].Notes[0].Text);
+  AssertEquals('the layout''s sizes', '38', FLayout.FieldValues('', '').Size);
+end;
+
 procedure TTestLayout.TestPatternNotesStayUpright;
 var
   Shapes: TPlacedPieceArray;
@@ -2126,6 +2199,11 @@ begin
   Values.PatternName := 'Skirt';
   Values.Date := '2026-10-31';
   AssertEquals('Skirt, 2026-10-31', ExpandFields('{pattern.name}, {date}', Values));
+  Values.Size := '38';
+  Values.PieceName := 'Front';
+  Values.PieceCut := 'cut 2';
+  Values.PieceMaterial := 'Main';
+  AssertEquals('Front, cut 2, Main, 38', ExpandFields('{piece.name}, {piece.cut}, {piece.material}, {size}', Values));
   AssertEquals('empty stays as typed', '{page}', ExpandFields('{page}', Values));
   AssertEquals('unknown stays', '{other}', ExpandFields('{other}', Values));
 end;

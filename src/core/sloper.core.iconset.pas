@@ -52,7 +52,9 @@ type
     // Stepping through the objects
     aiSelectNext, aiSelectPrevious,
     // The problems drawn on the canvas
-    aiProblems);
+    aiProblems,
+    // Dependency arrows to what reads an object
+    aiDependents);
 
 const
   APP_ICON_NAMES: array[TAppIcon] of string = ('file-plus', 'folder-open', 'device-floppy', 'file-pencil',
@@ -71,7 +73,7 @@ const
     'eye-off', 'eye', 'focus-2', 'stack-front', 'stack-back', 'lock', 'lock-open',
     'wand',
     'arrow-narrow-right', 'arrow-narrow-left',
-    'alert-triangle');
+    'alert-triangle', 'sitemap');
 
 type
   // Where a command's icon shows: on the toolbar along the top, on the design
@@ -154,6 +156,7 @@ resourcestring
   rsIconBringToFront = 'Bring to Front';
   rsIconSendToBack = 'Send to Back';
   rsIconProblems = 'Problems';
+  rsIconDependents = 'Dependents';
   rsIconSelect = 'Select';
   rsIconZoom = 'Zoom';
   rsIconPoint = 'Point';
@@ -239,6 +242,7 @@ resourcestring
   rsIconBringToFrontText = 'Draw the selected pieces over the others';
   rsIconSendToBackText = 'Draw the selected pieces under the others';
   rsIconProblemsText = 'Mark the objects with problems on the canvas; pointing at one says what is wrong';
+  rsIconDependentsText = 'Arrows from the hovered or selected object also go to what reads it, not only to what it reads';
   rsIconSelectText = 'Select points, edges and pieces; drag to move points';
   rsIconZoomText = 'Zoom in a step; Shift and click zooms out, and dragging a box zooms to it';
   rsIconPointText = 'Add a point';
@@ -422,6 +426,7 @@ begin
   Add(aiBringToFront, rsIconBringToFront, rsIconBringToFrontText);
   Add(aiSendToBack, rsIconSendToBack, rsIconSendToBackText);
   Add(aiProblems, rsIconProblems, rsIconProblemsText);
+  Add(aiDependents, rsIconDependents, rsIconDependentsText);
   // On the menu only, as on the toolbar they would look like the Line and
   // Curve tools and the two offsets
   Menu := rsIconMenuToolsEdge;

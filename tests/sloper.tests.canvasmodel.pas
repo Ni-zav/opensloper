@@ -96,6 +96,9 @@ type
     procedure TestHiddenRoleNotPicked;
     procedure TestHiddenRoleNotSnappedTo;
     procedure TestCopyLinks;
+    procedure TestDependencyLinksToInputs;
+    procedure TestDependencyLinksToDependents;
+    procedure TestDependencyLinksLargeSelection;
   end;
 
 implementation
@@ -938,6 +941,69 @@ end;
 
 // A copy is linked to its source while hovered or selected; a selected
 // transform links its copied points, whose edges' ends show the rest
+// A (0, 0) and B (100, 0) with a line between them; C 50 below A; M halfway
+// along the line
+procedure BuildLinked(Pattern: TPattern; out A, B, Line, C, M: string);
+begin
+  A := Pattern.AddFreePoint('A', '0', '0').Key;
+  B := Pattern.AddFreePoint('B', '100', '0').Key;
+  Line := Pattern.AddLine(A, B).Key;
+  C := Pattern.AddOffsetPoint('C', A, omPolar, '50', '270').Key;
+  M := Pattern.AddAlongEdgePoint('M', Line, False, amRatio, '0.5').Key;
+  Pattern.Evaluate;
+end;
+
+procedure TTestCanvasModel.TestDependencyLinksToInputs;
+var
+  A, B, Line, C, M: string;
+  Links: TDependencyLinkArray;
+begin
+  BuildLinked(FPattern, A, B, Line, C, M);
+  AssertEquals('nothing going on', 0, Length(DependencyLinks(FPattern, nil, '', True)));
+  Links := DependencyLinks(FPattern, nil, C, False);
+  AssertEquals('C reads A', 1, Length(Links));
+  AssertEquals(C, Links[0].FromKey);
+  AssertEquals(A, Links[0].ToKey);
+  AssertFalse('an input', Links[0].Dependent);
+  AssertPointsNear('from C', Vec2(0, 50), Links[0].FromAt);
+  AssertPointsNear('to A', Vec2(0, 0), Links[0].ToAt);
+  Links := DependencyLinks(FPattern, [M], '', False);
+  AssertEquals('M reads the line', 1, Length(Links));
+  AssertPointsNear('at its middle', Vec2(50, 0), Links[0].ToAt);
+  AssertEquals('a line''s own ends need no arrow', 0, Length(DependencyLinks(FPattern, nil, Line, False)));
+  AssertEquals('hovered and selected once', 1, Length(DependencyLinks(FPattern, [C], C, False)));
+end;
+
+procedure TTestCanvasModel.TestDependencyLinksToDependents;
+var
+  A, B, Line, C, M: string;
+  Links: TDependencyLinkArray;
+begin
+  BuildLinked(FPattern, A, B, Line, C, M);
+  AssertEquals('only when asked', 0, Length(DependencyLinks(FPattern, nil, A, False)));
+  Links := DependencyLinks(FPattern, nil, A, True);
+  AssertEquals('C reads A; the line ends on it', 1, Length(Links));
+  AssertEquals(C, Links[0].ToKey);
+  AssertTrue('a dependent', Links[0].Dependent);
+  Links := DependencyLinks(FPattern, nil, Line, True);
+  AssertEquals('M reads the line', 1, Length(Links));
+  AssertEquals(M, Links[0].ToKey);
+end;
+
+procedure TTestCanvasModel.TestDependencyLinksLargeSelection;
+var
+  A, B, Line, C, M: string;
+  Selection: TStringArray;
+  Index: integer;
+begin
+  BuildLinked(FPattern, A, B, Line, C, M);
+  Selection := nil;
+  for Index := 0 to MAX_LINKED_SELECTION do
+    Insert(C, Selection, 0);
+  AssertEquals('too many selected for arrows', 0, Length(DependencyLinks(FPattern, Selection, '', True)));
+  AssertEquals('the hovered one still has them', 1, Length(DependencyLinks(FPattern, Selection, C, False)));
+end;
+
 procedure TTestCanvasModel.TestCopyLinks;
 var
   Spec: TTransformSpec;

@@ -43,6 +43,16 @@ object's name and a property: `B.x`, `Waist_line.length`, `Line_A_B.angle`.
 Square to a line is its angle plus 90: `Line_A_B.angle + 90`. Each object's
 properties are listed in [Operations and objects](../reference/operations.md).
 
+### What reads what
+
+Point at a point or an edge, or select one, and faint blue arrows run from it
+to the points and edges it is built from: the point an offset starts from,
+the edge a point lies along, the objects its formulas read. An edge's own end
+points get no arrow. With View → Dependents on, purple arrows also run to the
+points and edges that read it, which shows what will move when it changes.
+Arrows show for up to 10 selected objects at once, so selecting everything
+does not cover the pattern in them.
+
 ## Typing formulas
 
 As you type, the field suggests names: after `@` the measurements, after `#`

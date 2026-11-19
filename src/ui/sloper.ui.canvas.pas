@@ -78,6 +78,7 @@ type
     FShowPieceFills: boolean;
     // The problems the overlay marks, worked out again after each change
     FShowProblems, FProblemsStale: boolean;
+    FShowDependents: boolean;
     FProblems: TPatternProblemArray;
     // The grid's spacing, in GridUnit
     FGridStep: double;
@@ -149,6 +150,7 @@ type
     procedure SetLabelMode(Value: TLabelMode);
     procedure SetShowPieceFills(Value: boolean);
     procedure SetShowProblems(Value: boolean);
+    procedure SetShowDependents(Value: boolean);
     function Problems: TPatternProblemArray;
     // What is wrong with the object, in the overlay's words; empty when nothing is
     function ProblemText(const Key: string): string;
@@ -263,6 +265,8 @@ type
     property ShowPieceFills: boolean read FShowPieceFills write SetShowPieceFills;
     // Marks the objects with problems, and pointing at one says what is wrong
     property ShowProblems: boolean read FShowProblems write SetShowProblems;
+    // Dependency arrows also go to what reads the hovered and selected objects
+    property ShowDependents: boolean read FShowDependents write SetShowDependents;
     // An object pointed at somewhere else, such as a piece in the Garment
     // tab, shown as if hovered here while the pointer is not on the canvas
     property OutsideHoverKey: string read FOutsideHoverKey write SetOutsideHoverKey;
@@ -1144,6 +1148,12 @@ begin
   Invalidate;
 end;
 
+procedure TPatternCanvas.SetShowDependents(Value: boolean);
+begin
+  FShowDependents := Value;
+  Invalidate;
+end;
+
 function TPatternCanvas.Problems: TPatternProblemArray;
 var
   BlockedCount: integer;
@@ -1737,6 +1747,7 @@ begin
   if Result.HoverKey = '' then
     Result.HoverKey := FOutsideHoverKey;
   Result.ShowPieceFills := FShowPieceFills;
+  Result.ShowDependents := FShowDependents;
   if FShowProblems then
     for Problem in Problems do
       Insert(Problem.Key, Result.ProblemKeys, Length(Result.ProblemKeys));

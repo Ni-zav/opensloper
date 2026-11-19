@@ -62,6 +62,16 @@ type
 
   TCopyLinkArray = array of TCopyLink;
 
+  // An arrow from an object to one it reads (an input), or to one that reads
+  // it (a dependent), between their places on the canvas
+  TDependencyLink = record
+    FromKey, ToKey: string;
+    FromAt, ToAt: TVec2;
+    Dependent: boolean;
+  end;
+
+  TDependencyLinkArray = array of TDependencyLink;
+
   // Where a notch would go: on a point, or Position mm along the edge
   TNotchTarget = record
     EdgeKey, PointKey: string;
@@ -138,6 +148,17 @@ function LabelKeys(Pattern: TPattern; Mode: TLabelMode; const Selection: TString
 // selected ones, and the copied points of a selected transform (its edges'
 // ends already show where they went)
 function CopyLinks(Pattern: TPattern; const Selection: TStringArray; const HoverKey: string): TCopyLinkArray;
+// Arrows from the hovered object, and from the selection while it is no more
+// than MAX_LINKED_SELECTION objects, to the points and edges each reads and,
+// with WithDependents, to those that read it. Only points and edges are
+// linked, at a point's place and an edge's middle; an edge's own ends, copies
+// (which CopyLinks shows) and objects not active on the canvas are left out.
+function DependencyLinks(Pattern: TPattern; const Selection: TStringArray; const HoverKey: string;
+  WithDependents: boolean): TDependencyLinkArray;
+
+const
+  // A larger selection, such as everything boxed, would be a web of arrows
+  MAX_LINKED_SELECTION = 10;
 
 resourcestring
   rsSceneSplitSelect = 'Select an edge and a point on it to split the edge';
@@ -889,6 +910,87 @@ begin
         Insert(Point.Key, Result, Length(Result));
   finally
     FreeAndNil(Wanted);
+  end;
+end;
+
+// Where an object's arrows start and end: a point's place, an edge's middle;
+// False for anything else
+function LinkPlace(Pattern: TPattern; Node: TEvalNode; out At: TVec2): boolean;
+var
+  Line: TVec2Array;
+begin
+  At := Vec2(0, 0);
+  if not (Node is TDraftObject) or not Node.HasResult or (CopyTransformKey(TDraftObject(Node)) <> '') or not Pattern.IsActive(TDraftObject(Node)) then
+    Exit(False);
+  if Node is TPointObject then
+  begin
+    At := TPointObject(Node).Position;
+    Exit(True);
+  end;
+  if not (Node is TEdgeObject) then
+    Exit(False);
+  Line := EdgePolyline(TEdgeObject(Node), COPY_LINK_TOLERANCE);
+  Result := Length(Line) > 0;
+  if Result then
+    At := PolylineMiddle(Line);
+end;
+
+// An edge and one of its own end points, which need no arrow
+function IsEdgeEnd(Edge, Point: TEvalNode): boolean;
+begin
+  Result := (Edge is TEdgeObject) and ((TEdgeObject(Edge).StartKey = Point.Key) or (TEdgeObject(Edge).EndKey = Point.Key));
+end;
+
+function DependencyLinks(Pattern: TPattern; const Selection: TStringArray; const HoverKey: string;
+  WithDependents: boolean): TDependencyLinkArray;
+var
+  Sources: TStringArray;
+  Seen: TKeySet;
+  Key: string;
+  Node, Neighbour: TEvalNode;
+  From: TVec2;
+
+  procedure Link(Other: TEvalNode; Dependent: boolean);
+  var
+    Item: TDependencyLink;
+  begin
+    if (Other = Node) or IsEdgeEnd(Node, Other) or IsEdgeEnd(Other, Node) or Seen.Contains(Node.Key + #0 + Other.Key) then
+      Exit;
+    Item := Default(TDependencyLink);
+    if not LinkPlace(Pattern, Other, Item.ToAt) then
+      Exit;
+    Seen.Add(Node.Key + #0 + Other.Key);
+    Item.FromKey := Node.Key;
+    Item.ToKey := Other.Key;
+    Item.FromAt := From;
+    Item.Dependent := Dependent;
+    Insert(Item, Result, Length(Result));
+  end;
+
+begin
+  Result := nil;
+  Sources := nil;
+  if HoverKey <> '' then
+    Insert(HoverKey, Sources, 0);
+  if Length(Selection) <= MAX_LINKED_SELECTION then
+    for Key in Selection do
+      if IndexStr(Key, Sources) < 0 then
+        Insert(Key, Sources, Length(Sources));
+  Seen := TKeySet.Create;
+  try
+    for Key in Sources do
+    begin
+      Node := Pattern.FindNode(Key);
+      if not Assigned(Node) or not LinkPlace(Pattern, Node, From) then
+        Continue;
+      for Neighbour in Node.Deps do
+        Link(Neighbour, False);
+      if WithDependents then
+        for Neighbour in Node.Dependents do
+          Link(Neighbour, True);
+    end;
+  finally
+    FreeAndNil(Seen);
   end;
 end;
 

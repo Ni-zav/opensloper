@@ -52,6 +52,8 @@ type
     TipHandles: boolean;
     // Objects with problems, marked with a red halo; empty when the overlay is off
     ProblemKeys: TStringArray;
+    // Arrows also go to what reads the hovered and selected objects
+    ShowDependents: boolean;
   end;
 
   TPatternPainter = class
@@ -78,6 +80,7 @@ type
     procedure DrawPoint(Point: TPointObject);
     procedure DrawSourceHalos;
     procedure DrawCopyLinks;
+    procedure DrawDependencyLinks;
     procedure DrawMarker(DraftObject: TDraftObject);
     procedure DrawLayer(Dimmed: boolean);
   public
@@ -151,6 +154,11 @@ const
   // Wider than a hover's or a copy source's, so a problem reads over both
   PROBLEM_HALO_WIDTH = 10;
   PROBLEM_HALO_GROW = 6;
+  // A dependency arrow: its width, how far it stops short of each end, and
+  // the length of its head, in pixels
+  LINK_ARROW_WIDTH = 1.2;
+  LINK_ARROW_GAP = 6;
+  LINK_ARROW_HEAD = 7;
   // Text smaller than this many pixels is drawn as a faint bar
   MIN_NOTE_PIXELS = 3;
   DASH_PIXELS_PER_MILLIMETRE = 2.5;
@@ -249,6 +257,17 @@ end;
 function CopyLinkInk: TBGRAPixel;
 begin
   Result := BGRA(37, 116, 214, 170);
+end;
+
+// From an object to what it reads, and to what reads it
+function InputLinkInk: TBGRAPixel;
+begin
+  Result := BGRA(37, 116, 214, 130);
+end;
+
+function DependentLinkInk: TBGRAPixel;
+begin
+  Result := BGRA(140, 80, 200, 130);
 end;
 
 function StateInk(State: TEvalState; const Normal: TBGRAPixel): TBGRAPixel;
@@ -760,6 +779,38 @@ begin
   FBitmap.PenStyle := psSolid;
 end;
 
+// Faint arrows from the hovered and selected objects to what they read, and
+// to what reads them when asked, stopping short of both ends so the points
+// stay clear, with the head at the far end
+procedure TPatternPainter.DrawDependencyLinks;
+var
+  Link: TDependencyLink;
+  First, Last, Along, Across: TVec2;
+  LinkInk: TBGRAPixel;
+  Span: double;
+begin
+  for Link in DependencyLinks(FPattern, FState.Selection, FState.HoverKey, FState.ShowDependents) do
+  begin
+    First := FState.View.ToScreen(Link.FromAt);
+    Last := FState.View.ToScreen(Link.ToAt);
+    Span := Distance(First, Last);
+    if Span < 3 * LINK_ARROW_GAP then
+      Continue;
+    Along := (Last - First) * (1 / Span);
+    Across := Vec2(-Along.Y, Along.X);
+    First := First + Along * LINK_ARROW_GAP;
+    Last := Last - Along * LINK_ARROW_GAP;
+    if Link.Dependent then
+      LinkInk := DependentLinkInk
+    else
+      LinkInk := InputLinkInk;
+    FBitmap.DrawLineAntialias(First.X, First.Y, Last.X, Last.Y, LinkInk, LINK_ARROW_WIDTH);
+    FBitmap.FillPolyAntialias([PointF(Last.X, Last.Y),
+      ScreenPoint(Last - Along * LINK_ARROW_HEAD + Across * (LINK_ARROW_HEAD / 2)),
+      ScreenPoint(Last - Along * LINK_ARROW_HEAD - Across * (LINK_ARROW_HEAD / 2))], LinkInk);
+  end;
+end;
+
 // Pieces under edges, edges under points, with seams and markers. While a
 // piece is isolated, what it does not use is drawn first and washed over with
 // paper, so it shows faintly under the piece.
@@ -828,7 +879,10 @@ begin
     if (DraftObject.Marker <> pmPlain) and DraftObject.HasResult then
       DrawMarker(DraftObject);
   if not Dimmed then
+  begin
     DrawCopyLinks;
+    DrawDependencyLinks;
+  end;
   for Point in ShownPoints(FPattern) do
     if Point.HasResult and (FPattern.IsDimmed(Point) = Dimmed) then
       DrawPoint(Point);

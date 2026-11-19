@@ -565,6 +565,10 @@ Direction and dependency marks appear only on hover, selection or piece creation
 | --- | --- | --- |
 | Piece direction | Hovering or selecting a piece | Small chevrons at each edge's middle, not arrowheads at the ends |
 | Copy source | Hovering or selecting a transform copy, or selecting its transform | Faint dashed line to the source, which is highlighted |
+| Inputs | Hovering or selecting a point or edge (issue #52, built 2026-11-19) | Faint blue arrow to each point and edge it reads, through its operation or its formulas |
+| Dependents | As inputs, with View → Dependents on (`showDependents` in the settings, off by default) | Faint purple arrow to each point and edge that reads it |
+
+**Dependency arrows** (`DependencyLinks` in `Sloper.UI.Scene`, drawn by `TPatternPainter.DrawDependencyLinks`). They use the evaluator's graph (`Deps`, `Dependents`), so formula references count as operation inputs do. Only points and edges are linked, at a point's place and an edge's middle: pieces have their chevrons and seams and notes their own marks, and variables and measurements have no place. An edge's own end points are left out both ways, as the line already shows them, and so are transform copies, which have their copy link, and objects not active on the canvas. The selection gets arrows only while it holds at most `MAX_LINKED_SELECTION` (10) objects, so a box round everything is not a web of arrows; the hovered object always does. Arrows stop a few pixels short of both ends, with the head at the object read or reading.
 
 **Problems** (`Sloper.Core.PatternCheck`) are listed in plain words and counted in the status bar: failing objects, gaps where a piece no longer closes, seams out of tolerance, markings outside their piece or in none, marked points in no piece, and outline edges in no piece once the pattern has one (issue #51, built 2026-11-19; an edge split into outline parts is left out, as piece detection leaves it out). Each problem carries the key of the object it is about (`PatternProblemList`; `PatternProblems` gives the texts alone). **Problem overlay** (issue #51, built 2026-11-19): the canvas draws a faint red halo under each object with a problem (an edge, a piece's cutting line, a seam's two sides, a point or a repeat's points, a note's box), skipping hidden and dimmed ones, and pointing at one puts its problems in the status bar. The canvas works the list out again after each document change, only when it paints. View → Problems turns it off, saved as `showProblems` in the settings, on by default. The same list is the Objects tab's Problems filter, `check` in the CLI and the Automation API.
 
@@ -1117,7 +1121,6 @@ Agreed, but not built. Each line is meant to become one issue.
 **Design app**
 
 - **Transforms**: (Issue #49) a live ghost while dragging, and snapping to existing angles.
-- **Dependency arrows**: (Issue #52) hovering or selecting an object draws faint arrows to its inputs, optionally to its dependents (see Links and problem display).
 - **Typing note text on the canvas**, (Issue #53) rather than in the properties.
 - **SVG stamps** (Issue #9) (annotations stage 4). A drawing from another app (a logo, a fold or assembly diagram) placed and anchored like a note, so it moves with the geometry. Paths only: `<text>` is refused with a message asking for it to be converted to paths, which keeps fonts out. Drawn at true size from the SVG's own units (px taken at 96 per inch, with a warning), and stored in the pattern as path data, so the pattern does not depend on the outside file.
 - **Rounding curved corners**, (Issue #54) which needs a tangent found numerically (see Accessories).

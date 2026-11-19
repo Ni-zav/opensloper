@@ -33,6 +33,9 @@ Changed, Fixed and Removed under each version.
 - Problems are drawn on the canvas (#51): every object with a problem has a
   faint red halo, and pointing at it says what is wrong. View → Problems turns
   the halos off and on.
+- Dependency arrows (#52): pointing at or selecting a point or edge draws
+  faint arrows to the points and edges it is built from, and, with View →
+  Dependents on, to those built from it.
 
 ### Changed
 

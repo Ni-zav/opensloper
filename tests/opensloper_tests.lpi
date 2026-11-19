@@ -116,6 +116,11 @@
         <UnitName Value="Sloper.Tests.LayoutExports"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.nesting.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.Nesting"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.printing.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.Printing"/>

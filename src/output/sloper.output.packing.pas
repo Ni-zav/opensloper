@@ -52,9 +52,10 @@ type
 
   TBoxSpotArray = array of TBoxSpot;
 
-// Places any new copies first. Failing pieces stay in the tray.
+// Places any new copies first, then nests their cutting lines, PACK_GAP
+// apart. Failing pieces stay in the tray.
 function PackLayout(Layout: TLayout): TPackResult;
-// Packs boxes as Pack Pieces does, longest side first, PACK_GAP apart, within
+// Packs boxes longest side first, PACK_GAP apart, within
 // Limit across and Depth down, around the boxes in Placed. Turns lets a box
 // try a quarter turn. The spots are in the order of Sizes (X wide, Y high).
 function PackBoxes(const Sizes: TVec2Array; Limit, Depth: double; Turns: boolean; const Placed: array of TRect2): TBoxSpotArray;
@@ -68,7 +69,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Sloper.Core.Numeric, Sloper.Output.Tiling;
+  SysUtils, Math, Sloper.Core.Numeric, Sloper.Output.Tiling, Sloper.Output.Nesting;
 
 const
   // The window's drag grid, so packed pieces can be lined up by hand
@@ -81,6 +82,8 @@ type
   TPackItem = record
     Placement: integer;
     Width, Height: double;
+    // Its cutting line's shape, for nesting; boxes have none
+    Shape: integer;
   end;
 
   TPackItemArray = array of TPackItem;
@@ -107,11 +110,13 @@ begin
   Result := First.Placement < Second.Placement;
 end;
 
-function ItemsFrom(Layout: TLayout): TPackItemArray;
+// Each piece's cutting line as it lies, its top left at 0, 0
+function ItemsFrom(Layout: TLayout; Shapes: TNestShapes): TPackItemArray;
 var
   Shape: TPlacedPiece;
   Item: TPackItem;
-  Place: integer;
+  Outline: TVec2Array;
+  Place, Index: integer;
 begin
   Result := nil;
   for Shape in Layout.PlacedPieces do
@@ -119,6 +124,11 @@ begin
     Item.Placement := Shape.Placement;
     Item.Width := Shape.Bounds.MaxX - Shape.Bounds.MinX;
     Item.Height := Shape.Bounds.MaxY - Shape.Bounds.MinY;
+    Outline := nil;
+    SetLength(Outline, Length(Shape.CutLine));
+    for Index := 0 to High(Outline) do
+      Outline[Index] := Shape.CutLine[Index] - Vec2(Shape.Bounds.MinX, Shape.Bounds.MinY);
+    Item.Shape := Shapes.Add(Outline);
     Place := Length(Result);
     while (Place > 0) and ComesFirst(Item, Result[Place - 1]) do
       Dec(Place);
@@ -244,34 +254,60 @@ begin
   end;
 end;
 
-// Sets the pieces PackInto left out below the packed ones, so none lies on
-// another: packed again with no depth when they fit across, else one under
-// another at the left
-procedure SetLeftOutBelow(const Items: TPackItemArray; Limit: double; var Spots: TPackSpotArray; Turns: boolean);
+// Items nested on Sheet, in Spots, each as near the top and then as far left as its
+// cutting line fits; returns how many did not fit
+function NestInto(Sheet: TNestSheet; const Items: TPackItemArray; Turns: boolean; out Spots: TPackSpotArray): integer;
 var
   Item: TPackItem;
   Spot: TPackSpot;
-  Boxes: TPackBoxArray;
+begin
+  Result := 0;
+  Spots := nil;
+  for Item in Items do
+  begin
+    Spot.Placement := Item.Placement;
+    if not Sheet.Find(Item.Shape, Turns, Spot.X, Spot.Y, Spot.Turned) then
+    begin
+      Inc(Result);
+      Continue;
+    end;
+    Sheet.Put(Item.Shape, Spot.Turned, Spot.X, Spot.Y);
+    Insert(Spot, Spots, Length(Spots));
+  end;
+end;
+
+// Sets the pieces nesting left out below the packed ones, so none lies on
+// another: packed again with no depth when they fit across, else one under
+// another at the left
+procedure SetLeftOutBelow(Shapes: TNestShapes; const Items: TPackItemArray; Limit: double; var Spots: TPackSpotArray; Turns: boolean);
+var
+  Item: TPackItem;
+  Spot: TPackSpot;
+  Sheet: TNestSheet;
   Rest: TPackItemArray;
   More: TPackSpotArray;
   Placed: boolean;
   Bottom: double;
 begin
-  Boxes := nil;
   Rest := nil;
-  for Item in Items do
-  begin
-    Placed := False;
-    for Spot in Spots do
-      if Spot.Placement = Item.Placement then
-      begin
-        Insert(SpotBox(Spot, Item), Boxes, Length(Boxes));
-        Placed := True;
-      end;
-    if not Placed then
-      Insert(Item, Rest, Length(Rest));
+  Sheet := TNestSheet.Create(Shapes, Limit, Infinity);
+  try
+    for Item in Items do
+    begin
+      Placed := False;
+      for Spot in Spots do
+        if Spot.Placement = Item.Placement then
+        begin
+          Sheet.Put(Item.Shape, Spot.Turned, Spot.X, Spot.Y);
+          Placed := True;
+        end;
+      if not Placed then
+        Insert(Item, Rest, Length(Rest));
+    end;
+    NestInto(Sheet, Rest, Turns, More);
+  finally
+    FreeAndNil(Sheet);
   end;
-  PackInto(Rest, Limit, More, Infinity, Turns, Boxes);
   Spots := Concat(Spots, More);
   Bottom := 0;
   for Item in Items do
@@ -343,8 +379,9 @@ begin
 end;
 
 // Each column count is tried on the real pages; the fewest pages win
-function BestTiledSpots(Layout: TLayout; const Items: TPackItemArray): TPackSpotArray;
+function BestTiledSpots(Layout: TLayout; Shapes: TNestShapes; const Items: TPackItemArray): TPackSpotArray;
 var
+  Nest: TNestSheet;
   Before: TPlacementArray;
   Spots: TPackSpotArray;
   Item: TPackItem;
@@ -363,7 +400,12 @@ begin
   BestSheet := Infinity;
   for Columns := First to First + EXTRA_COLUMNS do
   begin
-    PackInto(Items, TiledWidth(Layout, Columns), Spots);
+    Nest := TNestSheet.Create(Shapes, TiledWidth(Layout, Columns), Infinity);
+    try
+      NestInto(Nest, Items, True, Spots);
+    finally
+      FreeAndNil(Nest);
+    end;
     ApplySpots(Layout, Spots);
     Pages := PagesInUse(Layout);
     Sheet := SheetLength(Layout);
@@ -394,9 +436,10 @@ begin
   Result := True;
 end;
 
-function PackLayout(Layout: TLayout): TPackResult;
+// Pack Pieces once the copies are placed and their shapes known
+function NestLayout(Layout: TLayout; Shapes: TNestShapes; const Items: TPackItemArray): TPackResult;
 var
-  Items: TPackItemArray;
+  Sheet: TNestSheet;
   Spots: TPackSpotArray;
   Before: TPlacementArray;
   PagesBefore: integer;
@@ -404,36 +447,24 @@ var
   CanKeep, Turns: boolean;
 begin
   Result := Default(TPackResult);
-  if Layout.Output.Kind = okProjector then
-  begin
-    Result.Reason := rsPackProjector;
-    Exit;
-  end;
-  if (Layout.Output.Kind = okTiled) and not TilesAreUsable(Layout.Output.Tiles) then
-  begin
-    Result.Reason := rsPackNoPrintArea;
-    Exit;
-  end;
-  Layout.PlaceNewPieces;
-  Items := ItemsFrom(Layout);
-  if Length(Items) = 0 then
-  begin
-    Result.Reason := rsPackNothing;
-    Exit;
-  end;
   PagesBefore := PagesInUse(Layout);
   LengthBefore := SheetLength(Layout);
   // An arrangement that runs off the roll is never the better one
   CanKeep := (Layout.Output.Kind = okTiled) or FitsRoll(Layout);
   Before := Copy(Layout.Placements);
   if Layout.Output.Kind = okTiled then
-    Spots := BestTiledSpots(Layout, Items)
+    Spots := BestTiledSpots(Layout, Shapes, Items)
   else
   begin
     Turns := (Layout.Output.Kind <> okMaterial) or Layout.Output.AllowTurns;
-    Result.LeftOut := PackInto(Items, Layout.UsableWidth, Spots, SheetDepth(Layout), Turns);
+    Sheet := TNestSheet.Create(Shapes, Layout.UsableWidth, SheetDepth(Layout));
+    try
+      Result.LeftOut := NestInto(Sheet, Items, Turns, Spots);
+    finally
+      FreeAndNil(Sheet);
+    end;
     if Result.LeftOut > 0 then
-      SetLeftOutBelow(Items, Layout.UsableWidth, Spots, Turns);
+      SetLeftOutBelow(Shapes, Items, Layout.UsableWidth, Spots, Turns);
   end;
   ApplySpots(Layout, Spots);
   Result.Pages := PagesInUse(Layout);
@@ -448,6 +479,37 @@ begin
   Layout.Output.ExcludedPages := nil;
   Result.Done := True;
   Result.Count := Length(Spots) - Result.LeftOut;
+end;
+
+function PackLayout(Layout: TLayout): TPackResult;
+var
+  Shapes: TNestShapes;
+  Items: TPackItemArray;
+begin
+  Result := Default(TPackResult);
+  if Layout.Output.Kind = okProjector then
+  begin
+    Result.Reason := rsPackProjector;
+    Exit;
+  end;
+  if (Layout.Output.Kind = okTiled) and not TilesAreUsable(Layout.Output.Tiles) then
+  begin
+    Result.Reason := rsPackNoPrintArea;
+    Exit;
+  end;
+  Layout.PlaceNewPieces;
+  Shapes := TNestShapes.Create(PACK_GAP);
+  try
+    Items := ItemsFrom(Layout, Shapes);
+    if Length(Items) = 0 then
+    begin
+      Result.Reason := rsPackNothing;
+      Exit;
+    end;
+    Result := NestLayout(Layout, Shapes, Items);
+  finally
+    FreeAndNil(Shapes);
+  end;
 end;
 
 function PackBoxes(const Sizes: TVec2Array; Limit, Depth: double; Turns: boolean; const Placed: array of TRect2): TBoxSpotArray;
@@ -465,6 +527,7 @@ begin
     Item.Placement := Index;
     Item.Width := Sizes[Index].X;
     Item.Height := Sizes[Index].Y;
+    Item.Shape := -1;
     Place := Length(Items);
     while (Place > 0) and ComesFirst(Item, Items[Place - 1]) do
       Dec(Place);

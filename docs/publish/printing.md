@@ -95,8 +95,8 @@ however the paper layout turns it.
 - With **no size**, it gives the area of the pieces and the narrowest roll
   they fit.
 
-Pieces are packed by the rectangles round them, 10 mm apart, so the answer
-is on the generous side. Notes under the list say which pieces are cut
+Pieces are packed by the rectangles round them, 10 mm apart, rather than by
+their shapes as Pack pieces does, so the answer is on the generous side. Notes under the list say which pieces are cut
 unfolded, which do not fit at all, and when two patterns give a material
 different sizes. `opensloper-cli materials` prints the same from the command
 line.

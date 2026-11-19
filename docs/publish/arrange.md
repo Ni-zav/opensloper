@@ -28,8 +28,11 @@ fixed.
 ## Pack pieces
 
 **Pack pieces** arranges every copy, including those in the tray, to use as
-few pages, or as short a sheet, as it can. It tries each piece as it stands and
-a quarter turn from it, keeps pieces 10 mm apart, and keeps flips. When your own
+few pages, or as short a sheet, as it can. It follows the pieces' shapes, so
+a small piece can go in the curve or notch of a larger one: each goes as high
+on the sheet, then as far left, as its cutting line fits. It tries each piece as
+it stands and a quarter turn from it, keeps pieces at least 10 mm apart, and
+keeps flips. Packed pieces lie on the half-millimetre drag grid. When your own
 arrangement already does better, it is kept, and the status bar says so.
 
 Packing is one step to undo, and the pieces can still be dragged afterwards.

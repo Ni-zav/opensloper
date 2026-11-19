@@ -35,6 +35,9 @@ type
     // A pattern of rectangles Width by Height, 10 mm allowance, each cut Cut
     // times, saved as AFile and added to the layout as a source
     procedure AddPattern(const AFile: string; const Widths, Heights: array of double; Cut: integer = 1; Fold: boolean = False);
+    // A pattern of one piece with no allowance for each closed outline, each
+    // cut once, with Inside a point inside each
+    procedure AddOutlinePattern(const AFile: string; const Outlines: array of TVec2Array; const Inside: array of TVec2);
     // A 100 mm square, 10 mm allowance, with one marking of each kind: a 4 mm
     // hole at (30, 40), a placement line, a fold line and stitch holes
     procedure AddMarkedPattern(const AFile: string; Fold: boolean = False);
@@ -133,6 +136,7 @@ type
     procedure TestExportWritesFile;
     procedure TestExportRefusesBlockedLayout;
     procedure TestPackNeverOverlaps;
+    procedure TestPackNestsShapes;
     procedure TestPackRepeatsExactly;
     procedure TestPackReducesPages;
     procedure TestPackDoesNotAddPages;
@@ -238,6 +242,39 @@ begin
   FLayout.LoadSources;
 end;
 
+procedure TTestLayoutExports.AddOutlinePattern(const AFile: string; const Outlines: array of TVec2Array; const Inside: array of TVec2);
+var
+  Pattern: TPattern;
+  Index, Corner: integer;
+  Keys: array of string;
+  Reason: string;
+  Path: TPiecePath;
+  Fixed: TFormatSettings;
+begin
+  Fixed := DefaultFormatSettings;
+  Fixed.DecimalSeparator := '.';
+  Pattern := TPattern.Create;
+  try
+    for Index := 0 to High(Outlines) do
+    begin
+      Keys := nil;
+      SetLength(Keys, Length(Outlines[Index]));
+      for Corner := 0 to High(Keys) do
+        Keys[Corner] := Pattern.AddFreePoint('', FloatToStr(Outlines[Index][Corner].X, Fixed), FloatToStr(Outlines[Index][Corner].Y, Fixed)).Key;
+      for Corner := 0 to High(Keys) do
+        Pattern.AddLine(Keys[Corner], Keys[(Corner + 1) mod Length(Keys)], erOutline);
+      Pattern.Evaluate;
+      AssertTrue(Reason, DetectPiecePath(Pattern, Inside[Index], Path, Reason));
+      AssertNotNull(Pattern.LastError, Pattern.AddPiece('', Path, '0'));
+    end;
+    AssertTrue(Reason, SavePatternToFile(Pattern, ConcatPaths([FFolder, AFile]), Reason));
+  finally
+    FreeAndNil(Pattern);
+  end;
+  FLayout.AddSource(AFile, '', '');
+  FLayout.LoadSources;
+end;
+
 procedure TTestLayoutExports.LineFirstPiece;
 var
   Pattern: TPattern;
@@ -327,18 +364,22 @@ begin
       Inc(Result);
 end;
 
+// The test pieces are rectangles, so the gap between their bounds is the
+// gap between their cutting lines, corner to corner included
 procedure TTestLayoutExports.AssertNoOverlap;
 var
   Shapes: TPlacedPieceArray;
   Index, Other: integer;
+  Across, Down: double;
 begin
   Shapes := FLayout.PlacedPieces;
   for Index := 0 to High(Shapes) do
     for Other := 0 to Index - 1 do
-      AssertFalse(Format('pieces %d and %d touch', [Other, Index]), (Shapes[Index].Bounds.MinX < Shapes[Other].Bounds.MaxX + PACK_GAP - 0.001) and
-        (Shapes[Index].Bounds.MaxX + PACK_GAP - 0.001 > Shapes[Other].Bounds.MinX) and
-        (Shapes[Index].Bounds.MinY < Shapes[Other].Bounds.MaxY + PACK_GAP - 0.001) and
-        (Shapes[Index].Bounds.MaxY + PACK_GAP - 0.001 > Shapes[Other].Bounds.MinY));
+    begin
+      Across := Max(0, Max(Shapes[Other].Bounds.MinX - Shapes[Index].Bounds.MaxX, Shapes[Index].Bounds.MinX - Shapes[Other].Bounds.MaxX));
+      Down := Max(0, Max(Shapes[Other].Bounds.MinY - Shapes[Index].Bounds.MaxY, Shapes[Index].Bounds.MinY - Shapes[Other].Bounds.MaxY));
+      AssertTrue(Format('pieces %d and %d %g mm apart', [Other, Index, Hypot(Across, Down)]), Hypot(Across, Down) >= PACK_GAP - 0.001);
+    end;
 end;
 
 // 100 mm square + 2 * 10 mm allowance + 2 * 5 mm margin
@@ -1422,6 +1463,23 @@ begin
   AssertTrue(Outcome.Reason, Outcome.Done);
   AssertEquals('all placed', 14, Outcome.Count);
   AssertNoOverlap;
+end;
+
+// An L and a square on material only as wide as the L: bounding boxes put the
+// square below it, its shape takes it into the L's notch
+procedure TTestLayoutExports.TestPackNestsShapes;
+var
+  Outcome: TPackResult;
+  Shape: TPlacedPiece;
+begin
+  AddOutlinePattern('a.sloper', [[Vec2(0, 0), Vec2(150, 0), Vec2(150, 150), Vec2(300, 150), Vec2(300, 300), Vec2(0, 300)],
+    [Vec2(400, 0), Vec2(500, 0), Vec2(500, 100), Vec2(400, 100)]], [Vec2(75, 225), Vec2(450, 50)]);
+  UseMaterial(300);
+  Outcome := PackLayout(FLayout);
+  AssertTrue(Outcome.Reason, Outcome.Done);
+  AssertEquals('both placed', 2, Outcome.Count);
+  for Shape in FLayout.PlacedPieces do
+    AssertTrue(Format('within the L''s length, to %g', [Shape.Bounds.MaxY]), Shape.Bounds.MaxY <= 300 + 0.001);
 end;
 
 procedure TTestLayoutExports.TestPackRepeatsExactly;

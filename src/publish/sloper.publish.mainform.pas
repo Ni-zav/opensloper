@@ -38,7 +38,7 @@ type
     FPreview: TPreviewCanvas;
     // The side tabs; the rows being built go into FRowParent
     FTabs: TAccordion;
-    FPiecesSide, FSide, FInfoSide, FNotesSide, FRowParent: TWinControl;
+    FPiecesSide, FOutputSide, FInfoSide, FNotesSide, FRowParent: TWinControl;
     FColumn: TPanel;
     FColumnSplitter: TSplitter;
     FTitleBox, FEveryPageBox: TCheckBox;
@@ -435,13 +435,14 @@ begin
   FTabs := TAccordion.Create(Self);
   FTabs.Parent := FColumn;
   FTabs.Align := alClient;
-  // In the order they are used: patterns in, pieces placed, then output
+  // In the order they are used: patterns in, pieces placed, what goes on
+  // the sheets, then output last, just above Problems
   FPatternsSide := FTabs.AddSection('patterns', rsTabPatterns);
   FPiecesSide := FTabs.AddSection('pieces', rsTabPieces);
-  FSide := FTabs.AddSection('output', rsTabOutput);
   FMaterialsSide := FTabs.AddSection(MATERIALS_SECTION, rsTabMaterials);
   FInfoSide := FTabs.AddSection(INFO_SECTION, rsTabInfo);
   FNotesSide := FTabs.AddSection(NOTES_SECTION, rsTabNotes);
+  FOutputSide := FTabs.AddSection('output', rsTabOutput);
   // Last, so it stays at the foot of the panel, as in every app
   FProblemsSide := FTabs.AddSection(PROBLEMS_SECTION, rsTabProblems);
   FProblemsList := TProblemsPanel.Create(Self);
@@ -475,7 +476,7 @@ begin
   BuildPiecesTab;
   FRowParent := FMaterialsSide;
   BuildMaterialsTab;
-  FOutputScroll := ScrollingRows(FSide);
+  FOutputScroll := ScrollingRows(FOutputSide);
   FRowParent := FOutputScroll;
   BuildSide;
   FRowParent := ScrollingRows(FInfoSide);

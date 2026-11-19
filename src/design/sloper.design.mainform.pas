@@ -32,7 +32,7 @@ uses
   Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
   Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.Core.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
   Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.Accordion, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
-  Sloper.UI.GarmentPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
+  Sloper.UI.GarmentPanel, Sloper.UI.ProblemsPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
 
 type
 
@@ -133,6 +133,7 @@ type
     FGarment: TGarmentPanel;
     FVariables: TVariablesPanel;
     FMeasurements: TMeasurementsPanel;
+    FProblemsList: TProblemsPanel;
     FNewSetDialog: TSaveDialog;
     FMeasurementWatch: TTimer;
     FOpenSetAction: TAction;
@@ -183,6 +184,10 @@ type
     procedure PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2; const Sizes: TGradeGhostArray);
     procedure GarmentHoverPiece(Sender: TObject; const PieceKey: string);
     procedure GarmentSelectPiece(Sender: TObject; const PieceKey: string);
+    procedure ProblemSelect(Sender: TObject; const Key: string);
+    procedure ProblemHover(Sender: TObject; const Key: string);
+    procedure ProblemZoom(Sender: TObject; const Key: string);
+    procedure ShowProblemsSection;
     procedure ObjectsSelect(Sender: TObject);
     procedure ObjectsZoom(Sender: TObject);
     procedure ObjectsDelete(Sender: TObject);
@@ -256,12 +261,13 @@ uses
   Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.UI.ObjectList, Sloper.Core.JSON, Sloper.Output.DraftSVG,
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
-  Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.Evaluator, Sloper.API.Server,
-  Sloper.API.Endpoint;
+  Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.Evaluator, Sloper.Core.Variables,
+  Sloper.API.Server, Sloper.API.Endpoint;
 
 const
   // The Claude tab's key in the side panel, and in the settings
   CLAUDE_SECTION = 'claude';
+  PROBLEMS_SECTION = 'problems';
   MARKING_ICONS: array[TMarkingKind] of TAppIcon = (aiHole, aiPlacement, aiStitchHoles);
   TRANSFORM_ICONS: array[TTransformKind] of TAppIcon = (aiRotate, aiMirror, aiMove);
   CURSOR_DECIMALS: array[TMeasureUnit] of integer = (1, 2, 3);
@@ -326,6 +332,8 @@ resourcestring
   rsMenuViewTrueSize = '&True Size';
   rsTabMaterials = 'Materials';
   rsTabClaude = 'Claude';
+  rsTabProblems = 'Problems';
+  rsTabProblemsCount = 'Problems (%d)';
   rsTabLines = 'Lines';
   rsMenuViewSidePanel = '&Side Panel';
   rsMenuViewRulers = '&Rulers';
@@ -639,6 +647,11 @@ begin
   FAssistant := TAssistantPanel(AddSection(CLAUDE_SECTION, rsTabClaude, TAssistantPanel.Create(Self)));
   FAssistant.Document := FDocument;
   FAssistant.WindowState := @UIStateJSON;
+  // Last, so it stays at the foot of the panel, as in every app
+  FProblemsList := TProblemsPanel(AddSection(PROBLEMS_SECTION, rsTabProblems, TProblemsPanel.Create(Self)));
+  FProblemsList.OnSelect := @ProblemSelect;
+  FProblemsList.OnHover := @ProblemHover;
+  FProblemsList.OnZoom := @ProblemZoom;
   FSideSplitter := TSplitter.Create(Self);
   FSideSplitter.Parent := Self;
   FSideSplitter.Align := alRight;
@@ -669,6 +682,49 @@ end;
 procedure TMainForm.GarmentSelectPiece(Sender: TObject; const PieceKey: string);
 begin
   FCanvas.SelectObjects([PieceKey]);
+end;
+
+// A problem with a measurement or variable is shown in its tab, and one with
+// an object on the canvas, the Problems tab staying open
+procedure TMainForm.ProblemSelect(Sender: TObject; const Key: string);
+var
+  Node: TEvalNode;
+begin
+  Node := FDocument.Pattern.FindNode(Key);
+  if Node is TMeasurementNode then
+  begin
+    FSidePanel.ActiveContent := FMeasurements.Parent;
+    FMeasurements.ChooseKeys([Copy(Key, 2, Length(Key) - 1)]);
+  end
+  else if Node is TVariable then
+  begin
+    FSidePanel.ActiveContent := FVariables.Parent;
+    FVariables.ChooseKeys([Key]);
+  end
+  else if Assigned(Node) then
+  begin
+    FCanvas.SelectObjects([Key]);
+    FCanvas.RevealSelection;
+  end;
+end;
+
+procedure TMainForm.ProblemHover(Sender: TObject; const Key: string);
+begin
+  FCanvas.OutsideHoverKey := Key;
+end;
+
+procedure TMainForm.ProblemZoom(Sender: TObject; const Key: string);
+begin
+  if FDocument.Pattern.FindNode(Key) is TDraftObject then
+    FCanvas.ZoomToSelection;
+end;
+
+// The side panel open at its Problems tab
+procedure TMainForm.ShowProblemsSection;
+begin
+  if not FSidePanel.Visible then
+    SetSideShown(True);
+  FSidePanel.ActiveKey := PROBLEMS_SECTION;
 end;
 
 procedure TMainForm.ListPanelMessage(Sender: TObject; const AText: string);
@@ -1541,8 +1597,12 @@ end;
 
 procedure TMainForm.StatusBarMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: integer);
 begin
-  if (Button = mbLeft) and (StatusBar.GetPanelIndexAt(X, Y) = PANEL_AUTOMATION) and (FAutomation.State = asConnected) then
-    FAutomation.Disconnect;
+  if Button <> mbLeft then
+    Exit;
+  if (StatusBar.GetPanelIndexAt(X, Y) = PANEL_AUTOMATION) and (FAutomation.State = asConnected) then
+    FAutomation.Disconnect
+  else if StatusBar.GetPanelIndexAt(X, Y) = PANEL_PROBLEMS then
+    ShowProblemsSection;
 end;
 
 procedure TMainForm.AutomationChanged(Sender: TObject);
@@ -1744,12 +1804,35 @@ end;
 
 procedure TMainForm.UpdateStatus;
 var
-  Problems: TStringArray;
+  Problems: TPatternProblemArray;
   BlockedCount, Hidden: integer;
   ProblemText: string;
   Role: TEdgeRole;
+
+// In full in the Problems tab, with their count on its header
+  procedure ListProblems;
+  var
+    Listed: TListedProblemArray;
+    Index: integer;
+  begin
+    Listed := nil;
+    SetLength(Listed, Length(Problems));
+    for Index := 0 to High(Problems) do
+    begin
+      Listed[Index].Key := Problems[Index].Key;
+      Listed[Index].Text := Problems[Index].Text;
+      Listed[Index].Blocking := False;
+    end;
+    FProblemsList.SetProblems(Listed);
+    if Length(Problems) = 0 then
+      FSidePanel.SetSectionCaption(FProblemsList.Parent, rsTabProblems)
+    else
+      FSidePanel.SetSectionCaption(FProblemsList.Parent, Format(rsTabProblemsCount, [Length(Problems)]));
+  end;
+
 begin
-  Problems := PatternProblems(FDocument.Pattern, BlockedCount);
+  Problems := PatternProblemList(FDocument.Pattern, BlockedCount);
+  ListProblems;
   if Length(Problems) = 0 then
     ProblemText := rsNoProblems
   else

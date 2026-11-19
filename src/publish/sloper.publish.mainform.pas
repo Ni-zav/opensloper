@@ -28,7 +28,8 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, Grids, fpjson, Sloper.Core.TextFields,
   Sloper.Core.Note, Sloper.API.AppLink, Sloper.Output.Layout, Sloper.Output.LayoutDocument, Sloper.Output.LayoutExport,
-  Sloper.Publish.PreviewCanvas, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.Accordion, Sloper.UI.SavePrompt;
+  Sloper.Publish.PreviewCanvas, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.Accordion, Sloper.UI.SavePrompt,
+  Sloper.UI.ProblemsPanel;
 
 type
   TPublishForm = class(TForm)
@@ -39,6 +40,7 @@ type
     FTabs: TAccordion;
     FPiecesSide, FSide, FInfoSide, FNotesSide, FRowParent: TWinControl;
     FColumn: TPanel;
+    FColumnSplitter: TSplitter;
     FTitleBox, FEveryPageBox: TCheckBox;
     FFieldBoxes: array[0..6] of TCheckBox;
     FCornerBox: TComboBox;
@@ -62,9 +64,9 @@ type
     FPaperWidthEdit, FPaperHeightEdit, FRollEdit, FMaterialWidthEdit, FMaterialLengthEdit, FMarginEdit,
     FOverlapEdit: TFloatSpinEdit;
     FTray: TListBox;
-    // The problems, in plain words, that the status bar counts
-    FProblemTexts: TStringArray;
-    FProblemsMenu: TPopupMenu;
+    // The problems in full, which the status bar counts
+    FProblemsSide: TWinControl;
+    FProblemsList: TProblemsPanel;
     // What each tray line stands for
     FTrayCopies: TUnplacedCopyArray;
     FTurnButton, FFlipButton, FRemoveButton, FPackButton: TButton;
@@ -115,6 +117,7 @@ type
     function AddButton(const ACaption: string; AHandler: TNotifyEvent): TButton;
     procedure DocumentChanged(Sender: TObject);
     procedure SelectionChanged(Sender: TObject);
+    procedure ProblemSelect(Sender: TObject; const Key: string);
     procedure RefreshControls;
     procedure RefreshCommands;
     procedure PreferencesClick(Sender: TObject);
@@ -266,6 +269,8 @@ resourcestring
   rsPaperWidth = 'Paper width (mm)';
   rsPaperHeight = 'Paper height (mm)';
   rsTabNotes = 'Notes';
+  rsTabProblems = 'Problems';
+  rsTabProblemsCount = 'Problems (%d)';
   rsTabInfo = 'Information Block';
   rsShowTitleBlock = 'Show';
   rsChooseNote = 'Click a note on the pages to change it.';
@@ -343,7 +348,7 @@ resourcestring
 implementation
 
 uses
-  LCLType, Math, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
+  LCLType, Math, StrUtils, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
   Sloper.Core.Settings, Sloper.Core.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
   Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
   Sloper.Output.LayoutPDF, Sloper.Output.Packing, Sloper.Output.Preview, Sloper.Output.Printing, Sloper.Output.Tiling,
@@ -380,6 +385,11 @@ const
   // The side panel's sections, by the key their choice is saved under
   INFO_SECTION = 'info';
   NOTES_SECTION = 'notes';
+  PROBLEMS_SECTION = 'problems';
+  // A problem's key in the Problems tab: the placement or note it is about,
+  // by index, after one of these
+  PLACEMENT_KEY = 'placement:';
+  NOTE_KEY = 'note:';
   MATERIALS_SECTION = 'materials';
   NEED_GRID_HEIGHT = 140;
 
@@ -410,12 +420,17 @@ begin
   FStatus.OnResize := @StatusResize;
   FStatus.OnMouseMove := @StatusMouseMove;
   FStatus.OnMouseUp := @StatusMouseUp;
-  FProblemsMenu := TPopupMenu.Create(Self);
   FColumn := TPanel.Create(Self);
   FColumn.Parent := Self;
   FColumn.Align := alRight;
   FColumn.Width := SIDE_WIDTH;
   FColumn.BevelOuter := bvNone;
+  // Both dock on the right, so the splitter goes just before the column,
+  // between it and the preview, as in the design app
+  FColumnSplitter := TSplitter.Create(Self);
+  FColumnSplitter.Parent := Self;
+  FColumnSplitter.Align := alRight;
+  FColumnSplitter.Left := FColumn.Left - FColumnSplitter.Width;
   // One tab open at a time, as in the design app's side panel
   FTabs := TAccordion.Create(Self);
   FTabs.Parent := FColumn;
@@ -427,6 +442,12 @@ begin
   FMaterialsSide := FTabs.AddSection(MATERIALS_SECTION, rsTabMaterials);
   FInfoSide := FTabs.AddSection(INFO_SECTION, rsTabInfo);
   FNotesSide := FTabs.AddSection(NOTES_SECTION, rsTabNotes);
+  // Last, so it stays at the foot of the panel, as in every app
+  FProblemsSide := FTabs.AddSection(PROBLEMS_SECTION, rsTabProblems);
+  FProblemsList := TProblemsPanel.Create(Self);
+  FProblemsList.Parent := FProblemsSide;
+  FProblemsList.Align := alClient;
+  FProblemsList.OnSelect := @ProblemSelect;
   // The preview and its scroll bars share a panel, so the bars stay beside it
   PreviewPanel := TPanel.Create(Self);
   PreviewPanel.Parent := Self;
@@ -1191,14 +1212,13 @@ begin
   FStatus.Panels[PANEL_MESSAGE].Width := Max(MIN_MESSAGE_WIDTH, FStatus.ClientWidth - FStatus.Panels[PANEL_PROBLEMS].Width);
 end;
 
-// The problems in full over their count
 procedure TPublishForm.StatusMouseMove(Sender: TObject; Shift: TShiftState; X, Y: integer);
 var
   Wanted: string;
 begin
   Wanted := '';
-  if (FStatus.GetPanelIndexAt(X, Y) = PANEL_PROBLEMS) and (Length(FProblemTexts) > 0) then
-    Wanted := string.Join(LineEnding, FProblemTexts) + LineEnding + LineEnding + rsProblemsHint;
+  if (FStatus.GetPanelIndexAt(X, Y) = PANEL_PROBLEMS) and (FProblemsList.Count > 0) then
+    Wanted := rsProblemsHint;
   if FStatus.Hint <> Wanted then
   begin
     FStatus.Hint := Wanted;
@@ -1206,23 +1226,20 @@ begin
   end;
 end;
 
+// The count opens the Problems tab, which lists them in full
 procedure TPublishForm.StatusMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: integer);
-var
-  Problem: string;
-  Item: TMenuItem;
-  At: TPoint;
 begin
-  if (FStatus.GetPanelIndexAt(X, Y) <> PANEL_PROBLEMS) or (Length(FProblemTexts) = 0) then
-    Exit;
-  FProblemsMenu.Items.Clear;
-  for Problem in FProblemTexts do
-  begin
-    Item := TMenuItem.Create(FProblemsMenu);
-    Item.Caption := Problem;
-    FProblemsMenu.Items.Add(Item);
-  end;
-  At := FStatus.ClientToScreen(Point(X, Y));
-  FProblemsMenu.PopUp(At.X, At.Y);
+  if (Button = mbLeft) and (FStatus.GetPanelIndexAt(X, Y) = PANEL_PROBLEMS) then
+    FTabs.ActiveKey := PROBLEMS_SECTION;
+end;
+
+// The piece or note a problem is about is selected on the pages
+procedure TPublishForm.ProblemSelect(Sender: TObject; const Key: string);
+begin
+  if StartsStr(PLACEMENT_KEY, Key) then
+    FPreview.Selected := StrToIntDef(Copy(Key, Length(PLACEMENT_KEY) + 1, Length(Key)), -1)
+  else if StartsStr(NOTE_KEY, Key) then
+    FPreview.SelectedNote := StrToIntDef(Copy(Key, Length(NOTE_KEY) + 1, Length(Key)), -1);
 end;
 
 procedure TPublishForm.DocumentChanged(Sender: TObject);
@@ -1326,29 +1343,45 @@ begin
   FPreview.RemoveSelected;
 end;
 
-// Counted in the status bar, as in the design app; the tray shows the
-// copies waiting to be placed
+// Listed in the Problems tab and counted in the status bar, as in the design
+// app; the tray shows the copies waiting to be placed
 procedure TPublishForm.RefreshProblems;
 var
   Problem: TLayoutProblem;
-  Blocking: integer;
+  Listed: TListedProblemArray;
+  Blocking, Index: integer;
   Shown: string;
 begin
-  FProblemTexts := nil;
+  Listed := nil;
   Blocking := 0;
   for Problem in FDocument.Layout.Problems do
     if not Problem.Unplaced then
     begin
-      Insert(Problem.Text, FProblemTexts, Length(FProblemTexts));
+      Index := Length(Listed);
+      SetLength(Listed, Index + 1);
+      Listed[Index].Text := Problem.Text;
+      Listed[Index].Blocking := Problem.Blocking;
+      if Problem.Placement >= 0 then
+        Listed[Index].Key := PLACEMENT_KEY + IntToStr(Problem.Placement)
+      else if Problem.Note >= 0 then
+        Listed[Index].Key := NOTE_KEY + IntToStr(Problem.Note);
       if Problem.Blocking then
         Inc(Blocking);
     end;
-  if Length(FProblemTexts) = 0 then
-    Shown := rsNoProblems
-  else if Blocking = 0 then
-    Shown := Format(rsProblemCount, [Length(FProblemTexts)])
+  FProblemsList.SetProblems(Listed);
+  if Length(Listed) = 0 then
+  begin
+    Shown := rsNoProblems;
+    FTabs.SetSectionCaption(FProblemsSide, rsTabProblems);
+  end
   else
-    Shown := Format(rsProblemCountBlocking, [Length(FProblemTexts), Blocking]);
+  begin
+    if Blocking = 0 then
+      Shown := Format(rsProblemCount, [Length(Listed)])
+    else
+      Shown := Format(rsProblemCountBlocking, [Length(Listed), Blocking]);
+    FTabs.SetSectionCaption(FProblemsSide, Format(rsTabProblemsCount, [Length(Listed)]));
+  end;
   FStatus.Panels[PANEL_PROBLEMS].Text := Shown;
   FStatus.Panels[PANEL_PROBLEMS].Width := Max(Scale96ToForm(PROBLEMS_PANEL_WIDTH96), FStatus.Canvas.TextWidth(Shown) +
     Scale96ToForm(PANEL_PADDING96));

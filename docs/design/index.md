@@ -25,6 +25,7 @@ points and edges placed by formulas, then closed outlines become pieces.
     | Lines | Which kinds of line are shown |
     | Materials | The materials pieces are cut from |
     | Claude | Ask Claude to change the pattern, see [Asking Claude](claude.md) |
+    | Problems | Every problem in full; click one to show what it is about, see [When something goes wrong](formulas.md#when-something-goes-wrong) |
 
 - **Status bar**, along the bottom: where the pointer is, what a click will
   make, and whether the pattern has problems.

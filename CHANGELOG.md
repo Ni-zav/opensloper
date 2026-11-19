@@ -15,6 +15,12 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- A Problems tab at the foot of the side panel, in the design and publish
+  apps, lists every problem in full with the count on its header. Clicking
+  one selects the object, piece or note it is about; in the design app
+  pointing at one lights its object and double-clicking zooms to it.
+  Clicking the status bar's problems count opens the tab (#61).
+
 - Formula suggestions for a free point's x or y now offer another point's
   coordinate (`B.x`) and the point halfway between two points
   (`(B.x + C.x)/2`), the ends of an edge first.

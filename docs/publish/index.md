@@ -33,11 +33,11 @@ a pattern to start a layout for.
     | Output | What it prints on, the paper, marks, fill and profiles, and the exports |
     | Information Block | The pattern, measurements, date and other details, printed in a page corner |
     | Notes | Text placed on the pages |
+    | Problems | Everything that stops the layout printing, in red, and the warnings; click one to select its piece or note |
 
 - **Problems**, counted at the left of the status bar at the bottom: anything
   that stops the layout printing, such as a missing pattern, and warnings,
-  such as overlapping pieces. Point at the count to read them, or click it
-  to list them.
+  such as overlapping pieces. Click the count to open the Problems tab.
 
 The wheel zooms about the pointer, and View → Zoom In and Zoom Out
 (++ctrl+plus++ and ++ctrl+minus++) zoom about the middle; drag with the middle

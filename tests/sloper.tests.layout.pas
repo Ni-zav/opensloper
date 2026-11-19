@@ -97,6 +97,7 @@ type
     procedure TestFailingPieceBlocks;
     procedure TestOverlapIsAWarning;
     procedure TestOffGrainIsAWarning;
+    procedure TestProblemsNameTheirPlacement;
     procedure TestUnknownSizeBlocks;
     procedure TestSourceUsesItsSize;
     procedure TestNoValueForSizeBlocks;
@@ -1203,6 +1204,33 @@ begin
   Problems := FLayout.Problems;
   AssertEquals(1, Length(Problems));
   AssertFalse(Problems[0].Blocking);
+end;
+
+// So the window can select what a problem is about
+procedure TTestLayout.TestProblemsNameTheirPlacement;
+var
+  Problems: TLayoutProblemArray;
+  Problem: TLayoutProblem;
+begin
+  WritePattern(2);
+  Prepare;
+  FLayout.PlaceNewPieces;
+  FLayout.Placements[1].Rotation := 45;
+  Problems := FLayout.Problems;
+  AssertEquals(ProblemText, 1, Length(Problems));
+  AssertEquals('off grain', 1, Problems[0].Placement);
+  AssertEquals('about no note', -1, Problems[0].Note);
+  FLayout.Placements[1].Rotation := 0;
+  FLayout.Placements[1].X := -5;
+  FLayout.Placements[1].Y := 500;
+  Problems := FLayout.Problems;
+  AssertEquals(ProblemText, 1, Length(Problems));
+  AssertEquals('off the sheet', 1, Problems[0].Placement);
+  FLayout.Placements := nil;
+  Problems := FLayout.Problems;
+  AssertTrue(ProblemText, Length(Problems) > 0);
+  for Problem in Problems do
+    AssertEquals(Problem.Text, -1, Problem.Placement);
 end;
 
 procedure TTestLayout.TestUnknownSizeBlocks;

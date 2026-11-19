@@ -91,6 +91,8 @@ type
     // Leaves a section out, header and all, or brings it back; the open
     // section, once left out, gives way to the first shown one
     procedure SetSectionShown(Content: TWinControl; Shown: boolean);
+    // A new caption for a section's header, such as one with a count in it
+    procedure SetSectionCaption(Content: TWinControl; const ACaption: string);
     // The open section, by what AddSection gave
     property ActiveContent: TWinControl read GetActiveContent write SetActiveContent;
     // The open section by its key; a key no shown section has changes nothing
@@ -325,6 +327,17 @@ begin
     Section.Content.Visible := False;
   end;
   ArrangeSections;
+end;
+
+procedure TAccordion.SetSectionCaption(Content: TWinControl; const ACaption: string);
+var
+  Section: TAccordionSection;
+begin
+  Section := SectionOf(Content);
+  if not Assigned(Section) or (Section.Header.Caption = ACaption) then
+    Exit;
+  Section.Header.Caption := ACaption;
+  Section.Header.Invalidate;
 end;
 
 function TAccordion.GetActiveContent: TWinControl;

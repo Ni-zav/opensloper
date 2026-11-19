@@ -182,6 +182,8 @@ type
     Blocking: boolean;
     // It says a copy is waiting to be placed, which the window's tray shows
     Unplaced: boolean;
+    // The index of the placement or the layout's note it is about, or -1
+    Placement, Note: integer;
   end;
 
   // A copy of a piece with no placement yet
@@ -1908,44 +1910,49 @@ begin
     Problems[High(Problems)].Text := Text;
     Problems[High(Problems)].Blocking := False;
     Problems[High(Problems)].Unplaced := False;
+    Problems[High(Problems)].Placement := -1;
+    Problems[High(Problems)].Note := -1;
   end;
 end;
 
 procedure TLayout.AddOverlapProblems(const Shapes: TPlacedPieceArray; var Problems: TLayoutProblemArray);
 var
-  First, Second: integer;
-  Note: TSheetNote;
+  First, Second, NoteIndex: integer;
   Values: TFieldValues;
 
-  procedure Add(const Text: string);
+  procedure Add(const Text: string; Placement, Note: integer);
   begin
     SetLength(Problems, Length(Problems) + 1);
     Problems[High(Problems)].Text := Text;
     Problems[High(Problems)].Blocking := False;
+    Problems[High(Problems)].Unplaced := False;
+    Problems[High(Problems)].Placement := Placement;
+    Problems[High(Problems)].Note := Note;
   end;
 
 begin
   Values := FieldValues('', '');
-  for Note in Notes do
+  for NoteIndex := 0 to High(Notes) do
     for First := 0 to High(Shapes) do
-      if PolygonTouches(Shapes[First].CutLine, NoteBounds(Note, Values)) then
-        Add(Format(rsLayoutNoteOverlap, [TextLines(Note.Text)[0], Shapes[First].Caption]));
+      if PolygonTouches(Shapes[First].CutLine, NoteBounds(Notes[NoteIndex], Values)) then
+        Add(Format(rsLayoutNoteOverlap, [TextLines(Notes[NoteIndex].Text)[0], Shapes[First].Caption]), -1, NoteIndex);
   for First := 0 to High(Shapes) do
   begin
     if (Shapes[First].Bounds.MinX < -DEFAULT_TOLERANCE) or (Shapes[First].Bounds.MinY < -DEFAULT_TOLERANCE) then
-      Add(Format(rsLayoutOffSheet, [Shapes[First].Caption]));
+      Add(Format(rsLayoutOffSheet, [Shapes[First].Caption]), Shapes[First].Placement, -1);
     if (Output.Kind = okLarge) and (Shapes[First].Bounds.MaxX > Output.RollWidth - 2 * Output.Tiles.Margin + DEFAULT_TOLERANCE) then
-      Add(Format(rsLayoutWiderThanRoll, [Shapes[First].Caption, FormatFloat('0.#', Output.RollWidth)]));
+      Add(Format(rsLayoutWiderThanRoll, [Shapes[First].Caption, FormatFloat('0.#', Output.RollWidth)]), Shapes[First].Placement, -1);
     if (Output.Kind = okMaterial) and (Output.MaterialLength > 0) and ((Shapes[First].Bounds.MaxX > Output.MaterialWidth + DEFAULT_TOLERANCE) or
       (Shapes[First].Bounds.MaxY > Output.MaterialLength + DEFAULT_TOLERANCE)) then
-      Add(Format(rsLayoutPastSheet, [Shapes[First].Caption, FormatFloat('0.#', Output.MaterialWidth), FormatFloat('0.#', Output.MaterialLength)]))
+      Add(Format(rsLayoutPastSheet, [Shapes[First].Caption, FormatFloat('0.#', Output.MaterialWidth), FormatFloat('0.#', Output.MaterialLength)]),
+        Shapes[First].Placement, -1)
     else if (Output.Kind = okMaterial) and (Shapes[First].Bounds.MaxX > Output.MaterialWidth + DEFAULT_TOLERANCE) then
-      Add(Format(rsLayoutPastWidth, [Shapes[First].Caption, FormatFloat('0.#', Output.MaterialWidth)]));
+      Add(Format(rsLayoutPastWidth, [Shapes[First].Caption, FormatFloat('0.#', Output.MaterialWidth)]), Shapes[First].Placement, -1);
     for Second := First + 1 to High(Shapes) do
       if (Shapes[First].Bounds.MaxX > Shapes[Second].Bounds.MinX) and (Shapes[Second].Bounds.MaxX > Shapes[First].Bounds.MinX) and
         (Shapes[First].Bounds.MaxY > Shapes[Second].Bounds.MinY) and (Shapes[Second].Bounds.MaxY > Shapes[First].Bounds.MinY) and
         (Abs(Area(Intersect(ClipperPaths(Shapes[First].CutLine), ClipperPaths(Shapes[Second].CutLine), frNonZero))) > OVERLAP_AREA) then
-        Add(Format(rsLayoutOverlap, [Shapes[First].Caption, Shapes[Second].Caption]));
+        Add(Format(rsLayoutOverlap, [Shapes[First].Caption, Shapes[Second].Caption]), Shapes[Second].Placement, -1);
   end;
 end;
 
@@ -1972,13 +1979,17 @@ var
   Profile: TMachineProfile;
   Chosen: TOutputProfile;
   Shapes: TPlacedPieceArray;
+  PlacementIndex: integer;
 
+// About the placement PlacementIndex, -1 outside the loop over them
   procedure Add(const Text: string; Blocking: boolean);
   begin
     SetLength(Result, Length(Result) + 1);
     Result[High(Result)].Text := Text;
     Result[High(Result)].Blocking := Blocking;
     Result[High(Result)].Unplaced := False;
+    Result[High(Result)].Placement := PlacementIndex;
+    Result[High(Result)].Note := -1;
   end;
 
   function MaterialExists: boolean;
@@ -1994,6 +2005,7 @@ var
 begin
   Result := nil;
   AllRead := True;
+  PlacementIndex := -1;
   // Placing every piece is the costly part, so it is done once
   Shapes := PlacedPieces;
   if (Output.Profile <> '') and not ChosenProfile(Profile) then
@@ -2008,8 +2020,9 @@ begin
       Add(Format(rsLayoutSourceProblem, [ExtractFileName(Source.PatternFile), Source.LoadError]), True);
       AllRead := False;
     end;
-  for Placement in Placements do
+  for PlacementIndex := 0 to High(Placements) do
   begin
+    Placement := Placements[PlacementIndex];
     Source := FindSourceById(FSources, Placement.SourceId);
     if not Assigned(Source) or not Assigned(Source.Pattern) or (Source.LoadError <> '') then
       Continue;
@@ -2031,6 +2044,7 @@ begin
     if Placement.Copy > Piece.CutCount then
       Add(Format(rsLayoutExtraCopy, [ExtractFileName(Source.PatternFile), Piece.DisplayName, Piece.CutCount, Placement.Copy]), False);
   end;
+  PlacementIndex := -1;
   for Item in Unplaced do
   begin
     Probe := Default(TPlacement);

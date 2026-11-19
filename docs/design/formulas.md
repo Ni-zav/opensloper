@@ -88,7 +88,12 @@ number it cannot tell, such as `400 * 2`.
 
 An object that cannot be worked out is drawn red, at its last good place, and
 those that depend on it orange. Hover over it, or select it, to see why. The
-Objects tab's Problems filter lists them all.
+Problems tab, at the foot of the side panel, lists every problem in full,
+with how many there are on its header; click one to select what it is about
+and bring it into view, or double-click to zoom to it. A problem with a
+variable or measurement opens its tab instead. The Objects tab's Problems
+filter lists the objects too, and clicking the problems count in the status
+bar opens the Problems tab.
 
 Every object with a problem, not only a failing one, has a faint red halo on
 the canvas: a seam whose sides do not match, a marking or note in no piece, an

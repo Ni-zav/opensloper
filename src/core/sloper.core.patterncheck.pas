@@ -28,6 +28,14 @@ interface
 uses
   SysUtils, fpjson, Sloper.Core.EvalTypes, Sloper.Core.Pattern;
 
+type
+  // A problem in plain words, and the object it is about
+  TPatternProblem = record
+    Key, Text: string;
+  end;
+
+  TPatternProblemArray = array of TPatternProblem;
+
 // The measurement keys the pattern's formulas use, in order
 function PatternMeasurementKeys(Pattern: TPattern): TStringArray;
 // The same, from a pattern file; needs no measurement set
@@ -39,10 +47,13 @@ function ReportFloat(Value: double): TJSONData;
 function StateName(State: TEvalState): string;
 // One line per measurement, variable or object in error or invalid, as
 // "Name (error): message", then one per seam out of tolerance and one per piece
-// with no material, one per marking line in no piece or outside its piece, and
-// one per printing note in no piece.
+// with no material or too big for it, one per marker or marking line in no
+// piece or outside its piece, one per outline edge in no piece, and one per
+// printing note in no piece.
 // Blocked ones fail because of these, so they are only counted.
 function PatternProblems(Pattern: TPattern; out BlockedCount: integer): TStringArray;
+// The same problems, each with the key of the object it is about
+function PatternProblemList(Pattern: TPattern; out BlockedCount: integer): TPatternProblemArray;
 // Every variable's value and every object's position (points), length (edges)
 // areas and perimeter (pieces), or side lengths (seams), with its state; failing ones have a message instead of values.
 // PatternName and MeasurementName are written as given. The caller frees it.
@@ -56,6 +67,7 @@ resourcestring
   rsCheckLineOutside = '%s lies outside %s, which it is marked on';
   rsCheckLineLoose = '%s is a marking line in no piece, so it does not print';
   rsCheckMarkerLoose = '%s has a marker but is in no piece, so it does not print';
+  rsCheckOutlineLoose = '%s is an outline edge in no piece, so it does not print';
   rsCheckSeam = '%s: side A is %s mm and side B %s mm, %s mm from the expected %s mm';
   rsCheckNoteLoose = '%s is marked to print but lies in no piece, so it does not print in layouts';
   rsCheckWiderThanRoll = '%s is %s across, wider than %s at %s';
@@ -66,7 +78,8 @@ resourcestring
 implementation
 
 uses
-  Classes, Math, Sloper.Core.JSON, Sloper.Core.Evaluator, Sloper.Core.PatternFile, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.Geometry,
+  Classes, Math, Generics.Collections, Sloper.Core.JSON, Sloper.Core.Evaluator, Sloper.Core.PatternFile, Sloper.Core.Variables,
+  Sloper.Core.Draft, Sloper.Core.Geometry,
   Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units;
 
 const
@@ -121,10 +134,17 @@ begin
   end;
 end;
 
+procedure AddProblem(var Problems: TPatternProblemArray; const Key, Text: string);
+begin
+  SetLength(Problems, Length(Problems) + 1);
+  Problems[High(Problems)].Key := Key;
+  Problems[High(Problems)].Text := Text;
+end;
+
 // Only for markings and pieces that computed, as failing ones are reported
 // anyway. A marked point outside its piece makes the piece invalid, so only
 // lines are checked for that here.
-procedure AddMarkingLineProblems(Pattern: TPattern; var Problems: TStringArray);
+procedure AddMarkingLineProblems(Pattern: TPattern; var Problems: TPatternProblemArray);
 var
   Index: integer;
   DraftObject: TDraftObject;
@@ -142,19 +162,57 @@ begin
       Continue;
     Pieces := Pattern.PiecesWithMarking(DraftObject.Key);
     if (Length(Pieces) = 0) and IsLine then
-      Insert(Format(rsCheckLineLoose, [DraftObject.DisplayName]), Problems, Length(Problems))
+      AddProblem(Problems, DraftObject.Key, Format(rsCheckLineLoose, [DraftObject.DisplayName]))
     else if Length(Pieces) = 0 then
-      Insert(Format(rsCheckMarkerLoose, [DraftObject.DisplayName]), Problems, Length(Problems));
+      AddProblem(Problems, DraftObject.Key, Format(rsCheckMarkerLoose, [DraftObject.DisplayName]));
     if IsLine then
       for Piece in Pieces do
         if (Piece.State = esValid) and not Pattern.LiesInside(DraftObject, Piece) then
-          Insert(Format(rsCheckLineOutside, [DraftObject.DisplayName, Piece.DisplayName]), Problems, Length(Problems));
+          AddProblem(Problems, DraftObject.Key, Format(rsCheckLineOutside, [DraftObject.DisplayName, Piece.DisplayName]));
+  end;
+end;
+
+// Outline edges no piece uses, once there is a piece: drawn as outline but
+// left out, often by a piece made before the edge was added. An edge split
+// into outline parts is skipped, as piece detection skips it for them.
+procedure AddOutlineEdgeProblems(Pattern: TPattern; var Problems: TPatternProblemArray);
+var
+  Index: integer;
+  Used: specialize THashSet<string>;
+  Piece: TPieceObject;
+  Entry: TPieceEdge;
+  Edge: TEdgeObject;
+begin
+  if Length(Pattern.PieceList) = 0 then
+    Exit;
+  Used := specialize THashSet<string>.Create;
+  try
+    for Index := 0 to Pattern.ObjectCount - 1 do
+      if Pattern.Objects[Index] is TPieceObject then
+      begin
+        Piece := TPieceObject(Pattern.Objects[Index]);
+        for Entry in Piece.Path do
+          Used.Add(Entry.EdgeKey);
+        if Piece.FoldEdgeKey <> '' then
+          Used.Add(Piece.FoldEdgeKey);
+      end
+      else if (Pattern.Objects[Index] is TSplitPart) and (TSplitPart(Pattern.Objects[Index]).Role = erOutline) then
+        Used.Add(TSplitPart(Pattern.Objects[Index]).Source);
+    for Index := 0 to Pattern.ObjectCount - 1 do
+      if Pattern.Objects[Index] is TEdgeObject then
+      begin
+        Edge := TEdgeObject(Pattern.Objects[Index]);
+        if (Edge.Role = erOutline) and (Edge.State = esValid) and not Used.Contains(Edge.Key) then
+          AddProblem(Problems, Edge.Key, Format(rsCheckOutlineLoose, [Edge.DisplayName]));
+      end;
+  finally
+    FreeAndNil(Used);
   end;
 end;
 
 // Each valid piece on a material with a size, measured as it is cut (see
 // TPieceObject.GrainExtent), with across along the material's width
-procedure AddMaterialFitProblems(Pattern: TPattern; var Problems: TStringArray);
+procedure AddMaterialFitProblems(Pattern: TPattern; var Problems: TPatternProblemArray);
 var
   Index: integer;
   Piece: TPieceObject;
@@ -192,11 +250,20 @@ begin
         Shown(Material.Width * Scale)])
     else
       Problem := Format(rsCheckWiderThanRoll, [Piece.DisplayName, Shown(Extent.X), Material.Name, Shown(Material.Width * Scale)]);
-    Insert(Problem, Problems, Length(Problems));
+    AddProblem(Problems, Piece.Key, Problem);
   end;
 end;
 
 function PatternProblems(Pattern: TPattern; out BlockedCount: integer): TStringArray;
+var
+  Problem: TPatternProblem;
+begin
+  Result := nil;
+  for Problem in PatternProblemList(Pattern, BlockedCount) do
+    Insert(Problem.Text, Result, Length(Result));
+end;
+
+function PatternProblemList(Pattern: TPattern; out BlockedCount: integer): TPatternProblemArray;
 var
   Node: TEvalNode;
   StateText: string;
@@ -218,8 +285,7 @@ begin
       else
         Continue;
     end;
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := Format(rsCheckProblem, [Node.DisplayName, StateText, Node.Message]);
+    AddProblem(Result, Node.Key, Format(rsCheckProblem, [Node.DisplayName, StateText, Node.Message]));
   end;
   for Index := 0 to Pattern.ObjectCount - 1 do
     if (Pattern.Objects[Index] is TSeamObject) and (Pattern.Objects[Index].State = esValid) then
@@ -227,22 +293,19 @@ begin
       Seam := TSeamObject(Pattern.Objects[Index]);
       if not Seam.OutOfTolerance then
         Continue;
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Format(rsCheckSeam, [Seam.DisplayName, FormatFloat(SEAM_FORMAT, Seam.LengthA), FormatFloat(SEAM_FORMAT, Seam.LengthB),
-        FormatFloat(SEAM_FORMAT, Seam.Mismatch), FormatFloat(SEAM_FORMAT, Seam.Ease)]);
+      AddProblem(Result, Seam.Key, Format(rsCheckSeam, [Seam.DisplayName, FormatFloat(SEAM_FORMAT, Seam.LengthA), FormatFloat(SEAM_FORMAT, Seam.LengthB),
+        FormatFloat(SEAM_FORMAT, Seam.Mismatch), FormatFloat(SEAM_FORMAT, Seam.Ease)]));
     end;
   for Index := 0 to Pattern.ObjectCount - 1 do
     if (Pattern.Objects[Index] is TPieceObject) and not Assigned(Pattern.MaterialOf(TPieceObject(Pattern.Objects[Index]))) then
-    begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Format(rsCheckNoMaterial, [Pattern.Objects[Index].DisplayName]);
-    end;
+      AddProblem(Result, Pattern.Objects[Index].Key, Format(rsCheckNoMaterial, [Pattern.Objects[Index].DisplayName]));
   AddMaterialFitProblems(Pattern, Result);
   AddMarkingLineProblems(Pattern, Result);
+  AddOutlineEdgeProblems(Pattern, Result);
   for Index := 0 to Pattern.ObjectCount - 1 do
     if (Pattern.Objects[Index] is TNoteObject) and TNoteObject(Pattern.Objects[Index]).Print and (Pattern.Objects[Index].State = esValid) and
       (Length(Pattern.NotePieces(TNoteObject(Pattern.Objects[Index]))) = 0) then
-      Insert(Format(rsCheckNoteLoose, [Pattern.Objects[Index].DisplayName]), Result, Length(Result));
+      AddProblem(Result, Pattern.Objects[Index].Key, Format(rsCheckNoteLoose, [Pattern.Objects[Index].DisplayName]));
 end;
 
 function ReportFloat(Value: double): TJSONData;

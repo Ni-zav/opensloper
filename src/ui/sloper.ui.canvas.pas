@@ -31,7 +31,7 @@ uses
   Classes, SysUtils, Controls, StdCtrls, Menus, Graphics, LCLType, LMessages, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.Pattern, Sloper.Core.Transform, Sloper.Core.Settings,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.TextFields, Sloper.Core.Fragment,
-  Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap,
+  Sloper.Core.PatternCheck, Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap,
   Sloper.UI.Scene, Sloper.UI.CanvasInput, Sloper.UI.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools, Sloper.UI.SuggestionGrade;
 
 type
@@ -76,6 +76,9 @@ type
     FLabelMode: TLabelMode;
     FDrawRole: TEdgeRole;
     FShowPieceFills: boolean;
+    // The problems the overlay marks, worked out again after each change
+    FShowProblems, FProblemsStale: boolean;
+    FProblems: TPatternProblemArray;
     // The grid's spacing, in GridUnit
     FGridStep: double;
     FGridUnit: TMeasureUnit;
@@ -145,6 +148,10 @@ type
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
     procedure SetLabelMode(Value: TLabelMode);
     procedure SetShowPieceFills(Value: boolean);
+    procedure SetShowProblems(Value: boolean);
+    function Problems: TPatternProblemArray;
+    // What is wrong with the object, in the overlay's words; empty when nothing is
+    function ProblemText(const Key: string): string;
     procedure SetOutsideHoverKey(const Value: string);
     procedure SetLabelsHeld(Value: boolean);
     function ShownLabelMode: TLabelMode;
@@ -254,6 +261,8 @@ type
     // The role of the lines, curves, circles, arcs and rectangles drawn next
     property DrawRole: TEdgeRole read FDrawRole write FDrawRole;
     property ShowPieceFills: boolean read FShowPieceFills write SetShowPieceFills;
+    // Marks the objects with problems, and pointing at one says what is wrong
+    property ShowProblems: boolean read FShowProblems write SetShowProblems;
     // An object pointed at somewhere else, such as a piece in the Garment
     // tab, shown as if hovered here while the pointer is not on the canvas
     property OutsideHoverKey: string read FOutsideHoverKey write SetOutsideHoverKey;
@@ -286,6 +295,8 @@ uses
   Sloper.UI.ObjectList;
 
 const
+  // Between an object's problems in the status bar
+  PROBLEM_GAP = '; ';
   // Screen pixels
   POINT_HIT_RADIUS = 7;
   EDGE_HIT_RADIUS = 5;
@@ -365,6 +376,8 @@ begin
   inherited Create(AOwner);
   FView := DefaultView;
   FShowPieceFills := True;
+  FShowProblems := True;
+  FProblemsStale := True;
   FDrawRole := erOutline;
   FGridUnit := muMillimetre;
   FGridStep := DEFAULT_GRID_STEPS[muMillimetre];
@@ -442,6 +455,7 @@ begin
     end;
     FTipSnapShown := False;
   end;
+  FProblemsStale := True;
   Invalidate;
 end;
 
@@ -1124,6 +1138,42 @@ begin
   Invalidate;
 end;
 
+procedure TPatternCanvas.SetShowProblems(Value: boolean);
+begin
+  FShowProblems := Value;
+  Invalidate;
+end;
+
+function TPatternCanvas.Problems: TPatternProblemArray;
+var
+  BlockedCount: integer;
+begin
+  if not Assigned(FDocument) then
+    Exit(nil);
+  if FProblemsStale then
+  begin
+    FProblems := PatternProblemList(FDocument.Pattern, BlockedCount);
+    FProblemsStale := False;
+  end;
+  Result := FProblems;
+end;
+
+function TPatternCanvas.ProblemText(const Key: string): string;
+var
+  Problem: TPatternProblem;
+begin
+  Result := '';
+  if Key = '' then
+    Exit;
+  for Problem in Problems do
+    if Problem.Key = Key then
+    begin
+      if Result <> '' then
+        Result := Result + PROBLEM_GAP;
+      Result := Result + Problem.Text;
+    end;
+end;
+
 procedure TPatternCanvas.SetGrid(Step: double; AUnit: TMeasureUnit);
 begin
   if Step <= 0 then
@@ -1344,7 +1394,9 @@ begin
           FHoverKey := Key;
           Invalidate;
           Node := FDocument.Pattern.FindNode(Key);
-          if Assigned(Node) and (Node.State <> esValid) then
+          if FShowProblems and (ProblemText(Key) <> '') then
+            ShowMessageText(ProblemText(Key))
+          else if Assigned(Node) and (Node.State <> esValid) then
             ShowMessageText(Format(rsCanvasHover, [Node.DisplayName, Node.Message]))
           else
             ShowMessageText('');
@@ -1675,6 +1727,8 @@ end;
 
 // What the painter needs to know of the canvas
 function TPatternCanvas.PaintState: TPaintState;
+var
+  Problem: TPatternProblem;
 begin
   Result := Default(TPaintState);
   Result.View := FView;
@@ -1683,6 +1737,9 @@ begin
   if Result.HoverKey = '' then
     Result.HoverKey := FOutsideHoverKey;
   Result.ShowPieceFills := FShowPieceFills;
+  if FShowProblems then
+    for Problem in Problems do
+      Insert(Problem.Key, Result.ProblemKeys, Length(Result.ProblemKeys));
   Result.SmallPoints := ShownLabelMode = lmNone;
   if FTipDragging then
   begin

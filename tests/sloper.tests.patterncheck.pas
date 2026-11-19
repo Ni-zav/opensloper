@@ -39,12 +39,46 @@ type
     procedure TestNoProblems;
     procedure TestProblemsAndBlocked;
     procedure TestReport;
+    procedure TestLooseOutlineEdgeReported;
+    procedure TestNoOutlineReportBeforeAPiece;
+    procedure TestSplitOutlineEdgeNotReported;
+    procedure TestProblemsNameTheirObjects;
+    procedure TestSettingsKeepProblemsToggle;
   end;
 
 implementation
 
 uses
-  SysUtils, fpjson, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.PatternFile, Sloper.Core.PatternCheck;
+  SysUtils, fpjson, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.PatternFile, Sloper.Core.PatternCheck, Sloper.Core.Geometry,
+  Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Settings;
+
+// A 200 by 100 outline rectangle, as a piece when MakePiece
+function OutlineRectangle(Pattern: TPattern; MakePiece: boolean; out Edges: TRectangleEdges): TPieceObject;
+var
+  Path: TPiecePath;
+  Reason: string;
+begin
+  Result := nil;
+  if not Pattern.AddRectangle(Pattern.AddFreePoint('O', '0', '0').Key, '200', '100', erOutline, Edges) then
+    raise Exception.Create(Pattern.LastError);
+  Pattern.Evaluate;
+  if not MakePiece then
+    Exit;
+  if not DetectPiecePath(Pattern, Vec2(50, 50), Path, Reason) then
+    raise Exception.Create(Reason);
+  Result := Pattern.AddPiece('Front', Path, '10');
+  Pattern.Evaluate;
+end;
+
+function HasProblem(Pattern: TPattern; const Problem: string): boolean;
+var
+  BlockedCount: integer;
+  Found: string;
+begin
+  Result := False;
+  for Found in PatternProblems(Pattern, BlockedCount) do
+    Result := Result or (Found = Problem);
+end;
 
 procedure TTestPatternCheck.SetUp;
 begin
@@ -161,6 +195,81 @@ begin
       '}'#10, JSONToText(Report));
   finally
     FreeAndNil(Report);
+  end;
+end;
+
+procedure TTestPatternCheck.TestLooseOutlineEdgeReported;
+var
+  Edges: TRectangleEdges;
+  Loose: TLineObject;
+begin
+  OutlineRectangle(FPattern, True, Edges);
+  Loose := FPattern.AddLine(FPattern.AddFreePoint('P', '300', '0').Key, FPattern.AddFreePoint('Q', '300', '100').Key, erOutline);
+  FPattern.Evaluate;
+  AssertTrue('the loose edge', HasProblem(FPattern, Format(rsCheckOutlineLoose, [Loose.DisplayName])));
+  AssertFalse('the piece''s own', HasProblem(FPattern, Format(rsCheckOutlineLoose, [Edges[0].DisplayName])));
+  AssertTrue(FPattern.LastError, FPattern.SetEdgeRole(Loose, erConstruction));
+  FPattern.Evaluate;
+  AssertFalse('construction is fine', HasProblem(FPattern, Format(rsCheckOutlineLoose, [Loose.DisplayName])));
+end;
+
+procedure TTestPatternCheck.TestNoOutlineReportBeforeAPiece;
+var
+  Edges: TRectangleEdges;
+begin
+  OutlineRectangle(FPattern, False, Edges);
+  AssertFalse('still drafting', HasProblem(FPattern, Format(rsCheckOutlineLoose, [Edges[0].DisplayName])));
+end;
+
+procedure TTestPatternCheck.TestSplitOutlineEdgeNotReported;
+var
+  Edges: TRectangleEdges;
+  First, Second: TSplitPart;
+  BlockedCount: integer;
+begin
+  OutlineRectangle(FPattern, True, Edges);
+  AssertTrue(FPattern.LastError, FPattern.SplitEdge(Edges[0].Key, FPattern.AddAlongEdgePoint('M', Edges[0].Key, False, amRatio, '0.5').Key,
+    First, Second));
+  FPattern.Evaluate;
+  AssertEquals('its parts stand in for it', 0, Length(PatternProblems(FPattern, BlockedCount)));
+end;
+
+procedure TTestPatternCheck.TestProblemsNameTheirObjects;
+var
+  Edges: TRectangleEdges;
+  Loose: TLineObject;
+  Piece: TPieceObject;
+  List: TPatternProblemArray;
+  Texts: TStringArray;
+  BlockedCount, Index: integer;
+begin
+  Piece := OutlineRectangle(FPattern, True, Edges);
+  FPattern.SetPieceMaterial(Piece, nil);
+  Loose := FPattern.AddLine(FPattern.AddFreePoint('P', '300', '0').Key, FPattern.AddFreePoint('Q', '300', '100').Key, erOutline);
+  FPattern.Evaluate;
+  List := PatternProblemList(FPattern, BlockedCount);
+  Texts := PatternProblems(FPattern, BlockedCount);
+  AssertEquals('the same problems', Length(Texts), Length(List));
+  for Index := 0 to High(List) do
+    AssertEquals('in the same order', Texts[Index], List[Index].Text);
+  AssertEquals(2, Length(List));
+  AssertEquals('the piece with no material', Piece.Key, List[0].Key);
+  AssertEquals('the loose edge', Loose.Key, List[1].Key);
+end;
+
+procedure TTestPatternCheck.TestSettingsKeepProblemsToggle;
+var
+  Settings: TAppSettings;
+  Reason: string;
+begin
+  Settings := TAppSettings.Create;
+  try
+    AssertTrue('on by default', Settings.ShowProblems);
+    Settings.ShowProblems := False;
+    AssertTrue(Reason, Settings.LoadFromText(Settings.SaveToText, Reason));
+    AssertFalse(Settings.ShowProblems);
+  finally
+    FreeAndNil(Settings);
   end;
 end;
 

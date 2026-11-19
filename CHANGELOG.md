@@ -28,6 +28,11 @@ Changed, Fixed and Removed under each version.
   can show `{piece.name}`, `{piece.cut}` ("cut 2 on fold") and
   `{piece.material}`, and any note or sheet note the size chosen from a size
   table, `{size}`, so a note can be a piece label of your own.
+- Once a pattern has a piece, an outline edge that no piece uses is listed
+  as a problem, since it does not print (#51).
+- Problems are drawn on the canvas (#51): every object with a problem has a
+  faint red halo, and pointing at it says what is wrong. View → Problems turns
+  the halos off and on.
 
 ### Changed
 

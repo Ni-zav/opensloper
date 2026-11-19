@@ -102,6 +102,8 @@ type
     ShowRulers: boolean;
     // Whether the drafting canvas fills pieces with their material
     ShowPieceFills: boolean;
+    // The design canvas marks the objects with problems
+    ShowProblems: boolean;
     // The width of the Materials dialog's list, at 96 pixels per inch; 0 for the default
     MaterialDialogSplit: integer;
     // Besides the built-in Standard
@@ -216,6 +218,7 @@ begin
   PublishTab := '';
   ShowRulers := True;
   ShowPieceFills := True;
+  ShowProblems := True;
   MaterialDialogSplit := 0;
   Preferences := DefaultPreferences;
   MachineProfiles := nil;
@@ -342,6 +345,7 @@ begin
       Obj.Add('publishTab', PublishTab);
     Obj.Add('showRulers', ShowRulers);
     Obj.Add('showPieceFills', ShowPieceFills);
+    Obj.Add('showProblems', ShowProblems);
     if MaterialDialogSplit > 0 then
       Obj.Add('materialDialogSplit', MaterialDialogSplit);
     Obj.Add('measureUnit', MEASURE_UNIT_NAMES[Preferences.MeasureUnit]);
@@ -404,6 +408,8 @@ begin
       ShowRulers := Shown;
     if GetJSONBoolean(Obj, 'showPieceFills', Shown) then
       ShowPieceFills := Shown;
+    if GetJSONBoolean(Obj, 'showProblems', Shown) then
+      ShowProblems := Shown;
     if GetJSONInteger(Obj, 'materialDialogSplit', Split) and (Split > 0) then
       MaterialDialogSplit := Split;
     if GetJSONString(Obj, 'measureUnit', TextValue) then

@@ -79,3 +79,9 @@ number it cannot tell, such as `400 * 2`.
 An object that cannot be worked out is drawn red, at its last good place, and
 those that depend on it orange. Hover over it, or select it, to see why. The
 Objects tab's Problems filter lists them all.
+
+Every object with a problem, not only a failing one, has a faint red halo on
+the canvas: a seam whose sides do not match, a marking or note in no piece, an
+outline edge no piece uses, or a piece too big for its material. Point at it
+and the status bar says what is wrong. View → Problems turns the halos off and
+on; the app remembers the choice.

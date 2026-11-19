@@ -50,7 +50,9 @@ type
     // Formula suggestions
     aiWand,
     // Stepping through the objects
-    aiSelectNext, aiSelectPrevious);
+    aiSelectNext, aiSelectPrevious,
+    // The problems drawn on the canvas
+    aiProblems);
 
 const
   APP_ICON_NAMES: array[TAppIcon] of string = ('file-plus', 'folder-open', 'device-floppy', 'file-pencil',
@@ -68,7 +70,8 @@ const
     'typography', 'notes', 'message',
     'eye-off', 'eye', 'focus-2', 'stack-front', 'stack-back', 'lock', 'lock-open',
     'wand',
-    'arrow-narrow-right', 'arrow-narrow-left');
+    'arrow-narrow-right', 'arrow-narrow-left',
+    'alert-triangle');
 
 type
   // Where a command's icon shows: on the toolbar along the top, on the design
@@ -150,6 +153,7 @@ resourcestring
   rsIconIsolate = 'Isolate Piece';
   rsIconBringToFront = 'Bring to Front';
   rsIconSendToBack = 'Send to Back';
+  rsIconProblems = 'Problems';
   rsIconSelect = 'Select';
   rsIconZoom = 'Zoom';
   rsIconPoint = 'Point';
@@ -234,6 +238,7 @@ resourcestring
   rsIconIsolateText = 'Work on the selected piece alone, the rest shown faintly';
   rsIconBringToFrontText = 'Draw the selected pieces over the others';
   rsIconSendToBackText = 'Draw the selected pieces under the others';
+  rsIconProblemsText = 'Mark the objects with problems on the canvas; pointing at one says what is wrong';
   rsIconSelectText = 'Select points, edges and pieces; drag to move points';
   rsIconZoomText = 'Zoom in a step; Shift and click zooms out, and dragging a box zooms to it';
   rsIconPointText = 'Add a point';
@@ -416,6 +421,7 @@ begin
   Add(aiIsolate, rsIconIsolate, rsIconIsolateText);
   Add(aiBringToFront, rsIconBringToFront, rsIconBringToFrontText);
   Add(aiSendToBack, rsIconSendToBack, rsIconSendToBackText);
+  Add(aiProblems, rsIconProblems, rsIconProblemsText);
   // On the menu only, as on the toolbar they would look like the Line and
   // Curve tools and the two offsets
   Menu := rsIconMenuToolsEdge;

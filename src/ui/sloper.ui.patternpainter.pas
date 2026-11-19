@@ -50,6 +50,8 @@ type
     DraggedTip: TVec2;
     // A selected callout shows a handle on its tip, for dragging it
     TipHandles: boolean;
+    // Objects with problems, marked with a red halo; empty when the overlay is off
+    ProblemKeys: TStringArray;
   end;
 
   TPatternPainter = class
@@ -66,7 +68,9 @@ type
     procedure DrawPiece(Piece: TPieceObject);
     procedure DrawChevron(const Position: TVec2; Angle: double; const AColor: TBGRAPixel);
     procedure DrawChevrons(Piece: TPieceObject);
-    procedure DrawSeamSide(const Side: TSeamSide; const AColor: TBGRAPixel);
+    procedure DrawSeamSide(const Side: TSeamSide; const AColor: TBGRAPixel; Width: single);
+    function HasProblem(const Key: string): boolean;
+    procedure DrawProblemHalos;
     procedure DrawSeams;
     procedure DrawPieceMarks(Piece: TPieceObject);
     function EdgeShift(const Key: string): TVec2;
@@ -144,6 +148,9 @@ const
   COPY_LINK_WIDTH = 1.5;
   SOURCE_HALO_WIDTH = 8;
   SOURCE_HALO_GROW = 5;
+  // Wider than a hover's or a copy source's, so a problem reads over both
+  PROBLEM_HALO_WIDTH = 10;
+  PROBLEM_HALO_GROW = 6;
   // Text smaller than this many pixels is drawn as a faint bar
   MIN_NOTE_PIXELS = 3;
   DASH_PIXELS_PER_MILLIMETRE = 2.5;
@@ -217,6 +224,13 @@ end;
 function HoverHalo: TBGRAPixel;
 begin
   Result := BGRA(37, 116, 214, 60);
+end;
+
+// Round an object with a problem, in the error colour, faint enough to read
+// the object through
+function ProblemHalo: TBGRAPixel;
+begin
+  Result := BGRA(209, 52, 56, 80);
 end;
 
 // A suggestion's object at the smallest and largest sizes
@@ -453,7 +467,7 @@ begin
     DrawChevron(Item.Position, Item.Angle, SelectedInk);
 end;
 
-procedure TPatternPainter.DrawSeamSide(const Side: TSeamSide; const AColor: TBGRAPixel);
+procedure TPatternPainter.DrawSeamSide(const Side: TSeamSide; const AColor: TBGRAPixel; Width: single);
 var
   Entry: TSeamEntry;
   Model: TVec2Array;
@@ -467,7 +481,7 @@ begin
     SetLength(Screen, Length(Model));
     for Index := 0 to High(Model) do
       Screen[Index] := ScreenPoint(FState.View.ToScreen(Model[Index]));
-    FBitmap.DrawPolyLineAntialias(Screen, AColor, SEAM_LINE_WIDTH);
+    FBitmap.DrawPolyLineAntialias(Screen, AColor, Width);
   end;
 end;
 
@@ -483,15 +497,15 @@ begin
     Node := FPattern.FindNode(Key);
     if not (Node is TSeamObject) then
       Continue;
-    DrawSeamSide(TSeamObject(Node).SideA, SeamInkA);
-    DrawSeamSide(TSeamObject(Node).SideB, SeamInkB);
+    DrawSeamSide(TSeamObject(Node).SideA, SeamInkA, SEAM_LINE_WIDTH);
+    DrawSeamSide(TSeamObject(Node).SideB, SeamInkB, SEAM_LINE_WIDTH);
     for Item in SeamChevrons(FPattern, TSeamObject(Node), False) do
       DrawChevron(Item.Position, Item.Angle, SeamInkA);
     for Item in SeamChevrons(FPattern, TSeamObject(Node), True) do
       DrawChevron(Item.Position, Item.Angle, SeamInkB);
   end;
-  DrawSeamSide(FState.SeamA, SeamInkA);
-  DrawSeamSide(FState.SeamB, SeamInkB);
+  DrawSeamSide(FState.SeamA, SeamInkA, SEAM_LINE_WIDTH);
+  DrawSeamSide(FState.SeamB, SeamInkB, SEAM_LINE_WIDTH);
 end;
 
 // The grainline and notches, over the edges
@@ -663,6 +677,73 @@ begin
   end;
 end;
 
+function TPatternPainter.HasProblem(const Key: string): boolean;
+var
+  Problem: string;
+begin
+  for Problem in FState.ProblemKeys do
+    if Problem = Key then
+      Exit(True);
+  Result := False;
+end;
+
+// Under the lines, so each object stays readable over its halo. Hidden and
+// dimmed objects are left out, as they cannot be clicked; notes mark theirs
+// in DrawNotes.
+procedure TPatternPainter.DrawProblemHalos;
+var
+  Key: string;
+  Node: TEvalNode;
+  Model: TVec2Array;
+  Screen: array of TPointF;
+  Shift, Spot, Centre: TVec2;
+  Index: integer;
+  Piece: TPieceObject;
+begin
+  for Key in FState.ProblemKeys do
+  begin
+    Node := FPattern.FindNode(Key);
+    if not (Node is TDraftObject) or not Node.HasResult or FPattern.IsHidden(TDraftObject(Node)) or FPattern.IsDimmed(TDraftObject(Node)) then
+      Continue;
+    Screen := nil;
+    if Node is TPieceObject then
+    begin
+      Piece := TPieceObject(Node);
+      SetLength(Screen, Length(Piece.CutLine));
+      for Index := 0 to High(Screen) do
+        Screen[Index] := ScreenPoint(FState.View.ToScreen(Piece.CutLine[Index]));
+      if Length(Screen) > 2 then
+        FBitmap.DrawPolygonAntialias(Screen, ProblemHalo, PROBLEM_HALO_WIDTH);
+    end
+    else if Node is TEdgeObject then
+    begin
+      Model := EdgePolyline(TEdgeObject(Node), FState.View.PixelsToMM(FLATTEN_PIXELS));
+      Shift := EdgeShift(Node.Key);
+      SetLength(Screen, Length(Model));
+      for Index := 0 to High(Model) do
+        Screen[Index] := ScreenPoint(FState.View.ToScreen(Model[Index]) + Shift);
+      FBitmap.DrawPolyLineAntialias(Screen, ProblemHalo, PROBLEM_HALO_WIDTH);
+    end
+    else if Node is TSeamObject then
+    begin
+      DrawSeamSide(TSeamObject(Node).SideA, ProblemHalo, PROBLEM_HALO_WIDTH);
+      DrawSeamSide(TSeamObject(Node).SideB, ProblemHalo, PROBLEM_HALO_WIDTH);
+    end
+    else if Node is TPointObject then
+    begin
+      Spot := FState.View.ToScreen(TPointObject(Node).Position);
+      FBitmap.FillEllipseAntialias(Spot.X, Spot.Y, POINT_RADIUS + PROBLEM_HALO_GROW, POINT_RADIUS + PROBLEM_HALO_GROW, ProblemHalo);
+    end
+    else
+      // A repeat's marked points
+      for Centre in MarkerPositions(TDraftObject(Node)) do
+      begin
+        Spot := FState.View.ToScreen(Centre);
+        FBitmap.FillEllipseAntialias(Spot.X, Spot.Y, POINT_RADIUS + PROBLEM_HALO_GROW, POINT_RADIUS + PROBLEM_HALO_GROW, ProblemHalo);
+      end;
+  end;
+end;
+
 // A faint dashed line from each linked copy to its source
 procedure TPatternPainter.DrawCopyLinks;
 var
@@ -717,7 +798,10 @@ begin
     if Piece.HasResult and not FPattern.IsHidden(Piece) and (FPattern.IsDimmed(Piece) = Dimmed) then
       DrawPiece(Piece);
   if not Dimmed then
+  begin
     DrawSourceHalos;
+    DrawProblemHalos;
+  end;
   for DraftObject in EdgesInDrawOrder(Shown) do
     if DraftObject.HasResult then
       DrawEdge(TEdgeObject(DraftObject));
@@ -821,6 +905,13 @@ begin
     begin
       Spot := FState.View.ToScreen(Tip);
       FBitmap.EllipseAntialias(Spot.X, Spot.Y, HANDLE_RADIUS, HANDLE_RADIUS, SelectedInk, 1.5, Paper);
+    end;
+    if HasProblem(Note.Key) and not FPattern.IsDimmed(Note) then
+    begin
+      First := FState.View.ToScreen(Vec2(Frame.MinX, Frame.MinY));
+      Last := FState.View.ToScreen(Vec2(Frame.MaxX, Frame.MaxY));
+      FBitmap.FillRectAntialias(First.X - PROBLEM_HALO_GROW, First.Y - PROBLEM_HALO_GROW, Last.X + PROBLEM_HALO_GROW,
+        Last.Y + PROBLEM_HALO_GROW, ProblemHalo);
     end;
     if Note.Boxed then
     begin

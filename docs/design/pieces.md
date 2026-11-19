@@ -16,6 +16,11 @@ status bar names the edge: split it at the point where the pieces meet (select
 the edge and the point, then Tools → Edge → Split Edge) and click again.
 Splitting an edge that pieces already use moves them onto the parts.
 
+Once the pattern has a piece, an outline edge that no piece uses is a problem,
+since it does not print: often an edge added after its piece was made, or one
+left out of the piece by mistake. Make the piece again to take it in, or set
+the edge to Construction if it is only a guide.
+
 ## Seam allowance
 
 A new piece starts with the allowance in its properties; type a formula to

@@ -111,7 +111,7 @@ type
     FCommands: TCommandSet;
     // The drafting tools down the left
     FToolBar: TToolBar;
-    FUndoAction, FRedoAction, FPieceFillsAction, FSideAction, FRulersAction, FAnnotationsAction: TAction;
+    FUndoAction, FRedoAction, FPieceFillsAction, FProblemsAction, FSideAction, FRulersAction, FAnnotationsAction: TAction;
     FHidePieceAction, FShowPiecesAction, FIsolateAction, FBringToFrontAction, FSendToBackAction: TAction;
     // Enabled only while there is something for them to work on
     FSaveAction, FSaveAsAction, FExportDraftAction, FPublishAction, FFitAction: TAction;
@@ -163,6 +163,7 @@ type
     procedure SetDrawRole(Role: TEdgeRole);
     procedure CreateDrawRoleBox;
     procedure PieceFillsClick(Sender: TObject);
+    procedure ProblemsClick(Sender: TObject);
     procedure AnnotationsClick(Sender: TObject);
     function SelectedPieces: TPieceObjectArray;
     procedure PieceViewChanged(const AText: string);
@@ -333,6 +334,7 @@ resourcestring
   rsTabMeasurements = 'Measurements';
   rsMenuViewLabels = '&Labels';
   rsMenuViewPieceFills = 'Piece &Fills';
+  rsMenuViewProblems = 'Probl&ems';
   rsMenuViewAnnotations = '&Annotations';
   rsMenuViewHidePiece = '&Hide Piece';
   rsMenuViewShowPieces = 'Show All &Pieces';
@@ -477,6 +479,8 @@ begin
   SetDrawRole(erOutline);
   FPieceFillsAction.Checked := FSettings.ShowPieceFills;
   FCanvas.ShowPieceFills := FSettings.ShowPieceFills;
+  FProblemsAction.Checked := FSettings.ShowProblems;
+  FCanvas.ShowProblems := FSettings.ShowProblems;
   SetSideShown(FSettings.ShowSidePanel);
   SetRulersShown(FSettings.ShowRulers);
   FDocument.NewPattern(FPreferences.MeasureUnit);
@@ -520,6 +524,7 @@ begin
   FSettings.NameColumnShare := FProperties.NameShare;
   FSettings.LabelMode := FCanvas.LabelMode;
   FSettings.ShowPieceFills := FCanvas.ShowPieceFills;
+  FSettings.ShowProblems := FCanvas.ShowProblems;
   FSettings.ShowSidePanel := FSidePanel.Visible;
   FSettings.SideTab := FSidePanel.ActiveKey;
   FSettings.ShowRulers := FRulersAction.Checked;
@@ -916,6 +921,8 @@ begin
   FCommands.AddMenuItem(MenuView, FPieceFillsAction);
   FAnnotationsAction := FCommands.NewAction(rsMenuViewAnnotations, aiAnnotations, @AnnotationsClick);
   FCommands.AddMenuItem(MenuView, FAnnotationsAction);
+  FProblemsAction := FCommands.NewAction(rsMenuViewProblems, aiProblems, @ProblemsClick);
+  FCommands.AddMenuItem(MenuView, FProblemsAction);
   // For overlapping pieces: view state, outside undo
   MenuView.Add(NewLine);
   FHidePieceAction := FCommands.NewAction(rsMenuViewHidePiece, aiHidePiece, @HidePieceClick);
@@ -1087,6 +1094,12 @@ procedure TMainForm.PieceFillsClick(Sender: TObject);
 begin
   FPieceFillsAction.Checked := not FPieceFillsAction.Checked;
   FCanvas.ShowPieceFills := FPieceFillsAction.Checked;
+end;
+
+procedure TMainForm.ProblemsClick(Sender: TObject);
+begin
+  FProblemsAction.Checked := not FProblemsAction.Checked;
+  FCanvas.ShowProblems := FProblemsAction.Checked;
 end;
 
 procedure TMainForm.LabelModeClick(Sender: TObject);

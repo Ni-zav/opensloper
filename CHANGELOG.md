@@ -39,6 +39,8 @@ Changed, Fixed and Removed under each version.
 - A note on the canvas follows its text as it is typed, values worked out,
   and double-clicking a note goes to its text, opening the side panel if it
   was hidden (#53).
+- The Garment tab draws fold lines, such as pleats, as lines on the pieces
+  (#55).
 
 ### Changed
 

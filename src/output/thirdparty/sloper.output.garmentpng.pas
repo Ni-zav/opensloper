@@ -358,6 +358,9 @@ begin
   end;
   for Line in Piece.Stitches do
     DrawDashed(Bitmap, ToPixels(Frame, Line.Points), InkColor, STITCH_WIDTH);
+  // Solid, so a pleat does not read as stitching
+  for Line in Piece.Folds do
+    Bitmap.DrawPolyLineAntialias(ToPixels(Frame, Line.Points), InkColor, STITCH_WIDTH);
   for Marker in Piece.Markers do
     DrawMarker(Bitmap, Marker, Frame);
 end;

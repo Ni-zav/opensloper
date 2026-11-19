@@ -218,6 +218,9 @@ begin
   for Line in Piece.Stitches do
     Result := Result + Format('<path d="%s" fill="none" stroke="%s" stroke-width="%s" stroke-dasharray="%s"/>',
       [PathData(Line.Points, False), INK_COLOR, Num(STITCH_WIDTH), STITCH_DASH]) + #10;
+  for Line in Piece.Folds do
+    Result := Result + Format('<path d="%s" fill="none" stroke="%s" stroke-width="%s"/>',
+      [PathData(Line.Points, False), INK_COLOR, Num(STITCH_WIDTH)]) + #10;
   for Marker in Piece.Markers do
     Result := Result + MarkerElement(Marker);
   Result := Result + '</g>' + #10;

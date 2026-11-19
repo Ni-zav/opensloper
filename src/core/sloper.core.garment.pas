@@ -66,6 +66,9 @@ type
     Edges: TGarmentLineArray;
     // Closed darts, stitch lines and topstitching
     Stitches: TGarmentLineArray;
+    // Fold lines, such as pleats: plain lines where the cloth is folded, not
+    // the pleat taken up
+    Folds: TGarmentLineArray;
     Markers: TGarmentMarkerArray;
     Bounds: TRect2;
     // Shaded across each column rather than each row: a long narrow piece
@@ -591,7 +594,9 @@ begin
       case Mark.Kind of
         mkLine:
           if Mark.Role = erStitch then
-            AddBoth(Result.Stitches, Mark.Line, Piece.Markings[Index].EdgeKey, '', False);
+            AddBoth(Result.Stitches, Mark.Line, Piece.Markings[Index].EdgeKey, '', False)
+          else if Mark.Role = erFold then
+            AddBoth(Result.Folds, Mark.Line, Piece.Markings[Index].EdgeKey, '', False);
         mkStitchHoles: AddMarkers(Mark.Holes, Mark.HoleSize, pmHole);
         mkPoint: AddMarkers(Mark.Centres, Mark.HoleSize, Mark.Marker);
       end;

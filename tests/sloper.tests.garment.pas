@@ -58,6 +58,7 @@ type
     procedure TestDartKeepsFarSideInPlace;
     procedure TestWideDartLeftOpen;
     procedure TestFoldOpens;
+    procedure TestPleatLinesDrawn;
     procedure TestGrainlineStandsUpright;
     procedure TestSeamEdgesAreSewn;
     procedure TestFailingPieceNoted;
@@ -294,6 +295,26 @@ begin
   for Point in Piece.Outline do
     AssertTrue('no apex in the outline', Distance(Point, Stitch.Points[0]) > 1);
   AssertEquals('no notes', 0, Length(Scene.Notes));
+end;
+
+// A pleat is a fold line inside the piece: drawn as a line, apart from the
+// stitching
+procedure TTestGarment.TestPleatLinesDrawn;
+var
+  Scene: TGarmentScene;
+  Piece: TGarmentPiece;
+begin
+  Shape('Skirt', [10, 110, 110, 10], [20, 20, 220, 220]);
+  FPattern.AddLine(FPattern.AddFreePoint('P', '60', '40').Key, FPattern.AddFreePoint('Q', '60', '200').Key, erFold);
+  FPattern.AddLine(FPattern.AddFreePoint('S', '30', '40').Key, FPattern.AddFreePoint('T', '30', '200').Key, erStitch);
+  FPattern.Evaluate;
+  Scene := BuildGarment(FPattern);
+  Piece := Scene.Pieces[0];
+  AssertEquals('the pleat', 1, Length(Piece.Folds));
+  AssertEquals('the stitch line stays a stitch', 1, Length(Piece.Stitches));
+  AssertEquals(2, Length(Piece.Folds[0].Points));
+  AssertPointsNear('where it was drawn', Vec2(60, 40), Piece.Folds[0].Points[0]);
+  AssertPointsNear('to its other end', Vec2(60, 200), Piece.Folds[0].Points[1]);
 end;
 
 procedure TTestGarment.TestDartKeepsFarSideInPlace;

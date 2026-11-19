@@ -29,6 +29,8 @@ saved with the pattern.
 - **Seams sewn.** An edge that is in a seam has a fine stitch line just inside
   it. Buttons, holes, stitch lines and topstitching are drawn; notches,
   labels, seam allowances and construction lines are not.
+- **Pleats as lines.** Fold lines, such as pleats, are drawn as plain lines
+  where they lie on the flat piece; the pleat is not folded up.
 - **Colour.** Each piece is filled with its material's colour at full
   strength, or its hatching.
 

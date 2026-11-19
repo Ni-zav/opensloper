@@ -1,6 +1,7 @@
 # Asking Claude
 
-The **Claude** tab in the side panel lets you ask Claude, Anthropic's AI model,
+The **Claude** tab in the side panel, its icon a speech bubble with a
+question mark, lets you ask Claude, Anthropic's AI model,
 to work on the pattern you have open, in your own words:
 
 - "Add 2 cm ease at the hip."

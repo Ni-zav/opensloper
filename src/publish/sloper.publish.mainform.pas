@@ -28,7 +28,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, Grids, fpjson, Sloper.Core.TextFields,
   Sloper.Core.Note, Sloper.API.AppLink, Sloper.Output.Layout, Sloper.Output.LayoutDocument, Sloper.Output.LayoutExport,
-  Sloper.Publish.PreviewCanvas, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.Accordion, Sloper.UI.SavePrompt,
+  Sloper.Publish.PreviewCanvas, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt,
   Sloper.UI.ProblemsPanel;
 
 type
@@ -37,9 +37,8 @@ type
     FDocument: TLayoutDocument;
     FPreview: TPreviewCanvas;
     // The side tabs; the rows being built go into FRowParent
-    FTabs: TAccordion;
+    FTabs: TSideTabs;
     FPiecesSide, FOutputSide, FInfoSide, FNotesSide, FRowParent: TWinControl;
-    FColumn: TPanel;
     FColumnSplitter: TSplitter;
     FTitleBox, FEveryPageBox: TCheckBox;
     FFieldBoxes: array[0..6] of TCheckBox;
@@ -112,6 +111,7 @@ type
     procedure SizeChange(Sender: TObject);
     procedure ChangeSource(const Description, AMeasurementFile, ASize: string);
     procedure BuildSide;
+    procedure TabsCollapsedChange(Sender: TObject);
     function AddSpin(const ACaption: string; AMax, AIncrement: double; Decimals: integer): TFloatSpinEdit;
     function AddLabel(const ACaption: string): TLabel;
     function AddButton(const ACaption: string; AHandler: TNotifyEvent): TButton;
@@ -420,31 +420,28 @@ begin
   FStatus.OnResize := @StatusResize;
   FStatus.OnMouseMove := @StatusMouseMove;
   FStatus.OnMouseUp := @StatusMouseUp;
-  FColumn := TPanel.Create(Self);
-  FColumn.Parent := Self;
-  FColumn.Align := alRight;
-  FColumn.Width := SIDE_WIDTH;
-  FColumn.BevelOuter := bvNone;
+  // One tab open at a time, as in the design app's side panel
+  FTabs := TSideTabs.Create(Self);
+  FTabs.Parent := Self;
+  FTabs.Align := alRight;
+  FTabs.Width := SIDE_WIDTH;
   // Both dock on the right, so the splitter goes just before the column,
   // between it and the preview, as in the design app
   FColumnSplitter := TSplitter.Create(Self);
   FColumnSplitter.Parent := Self;
   FColumnSplitter.Align := alRight;
-  FColumnSplitter.Left := FColumn.Left - FColumnSplitter.Width;
-  // One tab open at a time, as in the design app's side panel
-  FTabs := TAccordion.Create(Self);
-  FTabs.Parent := FColumn;
-  FTabs.Align := alClient;
+  FColumnSplitter.Left := FTabs.Left - FColumnSplitter.Width;
+  FTabs.OnCollapsedChange := @TabsCollapsedChange;
   // In the order they are used: patterns in, pieces placed, what goes on
   // the sheets, then output last, just above Problems
-  FPatternsSide := FTabs.AddSection('patterns', rsTabPatterns);
-  FPiecesSide := FTabs.AddSection('pieces', rsTabPieces);
-  FMaterialsSide := FTabs.AddSection(MATERIALS_SECTION, rsTabMaterials);
-  FInfoSide := FTabs.AddSection(INFO_SECTION, rsTabInfo);
-  FNotesSide := FTabs.AddSection(NOTES_SECTION, rsTabNotes);
-  FOutputSide := FTabs.AddSection('output', rsTabOutput);
-  // Last, so it stays at the foot of the panel, as in every app
-  FProblemsSide := FTabs.AddSection(PROBLEMS_SECTION, rsTabProblems);
+  FPatternsSide := FTabs.AddSection('patterns', rsTabPatterns, aiPatternsTab);
+  FPiecesSide := FTabs.AddSection('pieces', rsTabPieces, aiPiecesTab);
+  FMaterialsSide := FTabs.AddSection(MATERIALS_SECTION, rsTabMaterials, aiMaterialsTab);
+  FInfoSide := FTabs.AddSection(INFO_SECTION, rsTabInfo, aiInfoTab);
+  FNotesSide := FTabs.AddSection(NOTES_SECTION, rsTabNotes, aiAnnotations);
+  FOutputSide := FTabs.AddSection('output', rsTabOutput, aiPrint);
+  // At the foot of the column, as in every app
+  FProblemsSide := FTabs.AddSection(PROBLEMS_SECTION, rsTabProblems, aiProblems, True);
   FProblemsList := TProblemsPanel.Create(Self);
   FProblemsList.Parent := FProblemsSide;
   FProblemsList.Align := alClient;
@@ -830,6 +827,14 @@ begin
   Result.BorderSpacing.Top := ControlGap;
   Result.OnClick := AHandler;
   PlaceRow(Result);
+end;
+
+// Folded down to its icons, the panel cannot be dragged wider; opened out
+// again, the splitter goes back just before it
+procedure TPublishForm.TabsCollapsedChange(Sender: TObject);
+begin
+  FColumnSplitter.Visible := not FTabs.Collapsed;
+  FColumnSplitter.Left := FTabs.Left - FColumnSplitter.Width;
 end;
 
 procedure TPublishForm.BuildSide;
@@ -1370,6 +1375,7 @@ begin
         Inc(Blocking);
     end;
   FProblemsList.SetProblems(Listed);
+  FTabs.SetSectionCount(FProblemsSide, Length(Listed));
   if Length(Listed) = 0 then
   begin
     Shown := rsNoProblems;

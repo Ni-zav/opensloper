@@ -31,7 +31,7 @@ uses
   Sloper.UI.ListPanel, Sloper.UI.ObjectsPanel, Sloper.UI.VariablesPanel,
   Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
   Sloper.UI.MaterialPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.Core.IconSet, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.Preferences,
-  Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.Accordion, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
+  Sloper.Core.Transform, Sloper.Core.Fragment, Sloper.UI.SideTabs, Sloper.UI.Automation, Sloper.UI.AssistantPanel,
   Sloper.UI.GarmentPanel, Sloper.UI.ProblemsPanel, Sloper.Core.Garment, Sloper.API.AppLink, fpjson;
 
 type
@@ -123,7 +123,7 @@ type
     FLabelActions: array[TLabelMode] of TAction;
     FRoleActions: array[TEdgeRole] of TAction;
     FRoleBox: TComboBox;
-    FSidePanel: TAccordion;
+    FSidePanel: TSideTabs;
     FSideSplitter: TSplitter;
     FCanvasPanel: TPanel;
     FMaterials: TMaterialsPanel;
@@ -178,6 +178,7 @@ type
     procedure CanvasNoteAdded(Sender: TObject);
     procedure CreateSidePanel;
     procedure SetSideShown(Shown: boolean);
+    procedure SideCollapsedChange(Sender: TObject);
     procedure SideItemClick(Sender: TObject);
     procedure ListPanelMessage(Sender: TObject; const AText: string);
     procedure PropertiesSuggestChange(Sender: TObject);
@@ -599,58 +600,58 @@ end;
 // One section open at a time, each under its own header
 procedure TMainForm.CreateSidePanel;
 
-  function AddSection(const AKey, ACaption: string; Panel: TWinControl): TWinControl;
+  function AddSection(const AKey, ACaption: string; Icon: TAppIcon; Panel: TWinControl; AtFoot: boolean = False): TWinControl;
   begin
-    Panel.Parent := FSidePanel.AddSection(AKey, ACaption);
+    Panel.Parent := FSidePanel.AddSection(AKey, ACaption, Icon, AtFoot);
     Panel.Align := alClient;
     Result := Panel;
   end;
 
-  function AddList(const AKey, ACaption: string; Panel: TListPanel): TListPanel;
+  function AddList(const AKey, ACaption: string; Icon: TAppIcon; Panel: TListPanel): TListPanel;
   begin
-    AddSection(AKey, ACaption, Panel);
+    AddSection(AKey, ACaption, Icon, Panel);
     Panel.Document := FDocument;
     Panel.OnMessage := @ListPanelMessage;
     Result := Panel;
   end;
 
 begin
-  FSidePanel := TAccordion.Create(Self);
+  FSidePanel := TSideTabs.Create(Self);
   FSidePanel.Parent := Self;
   FSidePanel.Align := alRight;
   FSidePanel.Width := Scale96ToForm(490);
-  FProperties := TPropertiesPanel(AddSection('properties', rsTabProperties, TPropertiesPanel.Create(Self)));
+  FProperties := TPropertiesPanel(AddSection('properties', rsTabProperties, aiPropertiesTab, TPropertiesPanel.Create(Self)));
   FProperties.Document := FDocument;
   FProperties.OnMessage := @ListPanelMessage;
   FProperties.OnSuggestChange := @PropertiesSuggestChange;
   FProperties.OnSuggestPreview := @PropertiesSuggestPreview;
-  FObjects := TObjectsPanel(AddList('objects', rsTabObjects, TObjectsPanel.Create(Self)));
+  FObjects := TObjectsPanel(AddList('objects', rsTabObjects, aiObjectsTab, TObjectsPanel.Create(Self)));
   FObjects.OnSelect := @ObjectsSelect;
   FObjects.OnZoom := @ObjectsZoom;
   FObjects.OnDelete := @ObjectsDelete;
-  FGarment := TGarmentPanel(AddSection('garment', rsTabGarment, TGarmentPanel.Create(Self)));
+  FGarment := TGarmentPanel(AddSection('garment', rsTabGarment, aiGarmentTab, TGarmentPanel.Create(Self)));
   FGarment.Document := FDocument;
   FGarment.OnMessage := @ListPanelMessage;
   FGarment.OnHoverPiece := @GarmentHoverPiece;
   FGarment.OnSelectPiece := @GarmentSelectPiece;
-  FVariables := TVariablesPanel(AddList('variables', rsTabVariables, TVariablesPanel.Create(Self)));
-  FMeasurements := TMeasurementsPanel(AddList('measurements', rsTabMeasurements, TMeasurementsPanel.Create(Self)));
+  FVariables := TVariablesPanel(AddList('variables', rsTabVariables, aiVariablesTab, TVariablesPanel.Create(Self)));
+  FMeasurements := TMeasurementsPanel(AddList('measurements', rsTabMeasurements, aiMeasurements, TMeasurementsPanel.Create(Self)));
   FMeasurements.OnNewSet := @MeasurementsNewSet;
   FMeasurementWatch := TTimer.Create(Self);
   FMeasurementWatch.Interval := MEASUREMENT_WATCH_MILLISECONDS;
   FMeasurementWatch.OnTimer := @MeasurementWatchTick;
-  FRoles := TRolesPanel(AddSection('lines', rsTabLines, TRolesPanel.Create(Self)));
+  FRoles := TRolesPanel(AddSection('lines', rsTabLines, aiLinesTab, TRolesPanel.Create(Self)));
   FRoles.Document := FDocument;
   FRoles.OnMessage := @ListPanelMessage;
-  FMaterials := TMaterialsPanel(AddSection('materials', rsTabMaterials, TMaterialsPanel.Create(Self)));
+  FMaterials := TMaterialsPanel(AddSection('materials', rsTabMaterials, aiMaterialsTab, TMaterialsPanel.Create(Self)));
   FMaterials.Document := FDocument;
   FMaterials.OnMessage := @ListPanelMessage;
   FMaterials.OnEdit := @MaterialsEditClick;
-  FAssistant := TAssistantPanel(AddSection(CLAUDE_SECTION, rsTabClaude, TAssistantPanel.Create(Self)));
+  FAssistant := TAssistantPanel(AddSection(CLAUDE_SECTION, rsTabClaude, aiClaudeTab, TAssistantPanel.Create(Self)));
   FAssistant.Document := FDocument;
   FAssistant.WindowState := @UIStateJSON;
-  // Last, so it stays at the foot of the panel, as in every app
-  FProblemsList := TProblemsPanel(AddSection(PROBLEMS_SECTION, rsTabProblems, TProblemsPanel.Create(Self)));
+  // At the foot of the column, as in every app
+  FProblemsList := TProblemsPanel(AddSection(PROBLEMS_SECTION, rsTabProblems, aiProblems, TProblemsPanel.Create(Self), True));
   FProblemsList.OnSelect := @ProblemSelect;
   FProblemsList.OnHover := @ProblemHover;
   FProblemsList.OnZoom := @ProblemZoom;
@@ -658,6 +659,7 @@ begin
   FSideSplitter.Parent := Self;
   FSideSplitter.Align := alRight;
   FSideSplitter.Left := FSidePanel.Left - FSideSplitter.Width;
+  FSidePanel.OnCollapsedChange := @SideCollapsedChange;
 end;
 
 procedure TMainForm.SetSideShown(Shown: boolean);
@@ -666,8 +668,14 @@ begin
   // Both dock on the right, so the splitter goes just before the panel, between
   // it and the canvas, or it docks on the far side of it
   FSideSplitter.Left := FSidePanel.Left - FSideSplitter.Width;
-  FSideSplitter.Visible := Shown;
+  FSideSplitter.Visible := Shown and not FSidePanel.Collapsed;
   FSideAction.Checked := Shown;
+end;
+
+// Folded down to its icons, the panel cannot be dragged wider
+procedure TMainForm.SideCollapsedChange(Sender: TObject);
+begin
+  SetSideShown(FSidePanel.Visible);
 end;
 
 procedure TMainForm.SideItemClick(Sender: TObject);
@@ -1826,6 +1834,7 @@ var
       Listed[Index].Blocking := False;
     end;
     FProblemsList.SetProblems(Listed);
+    FSidePanel.SetSectionCount(FProblemsList.Parent, Length(Problems));
     if Length(Problems) = 0 then
       FSidePanel.SetSectionCaption(FProblemsList.Parent, rsTabProblems)
     else

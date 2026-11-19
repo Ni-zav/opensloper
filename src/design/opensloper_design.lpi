@@ -352,14 +352,14 @@
         <UnitName Value="Sloper.UI.PropertyText"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.accordion.pas"/>
+        <Filename Value="../ui/sloper.ui.sidetabs.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.Accordion"/>
+        <UnitName Value="Sloper.UI.SideTabs"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.accordionlayout.pas"/>
+        <Filename Value="../ui/sloper.ui.sidetabslayout.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.AccordionLayout"/>
+        <UnitName Value="Sloper.UI.SideTabsLayout"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.problemspanel.pas"/>

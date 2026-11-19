@@ -11,9 +11,12 @@ points and edges placed by formulas, then closed outlines become pieces.
   Rectangle, Piece, Notch, Seam, Text and Callout, then commands such as Arc,
   Split Edge and Round Corner. The Tools menu lists them all.
 - **Side panel**, on the right (View → Side Panel), with tabs, one open at a
-  time: click a tab's header to open it, and the others fold up under it.
-  With a header focused, ++enter++ or ++space++ opens it and the arrow keys
-  move to the next one:
+  time: click a tab's icon, in the column down the panel's left, to open it;
+  pointing at an icon names its tab. Click the open tab's icon to fold the
+  panel down to its icons, giving the canvas the room, and any icon to open
+  it again. With an icon focused, ++enter++ or ++space++ opens it and the
+  arrow keys move to the next one. [Icons](../reference/icons.md#side-panel-tabs)
+  shows each tab's icon:
 
     | Tab | What it shows |
     | --- | --- |

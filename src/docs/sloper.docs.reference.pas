@@ -150,6 +150,7 @@ resourcestring
   rsDocMenu = 'Menu';
   rsDocIconsToolbar = 'Toolbar';
   rsDocIconsTools = 'Tools, down the left of the canvas';
+  rsDocIconsSideTabs = 'Side panel tabs';
   rsDocIconsMenu = 'In the menus only';
   rsDocIconsProperties = 'In the properties';
   rsDocWhatItDoes = 'What it does';
@@ -229,7 +230,8 @@ const
   SHORTCUT_APP_TITLES: array[TShortcutApp] of string = (rsDocAppDesign, rsDocAppMeasurements, rsDocAppPublish);
   SHORTCUT_GROUP_TITLES: array[TShortcutGroup] of string = (rsDocShortcutFile, rsDocShortcutEdit, rsDocShortcutView, rsDocShortcutTools,
     rsDocShortcutCanvas, rsDocShortcutPanels, rsDocShortcutMouse);
-  ICON_PLACE_TITLES: array[TIconPlace] of string = (rsDocIconsToolbar, rsDocIconsTools, rsDocIconsMenu, rsDocIconsProperties);
+  ICON_PLACE_TITLES: array[TIconPlace] of string = (rsDocIconsToolbar, rsDocIconsTools, rsDocIconsSideTabs, rsDocIconsMenu,
+    rsDocIconsProperties);
   OPERATION_GROUP_TITLES: array[TOperationGroup] of string = (rsDocGroupPoints, rsDocGroupEdges, rsDocGroupTransforms, rsDocGroupPieces,
     rsDocGroupAnnotations);
   API_GROUP_TITLES: array[TApiMethodGroup] of string = (rsDocApiGroupFiles, rsDocApiGroupMeasurements, rsDocApiGroupObjects,

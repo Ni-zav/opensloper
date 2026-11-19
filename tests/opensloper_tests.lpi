@@ -331,9 +331,9 @@
         <UnitName Value="Sloper.Tests.PropertyText"/>
       </Unit>
       <Unit>
-        <Filename Value="sloper.tests.accordionlayout.pas"/>
+        <Filename Value="sloper.tests.sidetabslayout.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.Tests.AccordionLayout"/>
+        <UnitName Value="Sloper.Tests.SideTabsLayout"/>
       </Unit>
       <Unit>
         <Filename Value="sloper.tests.settings.pas"/>

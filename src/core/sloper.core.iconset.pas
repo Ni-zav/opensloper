@@ -54,7 +54,10 @@ type
     // The problems drawn on the canvas
     aiProblems,
     // Dependency arrows to what reads an object
-    aiDependents);
+    aiDependents,
+    // The side panel's tabs, those the commands above do not already give
+    aiPropertiesTab, aiObjectsTab, aiGarmentTab, aiVariablesTab, aiLinesTab, aiMaterialsTab,
+    aiPatternsTab, aiPiecesTab, aiInfoTab, aiClaudeTab);
 
 const
   APP_ICON_NAMES: array[TAppIcon] of string = ('file-plus', 'folder-open', 'device-floppy', 'file-pencil',
@@ -73,13 +76,15 @@ const
     'eye-off', 'eye', 'focus-2', 'stack-front', 'stack-back', 'lock', 'lock-open',
     'wand',
     'arrow-narrow-right', 'arrow-narrow-left',
-    'alert-triangle', 'sitemap');
+    'alert-triangle', 'sitemap',
+    'adjustments-horizontal', 'list-tree', 'shirt', 'variable', 'brush', 'texture',
+    'files', 'puzzle', 'id-badge', 'message-question');
 
 type
   // Where a command's icon shows: on the toolbar along the top, on the design
-  // app's tools down the left of the canvas, only in its menu, or beside a
-  // field in the properties
-  TIconPlace = (ipToolbar, ipTools, ipMenu, ipProperties);
+  // app's tools down the left of the canvas, on the side panel's tabs, only
+  // in its menu, or beside a field in the properties
+  TIconPlace = (ipToolbar, ipTools, ipSideTabs, ipMenu, ipProperties);
 
   // A command with an icon, for the Icons page
   TIconCommand = record
@@ -241,6 +246,36 @@ resourcestring
   rsIconIsolateText = 'Work on the selected piece alone, the rest shown faintly';
   rsIconBringToFrontText = 'Draw the selected pieces over the others';
   rsIconSendToBackText = 'Draw the selected pieces under the others';
+  rsIconTabProperties = 'Properties';
+  rsIconTabObjects = 'Objects';
+  rsIconTabGarment = 'Garment';
+  rsIconTabVariables = 'Variables';
+  rsIconTabMeasurements = 'Measurements';
+  rsIconTabLines = 'Lines';
+  rsIconTabMaterials = 'Materials';
+  rsIconTabClaude = 'Claude';
+  rsIconTabProblems = 'Problems';
+  rsIconTabPatterns = 'Patterns';
+  rsIconTabPieces = 'Pieces';
+  rsIconTabInfo = 'Information Block';
+  rsIconTabNotes = 'Notes';
+  rsIconTabOutput = 'Output';
+  rsIconTabPropertiesText = 'The selected object''s formulas and settings';
+  rsIconTabObjectsText = 'Every object in the pattern, to find, filter and select';
+  rsIconTabGarmentText = 'The pieces as they will look sewn, in their materials';
+  rsIconTabVariablesText = 'The pattern''s own variables, to add and edit';
+  rsIconTabMeasurementsText = 'The measurements the pattern reads, from its measurement file';
+  rsIconTabLinesText = 'Which kinds of line are shown';
+  rsIconTabMaterialsText = 'The materials pieces are cut from';
+  rsIconTabClaudeText = 'Ask Claude about the pattern, or to change it';
+  rsIconTabProblemsText = 'Every problem in the pattern; choose one to select what it is about';
+  rsIconTabPatternsText = 'The patterns the layout is made from';
+  rsIconTabPiecesText = 'The selected piece, placing and packing pieces, and the tray of pieces not yet placed';
+  rsIconTabPublishMaterialsText = 'How much of each material the patterns need';
+  rsIconTabInfoText = 'The pattern, measurements, date and other details printed in a page corner';
+  rsIconTabNotesText = 'Text placed on the pages';
+  rsIconTabOutputText = 'What the layout prints on, the paper, marks and profiles, and the exports';
+  rsIconTabPublishProblemsText = 'What stops the layout printing, and the warnings; choose one to select its piece or note';
   rsIconProblemsText = 'Mark the objects with problems on the canvas; pointing at one says what is wrong';
   rsIconDependentsText = 'Arrows from the hovered or selected object also go to what reads it, not only to what it reads';
   rsIconSelectText = 'Select points, edges and pieces; drag to move points';
@@ -398,6 +433,17 @@ begin
   Menu := rsIconMenuTools;
   Add(aiSuggestSeams, rsIconSuggestSeams, rsIconSuggestSeamsText);
 
+  Start(saDesign, ipSideTabs, '');
+  Add(aiPropertiesTab, rsIconTabProperties, rsIconTabPropertiesText);
+  Add(aiObjectsTab, rsIconTabObjects, rsIconTabObjectsText);
+  Add(aiGarmentTab, rsIconTabGarment, rsIconTabGarmentText);
+  Add(aiVariablesTab, rsIconTabVariables, rsIconTabVariablesText);
+  Add(aiMeasurements, rsIconTabMeasurements, rsIconTabMeasurementsText);
+  Add(aiLinesTab, rsIconTabLines, rsIconTabLinesText);
+  Add(aiMaterialsTab, rsIconTabMaterials, rsIconTabMaterialsText);
+  Add(aiClaudeTab, rsIconTabClaude, rsIconTabClaudeText);
+  Add(aiProblems, rsIconTabProblems, rsIconTabProblemsText);
+
   Start(saDesign, ipMenu, rsIconMenuFile);
   AddKey(aiSaveAs, rsIconSaveAs, kcSaveAs, rsIconSaveAsText);
   AddKey(aiQuit, rsIconQuit, kcQuit, rsIconQuitText);
@@ -482,6 +528,15 @@ begin
   Add(aiExportSVG, rsIconExportSVG, rsIconExportSVGText);
   Add(aiExportDXF, rsIconExportDXF, rsIconExportDXFText);
   Add(aiExportMachineDXF, rsIconExportMachineDXF, rsIconExportMachineDXFText);
+
+  Start(saPublish, ipSideTabs, '');
+  Add(aiPatternsTab, rsIconTabPatterns, rsIconTabPatternsText);
+  Add(aiPiecesTab, rsIconTabPieces, rsIconTabPiecesText);
+  Add(aiMaterialsTab, rsIconTabMaterials, rsIconTabPublishMaterialsText);
+  Add(aiInfoTab, rsIconTabInfo, rsIconTabInfoText);
+  Add(aiAnnotations, rsIconTabNotes, rsIconTabNotesText);
+  Add(aiPrint, rsIconTabOutput, rsIconTabOutputText);
+  Add(aiProblems, rsIconTabProblems, rsIconTabPublishProblemsText);
 
   Start(saPublish, ipMenu, rsIconMenuFile);
   AddKey(aiSaveAs, rsIconSaveAs, kcSaveAs, rsIconSaveAsText);

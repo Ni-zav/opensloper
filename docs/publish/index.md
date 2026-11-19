@@ -23,16 +23,18 @@ a pattern to start a layout for.
   print on. Each page's printable area is white, and grey when nothing prints
   on it. The status bar counts the pages.
 - **Tabs**, on the right, one open at a time, as in the design app's side
-  panel: click a tab's header to open it:
+  panel: click a tab's icon, down the panel's left, to open it, or the open
+  tab's icon to fold the panel down to its icons. [Icons](../reference/icons.md#side-panel-tabs_1)
+  shows each tab's icon:
 
     | Tab | What it holds |
     | --- | --- |
-    | Pieces | The selected piece (Turn 90°, Flip, Back to tray), Place new pieces, Pack pieces, and the tray of pieces not yet placed |
     | Patterns | The patterns in the layout, each with its measurements and size |
+    | Pieces | The selected piece (Turn 90°, Flip, Back to tray), Place new pieces, Pack pieces, and the tray of pieces not yet placed |
     | Materials | How much of each material the patterns need, and notes on it (see [Material needed](printing.md#material-needed)) |
-    | Output | What it prints on, the paper, marks, fill and profiles, and the exports |
     | Information Block | The pattern, measurements, date and other details, printed in a page corner |
     | Notes | Text placed on the pages |
+    | Output | What it prints on, the paper, marks, fill and profiles, and the exports |
     | Problems | Everything that stops the layout printing, in red, and the warnings; click one to select its piece or note |
 
 - **Problems**, counted at the left of the status bar at the bottom: anything

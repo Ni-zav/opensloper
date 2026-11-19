@@ -49,7 +49,7 @@ uses
   Sloper.Tests.Snap,
   Sloper.Tests.GridColumns,
   Sloper.Tests.PropertyText,
-  Sloper.Tests.AccordionLayout,
+  Sloper.Tests.SideTabsLayout,
   Sloper.Tests.ObjectList,
   Sloper.Tests.PanelEdits,
   Sloper.Tests.Completion,

@@ -166,7 +166,8 @@ begin
   begin
     AssertTrue(APP_ICON_NAMES[Command.Icon] + ' has a name', Command.Name <> '');
     AssertTrue(Command.Name + ' has a description', Command.Description <> '');
-    AssertTrue(Command.Name + ' has a menu, unless it is in the properties', (Command.Menu <> '') = (Command.Place <> ipProperties));
+    AssertTrue(Command.Name + ' has a menu, unless it is in the properties or a side panel tab',
+      (Command.Menu <> '') = not (Command.Place in [ipProperties, ipSideTabs]));
   end;
 end;
 

@@ -24,7 +24,7 @@ Changed, Fixed and Removed under each version.
   section (#60).
 
 - A Problems tab at the foot of the side panel, in the design and publish
-  apps, lists every problem in full with the count on its header. Clicking
+  apps, lists every problem in full with the count on its icon. Clicking
   one selects the object, piece or note it is about; in the design app
   pointing at one lights its object and double-clicking zooms to it.
   Clicking the status bar's problems count opens the tab (#61).
@@ -62,7 +62,13 @@ Changed, Fixed and Removed under each version.
   hidden on top of them, and after any transform the canvas brings the
   originals and copies into view (#49).
 - The publish app's side panel is in the order it is used: Patterns,
-  Pieces, Output, then Materials, Info and Notes.
+  Pieces, Materials, Info and Notes, then Output just above Problems.
+- The side panels of the design and publish apps have a column of tab icons
+  down their left instead of a header for each tab, so the open tab has the
+  panel's full height, under a title with its icon and name. The Problems
+  icon stays at the foot with the count on it, and clicking the open tab's
+  icon folds the panel down to its icons (#62). The Icons page lists each
+  tab's icon under Side panel tabs.
 
 ## 0.4.0
 

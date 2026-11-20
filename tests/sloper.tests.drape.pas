@@ -80,6 +80,7 @@ type
     procedure TestRingsGoUp;
     procedure TestMeshIsClosedAndFacesOut;
     procedure TestFigureStandsFacingForwards;
+    procedure TestHeadIsPlain;
     procedure TestSizeOfATable;
     procedure TestBackLengthPlacesTheWaist;
   end;
@@ -711,6 +712,26 @@ begin
   AssertTrue('arms out past the shoulders', High.X > Measures.ShoulderWidth / 2 + Measures.ArmLength * Sin(DegToRad(ARM_ANGLE)) / 2);
   AssertNear('left and right alike', -Low.X, High.X, 1e-6);
   AssertTrue('arms hang out and down', (ArmDirection(1).X > 0) and (ArmDirection(1).Z < 0) and (ArmDirection(-1).X < 0));
+end;
+
+// Issue #70: no nose, as the feet show which way the figure faces; the head
+// reaches as far forwards as backwards
+procedure TTestBodyForm.TestHeadIsPlain;
+var
+  Measures: TBodyMeasures;
+  Point: TVec3;
+  Front, Back: double;
+begin
+  Measures := DefaultBodyMeasures;
+  Front := 0;
+  Back := 0;
+  for Point in BuildBodyForm(Measures).Vertices do
+    if Point.Z > Measures.Height - Measures.HeadLength * 0.75 then
+    begin
+      Front := Min(Front, Point.Y);
+      Back := Max(Back, Point.Y);
+    end;
+  AssertNear('as deep in front as behind', Back, -Front, 1e-6);
 end;
 
 procedure TTestBodyForm.TestSizeOfATable;

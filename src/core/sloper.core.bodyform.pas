@@ -21,8 +21,8 @@
 // to the crotch, lofted through elliptical rings at the measured heights whose
 // circumferences match the measurements; legs and arms lofted the same way
 // through their own circumferences, the arms hanging a little out from the
-// sides; hands, feet pointing forwards, and a head with a nose, so the front
-// is plain from any side. Each part is a closed mesh; they overlap where they
+// sides; hands, feet pointing forwards, so the front is plain from any side,
+// and a head. Each part is a closed mesh; they overlap where they
 // join. A measurement the set lacks is taken from fixed proportions of the
 // height, so there is always a whole figure. In the drape frame
 // (Sloper.Core.Geometry3): facing -Y, centred on the Z axis, standing on
@@ -78,7 +78,7 @@ type
 
   TBodySectionArray = array of TBodySection;
 
-  // Closed parts (torso, legs, feet, arms with hands, head, nose), each
+  // Closed parts (torso, legs, feet, arms with hands, head), each
   // watertight with outward normals
   TBodyMesh = record
     Vertices: TVec3Array;
@@ -88,7 +88,7 @@ type
 const
   // Points round each ring of the torso
   BODY_RING_SEGMENTS = 48;
-  // Points round each section of a limb, the head and the nose
+  // Points round each section of a limb and the head
   LIMB_SEGMENTS = 24;
   // How far the arms hang out from straight down, degrees, so sleeves can go
   // round them clear of the body
@@ -199,15 +199,6 @@ const
   FOREARM_OF_ELBOW = 0.97;
   // A head this many rings from chin to crown
   HEAD_RINGS = 12;
-  // The nose: how far below the head's middle, its length, width and height
-  // as shares of the head's length, and how far it starts inside the face as
-  // a share of the head's half depth
-  NOSE_DROP = 0.15;
-  NOSE_LENGTH = 0.1;
-  NOSE_WIDTH = 0.14;
-  NOSE_HEIGHT = 0.2;
-  NOSE_TIP = 0.45;
-  NOSE_INSIDE = 0.85;
 
   KEY_HEIGHT = 'height';
   KEY_NECK_HEIGHT = 'height_back_neck';
@@ -579,12 +570,12 @@ begin
   AddSweep(Mesh, Sections, Across, Front, LIMB_SEGMENTS);
 end;
 
-// The head: an ellipsoid from the chin to the crown, and a nose on its front
+// The head: an ellipsoid from the chin to the crown
 procedure AddHead(var Mesh: TBodyMesh; const Measures: TBodyMeasures);
 var
   Sections: TBodySectionArray;
   Ring: TBodyRing;
-  Middle, HalfHeight, Angle, NoseZ: double;
+  Middle, HalfHeight, Angle: double;
   Index: integer;
 begin
   Ring := RingOf(0, Measures.HeadCircumference, HEAD_DEPTH_RATIO);
@@ -598,14 +589,6 @@ begin
     Sections[Index - 1] := Section(Vec3(0, 0, Middle - HalfHeight * Cos(Angle)), Ring.HalfWidth * Sin(Angle), Ring.HalfDepth * Sin(Angle));
   end;
   AddSweep(Mesh, Sections, Vec3(1, 0, 0), Vec3(0, 1, 0), LIMB_SEGMENTS);
-  NoseZ := Middle - HalfHeight * NOSE_DROP;
-  Sections := nil;
-  SetLength(Sections, 2);
-  Sections[0] := Section(Vec3(0, -Ring.HalfDepth * NOSE_INSIDE, NoseZ), Measures.HeadLength * NOSE_WIDTH / 2,
-    Measures.HeadLength * NOSE_HEIGHT / 2);
-  Sections[1] := Section(Vec3(0, -Ring.HalfDepth - Measures.HeadLength * NOSE_LENGTH, NoseZ - Measures.HeadLength * NOSE_HEIGHT * NOSE_TIP / 2),
-    Sections[0].HalfU * NOSE_TIP, Sections[0].HalfV * NOSE_TIP);
-  AddSweep(Mesh, Sections, Vec3(1, 0, 0), Vec3(0, 0, 1), LIMB_SEGMENTS);
 end;
 
 function BuildBodyForm(const Measures: TBodyMeasures): TBodyMesh;

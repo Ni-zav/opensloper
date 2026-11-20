@@ -28,7 +28,7 @@ uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement,
   Sloper.Core.DrapeFile, Sloper.Core.Measurements,
-  Sloper.Core.BodyForm, Sloper.Core.DrapeScene, Sloper.Document.DrapeDocument;
+  Sloper.Core.BodyForm, Sloper.Core.DrapeScene, Sloper.Document.DrapeDocument, Sloper.Core.Mesher;
 
 type
   TTestGeometry3 = class(TOSTestCase)
@@ -59,6 +59,7 @@ type
     procedure TestNormal;
     procedure TestMirroredCopyIsMirrorImage;
     procedure TestFoldOpensOut;
+    procedure TestMeshPieceOnFold;
     procedure TestFrontCamera;
     procedure TestSideAndTopCameras;
     procedure TestDragFollowsScreen;
@@ -415,6 +416,20 @@ begin
   FPattern.SetFoldEdge(Piece, '');
   FPattern.Evaluate;
   AssertEquals('unfolded', Length(Piece.Outline), Length(PlacedSeamLine(Piece)));
+end;
+
+procedure TTestDrapePlacement.TestMeshPieceOnFold;
+var
+  Piece: TPieceObject;
+  Mesh: TFlatMesh;
+begin
+  Piece := Shape('Front', [0, 100, 100, 0], [0, 0, 200, 200]);
+  AssertNear('flat', Abs(SignedArea(Piece.Outline)), MeshArea(MeshPiece(Piece)), 1e-6);
+  AssertTrue(FPattern.LastError, FPattern.SetFoldEdge(Piece, EdgeBetween(Piece, Vec2(0, 0), Vec2(0, 200))));
+  FPattern.Evaluate;
+  Mesh := MeshPiece(Piece);
+  AssertNear('opened out', 2 * Abs(SignedArea(Piece.Outline)), MeshArea(Mesh), 1e-6);
+  AssertTrue('inner points', Length(Mesh.Points) > Mesh.BoundaryCount);
 end;
 
 procedure TTestDrapePlacement.TestFrontCamera;

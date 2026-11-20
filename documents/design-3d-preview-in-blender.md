@@ -101,7 +101,7 @@ A **generic body**: a simple form, not an anatomical body, sized from a measurem
 
 ## Triangulation
 
-Clipper2's `Clipper.Triangulation` is not usable: it does not compile with FPC 3.2.2, so `src/core/clipper2/osclipper2.lpk` leaves it out, and the submodule is pinned (see the Clipper2 notes). An own mesher is needed, in the core.
+**Built 2026-11-20** as `Sloper.Core.Mesher`, as below (see the design document). Clipper2's `Clipper.Triangulation` is not usable: it does not compile with FPC 3.2.2, so `src/core/clipper2/osclipper2.lpk` leaves it out, and the submodule is pinned (see the Clipper2 notes). An own mesher is needed, in the core.
 
 Cloth simulation needs evenly sized, well-shaped triangles; plain ear clipping gives long slivers that make the cloth crease and jitter. The plan:
 

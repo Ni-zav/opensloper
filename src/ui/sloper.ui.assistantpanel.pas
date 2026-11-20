@@ -17,7 +17,9 @@
 }
 
 // The Claude section of the side panel: the user asks in their own words and
-// Claude works on the open pattern with the Automation API's methods. The
+// Claude works on what the window has open, with that app's tools: in the
+// design app the Automation API's methods on the pattern, in the publish and
+// drape apps their own (see Sloper.UI.AssistantHosts). A host says which. The
 // conversation runs on a thread of its own, so the window stays usable; each
 // tool call comes back to the main thread and is one undo step labelled
 // "Claude: ...", as in live editing.
@@ -29,10 +31,49 @@ interface
 
 uses
   Classes, SysUtils, Controls, ExtCtrls, StdCtrls, fpjson, Sloper.Document.PatternDocument, Sloper.API.Server,
-  Sloper.Assistant.Conversation, Sloper.Assistant.Http;
+  Sloper.API.Methods, Sloper.Assistant.Conversation, Sloper.Assistant.Http;
 
 type
   TAssistantPanel = class;
+
+  // What the Claude tab works on in one app: its tools, what Claude is told,
+  // and what the tab says before the first question. The panel owns it.
+  TAssistantHost = class
+  public
+    // Something is open to work on
+    function Ready: boolean; virtual; abstract;
+    // Changes when the window opens another file, whose IDs and indexes are
+    // not the ones Claude learned
+    function Generation: integer; virtual; abstract;
+    function Methods: TApiMethodArray; virtual; abstract;
+    function SystemPrompt: string; virtual; abstract;
+    // The opening text, and what goes to Anthropic
+    function Welcome(SharesMeasurements: boolean): string; virtual; abstract;
+    // A new conversation starts on the file as it is now
+    procedure Restart; virtual;
+    // On the main thread. Raises EApiError when refused; the reply is the caller's.
+    function CallTool(const ToolName: string; Input: TJSONObject; SharesMeasurements: boolean): TJSONData; virtual; abstract;
+  end;
+
+  // The design app's: the Automation API on the open pattern
+  TPatternAssistantHost = class(TAssistantHost)
+  private
+    FDocument: TPatternDocument;
+    FApi: TApiServer;
+    FWindowState: TApiWindowState;
+    function ConfirmWrite(const Path: string): boolean;
+  public
+    constructor Create(ADocument: TPatternDocument);
+    destructor Destroy; override;
+    function Ready: boolean; override;
+    function Generation: integer; override;
+    function Methods: TApiMethodArray; override;
+    function SystemPrompt: string; override;
+    function Welcome(SharesMeasurements: boolean): string; override;
+    procedure Restart; override;
+    function CallTool(const ToolName: string; Input: TJSONObject; SharesMeasurements: boolean): TJSONData; override;
+    property WindowState: TApiWindowState read FWindowState write FWindowState;
+  end;
 
   // Runs one question; its events come back to the panel on the main thread
   TAssistantWorker = class(TThread)
@@ -62,15 +103,15 @@ type
   TAssistantPanel = class(TPanel)
   private
     FDocument: TPatternDocument;
-    FApi: TApiServer;
+    FHost: TAssistantHost;
     FConversation: TAssistantConversation;
     // The conversation's, which owns it; given the key at each question
     FTransport: THttpsTransport;
     FWorker: TAssistantWorker;
     // The worker answered and is ending; freed before the next question
     FWorkerDone: boolean;
-    // The document's Generation the conversation began on; New or Open in
-    // the window ends the conversation, whose IDs belong to that pattern
+    // The host's Generation the conversation began on; New or Open in the
+    // window ends the conversation, whose IDs belong to that file
     FGeneration: integer;
     FTranscript, FInput: TMemo;
     FSendButton, FStopButton, FNewButton: TButton;
@@ -83,12 +124,13 @@ type
     procedure SetSharesMeasurements(Value: boolean);
     procedure ShowOpening;
     procedure SetDocument(Value: TPatternDocument);
-    procedure MakeApi;
+    procedure SetHost(Value: TAssistantHost);
+    procedure SetWindowState(Value: TApiWindowState);
+    function HostReady: boolean;
     procedure SendClick(Sender: TObject);
     procedure StopClick(Sender: TObject);
     procedure NewClick(Sender: TObject);
     procedure InputKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
-    function ConfirmWrite(const Path: string): boolean;
     procedure Append(const AText: string);
     procedure StopWorker;
     procedure UpdateButtons;
@@ -110,10 +152,13 @@ type
     // Puts the cursor in the question, when one can be asked
     procedure FocusQuestion;
     property HasKey: boolean read FHasKey;
-    // nil stops any conversation in progress
+    // The design app's: works on the pattern; nil stops any conversation in progress
     property Document: TPatternDocument read FDocument write SetDocument;
-    // Answers ui_state
-    property WindowState: TApiWindowState read FWindowState write FWindowState;
+    // Another app's: what the tab works on, which the panel takes over; nil
+    // stops any conversation in progress
+    property Host: TAssistantHost read FHost write SetHost;
+    // Answers ui_state, in the design app
+    property WindowState: TApiWindowState read FWindowState write SetWindowState;
     // Whether Claude may read and change the measurement values, from the
     // preferences; True unless set. Takes effect at the next question.
     property SharesMeasurements: boolean read FSharesMeasurements write SetSharesMeasurements;
@@ -127,22 +172,21 @@ resourcestring
     '"why is point C invalid?". Each change is one step you can undo.';
   rsAssistantPrivacyShared = 'What goes to Anthropic: your questions, the pattern''s names, formulas, values and drawings, ' +
     'and the measurement values, which Claude can also change. Folders and the measurement file''s name are never sent. ' +
-    'To keep the measurement values back, turn off "Let AI assistants read the measurements" in Edit → Preferences, Design.';
+    'To keep the measurement values back, turn off "Let AI assistants read the measurements" in Edit → Preferences, General.';
   rsAssistantPrivacyWithheld = 'What goes to Anthropic: your questions and the pattern''s names, formulas, values and ' +
     'drawings. The measurement values are kept back, as set in Edit → Preferences, but the pattern''s sizes are worked ' +
     'out from them. Folders and the measurement file''s name are never sent.';
-  rsAssistantNoKeyYet = 'Claude needs your Anthropic API key. Set it in Assistance → Anthropic API Key..., or in ' +
-    'Edit → Preferences, Design.';
+  rsAssistantNoKeyYet = 'Claude needs your Anthropic API key. Set it in Edit → Preferences, General.';
   rsAssistantYou = 'You: %s';
   rsAssistantClaude = 'Claude: ';
   // Who asks to write a file
   rsAssistantWho = 'Claude';
   rsAssistantTool = '  › %s';
   rsAssistantProblem = '(%s)';
-  rsAssistantNoPattern = 'No pattern is open';
-  rsAssistantAnotherPattern = 'Another pattern is open now, so this question was stopped: what Claude knew was about the ' +
-    'pattern open before.';
-  rsAssistantNewForPattern = '(Another pattern is open, so this is a new conversation.)';
+  rsAssistantNoPattern = 'Nothing is open';
+  rsAssistantAnotherPattern = 'Another file is open now, so this question was stopped: what Claude knew was about the ' +
+    'one open before.';
+  rsAssistantNewForPattern = '(Another file is open, so this is a new conversation.)';
 
 implementation
 
@@ -248,11 +292,78 @@ begin
   FPanel.QuestionDone(FAnswered, FProblem);
 end;
 
+procedure TAssistantHost.Restart;
+begin
+end;
+
+constructor TPatternAssistantHost.Create(ADocument: TPatternDocument);
+begin
+  inherited Create;
+  FDocument := ADocument;
+  Restart;
+end;
+
+destructor TPatternAssistantHost.Destroy;
+begin
+  FreeAndNil(FApi);
+  inherited Destroy;
+end;
+
+function TPatternAssistantHost.Ready: boolean;
+begin
+  Result := Assigned(FDocument);
+end;
+
+function TPatternAssistantHost.Generation: integer;
+begin
+  Result := FDocument.Generation;
+end;
+
+function TPatternAssistantHost.Methods: TApiMethodArray;
+begin
+  Result := ApiMethods;
+end;
+
+function TPatternAssistantHost.SystemPrompt: string;
+begin
+  Result := AssistantSystemPrompt;
+end;
+
+function TPatternAssistantHost.Welcome(SharesMeasurements: boolean): string;
+begin
+  if SharesMeasurements then
+    Result := rsAssistantWelcome + LineEnding + LineEnding + rsAssistantPrivacyShared
+  else
+    Result := rsAssistantWelcome + LineEnding + LineEnding + rsAssistantPrivacyWithheld;
+end;
+
+// The API server for the document, starting from its pattern as it is now
+procedure TPatternAssistantHost.Restart;
+begin
+  FreeAndNil(FApi);
+  FApi := TApiServer.CreateFor(FDocument);
+  FApi.ChangePrefix := rsClaudeChange;
+  FApi.OpensFiles := False;
+  FApi.WithholdsFiles := True;
+  FApi.OnConfirmWrite := @ConfirmWrite;
+end;
+
+function TPatternAssistantHost.ConfirmWrite(const Path: string): boolean;
+begin
+  Result := ConfirmAssistantWrite(FDocument, rsAssistantWho, Path);
+end;
+
+function TPatternAssistantHost.CallTool(const ToolName: string; Input: TJSONObject; SharesMeasurements: boolean): TJSONData;
+begin
+  FApi.SharesMeasurements := SharesMeasurements;
+  FApi.OnWindowState := FWindowState;
+  Result := FApi.CallMethod(ToolName, Input);
+end;
+
 constructor TAssistantPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   BevelOuter := bvNone;
-  FApi := nil;
   FSharesMeasurements := True;
 end;
 
@@ -310,12 +421,12 @@ end;
 // What to ask, or where to set the key first
 procedure TAssistantPanel.ShowOpening;
 begin
-  if FHasKey and FSharesMeasurements then
-    FTranscript.Text := rsAssistantWelcome + LineEnding + LineEnding + rsAssistantPrivacyShared
-  else if FHasKey then
-    FTranscript.Text := rsAssistantWelcome + LineEnding + LineEnding + rsAssistantPrivacyWithheld
+  if not FHasKey then
+    FTranscript.Text := rsAssistantNoKeyYet
+  else if Assigned(FHost) then
+    FTranscript.Text := FHost.Welcome(FSharesMeasurements)
   else
-    FTranscript.Text := rsAssistantNoKeyYet;
+    FTranscript.Text := rsAssistantWelcome;
   FFresh := True;
 end;
 
@@ -349,37 +460,51 @@ end;
 
 destructor TAssistantPanel.Destroy;
 begin
-  Document := nil;
+  Host := nil;
   FreeAndNil(FConversation);
   inherited Destroy;
 end;
 
 procedure TAssistantPanel.SetDocument(Value: TPatternDocument);
+var
+  PatternHost: TPatternAssistantHost;
 begin
   if Value = FDocument then
     Exit;
-  StopWorker;
   FDocument := Value;
-  MakeApi;
+  if not Assigned(Value) then
+  begin
+    Host := nil;
+    Exit;
+  end;
+  PatternHost := TPatternAssistantHost.Create(Value);
+  PatternHost.WindowState := FWindowState;
+  Host := PatternHost;
+end;
+
+procedure TAssistantPanel.SetHost(Value: TAssistantHost);
+begin
+  if Value = FHost then
+    Exit;
+  StopWorker;
+  FreeAndNil(FConversation);
+  FreeAndNil(FHost);
+  FHost := Value;
+  if Assigned(FTranscript) and FFresh then
+    ShowOpening;
   UpdateButtons;
 end;
 
-// The API server for the document, starting from its pattern as it is now
-procedure TAssistantPanel.MakeApi;
+procedure TAssistantPanel.SetWindowState(Value: TApiWindowState);
 begin
-  FreeAndNil(FApi);
-  if not Assigned(FDocument) then
-    Exit;
-  FApi := TApiServer.CreateFor(FDocument);
-  FApi.ChangePrefix := rsClaudeChange;
-  FApi.OpensFiles := False;
-  FApi.WithholdsFiles := True;
-  FApi.OnConfirmWrite := @ConfirmWrite;
+  FWindowState := Value;
+  if FHost is TPatternAssistantHost then
+    TPatternAssistantHost(FHost).WindowState := Value;
 end;
 
-function TAssistantPanel.ConfirmWrite(const Path: string): boolean;
+function TAssistantPanel.HostReady: boolean;
 begin
-  Result := ConfirmAssistantWrite(FDocument, rsAssistantWho, Path);
+  Result := Assigned(FHost) and FHost.Ready;
 end;
 
 function TAssistantPanel.Running: boolean;
@@ -391,7 +516,7 @@ procedure TAssistantPanel.UpdateButtons;
 begin
   if not Assigned(FSendButton) then
     Exit;
-  FSendButton.Enabled := FHasKey and not Running and Assigned(FDocument);
+  FSendButton.Enabled := FHasKey and not Running and HostReady;
   FStopButton.Enabled := Running;
   FNewButton.Enabled := FHasKey and not Running;
   // A question in progress keeps going if the key is removed meanwhile
@@ -422,7 +547,7 @@ var
   Source: TKeySource;
 begin
   Question := Trim(FInput.Text);
-  if (Question = '') or Running or not Assigned(FDocument) then
+  if (Question = '') or Running or not HostReady then
     Exit;
   Key := AssistantKey(Source);
   if Key = '' then
@@ -435,7 +560,7 @@ begin
   end;
   FFresh := False;
   StopWorker;
-  if Assigned(FConversation) and (FGeneration <> FDocument.Generation) then
+  if Assigned(FConversation) and (FGeneration <> FHost.Generation) then
   begin
     FreeAndNil(FConversation);
     Append(LineEnding + LineEnding + rsAssistantNewForPattern);
@@ -443,15 +568,14 @@ begin
   if not Assigned(FConversation) then
   begin
     FTransport := THttpsTransport.Create(Key);
-    FConversation := TAssistantConversation.Create(FTransport);
-    FGeneration := FDocument.Generation;
-    MakeApi;
+    FConversation := TAssistantConversation.CreateFor(FTransport, FHost.Methods, FHost.SystemPrompt);
+    FGeneration := FHost.Generation;
+    FHost.Restart;
   end;
   // The key and the measurements choice as Preferences has them now, so a
   // change works at once; no request is running between questions
   FTransport.Key := Key;
   FConversation.SharesMeasurements := FSharesMeasurements;
-  FApi.SharesMeasurements := FSharesMeasurements;
   FInput.Clear;
   Append(LineEnding + LineEnding + Format(rsAssistantYou, [Question]) + LineEnding + LineEnding + rsAssistantClaude);
   FWorkerDone := False;
@@ -514,19 +638,18 @@ var
 begin
   ShowNote(ToolName);
   IsError := True;
-  if not Assigned(FApi) then
+  if not HostReady then
     Exit(TJSONArray.Create([TJSONObject.Create(['type', 'text', 'text', rsAssistantNoPattern])]));
-  // A call still pending when the user opened another pattern would act on
-  // it with what Claude learned from the one before; the question stops
-  if FDocument.Generation <> FGeneration then
+  // A call still pending when the user opened another file would act on it
+  // with what Claude learned from the one before; the question stops
+  if FHost.Generation <> FGeneration then
   begin
     FConversation.Cancel;
     Append(LineEnding + rsAssistantAnotherPattern + LineEnding);
     Exit(TJSONArray.Create([TJSONObject.Create(['type', 'text', 'text', rsAssistantAnotherPattern])]));
   end;
-  FApi.OnWindowState := FWindowState;
   try
-    Output := FApi.CallMethod(ToolName, Input);
+    Output := FHost.CallTool(ToolName, Input, FSharesMeasurements);
     try
       Result := ToolContent(Output);
       IsError := False;

@@ -70,6 +70,11 @@ type
 
 // Every method, grouped and in the order the documentation lists them
 function ApiMethods: TApiMethodArray;
+// For other tables, such as the publish and drape apps' tools: a method, then
+// its parameters, added to the end of Methods
+procedure AddApiMethod(var Methods: TApiMethodArray; const AName, ASummary, AReturns: string; AReadOnly: boolean = False);
+procedure AddApiParam(var Methods: TApiMethodArray; const AName: string; AKind: TApiParamKind; ARequired: boolean;
+  const ADescription: string; const AChoices: string = '');
 function FindApiMethod(const AName: string; out Method: TApiMethod): boolean;
 
 resourcestring
@@ -362,6 +367,31 @@ begin
       Result := Result + ', ';
     Result := Result + EDGE_ROLE_NAMES[Role];
   end;
+end;
+
+procedure AddApiMethod(var Methods: TApiMethodArray; const AName, ASummary, AReturns: string; AReadOnly: boolean);
+var
+  Item: TApiMethod;
+begin
+  Item := Default(TApiMethod);
+  Item.Name := AName;
+  Item.Summary := ASummary;
+  Item.Returns := AReturns;
+  Item.ReadOnly := AReadOnly;
+  Insert(Item, Methods, Length(Methods));
+end;
+
+procedure AddApiParam(var Methods: TApiMethodArray; const AName: string; AKind: TApiParamKind; ARequired: boolean;
+  const ADescription: string; const AChoices: string);
+var
+  Param: TApiParam;
+begin
+  Param.Name := AName;
+  Param.Kind := AKind;
+  Param.Required := ARequired;
+  Param.Description := ADescription;
+  Param.Choices := AChoices;
+  Insert(Param, Methods[High(Methods)].Params, Length(Methods[High(Methods)].Params));
 end;
 
 procedure Method(const AName: string; AGroup: TApiMethodGroup; const ASummary, AReturns: string);

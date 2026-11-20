@@ -28,7 +28,7 @@ unit Sloper.API.MCP;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Server, Sloper.API.Rpc;
+  SysUtils, fpjson, Sloper.API.Server, Sloper.API.Rpc, Sloper.API.Methods;
 
 type
   TMcpServer = class
@@ -54,6 +54,8 @@ type
 
 // Every API method as an MCP tool, with a JSON Schema of its parameters
 function McpTools: TJSONArray;
+// The same for another table of methods
+function McpToolsFor(const Methods: TApiMethodArray): TJSONArray;
 
 type
   // What a tool's reply is sent as: render's PNG as an image; its SVG, or
@@ -84,7 +86,7 @@ resourcestring
 implementation
 
 uses
-  StrUtils, Sloper.Core.JSON, Sloper.Core.OperationInfo, Sloper.Core.Version, Sloper.API.Methods;
+  StrUtils, Sloper.Core.JSON, Sloper.Core.OperationInfo, Sloper.Core.Version;
 
 const
   // Newest first; a client asking for another is answered with the newest
@@ -257,12 +259,17 @@ begin
 end;
 
 function McpTools: TJSONArray;
+begin
+  Result := McpToolsFor(ApiMethods);
+end;
+
+function McpToolsFor(const Methods: TApiMethodArray): TJSONArray;
 var
   Method: TApiMethod;
   Tool, Schema: TJSONObject;
 begin
   Result := TJSONArray.Create;
-  for Method in ApiMethods do
+  for Method in Methods do
   begin
     Tool := TJSONObject.Create(['name', Method.Name, 'description', ToolDescription(Method)]);
     Result.Add(Tool);

@@ -148,7 +148,9 @@ type
     procedure LoadSettings;
     procedure SaveSettings;
     procedure ApplyPreferences;
+    procedure EditPreferencesOn(Tab: TPreferencesTab);
     procedure PreferencesClick(Sender: TObject);
+    procedure AssistantKeyClick(Sender: TObject);
     function AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
     procedure EditCutClick(Sender: TObject);
     procedure EditCopyClick(Sender: TObject);
@@ -574,17 +576,28 @@ begin
   FAutomation.SharesMeasurements := FPreferences.AssistantMeasurements;
 end;
 
-procedure TMainForm.PreferencesClick(Sender: TObject);
+procedure TMainForm.EditPreferencesOn(Tab: TPreferencesTab);
 var
   Preferences: TPreferences;
 begin
-  if not EditPreferences(Self, ptDesign, Preferences) then
+  if not EditPreferences(Self, Tab, Preferences) then
     Exit;
   FPreferences := Preferences;
   ApplyPreferences;
   // The key is saved with them
   AssistantKeyChanged;
   TellApps(APP_LINK_PREFERENCES, FAppLink);
+end;
+
+procedure TMainForm.PreferencesClick(Sender: TObject);
+begin
+  EditPreferencesOn(ptDesign);
+end;
+
+// The key is in Preferences, with the other Claude settings on the General tab
+procedure TMainForm.AssistantKeyClick(Sender: TObject);
+begin
+  EditPreferencesOn(ptGeneral);
 end;
 
 // Another app saved the preferences
@@ -1389,8 +1402,7 @@ begin
   MenuAssistance.Caption := rsMenuAssistance;
   MainMenu.Items.Insert(MainMenu.Items.IndexOf(MenuHelp), MenuAssistance);
   FAskClaudeAction := MenuAction(rsMenuAssistanceAskClaude, @AskClaudeClick);
-  // The key is in Preferences, on the Design tab this app opens on
-  MenuAction(rsMenuAssistanceApiKey, @PreferencesClick);
+  MenuAction(rsMenuAssistanceApiKey, @AssistantKeyClick);
   MenuAssistance.Add(NewLine);
   FAutomationAction := MenuAction(rsMenuAssistanceAllow, @AutomationClick);
   FAutomationAction.AutoCheck := False;

@@ -244,7 +244,7 @@ kept from putting a name to the measurements:
 - **In the design window**, an assistant is given the pattern's file name but
   no folder, and never the measurement file's name, since either may name the
   person measured. With **Let AI assistants read the measurements** off in the
-  Design tab of **Edit → Preferences**, it can neither read nor change the
+  General tab of **Edit → Preferences**, it can neither read nor change the
   measurement values, though the pattern's points and lengths, which it still
   reads, are worked out from them.
 - **With `serve` on its own**, the assistant opens and saves the files it

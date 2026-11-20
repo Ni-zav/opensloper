@@ -311,6 +311,13 @@ function WriteBytesToFile(const FileName: string; const Bytes: rawbytestring; ou
 // The version files are written at, and the steps that bring older files up to it
 function LayoutFileVersions: TFormatVersions;
 
+const
+  // As the layout file names them
+  CORNER_NAMES: array[TTitleCorner] of string = ('bottomRight', 'bottomLeft', 'topRight');
+  MARKS_NAMES: array[TLayoutMarks] of string = ('diamond', 'none', 'halfCircle');
+  FILL_NAMES: array[TLayoutFill] of string = ('none', 'tint', 'hatch');
+  KIND_NAMES: array[TOutputKind] of string = ('tiled', 'large', 'projector', 'material');
+
 resourcestring
   rsLayoutRefused = 'The layout cannot be exported:';
   rsLayoutWrongFormat = 'This is not a layout file';
@@ -361,14 +368,10 @@ uses
   Sloper.Core.PatternFile, Sloper.Core.Units, Sloper.Output.Fonts, Sloper.Output.MaterialNeeded;
 
 const
-  CORNER_NAMES: array[TTitleCorner] of string = ('bottomRight', 'bottomLeft', 'topRight');
   DEFAULT_SHEET_NOTE_SIZE = 12;
   DEFAULT_PAPER = 'A4';
   DEFAULT_MARGIN = 6;
   DEFAULT_OVERLAP = 10;
-  MARKS_NAMES: array[TLayoutMarks] of string = ('diamond', 'none', 'halfCircle');
-  FILL_NAMES: array[TLayoutFill] of string = ('none', 'tint', 'hatch');
-  KIND_NAMES: array[TOutputKind] of string = ('tiled', 'large', 'projector', 'material');
   // 36 inches, a common copy-shop width
   DEFAULT_ROLL_WIDTH = 914;
   DEFAULT_MATERIAL_WIDTH = 1500;

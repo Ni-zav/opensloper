@@ -20,9 +20,11 @@ Claude needs an Anthropic API key, which you get from the
 [Claude Console](https://platform.claude.com). Requests are billed to that key's
 account.
 
-1. Choose **Assistance → Anthropic API Key…** (the Design tab of
+1. Choose **Assistance → Anthropic API Key…** (the General tab of
    **Edit → Preferences**) and paste the key into **Anthropic API key**. It is
    kept in a file of its own that only you can read, not in the settings file.
+   The publish and drape apps' Claude tabs use the same key, so you set it
+   once, in any of the apps.
    If the `ANTHROPIC_API_KEY` environment variable is set, that key is used
    instead. Until there is a key, the Claude tab's question box and buttons
    are off, and **Assistance → Ask Claude** with them.
@@ -33,6 +35,11 @@ account.
 Other AI assistants can work on the pattern too, through MCP, with
 **Assistance → Allow Assistants to Connect** (see
 [Scripting](../scripting/index.md#an-assistant-in-the-design-window)).
+
+The publish and drape apps have a Claude tab of their own, which arranges the
+layout or places the pieces on the body (see
+[Arrange pieces](../publish/arrange.md#asking-claude) and
+[Draping](../drape/index.md#asking-claude)).
 
 ### If it cannot connect
 
@@ -78,7 +85,7 @@ Nothing that could put a name to the measurements is sent:
 
 The measurement values themselves are sent when Claude asks for them, so it
 can say which measurement a problem comes from or add a missing one. To keep
-them back, turn off **Let AI assistants read the measurements** in the Design tab of
+them back, turn off **Let AI assistants read the measurements** in the General tab of
 **Edit → Preferences**. Claude then cannot read or change them, though it still
 sees the pattern's points and lengths, which are worked out from them. The
 setting applies to any AI assistant connected to the window too (see

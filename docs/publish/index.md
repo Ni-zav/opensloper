@@ -35,6 +35,7 @@ a pattern to start a layout for.
     | Information Block | The pattern, measurements, date and other details, printed in a page corner |
     | Notes | Text placed on the pages |
     | Output | What it prints on, the paper, marks, fill and profiles, and the exports |
+    | Claude | Ask Claude to arrange the layout (see [Asking Claude](arrange.md#asking-claude)) |
     | Problems | Everything that stops the layout printing, in red, and the warnings; click one to select its piece or note |
 
 - **Problems**, counted at the left of the status bar at the bottom: anything

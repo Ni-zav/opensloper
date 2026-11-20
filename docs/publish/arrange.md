@@ -45,3 +45,21 @@ across the grain. Warnings do not stop printing; problems such as a missing
 pattern do, so a blank page is never printed, and are listed in red. Click a
 problem to select the piece or note it is about. The status bar counts them;
 click the count to open the tab.
+
+## Asking Claude
+
+The **Claude** tab lets you ask Claude to arrange the layout, or why something
+is wrong, in your own words: "pack the pieces on 150 cm material", "why does
+the front overlap the facing?". It uses the Anthropic API key set in the
+General tab of **Edit → Preferences**, the same key as the design app's Claude
+tab (see [Asking Claude](../design/claude.md#setting-it-up)).
+
+Claude places, turns, flips and packs pieces, changes what the layout prints
+on, and adds notes and the information block, as you can on the tabs, and can
+look at the sheet as a picture. Each change is one step on the undo history.
+It cannot save, export or print.
+
+Sent to Anthropic: your questions, the layout's settings and notes, its
+pieces' names, places and sizes, and pictures of the sheet. Patterns are
+named by their file names; folders, the measurement files' names and their
+values are never sent, though the pieces' sizes are worked out from them.

@@ -17,8 +17,9 @@
 }
 
 // The Preferences dialog, the same in every app: a General tab with the
-// unit, a Design tab with the grid, a Publish tab with the printer
-// calibration and a Drape tab with Blender. What it saves goes straight to settings.json, read again first
+// unit and Claude, which every app's Claude tab uses, a Design tab with the
+// grid, a Publish tab with the printer calibration and a Drape tab with
+// Blender. What it saves goes straight to settings.json, read again first
 // so the other apps' settings stay.
 unit Sloper.UI.Preferences;
 
@@ -84,11 +85,11 @@ resourcestring
   rsPreferencesNotSaved = 'The preferences could not be saved: %s';
   rsPreferencesClaude = 'AI assistants';
   rsPreferencesClaudeKey = 'Anthropic API key';
-  rsPreferencesClaudeNote = 'The Claude tab in the side panel sends your questions and the pattern''s names, formulas ' +
-    'and drawings to Anthropic, using this key and billed to its account. Folders and the measurement file''s name are ' +
-    'never sent. The key is kept in a file only you can read.';
+  rsPreferencesClaudeNote = 'Every app''s Claude tab uses this key, billed to its account. It sends your questions and ' +
+    'what you have open to Anthropic: a pattern''s names, formulas and drawings, or a layout''s or a drape''s pieces and ' +
+    'images. Folders and the measurement file''s name are never sent. The key is kept in a file only you can read.';
   rsPreferencesClaudeMeasurements = 'Let AI assistants read the measurements';
-  rsPreferencesClaudeMeasurementsNote = 'Off, the Claude tab and any AI assistant connected to this window can neither ' +
+  rsPreferencesClaudeMeasurementsNote = 'Off, the design app''s Claude tab and any AI assistant connected to its window can neither ' +
     'read nor change the measurement values. The pattern''s points and lengths are still sent, and they are worked out ' +
     'from the measurements.';
   rsPreferencesClaudeFromEnvironment = 'Using the key in ANTHROPIC_API_KEY.';
@@ -279,8 +280,10 @@ end;
 procedure TPreferencesDialog.BuildGeneralTab;
 var
   Group: TGroupBox;
+  Host: TScrollBox;
 begin
-  Group := AddGroup(AddTab(rsPreferencesGeneral), rsPreferencesUnitGroup);
+  Host := AddTab(rsPreferencesGeneral);
+  Group := AddGroup(Host, rsPreferencesUnitGroup);
   FUnitBox := TComboBox.Create(Self);
   FUnitBox.Style := csDropDownList;
   // In the order of TMeasureUnit
@@ -290,6 +293,7 @@ begin
   FUnitBox.OnChange := @UnitChange;
   AddRow(AddRows(Group), rsPreferencesUnit, FUnitBox);
   AddNote(Group, rsPreferencesUnitNote);
+  BuildClaudeGroup(Host);
 end;
 
 procedure TPreferencesDialog.BuildDesignTab;
@@ -310,7 +314,6 @@ begin
   end;
   AddNote(Group, rsPreferencesGridNote);
   BuildGarmentGroup(Host);
-  BuildClaudeGroup(Host);
 end;
 
 procedure TPreferencesDialog.BuildGarmentGroup(Host: TScrollBox);

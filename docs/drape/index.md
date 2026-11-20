@@ -34,6 +34,7 @@ a drape file or a pattern.
     | Patterns | The patterns placed, the body and its measurements, and the gap |
     | Pieces | Every piece, placed or not; double-click one not placed to place it by a guess |
     | Properties | Where the selected piece is placed and how it is turned, and the seams that join it to placed pieces |
+    | Claude | Ask Claude to place the pieces (see [Asking Claude](#asking-claude)) |
     | Problems | Pieces left out, pieces gone from their pattern, seams left open, and files that cannot be read |
 
 ## The body
@@ -118,6 +119,25 @@ The drape follows its patterns: when a pattern or measurement file is saved,
 the drape reads it again within a second or two. New pieces wait on the
 Pieces tab, and a placed piece that is gone from its pattern is listed under
 Problems. Nothing is ever written back to a pattern.
+
+## Asking Claude
+
+The **Claude** tab lets you ask Claude to place the pieces in your own words:
+"wrap the back round to the back of the body", "which seams are left open?".
+It uses the Anthropic API key set in the General tab of
+**Edit → Preferences**, the same key as the design app's Claude tab (see
+[Asking Claude](../design/claude.md#setting-it-up)).
+
+Claude places, turns, flips and aligns pieces, guesses placements and sets the
+gap, as you can on the tabs, and can look at the body and pieces as a picture.
+Each change is one step on the undo history. It cannot save the drape, change
+a pattern or run Blender.
+
+Sent to Anthropic: your questions, the pieces' names and placements, the
+drape's problems, and pictures of the body and pieces. Patterns are named by
+their file names; folders, the measurement files' names and their values are
+never sent, though the body's shape and the pieces' sizes are worked out from
+them.
 
 ## Drape in Blender
 

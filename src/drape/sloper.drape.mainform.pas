@@ -29,7 +29,8 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, fpjson, Sloper.API.AppLink,
   Sloper.Core.PatternSources, Sloper.Core.DrapeFile, Sloper.Core.DrapePlacement, Sloper.Core.Seam, Sloper.Document.DrapeDocument, Sloper.Drape.View,
-  Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt, Sloper.UI.ProblemsPanel;
+  Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt, Sloper.UI.ProblemsPanel,
+  Sloper.UI.AssistantPanel;
 
 type
   TDrapeForm = class(TForm)
@@ -42,6 +43,7 @@ type
     FNextRowTop: integer;
     FStatus: TStatusBar;
     FProblemsList: TProblemsPanel;
+    FAssistant: TAssistantPanel;
     FSourceBox, FPieceBox: TListBox;
     FRemoveSourceButton, FBodySetButton, FBodyPatternSetButton: TButton;
     FBodyKindBox, FBodySizeBox: TComboBox;
@@ -174,6 +176,7 @@ resourcestring
   rsTabPatterns = 'Patterns';
   rsTabPieces = 'Pieces';
   rsTabProperties = 'Properties';
+  rsTabClaude = 'Claude';
   rsTabProblems = 'Problems';
   rsTabProblemsCount = 'Problems (%d)';
   rsPatternsLabel = 'Patterns';
@@ -233,7 +236,7 @@ uses
   LCLType, Math, StrUtils, Sloper.Core.Geometry3, Sloper.Core.Piece, Sloper.Core.RecentFiles, Sloper.Core.Settings,
   Sloper.Core.IconSet, Sloper.Core.JSON, Sloper.UI.Spacing, Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
   Sloper.API.Endpoint, Sloper.Core.DrapeMesh, Sloper.Core.AppPaths, Sloper.Output.DrapeExport, Sloper.Output.BlenderRun,
-  Sloper.Drape.BlenderDialog;
+  Sloper.Drape.BlenderDialog, Sloper.UI.AssistantHosts;
 
 const
   SIDE_WIDTH = 320;
@@ -249,6 +252,7 @@ const
   MODIFIED_MARK: array[boolean] of string = ('', '*');
   PROBLEMS_SECTION = 'problems';
   PROPERTIES_SECTION = 'properties';
+  CLAUDE_SECTION = 'claude';
   // A problem's key in the Problems tab: the item it is about, by index
   ITEM_KEY = 'item:';
   // Fields: how far a position may go (mm), and the decimals shown
@@ -296,6 +300,10 @@ begin
   FPatternsSide := FTabs.AddSection('patterns', rsTabPatterns, aiPatternsTab);
   FPiecesSide := FTabs.AddSection('pieces', rsTabPieces, aiPiecesTab);
   FPropertiesSide := FTabs.AddSection(PROPERTIES_SECTION, rsTabProperties, aiPropertiesTab);
+  FAssistant := TAssistantPanel.Create(Self);
+  FAssistant.Parent := FTabs.AddSection(CLAUDE_SECTION, rsTabClaude, aiClaudeTab);
+  FAssistant.Align := alClient;
+  FAssistant.Host := TDrapeAssistantHost.Create(FDocument);
   FProblemsSide := FTabs.AddSection(PROBLEMS_SECTION, rsTabProblems, aiProblems, True);
   FProblemsList := TProblemsPanel.Create(Self);
   FProblemsList.Parent := FProblemsSide;
@@ -326,6 +334,8 @@ end;
 destructor TDrapeForm.Destroy;
 begin
   FreeAndNil(FAppLink);
+  // Stops a question in progress, which works on the document
+  FAssistant.Host := nil;
   // The view reads the document while it goes
   FView.Document := nil;
   FreeAndNil(FDocument);
@@ -955,7 +965,10 @@ var
   Preferences: TPreferences;
 begin
   if EditPreferences(Self, ptDrape, Preferences) then
+  begin
+    FAssistant.KeyChanged;
     TellApps(APP_LINK_PREFERENCES, FAppLink);
+  end;
 end;
 
 // Writes the files Blender needs beside the drape file, then runs Blender on
@@ -1284,7 +1297,10 @@ var
   DrapeFile: string;
 begin
   if Method = APP_LINK_PREFERENCES then
+  begin
+    FAssistant.KeyChanged;
     Exit(True);
+  end;
   Result := (Method = APP_LINK_SHOW) and GetJSONString(Params, APP_LINK_DRAPE_PARAM, DrapeFile) and
     (FDocument.Drape.FileName <> '') and SameFileName(ExpandFileName(FDocument.Drape.FileName), ExpandFileName(DrapeFile));
   if not Result then

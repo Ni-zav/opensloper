@@ -69,8 +69,20 @@ Changed, Fixed and Removed under each version.
   round them, so a small piece can go in the curve or notch of a larger one,
   at least 10 mm apart; the circle skirt example tiles on 20 A4 pages rather
   than 23. Material needed still packs rectangles (#58).
+- A Claude tab in the publish and drape apps. In publish, Claude places,
+  turns, flips and packs pieces, sets what the layout prints on and adds
+  notes and the information block; in drape, it places, turns, flips and
+  aligns pieces round the body and guesses placements. It can look at the
+  sheet or the body as a picture, each change is one step to undo, and it
+  cannot save, export, print or run Blender. The tab says what is sent to
+  Anthropic before the first question (#64).
 
 ### Changed
+
+- The Anthropic API key and **Let AI assistants read the measurements** are
+  on the General tab of Edit → Preferences rather than Design, since every
+  app's Claude tab uses them. Assistance → Anthropic API Key… in the design
+  app opens that tab (#64).
 
 - Move Copy starts with the copies just right of the originals, rather than
   hidden on top of them, and after any transform the canvas brings the

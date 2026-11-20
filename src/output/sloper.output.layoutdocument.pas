@@ -36,6 +36,7 @@ type
     FHistory: TTextHistory;
     FSavedText: string;
     FChangeOpen: boolean;
+    FGeneration: integer;
     FBefore, FDescription: string;
     // The files' stamps last time CheckSources saw them differ
     FPendingStamps: string;
@@ -72,6 +73,11 @@ type
     property CanRedo: boolean read GetCanRedo;
     property UndoDescription: string read GetUndoDescription;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
+    // A change is open, as during a drag
+    property ChangeOpen: boolean read FChangeOpen;
+    // Counts the files it has held: New and Open add one, so what an
+    // assistant learned about the one before is known to be stale
+    property Generation: integer read FGeneration;
   end;
 
 implementation
@@ -98,6 +104,7 @@ end;
 
 procedure TLayoutDocument.NewForPattern(const PatternFile: string);
 begin
+  Inc(FGeneration);
   FLayout.Clear;
   FLayout.FileName := ChangeFileExt(PatternFile, LAYOUT_EXTENSION);
   FLayout.Name := ChangeFileExt(ExtractFileName(PatternFile), '');
@@ -113,6 +120,7 @@ end;
 
 function TLayoutDocument.Open(const FileName: string; out ErrorMessage: string): boolean;
 begin
+  Inc(FGeneration);
   Result := FLayout.LoadFromFile(FileName, ErrorMessage);
   if not Result then
     Exit;

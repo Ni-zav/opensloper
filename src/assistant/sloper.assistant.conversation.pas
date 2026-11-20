@@ -29,7 +29,7 @@ unit Sloper.Assistant.Conversation;
 interface
 
 uses
-  Classes, SysUtils, fpjson, Sloper.Assistant.Http, Sloper.Assistant.Stream;
+  Classes, SysUtils, fpjson, Sloper.API.Methods, Sloper.Assistant.Http, Sloper.Assistant.Stream;
 
 type
   // Runs one tool and gives the tool_result content; in the window, on the main thread
@@ -44,6 +44,8 @@ type
     FCancelled: boolean;
     FRetryDelayMs: integer;
     FSharesMeasurements: boolean;
+    // The tools offered; the pattern's unless made for another app's
+    FMethods: TApiMethodArray;
     FOnText: TAssistantTextEvent;
     FOnTool: TAssistantToolEvent;
     FOnNote: TAssistantNoteEvent;
@@ -56,8 +58,11 @@ type
     procedure Wait(Milliseconds: integer);
     procedure SetSharesMeasurements(Value: boolean);
   public
-    // Takes over Transport
+    // Takes over Transport; the tools and instructions are the design app's
     constructor Create(ATransport: TAssistantTransport);
+    // For another app, as the publish and drape apps: its own methods as
+    // tools and its own instructions
+    constructor CreateFor(ATransport: TAssistantTransport; const AMethods: TApiMethodArray; const ASystem: string);
     destructor Destroy; override;
     // Sends the user's message and runs Claude's tool calls until it answers;
     // False with the reason when it stopped short
@@ -91,6 +96,8 @@ const
 // The Automation API methods as tools for the Messages API; without
 // SharesMeasurements, none that reads or writes measurement values
 function AssistantTools(SharesMeasurements: boolean): TJSONArray;
+// Another table's methods as tools, as AssistantTools makes them
+function AssistantToolsFor(const Methods: TApiMethodArray; SharesMeasurements: boolean): TJSONArray;
 // The instructions, formula syntax and object properties
 function AssistantSystemPrompt: string;
 // A method's reply as tool_result content: render's PNG as an image, so
@@ -156,6 +163,11 @@ const
   HTTP_OK_HIGH = 299;
 
 function AssistantTools(SharesMeasurements: boolean): TJSONArray;
+begin
+  Result := AssistantToolsFor(ApiMethods, SharesMeasurements);
+end;
+
+function AssistantToolsFor(const Methods: TApiMethodArray; SharesMeasurements: boolean): TJSONArray;
 var
   McpList: TJSONArray;
   Tool, Entry: TJSONObject;
@@ -164,7 +176,7 @@ var
   Wanted: boolean;
 begin
   Result := TJSONArray.Create;
-  McpList := McpTools;
+  McpList := McpToolsFor(Methods);
   try
     for Index := 0 to McpList.Count - 1 do
     begin
@@ -234,9 +246,19 @@ begin
   FTransport := ATransport;
   FMessages := TJSONArray.Create;
   FSharesMeasurements := True;
-  FTools := AssistantTools(FSharesMeasurements);
+  FMethods := ApiMethods;
+  FTools := AssistantToolsFor(FMethods, FSharesMeasurements);
   FSystem := AssistantSystemPrompt;
   FRetryDelayMs := DEFAULT_RETRY_MS;
+end;
+
+constructor TAssistantConversation.CreateFor(ATransport: TAssistantTransport; const AMethods: TApiMethodArray; const ASystem: string);
+begin
+  Create(ATransport);
+  FMethods := AMethods;
+  FreeAndNil(FTools);
+  FTools := AssistantToolsFor(FMethods, FSharesMeasurements);
+  FSystem := ASystem;
 end;
 
 procedure TAssistantConversation.SetSharesMeasurements(Value: boolean);
@@ -245,7 +267,7 @@ begin
     Exit;
   FSharesMeasurements := Value;
   FreeAndNil(FTools);
-  FTools := AssistantTools(FSharesMeasurements);
+  FTools := AssistantToolsFor(FMethods, FSharesMeasurements);
 end;
 
 destructor TAssistantConversation.Destroy;

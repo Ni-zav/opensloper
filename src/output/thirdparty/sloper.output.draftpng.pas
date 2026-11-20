@@ -45,6 +45,9 @@ function DraftToPNG(Pattern: TPattern; const Options: TDraftSVGOptions; Width: i
   out ErrorMessage: string): boolean;
 // The font families text is drawn with, best first; empty when no font loads
 function DrawingFontFamilies: string;
+// Any of our SVG drawings (a layout's sheet, the drape's view) as PNG, sized
+// as DraftToPNG sizes the draft
+function SVGToPNG(const SvgText: string; Width: integer; out Png: rawbytestring; out ErrorMessage: string): boolean;
 
 resourcestring
   rsPngWidth = 'The width must be from %d to %d pixels';
@@ -101,16 +104,21 @@ begin
     SetLength(Result, Length(Result) - 2);
 end;
 
-// The draft's SVG, naming the bundled fonts first: BGRABitmap draws with the
+// An SVG naming the bundled fonts first: BGRABitmap draws with the
 // first family it has, and cannot draw the generic sans-serif without one
-function DrawingSVG(Pattern: TPattern; const Options: TDraftSVGOptions): string;
+function WithDrawingFonts(const SvgText: string): string;
 begin
   LoadFonts;
-  Result := StringReplace(DraftToSVG(Pattern, Options), SVG_FONT_ATTRIBUTE, SVG_FONT_ATTRIBUTE + Families, [rfReplaceAll]);
+  Result := StringReplace(SvgText, SVG_FONT_ATTRIBUTE, SVG_FONT_ATTRIBUTE + Families, [rfReplaceAll]);
 end;
 
 function DraftToPNG(Pattern: TPattern; const Options: TDraftSVGOptions; Width: integer; out Png: rawbytestring;
   out ErrorMessage: string): boolean;
+begin
+  Result := SVGToPNG(DraftToSVG(Pattern, Options), Width, Png, ErrorMessage);
+end;
+
+function SVGToPNG(const SvgText: string; Width: integer; out Png: rawbytestring; out ErrorMessage: string): boolean;
 var
   Svg: TBGRASVG;
   Image: TBGRABitmap;
@@ -136,7 +144,7 @@ begin
   Output := nil;
   try
     try
-      Source := TStringStream.Create(DrawingSVG(Pattern, Options));
+      Source := TStringStream.Create(WithDrawingFonts(SvgText));
       Svg := TBGRASVG.Create(Source);
       if (Svg.ViewBox.size.x <= 0) or (Svg.ViewBox.size.y <= 0) then
       begin

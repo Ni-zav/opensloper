@@ -187,6 +187,16 @@ type
 // An object as a selection lists it: its id, name and type
 function NodeReference(Node: TEvalNode): TJSONObject;
 
+// Reading a call's parameters, for this server and the publish and drape
+// apps' tools: each raises EApiError when a parameter is the wrong kind
+function RequireString(Params: TJSONObject; const AName: string): string;
+function OptionalString(Params: TJSONObject; const AName: string): string;
+// True with Value when the parameter is given
+function OptionalNumber(Params: TJSONObject; const AName: string; var Value: double): boolean;
+function BooleanParam(Params: TJSONObject; const AName: string): boolean;
+// Which of Choices, the first when absent
+function ChoiceParam(Params: TJSONObject; const AName: string; const Choices: array of string): integer;
+
 const
   // Given in place of a file name the reply may not give out
   API_WITHHELD = '(withheld)';
@@ -387,7 +397,6 @@ begin
   Result := string.Join(', ', EDGE_ROLE_NAMES);
 end;
 
-// Which of Choices, the first when absent
 function ChoiceParam(Params: TJSONObject; const AName: string; const Choices: array of string): integer;
 var
   Text: string;

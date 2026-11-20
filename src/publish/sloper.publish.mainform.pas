@@ -29,7 +29,7 @@ uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, Grids, fpjson, Sloper.Core.TextFields,
   Sloper.Core.Note, Sloper.API.AppLink, Sloper.Output.Layout, Sloper.Core.PatternSources, Sloper.Output.LayoutDocument, Sloper.Output.LayoutExport,
   Sloper.Publish.PreviewCanvas, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt,
-  Sloper.UI.ProblemsPanel;
+  Sloper.UI.ProblemsPanel, Sloper.UI.AssistantPanel;
 
 type
   TPublishForm = class(TForm)
@@ -66,6 +66,7 @@ type
     // The problems in full, which the status bar counts
     FProblemsSide: TWinControl;
     FProblemsList: TProblemsPanel;
+    FAssistant: TAssistantPanel;
     // What each tray line stands for
     FTrayCopies: TUnplacedCopyArray;
     FTurnButton, FFlipButton, FRemoveButton, FPackButton: TButton;
@@ -231,6 +232,7 @@ resourcestring
   rsRemove = 'Back to tray';
   rsTabPieces = 'Pieces';
   rsTabOutput = 'Output';
+  rsTabClaude = 'Claude';
   rsTabPatterns = 'Patterns';
   rsTabMaterials = 'Materials';
   rsNeedMaterial = 'Material';
@@ -350,7 +352,7 @@ implementation
 uses
   LCLType, Math, StrUtils, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
   Sloper.Core.Settings, Sloper.Core.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
-  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
+  Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences, Sloper.UI.AssistantHosts,
   Sloper.Output.LayoutPDF, Sloper.Output.Packing, Sloper.Output.Preview, Sloper.Output.Printing, Sloper.Output.Tiling,
   Sloper.Publish.PrintDialog, Sloper.Core.JSON, Sloper.API.Endpoint, Sloper.Output.MaterialNeeded;
 
@@ -384,6 +386,7 @@ const
   MODIFIED_MARK: array[boolean] of string = ('', '*');
   // The side panel's sections, by the key their choice is saved under
   INFO_SECTION = 'info';
+  CLAUDE_SECTION = 'claude';
   NOTES_SECTION = 'notes';
   PROBLEMS_SECTION = 'problems';
   // A problem's key in the Problems tab: the placement or note it is about,
@@ -440,6 +443,10 @@ begin
   FInfoSide := FTabs.AddSection(INFO_SECTION, rsTabInfo, aiInfoTab);
   FNotesSide := FTabs.AddSection(NOTES_SECTION, rsTabNotes, aiAnnotations);
   FOutputSide := FTabs.AddSection('output', rsTabOutput, aiPrint);
+  FAssistant := TAssistantPanel.Create(Self);
+  FAssistant.Parent := FTabs.AddSection(CLAUDE_SECTION, rsTabClaude, aiClaudeTab);
+  FAssistant.Align := alClient;
+  FAssistant.Host := TLayoutAssistantHost.Create(FDocument);
   // At the foot of the column, as in every app
   FProblemsSide := FTabs.AddSection(PROBLEMS_SECTION, rsTabProblems, aiProblems, True);
   FProblemsList := TProblemsPanel.Create(Self);
@@ -495,6 +502,8 @@ end;
 destructor TPublishForm.Destroy;
 begin
   FreeAndNil(FAppLink);
+  // Stops a question in progress, which works on the document
+  FAssistant.Host := nil;
   FreeAndNil(FDocument);
   inherited Destroy;
 end;
@@ -1591,6 +1600,7 @@ begin
   if Method = APP_LINK_PREFERENCES then
   begin
     FDocument.Layout.Calibration := UserCalibration;
+    FAssistant.KeyChanged;
     Exit(True);
   end;
   Result := (Method = APP_LINK_SHOW) and GetJSONString(Params, APP_LINK_LAYOUT_PARAM, LayoutFile) and
@@ -1873,6 +1883,7 @@ begin
     Exit;
   // Only printing reads it, so nothing on screen changes
   FDocument.Layout.Calibration := Preferences.Calibration;
+  FAssistant.KeyChanged;
   TellApps(APP_LINK_PREFERENCES, FAppLink);
 end;
 

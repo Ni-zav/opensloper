@@ -13,7 +13,7 @@ To clone this project, you must use `--recursive`, since this project contains s
 Build with the release toolchain that CI uses: Lazarus 4.8 with FPC 3.2.2 (from your distribution, or the packages at [lazarus-ide.org](https://www.lazarus-ide.org)).
 
 ```
-git clone --recursive https://github.com/billbsing/opensloper.git
+git clone --recursive https://github.com/opensloper/opensloper.git
 cd opensloper
 ./opensloper-make.sh build
 ```

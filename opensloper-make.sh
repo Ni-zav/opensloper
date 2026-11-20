@@ -497,7 +497,7 @@ plist_document_type() {
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>LSHandlerRank</key><string>Owner</string>
       <key>CFBundleTypeIconFile</key><string>OpenSloper</string>
-      <key>LSItemContentTypes</key><array><string>io.github.billbsing.opensloper.$2</string></array>
+      <key>LSItemContentTypes</key><array><string>io.github.opensloper.opensloper.$2</string></array>
     </dict>
 EOF
 }
@@ -505,7 +505,7 @@ EOF
 plist_exported_type() {
   cat <<EOF
     <dict>
-      <key>UTTypeIdentifier</key><string>io.github.billbsing.opensloper.$2</string>
+      <key>UTTypeIdentifier</key><string>io.github.opensloper.opensloper.$2</string>
       <key>UTTypeDescription</key><string>$1</string>
       <key>UTTypeConformsTo</key><array><string>public.json</string></array>
       <key>UTTypeIconFile</key><string>OpenSloper</string>
@@ -533,7 +533,7 @@ write_readme() {
   {
     echo "OpenSloper $VERSION for $platform"
     echo
-    echo "Parametric sewing pattern drafting. https://github.com/billbsing/opensloper"
+    echo "Parametric sewing pattern drafting. https://github.com/opensloper/opensloper"
     echo "Free software under the GNU General Public License version 3 or later (LICENSE)."
     echo
     case "$platform" in
@@ -865,7 +865,7 @@ cmd_package() {
 <dict>
   <key>CFBundleName</key><string>OpenSloper</string>
   <key>CFBundleDisplayName</key><string>OpenSloper</string>
-  <key>CFBundleIdentifier</key><string>io.github.billbsing.opensloper</string>
+  <key>CFBundleIdentifier</key><string>io.github.opensloper.opensloper</string>
   <key>CFBundleExecutable</key><string>opensloper-design</string>
   <key>CFBundleIconFile</key><string>OpenSloper</string>
   <key>CFBundlePackageType</key><string>APPL</string>

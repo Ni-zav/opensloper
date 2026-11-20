@@ -8,7 +8,7 @@ OpenSloper is in early development and has no stable release yet. Security fixes
 
 Please do not report security problems in public issues, pull requests or discussions.
 
-Report them privately through GitHub: on the repository's **Security** tab, choose **Report a vulnerability** ([direct link](https://github.com/billbsing/opensloper/security/advisories/new)). If you cannot use GitHub, email info@opensloper.com.
+Report them privately through GitHub: on the repository's **Security** tab, choose **Report a vulnerability** ([direct link](https://github.com/opensloper/opensloper/security/advisories/new)). If you cannot use GitHub, email info@opensloper.com.
 
 Include as much of this as you can:
 

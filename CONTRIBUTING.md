@@ -9,7 +9,7 @@ Everyone taking part in the project is expected to follow the [Code of Conduct](
 Use the release toolchain that CI uses: **Lazarus 4.8 with FPC 3.2.2**. The formatter is built from your Lazarus's own source, so a different Lazarus version may format code differently and fail the CI formatting check. On Linux, the GUI apps also need the Qt5 or Qt6 Pascal bindings (`libQt5Pas` or `libQt6Pas`).
 
 ```
-git clone --recursive https://github.com/billbsing/opensloper.git
+git clone --recursive https://github.com/opensloper/opensloper.git
 cd opensloper
 ./opensloper-make.sh test
 ./opensloper-make.sh build

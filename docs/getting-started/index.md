@@ -48,7 +48,7 @@ Windows, if SmartScreen asks, choose More info, then Run anyway.
 ### Build
 
 ```
-git clone --recursive https://github.com/billbsing/opensloper.git
+git clone --recursive https://github.com/opensloper/opensloper.git
 cd opensloper
 ./opensloper-make.sh build
 ```

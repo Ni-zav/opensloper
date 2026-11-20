@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reporting a problem. Please search the [open issues](https://github.com/billbsing/opensloper/issues) and `documents/known-issues.md` first.
-        Report security problems privately instead, as described in [SECURITY.md](https://github.com/billbsing/opensloper/blob/development/SECURITY.md).
+        Thank you for reporting a problem. Please search the [open issues](https://github.com/opensloper/opensloper/issues) and `documents/known-issues.md` first.
+        Report security problems privately instead, as described in [SECURITY.md](https://github.com/opensloper/opensloper/blob/development/SECURITY.md).
   - type: dropdown
     id: app
     attributes:

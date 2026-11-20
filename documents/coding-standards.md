@@ -37,7 +37,7 @@ The project settings are the IDE's own settings with four changes: `RemoveExpres
 ## Naming
 
 - **Descriptive names.** No single-letter variables or parameters: `Index`, not `I`; `Node`, not `N`; `Failure`, not `E`. A name says what the value is (`StartPos`, `LengthOrDx`, `TokenIndex`), not just its type.
-  - Exceptions: the core math units (`Sloper.Core.Geometry`, `Sloper.Core.Bezier`, `Sloper.Core.Numeric`), where single letters (`P`, `T`, `A`, `B`) match the formulas and read better; and `tests/`.
+  - Exceptions: the core math units (`Sloper.Core.Geometry`, `Sloper.Core.Geometry3`, `Sloper.Core.Bezier`, `Sloper.Core.Numeric`), where single letters (`P`, `T`, `A`, `B`) match the formulas and read better; and `tests/`.
 - **Parameters that would clash take an `A` prefix.** When a parameter's plain name matches a field, property or method of the class (`AName`, `AEdge`, `AKey`, `AValue`), prefix it with `A`. Free Pascal refuses a local or parameter with the same name as a member. Locals use plain descriptive names instead (`EdgeObject`, `PointPos`).
 - **Fields** start with `F` and are private; expose them through properties.
 - **Types** start with `T`, exception classes with `E`; enumeration values carry a short lower-case prefix (`esValid`, `omPolar`, `pdAngle`).

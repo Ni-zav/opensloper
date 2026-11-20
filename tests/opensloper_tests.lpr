@@ -106,6 +106,7 @@ uses
   Sloper.Tests.AppLink,
   Sloper.Tests.Assistant,
   Sloper.Tests.Garment,
+  Sloper.Tests.Drape,
   Sloper.Tests.PieceView,
   Sloper.Tests.Locking;
 

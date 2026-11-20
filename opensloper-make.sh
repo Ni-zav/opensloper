@@ -1033,7 +1033,8 @@ my %no_lcl = map { $_ => 1 } qw(src/core src/document src/api src/output src/cli
 
 # Units where single-letter names match the maths (coding-standards.md)
 my %math = map { $_ => 1 } qw(
-  src/core/sloper.core.geometry.pas src/core/sloper.core.bezier.pas src/core/sloper.core.numeric.pas);
+  src/core/sloper.core.geometry.pas src/core/sloper.core.geometry3.pas src/core/sloper.core.bezier.pas
+  src/core/sloper.core.numeric.pas);
 
 sub report {
   my ($kind, $file, $line, $msg) = @_;

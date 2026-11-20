@@ -58,7 +58,7 @@ The user places each piece copy on or near the body, facing the way it is worn, 
 
 - **The frame** has Blender's axes, so the export needs only a scale: X to the body's left (the viewer's right seen from the front), Y towards the back, Z up, in mm. The body faces −Y, stands with its centre line on the Z axis and its feet at Z = 0.
 - **The piece frame.** The piece lies in its own plane with its drafted x along X and its drafted y (down) along −Z, the right side of the fabric facing −Y, so with no rotation a piece stands upright facing the viewer as it does on the canvas. Its origin is an **anchor**: the middle of the grainline, else the centre of the seam line's bounding box. The anchor is computed, so the placement survives measurement changes.
-- **The numbers**: `position` (x, y, z of the anchor) and `rotation` (three angles in degrees, applied in a fixed order stated in the schema; a quaternion was considered and rejected as unreadable in the file).
+- **The numbers**: `position` (x, y, z of the anchor) and `rotation` (three angles in degrees about X, then Y, then Z, about the fixed axes: Blender's XYZ Euler order, decided 2026-11-20; a quaternion was considered and rejected as unreadable in the file).
 - **Layers** (a lining inside its shell) are an offset along the piece's normal; the app offers a nudge ("one layer in") by the **gap**, a file setting (20 mm by default) also used by the guesses and Align to Seam.
 
 **Guesses.** An unplaced piece can be guessed (one command for all, one undo step):

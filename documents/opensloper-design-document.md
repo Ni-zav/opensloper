@@ -906,7 +906,7 @@ Decided and built 2026-11-14 (issue #19, phase 2). How much of each material the
 
 ### Drape app and Blender export (3D preview)
 
-Not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`.
+Being built (issue #11, started 2026-11-20): the placement maths is in the core; the drape file, body, app, mesher and Blender export are not built yet (see Open items). 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`.
 
 **A separate drape app** (decided 2026-11-18). The design app stays a 2D drafting app, and a garment is often made from several patterns, so placing pieces in 3D belongs to a fourth app, the drape app (`opensloper-drape`), not to a tab of the design app. Like the publish app it imports one or more patterns, each with a measurement set and size, keeps in step with their saved files and owns its own file, which holds the sources, the body and each piece copy's placement; nothing is written back to a pattern. The user places the pieces on a generic body built from a measurement set (or no body, for accessories), and the app writes the files Blender needs and runs it. This replaces the 2026-11-17 plan of an Assembly tab in the design app with assembly steps and printed flat-pack style instructions, which is set aside for later; the 2026-11-09 decision against a per-piece front or back setting stands, since no 3D data is stored in a pattern.
 
@@ -917,6 +917,13 @@ Writing a cloth simulator (triangulation, sewing constraints, body and self-coll
 - A Blender Python script that places pieces, creates sewing springs and runs the simulation in one step
 
 The Garment tab is the quick, flat look at one pattern's finished pieces; the drape app is for fit and drape. The placement maths, body, mesher, seam pairing and writer are core and output code, so the CLI can write and run the same files.
+
+**Placement** (decided 2026-11-20, started in `Sloper.Core.Geometry3` and `Sloper.Core.DrapePlacement`). The 3D frame has Blender's axes, so the export needs only a scale from mm to m: X to the body's left (the viewer's right seen from the front), Y towards the back, Z up, in mm, right-handed; the body faces −Y, stands on Z = 0 and its centre line is the Z axis. Turns are anticlockwise looking from the positive end of an axis, as in Blender, which differs from the 2D convention (anticlockwise on screen, y down) on purpose: this is not screen space.
+
+- **A piece's frame**: its drafted x along X, its drafted y (down) along −Z, the right side of the fabric facing −Y, so an unturned piece stands facing the viewer as it does on the canvas. Its origin is the **anchor**, the middle of the grainline, else the middle of the seam line's extent; it is computed, so a placement survives measurement changes. A piece on a fold is placed opened out (the half as drafted, then its mirror image across the fold).
+- **A placement** is `position` (the anchor's x, y, z) and `rotation` (three angles in degrees about X, then Y, then Z, each about the fixed axes): Blender's XYZ Euler order, so the numbers set `rotation_euler` as they are. A quaternion was rejected as unreadable in the file.
+- **A mirrored copy** (the second of a pair cut mirrored) has its frame's x turned round, giving the left of the pair. Its default placement is the mirror image of its partner's across the YZ plane: position (−x, y, z), rotation (x, −y, −z).
+- **The camera** orbits a target: yaw turns it about Z (turntable, so up stays up, 0 in front of the body), pitch raises it (90 looks straight down). Orthographic by default, perspective as an option. Front, Back, Left (the body's left, +X), Right, Top and Three-quarter (front and to the body's right, raised a little) set yaw and pitch. A drag moves a piece in the plane facing the camera.
 
 ## Automation API and command line
 

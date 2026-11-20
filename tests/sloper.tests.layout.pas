@@ -25,7 +25,7 @@ interface
 
 uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Pattern, Sloper.Core.Piece,
-  Sloper.Core.TextFields, Sloper.Output.Layout, Sloper.Output.Tiling;
+  Sloper.Core.TextFields, Sloper.Output.Layout, Sloper.Core.PatternSources, Sloper.Output.Tiling;
 
 type
   TTestLayout = class(TOSTestCase)
@@ -446,15 +446,15 @@ begin
   Refused('format', '{"format": "pattern", "version": 1}', rsLayoutWrongFormat);
   Refused('newer', '{"format": "layout", "version": 99}', Format(rsFileVersionNewer, [99]));
   Refused('below 1', '{"format": "layout", "version": 0}', Format(rsFileVersionInvalid, [0]));
-  Refused('sources', '{"format": "layout", "version": 1}', Format(rsLayoutList, ['sources']));
+  Refused('sources', '{"format": "layout", "version": 1}', rsPatternSourcesList);
   Refused('repeated id', '{"format": "layout", "version": 1, "sources": [{"id": 1, "pattern": "a"}, {"id": 1, "pattern": "b"}]}',
-    Format(rsLayoutBadSource, [2]));
-  Refused('nextId', '{"format": "layout", "version": 1, "nextId": 1, "sources": [{"id": 3, "pattern": "a"}]}', rsLayoutBadNextId);
+    Format(rsPatternSourcesBad, [2]));
+  Refused('nextId', '{"format": "layout", "version": 1, "nextId": 1, "sources": [{"id": 3, "pattern": "a"}]}', rsPatternSourcesNextId);
   // MaxInt leaves no room for the counter above it; past 32 bits is not cut down
   Refused('highest id', '{"format": "layout", "version": 1, "sources": [{"id": 2147483647, "pattern": "a"}]}',
-    Format(rsLayoutBadSource, [1]));
+    Format(rsPatternSourcesBad, [1]));
   Refused('64-bit id', '{"format": "layout", "version": 1, "sources": [{"id": 4294967297, "pattern": "a"}]}',
-    Format(rsLayoutBadSource, [1]));
+    Format(rsPatternSourcesBad, [1]));
   Refused('placement', '{"format": "layout", "version": 1, "sources": [{"id": 1, "pattern": "a"}], "placements": [{"source": 2, "piece": 5, "x": 0, "y": 0}]}',
     Format(rsLayoutUnknownSource, [1, 2]));
   Refused('paper', '{"format": "layout", "version": 1, "sources": [], "output": {"paper": "B9"}}', Format(rsLayoutBadPaper, ['B9']));
@@ -486,7 +486,7 @@ end;
 
 procedure TTestLayout.TestAddAndRemoveSource;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
 begin
   WritePattern;
   Prepare;
@@ -501,7 +501,7 @@ end;
 
 procedure TTestLayout.TestRemoveSourceTakesPlacements;
 var
-  Second: TLayoutSource;
+  Second: TPatternSource;
 begin
   WritePattern;
   Prepare;

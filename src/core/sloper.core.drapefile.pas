@@ -1,0 +1,825 @@
+{
+  OpenSloper - parametric sewing pattern drafting
+  Copyright (C) 2026 The OpenSloper authors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+}
+
+// Drape files (.sdrape): the patterns the drape app places on a body, the body,
+// and where each copy of each piece is placed in 3D. Information flows one
+// way, measurements to patterns to this file; nothing is written back to a
+// pattern. A placement names its piece by source and piece ID, so it survives
+// edits. Described in the design document under "Drape app and Blender
+// export". No LCL dependency.
+unit Sloper.Core.DrapeFile;
+
+{$mode ObjFPC}{$H+}
+
+interface
+
+uses
+  SysUtils, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources,
+  Sloper.Core.DrapePlacement, Sloper.Core.FileVersions;
+
+const
+  DRAPE_FORMAT = 'drape';
+  DRAPE_VERSION = 1;
+  DRAPE_EXTENSION = '.sdrape';
+  // How far (mm) pieces are placed off the body and apart across a seam
+  DEFAULT_DRAPE_GAP = 20;
+
+type
+  // bkMeasurements builds a generic body from a measurement set; bkNone has no
+  // body, for accessories
+  TDrapeBodyKind = (bkMeasurements, bkNone);
+
+  // The body's measurement set and size; an empty MeasurementFile is the first
+  // source's, with its size unless Size is given
+  TDrapeBody = record
+    Kind: TDrapeBodyKind;
+    MeasurementFile, Size: string;
+  end;
+
+  TDrapePieceCopy = record
+    SourceId, Copy: integer;
+    PieceKey: string;
+  end;
+
+  TDrapePieceCopyArray = array of TDrapePieceCopy;
+
+  TDrapeItem = record
+    Piece: TDrapePieceCopy;
+    Placement: TDrapePlacement;
+  end;
+
+  TDrapeItemArray = array of TDrapeItem;
+
+  // A problem with the file, and the index of the item it is about or -1
+  TDrapeProblem = record
+    Text: string;
+    Item: integer;
+  end;
+
+  TDrapeProblemArray = array of TDrapeProblem;
+
+  TDrape = class
+  private
+    FSources: TPatternSources;
+    function GetSources: TPatternSourceList;
+    function GuessFirstPieces: integer;
+    function GuessAlongSeams: integer;
+    function GuessMirroredCopies: integer;
+    function GuessRest: integer;
+    // The longest seam joining Copy to a placed copy that it can be aligned to
+    function LongestPlacedSeam(const Copy: TDrapePieceCopy; out Seam: TSeamObject; out Length: double): boolean;
+  public
+    Name: string;
+    // Where the file is saved; relative paths start from its folder
+    FileName: string;
+    Body: TDrapeBody;
+    Gap: double;
+    Items: TDrapeItemArray;
+    constructor Create;
+    destructor Destroy; override;
+    procedure Clear;
+    function AddSource(const APatternFile, AMeasurementFile, ASize: string): TPatternSource;
+    // Takes away the source and its placements
+    procedure RemoveSource(Source: TPatternSource);
+    function FindSource(Id: integer): TPatternSource;
+    function StoredPath(const Path: string): string;
+    procedure LoadSources;
+    function SaveToText: string;
+    function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
+    function SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
+    function LoadFromFile(const AFileName: string; out ErrorMessage: string): boolean;
+    // The piece of a copy, when its source is loaded and has it
+    function FindPiece(const Copy: TDrapePieceCopy; out Piece: TPieceObject): boolean;
+    // The index of the copy's item, or -1 when it is unplaced
+    function IndexOf(const Copy: TDrapePieceCopy): integer;
+    // Places the copy, or moves it when it is placed
+    procedure Place(const Copy: TDrapePieceCopy; const Placement: TDrapePlacement);
+    procedure Unplace(const Copy: TDrapePieceCopy);
+    // Every copy of every working piece of the loaded sources with no item
+    function Unplaced: TDrapePieceCopyArray;
+    // The copy's points placed on the body: its seam line, opened out on a
+    // fold. False when the piece cannot be found or is not placed.
+    function PlacedOutline(const Copy: TDrapePieceCopy; out Points: TVec3Array): boolean;
+    // Places Copy so its side of Seam lies along the other side's placed
+    // copy, Gap apart; Folded turns it over about the seam. False when the
+    // copy is not in the seam or no copy of the other side is placed.
+    function AlignToSeam(const Copy: TDrapePieceCopy; Seam: TSeamObject; Folded: boolean; out Placement: TDrapePlacement): boolean;
+    // Places every unplaced copy that can be, as a first guess: the largest
+    // piece of each source in front of the body, pieces sewn to a placed one
+    // along their seam, the other of a mirrored pair as its mirror image, and
+    // the rest in a row beside the body. Returns how many were placed.
+    function GuessPlacements: integer;
+    function Problems: TDrapeProblemArray;
+    property Sources: TPatternSourceList read GetSources;
+  end;
+
+// Whether a copy is cut mirrored: the even copies of a mirrored piece not on a
+// fold, as the publish app flips them
+function CopyIsMirrored(Piece: TPieceObject; Copy: integer): boolean;
+function DrapePieceCopy(SourceId: integer; const PieceKey: string; Copy: integer): TDrapePieceCopy;
+function DrapeFileVersions: TFormatVersions;
+
+resourcestring
+  rsDrapeWrongFormat = 'This is not a drape file';
+  rsDrapeUnits = 'Units "%s" are not supported; use mm';
+  rsDrapeList = 'The file has no valid "%s" list';
+  rsDrapeBadPlacement = 'Placement %d is not valid';
+  rsDrapeUnknownSource = 'Placement %d uses source %d, which is not in the file';
+  rsDrapeRepeatedPlacement = 'Placement %d places a copy already placed';
+  rsDrapeBadBody = 'The body is not valid';
+  rsDrapeBadGap = 'The gap must be 0 or more';
+  rsDrapeSourceProblem = '%s: %s';
+  rsDrapePieceGone = '%s: piece %s no longer exists';
+  rsDrapeExtraCopy = '%s: %s is cut %d times now, but copy %d is still placed';
+  rsDrapePieceFailing = '%s: %s cannot be placed: %s';
+  rsDrapeUnplaced = '%s: %s (copy %d of %d) is not placed, so it is left out';
+  rsDrapeNoPieces = '%s has no pieces. Make them in the drafting app and save the pattern';
+
+implementation
+
+uses
+  Math, fpjson, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.EvalTypes;
+
+const
+  BODY_KIND_NAMES: array[TDrapeBodyKind] of string = ('measurements', 'none');
+  // Where guesses go until the body is built from measurements: the height
+  // (mm) of the middle of the first piece, and how far in front of the centre
+  // line the body's front is
+  GUESS_HEIGHT = 1100;
+  GUESS_BODY_DEPTH = 150;
+  // Pieces with no seams wait in a row this far (mm) to the body's right,
+  // this far apart
+  GUESS_ROW_SIDE = 600;
+  GUESS_ROW_STEP = 50;
+
+function CopyIsMirrored(Piece: TPieceObject; Copy: integer): boolean;
+begin
+  Result := Piece.Mirrored and not Piece.OnFold and not Odd(Copy);
+end;
+
+function DrapePieceCopy(SourceId: integer; const PieceKey: string; Copy: integer): TDrapePieceCopy;
+begin
+  Result.SourceId := SourceId;
+  Result.PieceKey := PieceKey;
+  Result.Copy := Copy;
+end;
+
+function SameCopy(const First, Second: TDrapePieceCopy): boolean;
+begin
+  Result := (First.SourceId = Second.SourceId) and (First.PieceKey = Second.PieceKey) and (First.Copy = Second.Copy);
+end;
+
+function DrapeFileVersions: TFormatVersions;
+begin
+  Result.Current := DRAPE_VERSION;
+  Result.Steps := [];
+end;
+
+{ TDrape }
+
+constructor TDrape.Create;
+begin
+  FSources := TPatternSources.Create;
+  Clear;
+end;
+
+destructor TDrape.Destroy;
+begin
+  FreeAndNil(FSources);
+  inherited Destroy;
+end;
+
+procedure TDrape.Clear;
+begin
+  FSources.Clear;
+  Name := '';
+  Body := Default(TDrapeBody);
+  Gap := DEFAULT_DRAPE_GAP;
+  Items := nil;
+end;
+
+function TDrape.GetSources: TPatternSourceList;
+begin
+  Result := FSources.Items;
+end;
+
+function TDrape.AddSource(const APatternFile, AMeasurementFile, ASize: string): TPatternSource;
+begin
+  Result := FSources.Add(APatternFile, AMeasurementFile, ASize);
+end;
+
+procedure TDrape.RemoveSource(Source: TPatternSource);
+var
+  Index: integer;
+begin
+  for Index := High(Items) downto 0 do
+    if Items[Index].Piece.SourceId = Source.Id then
+      System.Delete(Items, Index, 1);
+  FSources.Remove(Source);
+end;
+
+function TDrape.FindSource(Id: integer): TPatternSource;
+begin
+  Result := FSources.FindById(Id);
+end;
+
+function TDrape.StoredPath(const Path: string): string;
+begin
+  Result := StoredSourcePath(FileName, Path);
+end;
+
+procedure TDrape.LoadSources;
+begin
+  FSources.LoadAll(FileName);
+end;
+
+function Vec3ToJSON(const Value: TVec3): TJSONArray;
+begin
+  Result := TJSONArray.Create;
+  Result.Add(JSONFloat(Value.X));
+  Result.Add(JSONFloat(Value.Y));
+  Result.Add(JSONFloat(Value.Z));
+end;
+
+function JSONToVec3(Data: TJSONData; out Value: TVec3): boolean;
+var
+  Index: integer;
+  Parts: array[0..2] of double;
+begin
+  Value := Vec3(0, 0, 0);
+  if not Assigned(Data) or (Data.JSONType <> jtArray) or (Data.Count <> 3) then
+    Exit(False);
+  for Index := 0 to 2 do
+  begin
+    if Data.Items[Index].JSONType <> jtNumber then
+      Exit(False);
+    Parts[Index] := Data.Items[Index].AsFloat;
+    if IsNan(Parts[Index]) or IsInfinite(Parts[Index]) then
+      Exit(False);
+  end;
+  Value := Vec3(Parts[0], Parts[1], Parts[2]);
+  Result := True;
+end;
+
+function TDrape.SaveToText: string;
+var
+  Root, Item: TJSONObject;
+  List: TJSONArray;
+  Entry: TDrapeItem;
+begin
+  Root := TJSONObject.Create;
+  try
+    Root.Add('format', DRAPE_FORMAT);
+    Root.Add('version', DRAPE_VERSION);
+    Root.Add('units', 'mm');
+    Root.Add('name', Name);
+    FSources.SaveTo(Root);
+    Item := TJSONObject.Create;
+    Root.Add('body', Item);
+    Item.Add('kind', BODY_KIND_NAMES[Body.Kind]);
+    if Body.MeasurementFile <> '' then
+      Item.Add('measurementFile', Body.MeasurementFile);
+    if Body.Size <> '' then
+      Item.Add('size', Body.Size);
+    Root.Add('gap', JSONFloat(Gap));
+    List := TJSONArray.Create;
+    Root.Add('placements', List);
+    for Entry in Items do
+    begin
+      Item := TJSONObject.Create;
+      List.Add(Item);
+      Item.Add('source', Entry.Piece.SourceId);
+      Item.Add('piece', StrToInt(Entry.Piece.PieceKey));
+      Item.Add('copy', Entry.Piece.Copy);
+      Item.Add('position', Vec3ToJSON(Entry.Placement.Position));
+      Item.Add('rotation', Vec3ToJSON(Entry.Placement.Rotation));
+    end;
+    Result := JSONToText(Root);
+  finally
+    FreeAndNil(Root);
+  end;
+end;
+
+function ReadBody(Data: TJSONData; out Body: TDrapeBody): boolean;
+var
+  Item: TJSONObject;
+  KindText: string;
+  Kind: TDrapeBodyKind;
+begin
+  Body := Default(TDrapeBody);
+  if not Assigned(Data) then
+    Exit(True);
+  if Data.JSONType <> jtObject then
+    Exit(False);
+  Item := TJSONObject(Data);
+  if not GetJSONString(Item, 'kind', KindText) then
+    Exit(False);
+  Result := False;
+  for Kind := Low(TDrapeBodyKind) to High(TDrapeBodyKind) do
+    if KindText = BODY_KIND_NAMES[Kind] then
+    begin
+      Body.Kind := Kind;
+      Result := True;
+    end;
+  GetJSONString(Item, 'measurementFile', Body.MeasurementFile);
+  GetJSONString(Item, 'size', Body.Size);
+end;
+
+function TDrape.LoadFromText(const Text: string; out ErrorMessage: string): boolean;
+var
+  Root, Item: TJSONObject;
+  Data: TJSONData;
+  TextValue: string;
+  Version, Index, PieceId: integer;
+  Entry: TDrapeItem;
+
+  function Fail(const Msg: string): boolean;
+  begin
+    ErrorMessage := Msg;
+    Clear;
+    Result := False;
+  end;
+
+begin
+  Clear;
+  ErrorMessage := '';
+  if not ParseJSONObject(Text, Root, ErrorMessage) then
+    Exit(False);
+  try
+    if not GetJSONString(Root, 'format', TextValue) or (TextValue <> DRAPE_FORMAT) or not GetJSONInteger(Root, 'version', Version) then
+      Exit(Fail(rsDrapeWrongFormat));
+    if not (UpgradeFile(Root, Version, DrapeFileVersions, TextValue) in [vcCurrent, vcUpgraded]) then
+      Exit(Fail(TextValue));
+    if GetJSONString(Root, 'units', TextValue) and (TextValue <> 'mm') then
+      Exit(Fail(Format(rsDrapeUnits, [TextValue])));
+    GetJSONString(Root, 'name', Name);
+    if not FSources.LoadFrom(Root, TextValue) then
+      Exit(Fail(TextValue));
+    if not ReadBody(Root.Find('body'), Body) then
+      Exit(Fail(rsDrapeBadBody));
+    if Assigned(Root.Find('gap')) and (not GetJSONNumber(Root, 'gap', Gap) or (Gap < 0)) then
+      Exit(Fail(rsDrapeBadGap));
+
+    Data := Root.Find('placements');
+    if Assigned(Data) then
+    begin
+      if Data.JSONType <> jtArray then
+        Exit(Fail(Format(rsDrapeList, ['placements'])));
+      for Index := 0 to Data.Count - 1 do
+      begin
+        if Data.Items[Index].JSONType <> jtObject then
+          Exit(Fail(Format(rsDrapeList, ['placements'])));
+        Item := TJSONObject(Data.Items[Index]);
+        Entry := Default(TDrapeItem);
+        if not GetJSONInteger(Item, 'source', Entry.Piece.SourceId) or not GetJSONId(Item, 'piece', PieceId) or not
+          JSONToVec3(Item.Find('position'), Entry.Placement.Position) or not JSONToVec3(Item.Find('rotation'), Entry.Placement.Rotation) then
+          Exit(Fail(Format(rsDrapeBadPlacement, [Index + 1])));
+        if not Assigned(FindSource(Entry.Piece.SourceId)) then
+          Exit(Fail(Format(rsDrapeUnknownSource, [Index + 1, Entry.Piece.SourceId])));
+        Entry.Piece.PieceKey := IntToStr(PieceId);
+        if not GetJSONInteger(Item, 'copy', Entry.Piece.Copy) then
+          Entry.Piece.Copy := 1;
+        if (Entry.Piece.Copy < 1) then
+          Exit(Fail(Format(rsDrapeBadPlacement, [Index + 1])));
+        if IndexOf(Entry.Piece) >= 0 then
+          Exit(Fail(Format(rsDrapeRepeatedPlacement, [Index + 1])));
+        SetLength(Items, Length(Items) + 1);
+        Items[High(Items)] := Entry;
+      end;
+    end;
+    Result := True;
+  finally
+    FreeAndNil(Root);
+  end;
+end;
+
+function TDrape.SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
+var
+  OldName: string;
+begin
+  // Paths are stored relative to where the file goes
+  OldName := FileName;
+  FileName := AFileName;
+  Result := WriteTextFileAtomic(AFileName, SaveToText, ErrorMessage);
+  if not Result then
+    FileName := OldName;
+end;
+
+function TDrape.LoadFromFile(const AFileName: string; out ErrorMessage: string): boolean;
+var
+  Text: string;
+begin
+  Clear;
+  if not ReadTextFile(AFileName, Text, ErrorMessage) then
+    Exit(False);
+  Result := LoadFromText(Text, ErrorMessage);
+  if Result then
+    FileName := AFileName;
+end;
+
+function TDrape.FindPiece(const Copy: TDrapePieceCopy; out Piece: TPieceObject): boolean;
+var
+  Source: TPatternSource;
+  Node: TObject;
+begin
+  Piece := nil;
+  Source := FindSource(Copy.SourceId);
+  if not Assigned(Source) or not Assigned(Source.Pattern) then
+    Exit(False);
+  Node := Source.Pattern.FindNode(Copy.PieceKey);
+  Result := Node is TPieceObject;
+  if Result then
+    Piece := TPieceObject(Node);
+end;
+
+function TDrape.IndexOf(const Copy: TDrapePieceCopy): integer;
+begin
+  for Result := 0 to High(Items) do
+    if SameCopy(Items[Result].Piece, Copy) then
+      Exit;
+  Result := -1;
+end;
+
+procedure TDrape.Place(const Copy: TDrapePieceCopy; const Placement: TDrapePlacement);
+var
+  Index: integer;
+begin
+  Index := IndexOf(Copy);
+  if Index < 0 then
+  begin
+    SetLength(Items, Length(Items) + 1);
+    Index := High(Items);
+    Items[Index].Piece := Copy;
+  end;
+  Items[Index].Placement := Placement;
+end;
+
+procedure TDrape.Unplace(const Copy: TDrapePieceCopy);
+var
+  Index: integer;
+begin
+  Index := IndexOf(Copy);
+  if Index >= 0 then
+    System.Delete(Items, Index, 1);
+end;
+
+function CanPlace(Piece: TPieceObject): boolean;
+begin
+  Result := (Piece.State = esValid) and (Length(Piece.Outline) > 0);
+end;
+
+function TDrape.Unplaced: TDrapePieceCopyArray;
+var
+  Source: TPatternSource;
+  Index, Copy: integer;
+  Piece: TPieceObject;
+begin
+  Result := nil;
+  for Source in FSources.Items do
+    if Assigned(Source.Pattern) then
+      for Index := 0 to Source.Pattern.ObjectCount - 1 do
+        if Source.Pattern.Objects[Index] is TPieceObject then
+        begin
+          Piece := TPieceObject(Source.Pattern.Objects[Index]);
+          if CanPlace(Piece) then
+            for Copy := 1 to Piece.CutCount do
+              if IndexOf(DrapePieceCopy(Source.Id, Piece.Key, Copy)) < 0 then
+                Insert(DrapePieceCopy(Source.Id, Piece.Key, Copy), Result, Length(Result));
+        end;
+end;
+
+function TDrape.PlacedOutline(const Copy: TDrapePieceCopy; out Points: TVec3Array): boolean;
+var
+  Piece: TPieceObject;
+  Index: integer;
+begin
+  Points := nil;
+  Index := IndexOf(Copy);
+  Result := (Index >= 0) and FindPiece(Copy, Piece) and CanPlace(Piece);
+  if Result then
+    Points := PlacePoints(PlacedSeamLine(Piece), PieceAnchor(Piece), CopyIsMirrored(Piece, Copy.Copy), Items[Index].Placement);
+end;
+
+// The ends of a seam side's run on one piece, in the seam's direction, as
+// drafted: from the start of its first entry on the piece to the end of its
+// last. False when the side has no entry on the piece.
+function SideEnds(Pattern: TPattern; Seam: TSeamObject; Piece: TPieceObject; OnSideB: boolean; out First, Last: TVec2): boolean;
+var
+  Side: TSeamSide;
+  Entry: TSeamEntry;
+  Edge: TEdgeObject;
+  Node: TObject;
+  Found: boolean;
+  Start, Finish: TVec2;
+begin
+  if OnSideB then
+    Side := Seam.SideB
+  else
+    Side := Seam.SideA;
+  Found := False;
+  First := Vec2(0, 0);
+  Last := Vec2(0, 0);
+  for Entry in Side do
+    if Entry.PieceKey = Piece.Key then
+    begin
+      Node := Pattern.FindNode(Entry.EdgeKey);
+      if not (Node is TEdgeObject) then
+        Continue;
+      Edge := TEdgeObject(Node);
+      Start := Edge.PointAtLength(0);
+      Finish := Edge.PointAtLength(Edge.Length);
+      if not Seam.RunsForward(Piece, Entry, OnSideB) then
+      begin
+        Start := Edge.PointAtLength(Edge.Length);
+        Finish := Edge.PointAtLength(0);
+      end;
+      if not Found then
+        First := Start;
+      Last := Finish;
+      Found := True;
+    end;
+  Result := Found;
+end;
+
+function SideHasPiece(const Side: TSeamSide; const PieceKey: string): boolean;
+var
+  Entry: TSeamEntry;
+begin
+  for Entry in Side do
+    if Entry.PieceKey = PieceKey then
+      Exit(True);
+  Result := False;
+end;
+
+function TDrape.AlignToSeam(const Copy: TDrapePieceCopy; Seam: TSeamObject; Folded: boolean; out Placement: TDrapePlacement): boolean;
+var
+  Piece, Partner: TPieceObject;
+  OnSideB: boolean;
+  Other: TSeamSide;
+  Entry: TSeamEntry;
+  PartnerCopy, Candidate: TDrapePieceCopy;
+  Index, PartnerIndex: integer;
+  Mirrored: boolean;
+  EdgeStart, EdgeEnd, PartnerStart, PartnerEnd, PartnerAnchor: TVec2;
+  PartnerMirrored: boolean;
+  Partnered: TDrapePlacement;
+  Pattern: TPattern;
+begin
+  Placement := Default(TDrapePlacement);
+  PartnerCopy := Default(TDrapePieceCopy);
+  if not FindPiece(Copy, Piece) or not CanPlace(Piece) then
+    Exit(False);
+  OnSideB := SideHasPiece(Seam.SideB, Piece.Key) and not SideHasPiece(Seam.SideA, Piece.Key);
+  if not SideHasPiece(Seam.SideA, Piece.Key) and not OnSideB then
+    Exit(False);
+  if OnSideB then
+    Other := Seam.SideA
+  else
+    Other := Seam.SideB;
+  Mirrored := CopyIsMirrored(Piece, Copy.Copy);
+  // A placed copy of the other side, preferring one on the same side of the
+  // body (left with left) as a seam joins
+  PartnerIndex := -1;
+  Partner := nil;
+  for Entry in Other do
+    for Index := 0 to High(Items) do
+    begin
+      Candidate := Items[Index].Piece;
+      if (Candidate.SourceId <> Copy.SourceId) or (Candidate.PieceKey <> Entry.PieceKey) or SameCopy(Candidate, Copy) then
+        Continue;
+      if not FindPiece(Candidate, Partner) or not CanPlace(Partner) then
+        Continue;
+      if (PartnerIndex < 0) or (CopyIsMirrored(Partner, Candidate.Copy) = Mirrored) then
+      begin
+        PartnerIndex := Index;
+        PartnerCopy := Candidate;
+      end;
+    end;
+  if (PartnerIndex < 0) or not FindPiece(PartnerCopy, Partner) then
+    Exit(False);
+  Pattern := FindSource(Copy.SourceId).Pattern;
+  if not SideEnds(Pattern, Seam, Piece, OnSideB, EdgeStart, EdgeEnd) or not SideEnds(Pattern, Seam, Partner, not OnSideB, PartnerStart, PartnerEnd) then
+    Exit(False);
+  Partnered := Items[PartnerIndex].Placement;
+  PartnerMirrored := CopyIsMirrored(Partner, PartnerCopy.Copy);
+  PartnerAnchor := PieceAnchor(Partner);
+  Placement := AlignedPlacement(PlacePoint(PartnerStart, PartnerAnchor, PartnerMirrored, Partnered),
+    PlacePoint(PartnerEnd, PartnerAnchor, PartnerMirrored, Partnered),
+    PlacePoint(PolygonMiddle(PlacedSeamLine(Partner)), PartnerAnchor, PartnerMirrored, Partnered), PlacedNormal(Partnered),
+    EdgeStart, EdgeEnd, PolygonMiddle(PlacedSeamLine(Piece)), PieceAnchor(Piece), Mirrored, Gap, Folded);
+  Result := True;
+end;
+
+function TDrape.LongestPlacedSeam(const Copy: TDrapePieceCopy; out Seam: TSeamObject; out Length: double): boolean;
+var
+  Source: TPatternSource;
+  Index: integer;
+  Candidate: TSeamObject;
+  Placement: TDrapePlacement;
+begin
+  Seam := nil;
+  Length := 0;
+  Source := FindSource(Copy.SourceId);
+  if not Assigned(Source) or not Assigned(Source.Pattern) then
+    Exit(False);
+  for Index := 0 to Source.Pattern.ObjectCount - 1 do
+    if Source.Pattern.Objects[Index] is TSeamObject then
+    begin
+      Candidate := TSeamObject(Source.Pattern.Objects[Index]);
+      // A dart joins a piece to itself, which places nothing
+      if not Candidate.UsesPiece(Copy.PieceKey) or (Candidate.State <> esValid) then
+        Continue;
+      if SideHasPiece(Candidate.SideA, Copy.PieceKey) and SideHasPiece(Candidate.SideB, Copy.PieceKey) then
+        Continue;
+      if (Candidate.LengthA > Length) and AlignToSeam(Copy, Candidate, False, Placement) then
+      begin
+        Seam := Candidate;
+        Length := Candidate.LengthA;
+      end;
+    end;
+  Result := Assigned(Seam);
+end;
+
+function TDrape.GuessFirstPieces: integer;
+var
+  Source: TPatternSource;
+  Copy, Largest: TDrapePieceCopy;
+  Item: TDrapeItem;
+  Piece: TPieceObject;
+  LargestArea: double;
+  Placed: boolean;
+  Turn: double;
+  Placement: TDrapePlacement;
+begin
+  Result := 0;
+  for Source in FSources.Items do
+  begin
+    Placed := False;
+    for Item in Items do
+      Placed := Placed or (Item.Piece.SourceId = Source.Id);
+    if Placed then
+      Continue;
+    LargestArea := 0;
+    Largest := Default(TDrapePieceCopy);
+    for Copy in Unplaced do
+      if (Copy.SourceId = Source.Id) and (Copy.Copy = 1) and FindPiece(Copy, Piece) and (Abs(Piece.Area) > LargestArea) then
+      begin
+        LargestArea := Abs(Piece.Area);
+        Largest := Copy;
+      end;
+    if (LargestArea <= 0) or not FindPiece(Largest, Piece) then
+      Continue;
+    // Turned about Y so the grainline points up
+    Turn := 0;
+    if (Piece.GrainKind <> gkNone) and (Piece.Grainline.Length > EPSILON) then
+      Turn := Piece.Grainline.Angle - 90;
+    Placement := UprightPlacement(Vec3(0, -(GUESS_BODY_DEPTH + Gap), GUESS_HEIGHT));
+    Placement.Rotation := Vec3(0, Turn, 0);
+    Place(Largest, Placement);
+    Inc(Result);
+  end;
+end;
+
+function TDrape.GuessAlongSeams: integer;
+var
+  Copy, Best: TDrapePieceCopy;
+  Seam, BestSeam: TSeamObject;
+  SeamLength, BestLength: double;
+  Placement: TDrapePlacement;
+  Piece: TPieceObject;
+begin
+  Result := 0;
+  repeat
+    BestLength := 0;
+    BestSeam := nil;
+    Best := Default(TDrapePieceCopy);
+    // The other of a mirrored pair follows its partner (GuessMirroredCopies)
+    for Copy in Unplaced do
+      if FindPiece(Copy, Piece) and not CopyIsMirrored(Piece, Copy.Copy) and LongestPlacedSeam(Copy, Seam, SeamLength) and
+        (SeamLength > BestLength) then
+      begin
+        BestLength := SeamLength;
+        BestSeam := Seam;
+        Best := Copy;
+      end;
+    if not Assigned(BestSeam) or not AlignToSeam(Best, BestSeam, False, Placement) then
+      Break;
+    Place(Best, Placement);
+    Inc(Result);
+  until False;
+end;
+
+function TDrape.GuessMirroredCopies: integer;
+var
+  Copy: TDrapePieceCopy;
+  Piece: TPieceObject;
+  Partner: integer;
+begin
+  Result := 0;
+  for Copy in Unplaced do
+    if FindPiece(Copy, Piece) and CopyIsMirrored(Piece, Copy.Copy) then
+    begin
+      Partner := IndexOf(DrapePieceCopy(Copy.SourceId, Copy.PieceKey, Copy.Copy - 1));
+      if Partner >= 0 then
+      begin
+        Place(Copy, MirroredPlacement(Items[Partner].Placement));
+        Inc(Result);
+      end;
+    end;
+end;
+
+function TDrape.GuessRest: integer;
+var
+  Copy: TDrapePieceCopy;
+  Piece: TPieceObject;
+  Across: double;
+  Extent: TVec2;
+begin
+  Result := 0;
+  Across := GUESS_ROW_SIDE;
+  for Copy in Unplaced do
+    if FindPiece(Copy, Piece) then
+    begin
+      Extent := PointsExtent(PlacedSeamLine(Piece));
+      Place(Copy, UprightPlacement(Vec3(-(Across + Extent.X / 2), -(GUESS_BODY_DEPTH + Gap), GUESS_HEIGHT)));
+      Across := Across + Extent.X + GUESS_ROW_STEP;
+      Inc(Result);
+    end;
+end;
+
+function TDrape.GuessPlacements: integer;
+var
+  Step: integer;
+begin
+  Result := GuessFirstPieces;
+  repeat
+    Step := GuessAlongSeams + GuessMirroredCopies;
+    Inc(Result, Step);
+  until Step = 0;
+  Inc(Result, GuessRest);
+end;
+
+function TDrape.Problems: TDrapeProblemArray;
+
+  procedure Add(const AText: string; Item: integer);
+  begin
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)].Text := AText;
+    Result[High(Result)].Item := Item;
+  end;
+
+var
+  Source: TPatternSource;
+  Index, PieceCount: integer;
+  Piece: TPieceObject;
+  Copy: TDrapePieceCopy;
+begin
+  Result := nil;
+  for Source in FSources.Items do
+    if Source.LoadError <> '' then
+      Add(Format(rsDrapeSourceProblem, [ExtractFileName(Source.PatternFile), Source.LoadError]), -1)
+    else if Assigned(Source.Pattern) then
+    begin
+      PieceCount := 0;
+      for Index := 0 to Source.Pattern.ObjectCount - 1 do
+        if Source.Pattern.Objects[Index] is TPieceObject then
+        begin
+          Inc(PieceCount);
+          Piece := TPieceObject(Source.Pattern.Objects[Index]);
+          if not CanPlace(Piece) then
+            Add(Format(rsDrapePieceFailing, [ExtractFileName(Source.PatternFile), Piece.DisplayName, Piece.Message]), -1);
+        end;
+      if PieceCount = 0 then
+        Add(Format(rsDrapeNoPieces, [ExtractFileName(Source.PatternFile)]), -1);
+    end;
+  for Index := 0 to High(Items) do
+  begin
+    Source := FindSource(Items[Index].Piece.SourceId);
+    if not Assigned(Source) or not Assigned(Source.Pattern) then
+      Continue;
+    if not FindPiece(Items[Index].Piece, Piece) then
+      Add(Format(rsDrapePieceGone, [ExtractFileName(Source.PatternFile), Items[Index].Piece.PieceKey]), Index)
+    else if Items[Index].Piece.Copy > Piece.CutCount then
+      Add(Format(rsDrapeExtraCopy, [ExtractFileName(Source.PatternFile), Piece.DisplayName, Piece.CutCount, Items[Index].Piece.Copy]), Index);
+  end;
+  for Copy in Unplaced do
+    if FindPiece(Copy, Piece) then
+      Add(Format(rsDrapeUnplaced, [ExtractFileName(FindSource(Copy.SourceId).PatternFile), Piece.DisplayName, Copy.Copy, Piece.CutCount]), -1);
+end;
+
+end.

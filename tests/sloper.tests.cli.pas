@@ -85,7 +85,8 @@ implementation
 
 uses
   Classes, StreamIO, fpjson, jsonparser, Sloper.Core.Version, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Units,
-  Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout, Sloper.Output.LayoutExport,
+  Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout,
+  Sloper.Core.PatternSources, Sloper.Output.LayoutExport,
   Sloper.Tests.TlsServer;
 
 function ExamplesFolder: string;
@@ -333,7 +334,7 @@ begin
   AssertEquals(FErr, 0, Run(['layout', Pattern]));
   AssertTrue(DeleteFile(InFolder('skirt.slm')));
   AssertEquals(EXIT_FAILURE, Run(['materials', InFolder('skirt-block.slayout')]));
-  AssertTrue(FErr, Pos(Format(rsLayoutNoFile, [InFolder('skirt.slm')]), FErr) > 0);
+  AssertTrue(FErr, Pos(Format(rsPatternSourcesNoFile, [InFolder('skirt.slm')]), FErr) > 0);
 end;
 
 procedure TTestCLI.TestExportNeedsLayout;

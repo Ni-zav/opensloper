@@ -27,7 +27,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, Grids, fpjson, Sloper.Core.TextFields,
-  Sloper.Core.Note, Sloper.API.AppLink, Sloper.Output.Layout, Sloper.Output.LayoutDocument, Sloper.Output.LayoutExport,
+  Sloper.Core.Note, Sloper.API.AppLink, Sloper.Output.Layout, Sloper.Core.PatternSources, Sloper.Output.LayoutDocument, Sloper.Output.LayoutExport,
   Sloper.Publish.PreviewCanvas, Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt,
   Sloper.UI.ProblemsPanel;
 
@@ -99,7 +99,7 @@ type
     procedure BuildPatternsTab;
     procedure BuildMaterialsTab;
     procedure RefreshMaterialsTab;
-    function CurrentSource: TLayoutSource;
+    function CurrentSource: TPatternSource;
     procedure RefreshPatternsTab;
     procedure RefreshProfiles;
     procedure RefreshMaterials;
@@ -994,7 +994,7 @@ begin
   end;
 end;
 
-function TPublishForm.CurrentSource: TLayoutSource;
+function TPublishForm.CurrentSource: TPatternSource;
 begin
   Result := nil;
   if (FSourceBox.ItemIndex >= 0) and (FSourceBox.ItemIndex < FDocument.Layout.Sources.Count) then
@@ -1036,7 +1036,7 @@ end;
 // stays listed, so the choice is not lost when a pattern changes
 procedure TPublishForm.RefreshMaterials;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Index: integer;
   Layout: TLayout;
 begin
@@ -1058,7 +1058,7 @@ end;
 procedure TPublishForm.RefreshPatternsTab;
 var
   Keep, Index: integer;
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Entry: string;
 begin
   Keep := Max(FSourceBox.ItemIndex, 0);
@@ -1139,7 +1139,7 @@ end;
 
 procedure TPublishForm.ChangeSource(const Description, AMeasurementFile, ASize: string);
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
 begin
   Source := CurrentSource;
   if not Assigned(Source) then

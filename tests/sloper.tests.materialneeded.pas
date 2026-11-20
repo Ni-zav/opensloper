@@ -26,7 +26,7 @@ interface
 
 uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Units,
-  Sloper.Output.Layout, Sloper.Output.MaterialNeeded;
+  Sloper.Output.Layout, Sloper.Core.PatternSources, Sloper.Output.MaterialNeeded;
 
 type
   TTestMaterialNeeded = class(TOSTestCase)
@@ -120,7 +120,7 @@ end;
 procedure TTestMaterialNeeded.AddToLayout(const FileName: string);
 var
   Reason: string;
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Known: boolean;
 begin
   AssertTrue(Reason, SavePatternToFile(FPattern, ConcatPaths([FFolder, FileName]), Reason));

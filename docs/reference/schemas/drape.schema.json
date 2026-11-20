@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.opensloper.com/reference/schemas/drape.schema.json",
+  "$comment": "Generated from the program by opensloper-cli doc drape.schema.json; do not edit it by hand.",
+  "title": "OpenSloper drape file (.sdrape)",
+  "description": "Made by opensloper-drape: the pieces of one or more patterns placed round a body in 3D, for draping in Blender. Positions are in mm: x to the body's left, y towards its back, z up, the body facing -y with its feet at z = 0.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "description": "What the file is; a file with another value does not load",
+      "const": "drape"
+    },
+    "version": {
+      "description": "The version of the format, from 1. The apps read every older version and always write the current one; they refuse a file newer than they know",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "units": {
+      "description": "Always mm: values in this file are millimetres",
+      "const": "mm"
+    },
+    "name": {
+      "description": "The drape's name",
+      "type": "string"
+    },
+    "nextId": {
+      "description": "The next source ID to hand out",
+      "type": "integer"
+    },
+    "sources": {
+      "description": "The patterns placed, each with the measurements to draw it with",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The source's ID, which placements refer to",
+            "type": "integer"
+          },
+          "pattern": {
+            "description": "The pattern file, relative to the layout's folder",
+            "type": "string"
+          },
+          "measurementFile": {
+            "description": "The measurement file, relative to the layout's folder; the pattern's own when left out",
+            "type": "string"
+          },
+          "size": {
+            "description": "The size, for a size table; its first size when left out",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "pattern"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "body": {
+      "description": "The body the pieces are placed on",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "measurements: a generic body built from a measurement set; none: no body, for accessories",
+          "enum": [
+            "measurements",
+            "none"
+          ]
+        },
+        "measurementFile": {
+          "description": "The body's measurement file, relative to the drape file's folder; the first source's when left out",
+          "type": "string"
+        },
+        "size": {
+          "description": "The body's size, for a size table; the first source's when left out",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "gap": {
+      "description": "How far pieces are placed off the body and apart across a seam",
+      "type": "number"
+    },
+    "placements": {
+      "description": "Where each copy of each piece is placed; a copy not listed is left out",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "description": "The source the piece is from",
+            "type": "integer"
+          },
+          "piece": {
+            "description": "The piece's ID in that source's pattern",
+            "type": "integer"
+          },
+          "copy": {
+            "description": "Which copy, from 1, for a piece cut more than once",
+            "type": "integer"
+          },
+          "position": {
+            "description": "Where the piece's anchor goes: x, y and z. The anchor is the middle of its grainline, else the middle of its seam line's extent",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "rotation": {
+            "description": "The turns in degrees about x, then y, then z, anticlockwise looking from the positive end of each axis: Blender's XYZ Euler angles. Unturned, a piece stands upright facing -y, as drawn",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "source",
+          "piece",
+          "position",
+          "rotation"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "sources"
+  ],
+  "additionalProperties": false
+}

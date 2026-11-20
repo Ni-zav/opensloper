@@ -30,7 +30,7 @@ interface
 
 uses
   SysUtils, Generics.Collections, Sloper.Core.Geometry, Sloper.Core.Materials, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles,
-  Sloper.Core.Measurements,
+  Sloper.Core.Measurements, Sloper.Core.PatternSources,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Settings, Sloper.Core.Draft, Sloper.Core.TextFields, Sloper.Core.Note,
   Sloper.Core.FileVersions, Sloper.Output.Tiling;
 
@@ -75,26 +75,6 @@ type
     // Limits the layout to this material, by name; empty for all
     Material: string;
   end;
-
-  // A pattern file with its measurement set. The stored paths are as written
-  // in the layout file; empty MeasurementFile means the one the pattern names.
-  TLayoutSource = class
-  public
-    Id: integer;
-    PatternFile, MeasurementFile, Size: string;
-    Pattern: TPattern;
-    Measurements: TMeasurementSet;
-    // Why the source could not be read; empty when it is ready
-    LoadError: string;
-    // The files read, and their stamps when they were
-    PatternPath, MeasurementPath, LoadedStamp: string;
-    // The files' stamps now; differs from LoadedStamp once either is saved
-    function CurrentStamp: string;
-    destructor Destroy; override;
-    procedure Unload;
-  end;
-
-  TLayoutSourceList = specialize TObjectList<TLayoutSource>;
 
   TPlacement = record
     SourceId, Copy: integer;
@@ -201,13 +181,10 @@ type
 
   TLayout = class
   private
-    FSources: TLayoutSourceList;
-    FNextId: integer;
+    FSources: TPatternSources;
     // The material needed, worked out again only when the files loaded change,
     // as title blocks ask for it on every page
     FNeedKey, FNeedSummary: string;
-    function ResolvePath(const Stored: string): string;
-    procedure LoadSource(Source: TLayoutSource);
     // False when the item cannot be placed, as when its piece has gone since
     function NewPlacement(const Item: TUnplacedCopy; out Placement: TPlacement; out Piece: TPieceObject): boolean;
     function IsPlaced(SourceId: integer; const PieceKey: string; Copy: integer): boolean;
@@ -216,8 +193,7 @@ type
     // The far corner of everything printed, from (0, 0)
     function SheetExtent(const Shapes: TPlacedPieceArray): TVec2;
     function PageIsExcluded(const Caption: string): boolean;
-    // The lowest ID no source has, once the counter is past JSON_MAX_ID
-    function LowestFreeSourceId: integer;
+    function GetSources: TPatternSourceList;
   public
     Name: string;
     // Where the layout is saved; relative paths start from its folder
@@ -238,9 +214,9 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure Clear;
-    function AddSource(const APatternFile, AMeasurementFile, ASize: string): TLayoutSource;
+    function AddSource(const APatternFile, AMeasurementFile, ASize: string): TPatternSource;
     // Takes the source and its placements out
-    procedure RemoveSource(Source: TLayoutSource);
+    procedure RemoveSource(Source: TPatternSource);
     // A path as stored in the layout: relative to its folder when it has one
     function StoredPath(const Path: string): string;
     // Reads and evaluates every source's files
@@ -263,7 +239,7 @@ type
     procedure RemovePlacement(Index: integer);
     function PlacedPieces: TPlacedPieceArray;
     // The source and piece a placement stands for; False when either has gone
-    function FindPiece(const Placement: TPlacement; out Source: TLayoutSource; out Piece: TPieceObject): boolean;
+    function FindPiece(const Placement: TPlacement; out Source: TPatternSource; out Piece: TPieceObject): boolean;
     // The pages Shapes need, with the empty ones marked Blank
     function Pages(const Shapes: TPlacedPieceArray; out RowCount, ColumnCount: integer): TTilePageArray;
     // Turns on the usual title block, for a new layout
@@ -289,7 +265,7 @@ type
     // The chosen output profile, or everything when it has none or is unknown
     function ActiveOutputProfile: TOutputProfile;
     // Whether the piece is on the material the layout is limited to, if any
-    function InMaterial(Source: TLayoutSource; Piece: TPieceObject): boolean;
+    function InMaterial(Source: TPatternSource; Piece: TPieceObject): boolean;
     // A material layout limited to one material takes that material's size
     // from the first pattern that gives it one; True when that changed it
     function TakeMaterialSize: boolean;
@@ -305,7 +281,7 @@ type
     function MaterialUse: string;
     // The blocking problems as one message, or empty when export can go ahead
     function Refusal: string;
-    property Sources: TLayoutSourceList read FSources;
+    property Sources: TPatternSourceList read GetSources;
   end;
 
 // The rough area a note's text covers, in layout space
@@ -340,14 +316,11 @@ resourcestring
   rsLayoutWrongFormat = 'This is not a layout file';
   rsLayoutUnits = 'Units "%s" are not supported; use mm';
   rsLayoutList = 'The file has no valid "%s" list';
-  rsLayoutBadSource = 'Source %d has a missing, invalid or repeated ID, or no pattern';
   rsLayoutBadPlacement = 'Placement %d is not valid';
   rsLayoutUnknownSource = 'Placement %d uses source %d, which is not in the file';
   rsLayoutBadPaper = 'Paper "%s" is not known; give paperWidth and paperHeight for custom paper';
-  rsLayoutBadNextId = '"nextId" must be a whole number above every source ID';
   rsLayoutNoPrintArea = 'The margin and overlap leave nothing to print on';
   rsLayoutTooManyPages = 'The layout would print on more than %d pages; move what lies far out, or use larger paper or smaller margins';
-  rsLayoutNoFile = 'File not found: %s';
   rsLayoutSetAndSize = '%s, size %s';
   rsLayoutSourceProblem = '%s: %s';
   rsLayoutPieceGone = '%s: piece %s no longer exists';
@@ -526,42 +499,11 @@ begin
   Result.MaterialWidth := DEFAULT_MATERIAL_WIDTH;
 end;
 
-{ TLayoutSource }
-
-destructor TLayoutSource.Destroy;
-begin
-  Unload;
-  inherited Destroy;
-end;
-
-// A checksum of the contents: file times only go to the second, and these
-// files are small enough to read each time. '-' when the file cannot be read.
-function FileStamp(const Path: string): string;
-var
-  Text, Reason: string;
-begin
-  Result := '-';
-  if (Path <> '') and FileExists(Path) and ReadTextFile(Path, Text, Reason) then
-    Result := IntToStr(crc32(crc32(0, nil, 0), pbyte(PChar(Text)), Length(Text)));
-end;
-
-function TLayoutSource.CurrentStamp: string;
-begin
-  Result := FileStamp(PatternPath) + ' ' + FileStamp(MeasurementPath);
-end;
-
-// The pattern reads the measurement set, so it goes first
-procedure TLayoutSource.Unload;
-begin
-  FreeAndNil(Pattern);
-  FreeAndNil(Measurements);
-end;
-
 { TLayout }
 
 constructor TLayout.Create;
 begin
-  FSources := TLayoutSourceList.Create;
+  FSources := TPatternSources.Create;
   Calibration := NoCalibration;
   Clear;
 end;
@@ -575,7 +517,6 @@ end;
 procedure TLayout.Clear;
 begin
   FSources.Clear;
-  FNextId := 1;
   Name := '';
   Output := DefaultOutput;
   Placements := nil;
@@ -594,7 +535,7 @@ end;
 
 function TLayout.FieldValues(const APage, APages: string): TFieldValues;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
   SetName: string;
   MeasurementNames, MaterialNames, SizeNames: TStringArray;
   Index: integer;
@@ -621,7 +562,7 @@ begin
   Result.Date := PrintDate;
   if Result.Date = '' then
     Result.Date := FieldDateText;
-  for Source in FSources do
+  for Source in FSources.Items do
   begin
     if Result.PatternName <> '' then
       Result.PatternName := Result.PatternName + ', ';
@@ -649,10 +590,10 @@ end;
 
 function TLayout.SourcesKey: string;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
 begin
   Result := '';
-  for Source in FSources do
+  for Source in FSources.Items do
     Result := Result + Source.PatternFile + #0 + Source.Size + #0 + Source.LoadedStamp + #0 + IntToHex(PtrUInt(Source.Pattern)) + #1;
 end;
 
@@ -706,40 +647,12 @@ begin
   System.Delete(Notes, Index, 1);
 end;
 
-function TLayout.LowestFreeSourceId: integer;
-var
-  Source: TLayoutSource;
-  Taken: boolean;
+function TLayout.AddSource(const APatternFile, AMeasurementFile, ASize: string): TPatternSource;
 begin
-  Result := 1;
-  repeat
-    Taken := False;
-    for Source in FSources do
-      if Source.Id = Result then
-        Taken := True;
-    if Taken then
-      Inc(Result);
-  until not Taken;
+  Result := FSources.Add(APatternFile, AMeasurementFile, ASize);
 end;
 
-function TLayout.AddSource(const APatternFile, AMeasurementFile, ASize: string): TLayoutSource;
-begin
-  Result := TLayoutSource.Create;
-  FSources.Add(Result);
-  // Past the highest ID a file may hold, as for pattern IDs: the lowest free
-  if FNextId > JSON_MAX_ID then
-    Result.Id := LowestFreeSourceId
-  else
-  begin
-    Result.Id := FNextId;
-    Inc(FNextId);
-  end;
-  Result.PatternFile := APatternFile;
-  Result.MeasurementFile := AMeasurementFile;
-  Result.Size := ASize;
-end;
-
-procedure TLayout.RemoveSource(Source: TLayoutSource);
+procedure TLayout.RemoveSource(Source: TPatternSource);
 var
   Index: integer;
 begin
@@ -750,80 +663,18 @@ begin
 end;
 
 function TLayout.StoredPath(const Path: string): string;
-var
-  Folder: string;
 begin
-  Folder := ExtractFilePath(ExpandFileName(FileName));
-  if FileName = '' then
-    Result := Path
-  else
-    Result := ExtractRelativePath(Folder, ExpandFileName(Path));
-end;
-
-function TLayout.ResolvePath(const Stored: string): string;
-var
-  Folder: string;
-begin
-  Result := SetDirSeparators(Stored);
-  Folder := ExtractFileDir(FileName);
-  if (Result <> '') and (Result[1] <> PathDelim) and (ExtractFileDrive(Result) = '') and (Folder <> '') then
-    Result := ConcatPaths([Folder, Result]);
-end;
-
-procedure TLayout.LoadSource(Source: TLayoutSource);
-var
-  Err: string;
-begin
-  Source.Unload;
-  Source.LoadError := '';
-  Source.PatternPath := ResolvePath(Source.PatternFile);
-  Source.MeasurementPath := '';
-  // Taken before reading, so a save during the read is not missed
-  Source.LoadedStamp := Source.CurrentStamp;
-  if not FileExists(Source.PatternPath) then
-  begin
-    Source.LoadError := Format(rsLayoutNoFile, [Source.PatternPath]);
-    Exit;
-  end;
-  Source.Pattern := TPattern.Create;
-  Source.Measurements := TMeasurementSet.Create;
-  if not LoadPatternFromFile(Source.Pattern, Source.PatternPath, Err) then
-  begin
-    Source.LoadError := Err;
-    Exit;
-  end;
-  Source.MeasurementPath := ResolvePath(Source.MeasurementFile);
-  if Source.MeasurementPath = '' then
-    Source.MeasurementPath := MeasurementFilePath(Source.Pattern, Source.PatternPath);
-  Source.LoadedStamp := Source.CurrentStamp;
-  if Source.MeasurementPath <> '' then
-  begin
-    if not FileExists(Source.MeasurementPath) then
-    begin
-      Source.LoadError := Format(rsLayoutNoFile, [Source.MeasurementPath]);
-      Exit;
-    end;
-    if not Source.Measurements.LoadFromFile(Source.MeasurementPath, Err) then
-    begin
-      Source.LoadError := Err;
-      Exit;
-    end;
-    Source.Pattern.Measurements := Source.Measurements;
-  end;
-  if (Source.Size <> '') and not Source.Measurements.SelectSize(Source.Size) then
-  begin
-    Source.LoadError := Format(rsMeasurementUnknownSize, [Source.Size]);
-    Exit;
-  end;
-  Source.Pattern.Evaluate;
+  Result := StoredSourcePath(FileName, Path);
 end;
 
 procedure TLayout.LoadSources;
-var
-  Source: TLayoutSource;
 begin
-  for Source in FSources do
-    LoadSource(Source);
+  FSources.LoadAll(FileName);
+end;
+
+function TLayout.GetSources: TPatternSourceList;
+begin
+  Result := FSources.Items;
 end;
 
 function SaveOutput(const Output: TLayoutOutput): TJSONObject;
@@ -876,7 +727,6 @@ function TLayout.SaveToText: string;
 var
   Root, Item: TJSONObject;
   List: TJSONArray;
-  Source: TLayoutSource;
   Placement: TPlacement;
   Note: TSheetNote;
   Field: string;
@@ -887,20 +737,7 @@ begin
     Root.Add('version', LAYOUT_VERSION);
     Root.Add('units', 'mm');
     Root.Add('name', Name);
-    Root.Add('nextId', FNextId);
-    List := TJSONArray.Create;
-    Root.Add('sources', List);
-    for Source in FSources do
-    begin
-      Item := TJSONObject.Create;
-      List.Add(Item);
-      Item.Add('id', Source.Id);
-      Item.Add('pattern', Source.PatternFile);
-      if Source.MeasurementFile <> '' then
-        Item.Add('measurementFile', Source.MeasurementFile);
-      if Source.Size <> '' then
-        Item.Add('size', Source.Size);
-    end;
+    FSources.SaveTo(Root);
     Root.Add('output', SaveOutput(Output));
     List := TJSONArray.Create;
     Root.Add('placements', List);
@@ -955,16 +792,6 @@ begin
   finally
     FreeAndNil(Root);
   end;
-end;
-
-function FindSourceById(List: TLayoutSourceList; Id: integer): TLayoutSource;
-var
-  Source: TLayoutSource;
-begin
-  for Source in List do
-    if Source.Id = Id then
-      Exit(Source);
-  Result := nil;
 end;
 
 // The GetJSON functions clear their result when a member is missing
@@ -1116,8 +943,7 @@ var
   Root, Item: TJSONObject;
   Data: TJSONData;
   TextValue: string;
-  Version, Index, Id, Saved, Top: integer;
-  Source: TLayoutSource;
+  Version, Index: integer;
   Placement: TPlacement;
   PieceId: integer;
 
@@ -1142,32 +968,8 @@ begin
       Exit(Fail(Format(rsLayoutUnits, [TextValue])));
     GetJSONString(Root, 'name', Name);
 
-    Data := Root.Find('sources');
-    if not Assigned(Data) or (Data.JSONType <> jtArray) then
-      Exit(Fail(Format(rsLayoutList, ['sources'])));
-    Top := 0;
-    for Index := 0 to Data.Count - 1 do
-    begin
-      if Data.Items[Index].JSONType <> jtObject then
-        Exit(Fail(Format(rsLayoutList, ['sources'])));
-      Item := TJSONObject(Data.Items[Index]);
-      if not GetJSONId(Item, 'id', Id) or Assigned(FindSourceById(FSources, Id)) or not GetJSONString(Item, 'pattern', TextValue) then
-        Exit(Fail(Format(rsLayoutBadSource, [Index + 1])));
-      Source := TLayoutSource.Create;
-      FSources.Add(Source);
-      Source.Id := Id;
-      Source.PatternFile := TextValue;
-      GetJSONString(Item, 'measurementFile', Source.MeasurementFile);
-      GetJSONString(Item, 'size', Source.Size);
-      Top := Max(Top, Id);
-    end;
-    FNextId := Top + 1;
-    if Assigned(Root.Find('nextId')) then
-    begin
-      if not GetJSONInteger(Root, 'nextId', Saved) or (Saved < FNextId) then
-        Exit(Fail(rsLayoutBadNextId));
-      FNextId := Saved;
-    end;
+    if not FSources.LoadFrom(Root, TextValue) then
+      Exit(Fail(TextValue));
 
     Data := Root.Find('output');
     if Assigned(Data) and (Data.JSONType = jtObject) and not ReadOutput(TJSONObject(Data), Output, TextValue) then
@@ -1187,7 +989,7 @@ begin
         if not GetJSONInteger(Item, 'source', Placement.SourceId) or not GetJSONInteger(Item, 'piece', PieceId) or not
           GetJSONNumber(Item, 'x', Placement.X) or not GetJSONNumber(Item, 'y', Placement.Y) then
           Exit(Fail(Format(rsLayoutBadPlacement, [Index + 1])));
-        if not Assigned(FindSourceById(FSources, Placement.SourceId)) then
+        if not Assigned(FSources.FindById(Placement.SourceId)) then
           Exit(Fail(Format(rsLayoutUnknownSource, [Index + 1, Placement.SourceId])));
         Placement.PieceKey := IntToStr(PieceId);
         if not GetJSONInteger(Item, 'copy', Placement.Copy) then
@@ -1242,13 +1044,13 @@ end;
 
 function TLayout.Unplaced: TUnplacedCopyArray;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Index, Copy: integer;
   Piece: TPieceObject;
   Item: TUnplacedCopy;
 begin
   Result := nil;
-  for Source in FSources do
+  for Source in FSources.Items do
     if Assigned(Source.Pattern) then
       for Index := 0 to Source.Pattern.ObjectCount - 1 do
         if Source.Pattern.Objects[Index] is TPieceObject then
@@ -1271,12 +1073,12 @@ begin
         end;
 end;
 
-function TLayout.FindPiece(const Placement: TPlacement; out Source: TLayoutSource; out Piece: TPieceObject): boolean;
+function TLayout.FindPiece(const Placement: TPlacement; out Source: TPatternSource; out Piece: TPieceObject): boolean;
 var
   Node: TObject;
 begin
   Piece := nil;
-  Source := FindSourceById(FSources, Placement.SourceId);
+  Source := FSources.FindById(Placement.SourceId);
   if not Assigned(Source) or not Assigned(Source.Pattern) then
     Exit(False);
   Node := Source.Pattern.FindNode(Placement.PieceKey);
@@ -1565,7 +1367,7 @@ end;
 // Even copies are the other side of a mirrored pair
 function TLayout.NewPlacement(const Item: TUnplacedCopy; out Placement: TPlacement; out Piece: TPieceObject): boolean;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
 begin
   Placement := Default(TPlacement);
   Placement.SourceId := Item.SourceId;
@@ -1645,7 +1447,7 @@ end;
 function TLayout.PlacedPieces: TPlacedPieceArray;
 var
   Index, Count: integer;
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Piece: TPieceObject;
   Profile: TOutputProfile;
   Values: TFieldValues;
@@ -1680,7 +1482,7 @@ begin
   Result := (Output.Kind = okMaterial) or (Output.Profile <> '');
 end;
 
-function TLayout.InMaterial(Source: TLayoutSource; Piece: TPieceObject): boolean;
+function TLayout.InMaterial(Source: TPatternSource; Piece: TPieceObject): boolean;
 var
   Material: TPatternMaterial;
 begin
@@ -1692,14 +1494,14 @@ end;
 
 function TLayout.TakeMaterialSize: boolean;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Material: TPatternMaterial;
   Scale, Width, Length: double;
 begin
   Result := False;
   if (Output.Kind <> okMaterial) or (Output.Material = '') then
     Exit;
-  for Source in FSources do
+  for Source in FSources.Items do
   begin
     if not Assigned(Source.Pattern) then
       Continue;
@@ -1956,7 +1758,7 @@ begin
   end;
 end;
 
-function HasPieces(Source: TLayoutSource): boolean;
+function HasPieces(Source: TPatternSource): boolean;
 var
   Index: integer;
 begin
@@ -1968,12 +1770,12 @@ end;
 
 function TLayout.Problems: TLayoutProblemArray;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Placement: TPlacement;
   Piece: TPieceObject;
   Item: TUnplacedCopy;
   Node: TPieceObject;
-  Found: TLayoutSource;
+  Found: TPatternSource;
   Probe: TPlacement;
   AllRead: boolean;
   Profile: TMachineProfile;
@@ -1994,9 +1796,9 @@ var
 
   function MaterialExists: boolean;
   var
-    Named: TLayoutSource;
+    Named: TPatternSource;
   begin
-    for Named in FSources do
+    for Named in FSources.Items do
       if Assigned(Named.Pattern) and Assigned(Named.Pattern.FindMaterialNamed(Output.Material)) then
         Exit(True);
     Result := False;
@@ -2014,7 +1816,7 @@ begin
   // and sewn wrongly
   if not ChosenOutputProfile(Chosen) then
     Add(Format(rsLayoutUnknownOutputProfile, [Output.OutputProfile]), True);
-  for Source in FSources do
+  for Source in FSources.Items do
     if Source.LoadError <> '' then
     begin
       Add(Format(rsLayoutSourceProblem, [ExtractFileName(Source.PatternFile), Source.LoadError]), True);
@@ -2023,7 +1825,7 @@ begin
   for PlacementIndex := 0 to High(Placements) do
   begin
     Placement := Placements[PlacementIndex];
-    Source := FindSourceById(FSources, Placement.SourceId);
+    Source := FSources.FindById(Placement.SourceId);
     if not Assigned(Source) or not Assigned(Source.Pattern) or (Source.LoadError <> '') then
       Continue;
     if not FindPiece(Placement, Source, Piece) then
@@ -2054,7 +1856,7 @@ begin
     Add(Format(rsLayoutUnplaced, [ExtractFileName(Found.PatternFile), Node.DisplayName, Item.Copy, Node.CutCount]), False);
     Result[High(Result)].Unplaced := True;
   end;
-  for Source in FSources do
+  for Source in FSources.Items do
     if Assigned(Source.Pattern) and (Source.LoadError = '') and not HasPieces(Source) then
       Add(Format(rsLayoutNoPieces, [ExtractFileName(Source.PatternFile)]), False);
   // A source that failed already says why; this is for a sheet that would print blank

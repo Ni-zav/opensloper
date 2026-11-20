@@ -76,7 +76,7 @@ implementation
 uses
   SysUtils, fpjson, ConsoleTools, Sloper.CLI.Arguments, Sloper.Docs.Reference, Sloper.Core.Version, Sloper.Core.JSON,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
-  Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout,
+  Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.PatternSources,
   Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection,
   Sloper.Assistant.Http;
 
@@ -391,7 +391,7 @@ var
   Note, Size, Err: string;
   Report, Item: TJSONObject;
   List, Notes: TJSONArray;
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Failed: boolean;
 begin
   if not CheckFileExists(FileName) then

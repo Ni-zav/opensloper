@@ -44,7 +44,7 @@ type
   end;
   TFileFormatInfoArray = array of TFileFormatInfo;
 
-// The pattern, measurement and layout files, in that order
+// The pattern, measurement, layout and drape files, in that order
 function FileFormatInfos: TFileFormatInfoArray;
 function FindFileFormatInfo(const FormatName: string; out Info: TFileFormatInfo): boolean;
 // The member with this name, such as sources[].id, or a list of values named
@@ -156,11 +156,29 @@ resourcestring
   rsFileTitleFields = 'What it shows, in order';
   rsFileTitleEveryPage = 'Whether it is on every page, not only the first';
 
+  rsFileDrapeTitle = 'Drape';
+  rsFileDrapeSummary = 'Made by opensloper-drape: the pieces of one or more patterns placed round a body in 3D, for ' +
+    'draping in Blender. Positions are in mm: x to the body''s left, y towards its back, z up, the body facing -y ' +
+    'with its feet at z = 0.';
+  rsFileDrapeName = 'The drape''s name';
+  rsFileDrapeSources = 'The patterns placed, each with the measurements to draw it with';
+  rsFileDrapeBody = 'The body the pieces are placed on';
+  rsFileDrapeBodyKind = 'measurements: a generic body built from a measurement set; none: no body, for accessories';
+  rsFileDrapeBodyMeasurementFile = 'The body''s measurement file, relative to the drape file''s folder; the first ' +
+    'source''s when left out';
+  rsFileDrapeBodySize = 'The body''s size, for a size table; the first source''s when left out';
+  rsFileDrapeGap = 'How far pieces are placed off the body and apart across a seam';
+  rsFileDrapePlacements = 'Where each copy of each piece is placed; a copy not listed is left out';
+  rsFileDrapePosition = 'Where the piece''s anchor goes: x, y and z. The anchor is the middle of its grainline, else ' +
+    'the middle of its seam line''s extent';
+  rsFileDrapeRotation = 'The turns in degrees about x, then y, then z, anticlockwise looking from the positive end ' +
+    'of each axis: Blender''s XYZ Euler angles. Unturned, a piece stands upright facing -y, as drawn';
+
 implementation
 
 uses
   SysUtils, Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.TextFields,
-  Sloper.Core.PatternFile, Sloper.Core.Measurements;
+  Sloper.Core.PatternFile, Sloper.Core.Measurements, Sloper.Core.DrapeFile;
 
 const
   // As the apps name them; Sloper.Output.Layout is outside the core, so a test
@@ -297,6 +315,44 @@ const
     '    ],' + LineEnding +
     '    "everyPage": false' + LineEnding +
     '  }' + LineEnding +
+    '}';
+
+  DRAPE_EXAMPLE =
+    '{' + LineEnding +
+    '  "format": "drape",' + LineEnding +
+    '  "version": 1,' + LineEnding +
+    '  "units": "mm",' + LineEnding +
+    '  "name": "Skirt",' + LineEnding +
+    '  "nextId": 2,' + LineEnding +
+    '  "sources": [' + LineEnding +
+    '    {' + LineEnding +
+    '      "id": 1,' + LineEnding +
+    '      "pattern": "skirt.sloper",' + LineEnding +
+    '      "measurementFile": "sizes.slm",' + LineEnding +
+    '      "size": "38"' + LineEnding +
+    '    }' + LineEnding +
+    '  ],' + LineEnding +
+    '  "body": {' + LineEnding +
+    '    "kind": "measurements"' + LineEnding +
+    '  },' + LineEnding +
+    '  "gap": 20,' + LineEnding +
+    '  "placements": [' + LineEnding +
+    '    {' + LineEnding +
+    '      "source": 1,' + LineEnding +
+    '      "piece": 42,' + LineEnding +
+    '      "copy": 1,' + LineEnding +
+    '      "position": [' + LineEnding +
+    '        0,' + LineEnding +
+    '        -170,' + LineEnding +
+    '        900' + LineEnding +
+    '      ],' + LineEnding +
+    '      "rotation": [' + LineEnding +
+    '        0,' + LineEnding +
+    '        0,' + LineEnding +
+    '        0' + LineEnding +
+    '      ]' + LineEnding +
+    '    }' + LineEnding +
+    '  ]' + LineEnding +
     '}';
 
 var
@@ -465,6 +521,29 @@ begin
   M('titleBlock.fields[]', mkChoice, rsFileTitleFields, Joined([FIELD_PATTERN_NAME, FIELD_MEASUREMENTS_NAME, FIELD_LAYOUT_NAME,
     FIELD_DATE, FIELD_CUT_LIST, FIELD_MATERIALS, FIELD_MATERIAL_NEEDED]));
   M('titleBlock.everyPage', mkFlag, rsFileTitleEveryPage);
+
+  FileFormat(DRAPE_FORMAT, DRAPE_EXTENSION, DRAPE_VERSION, rsFileDrapeTitle, rsFileDrapeSummary, DRAPE_EXAMPLE);
+  R('format', mkChoice, rsFileFormat, DRAPE_FORMAT);
+  R('version', mkWhole, rsFileVersion);
+  M('units', mkChoice, rsFileUnitsMM, 'mm');
+  M('name', mkText, rsFileDrapeName);
+  M('nextId', mkWhole, rsFileLayoutNextId);
+  R('sources', mkList, rsFileDrapeSources);
+  R('sources[].id', mkWhole, rsFileSourceId);
+  R('sources[].pattern', mkText, rsFileSourcePattern);
+  M('sources[].measurementFile', mkText, rsFileSourceMeasurementFile);
+  M('sources[].size', mkText, rsFileSourceSize);
+  M('body', mkGroup, rsFileDrapeBody);
+  R('body.kind', mkChoice, rsFileDrapeBodyKind, 'measurements, none');
+  M('body.measurementFile', mkText, rsFileDrapeBodyMeasurementFile);
+  M('body.size', mkText, rsFileDrapeBodySize);
+  M('gap', mkSize, rsFileDrapeGap);
+  M('placements', mkList, rsFileDrapePlacements);
+  R('placements[].source', mkWhole, rsFilePlacementSource);
+  R('placements[].piece', mkWhole, rsFilePlacementPiece);
+  M('placements[].copy', mkWhole, rsFilePlacementCopy);
+  R('placements[].position[]', mkSize, rsFileDrapePosition);
+  R('placements[].rotation[]', mkSize, rsFileDrapeRotation);
 end;
 
 function FileFormatInfos: TFileFormatInfoArray;

@@ -91,6 +91,17 @@ function PlacedNormal(const Placement: TDrapePlacement): TVec3;
 function MirroredPlacement(const Placement: TDrapePlacement): TDrapePlacement;
 // A placement standing upright in front of the body, facing the viewer
 function UprightPlacement(const Position: TVec3): TDrapePlacement;
+// The middle of a polygon's area; the middle of its extent when it has none
+function PolygonMiddle(const Points: TVec2Array): TVec2;
+// Where a piece goes to be sewn along a placed partner: its side of the seam,
+// from EdgeStart to EdgeEnd as drafted, lies along the partner's, from
+// PartnerStart to PartnerEnd as placed, Gap away from it. Flat, the piece lies
+// beside its partner across the seam, as the two would lie sewn and opened
+// out; Folded turns it over about the seam, onto the partner's side. Inside
+// and PartnerInside are points inside each piece (drafted, and placed), which
+// tell the two sides of the seam apart.
+function AlignedPlacement(const PartnerStart, PartnerEnd, PartnerInside, PartnerNormal: TVec3;
+  const EdgeStart, EdgeEnd, Inside, Anchor: TVec2; Mirrored: boolean; Gap: double; Folded: boolean): TDrapePlacement;
 function DefaultDrapeCamera: TDrapeCamera;
 // The camera turned to a view, keeping its target, scale and distance
 function CameraForView(const Camera: TDrapeCamera; View: TDrapeView): TDrapeCamera;
@@ -226,6 +237,86 @@ function UprightPlacement(const Position: TVec3): TDrapePlacement;
 begin
   Result.Position := Position;
   Result.Rotation := Vec3(0, 0, 0);
+end;
+
+function PolygonMiddle(const Points: TVec2Array): TVec2;
+var
+  Index: integer;
+  Area, Step: double;
+  Sum, Current, Following: TVec2;
+begin
+  Area := 0;
+  Sum := Vec2(0, 0);
+  for Index := 0 to High(Points) do
+  begin
+    Current := Points[Index];
+    Following := Points[(Index + 1) mod Length(Points)];
+    Step := Cross(Current, Following);
+    Area := Area + Step;
+    Sum := Sum + (Current + Following) * Step;
+  end;
+  if Abs(Area) > EPSILON then
+    Exit(Sum * (1 / (3 * Area)));
+  Result := Vec2(0, 0);
+  if Length(Points) > 0 then
+    Result := (Points[0] + Points[High(Points)]) * 0.5;
+end;
+
+// The part of Direction square to Along, with length 1
+function SquareTo(const Direction, Along: TVec3): TVec3;
+begin
+  Result := (Direction - Along * Dot3(Direction, Along)).Normalized;
+end;
+
+function MatrixOfColumns(const First, Second, Third: TVec3): TMat3;
+begin
+  Result.M[0, 0] := First.X;
+  Result.M[1, 0] := First.Y;
+  Result.M[2, 0] := First.Z;
+  Result.M[0, 1] := Second.X;
+  Result.M[1, 1] := Second.Y;
+  Result.M[2, 1] := Second.Z;
+  Result.M[0, 2] := Third.X;
+  Result.M[1, 2] := Third.Y;
+  Result.M[2, 2] := Third.Z;
+end;
+
+// The rotation taking the right-handed basis (A1, A2, A1 x A2) to (B1, B2,
+// B1 x B2); the A and B pairs are each square and of length 1
+function BasisTurn(const A1, A2, B1, B2: TVec3): TMat3;
+begin
+  Result := Mat3Then(MatrixOfColumns(B1, B2, Cross3(B1, B2)), MatrixOfColumns(A1, A2, Cross3(A1, A2)).Transposed);
+end;
+
+function AlignedPlacement(const PartnerStart, PartnerEnd, PartnerInside, PartnerNormal: TVec3;
+  const EdgeStart, EdgeEnd, Inside, Anchor: TVec2; Mirrored: boolean; Gap: double; Folded: boolean): TDrapePlacement;
+var
+  FrameStart, FrameEnd, FrameMiddle, FrameAlong, FrameInward: TVec3;
+  SeamMiddle, Along, PartnerInward, Outward, Target: TVec3;
+  Turn: TMat3;
+begin
+  // The moving piece's seam and the way into it, in its own frame
+  FrameStart := PieceFramePoint(EdgeStart, Anchor, Mirrored);
+  FrameEnd := PieceFramePoint(EdgeEnd, Anchor, Mirrored);
+  FrameMiddle := (FrameStart + FrameEnd) * 0.5;
+  FrameAlong := (FrameEnd - FrameStart).Normalized;
+  FrameInward := SquareTo(PieceFramePoint(Inside, Anchor, Mirrored) - FrameMiddle, FrameAlong);
+  // The partner's seam and the way into it, kept in the partner's plane
+  SeamMiddle := (PartnerStart + PartnerEnd) * 0.5;
+  Along := (PartnerEnd - PartnerStart).Normalized;
+  PartnerInward := SquareTo(PartnerInside - SeamMiddle - PartnerNormal.Normalized * Dot3(PartnerInside - SeamMiddle,
+    PartnerNormal.Normalized), Along);
+  if Folded then
+    Outward := PartnerInward
+  else
+    Outward := -PartnerInward;
+  // Flat, the piece runs on away from the partner; folded, back over it
+  Turn := BasisTurn(FrameAlong, FrameInward, Along, Outward);
+  Target := SeamMiddle + Outward * Gap;
+  if Folded then
+    Target := SeamMiddle + Turn.Apply(Vec3(0, -1, 0)) * Gap;
+  Result.Position := Target - Turn.Apply(FrameMiddle);
+  Result.Rotation := Mat3ToEuler(Turn);
 end;
 
 { TDrapeCamera }

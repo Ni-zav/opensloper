@@ -27,7 +27,7 @@ unit Sloper.Output.LayoutDocument;
 interface
 
 uses
-  Classes, SysUtils, Sloper.Core.TextHistory, Sloper.Output.Layout;
+  Classes, SysUtils, Sloper.Core.TextHistory, Sloper.Output.Layout, Sloper.Core.PatternSources;
 
 type
   TLayoutDocument = class
@@ -143,7 +143,7 @@ end;
 // on two checks running before it is loaded
 function TLayoutDocument.CheckSources: string;
 var
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Stamps: string;
 begin
   Result := '';

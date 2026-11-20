@@ -27,7 +27,7 @@ unit Sloper.Output.LayoutDXF;
 interface
 
 uses
-  Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.TextFields, Sloper.Output.Layout;
+  Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.TextFields, Sloper.Output.Layout, Sloper.Core.PatternSources;
 
 const
   LAYER_CUT = '1';
@@ -456,7 +456,7 @@ var
   Blocks: TStringArray;
   BlockName, SizeName, Key: string;
   Placement: TPlacement;
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Piece: TPieceObject;
 begin
   Blocks := nil;

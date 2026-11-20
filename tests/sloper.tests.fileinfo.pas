@@ -42,7 +42,7 @@ implementation
 
 uses
   SysUtils, Classes, fpjson, Sloper.Core.JSON, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Measurements,
-  Sloper.Core.OperationInfo, Sloper.Core.FileInfo, Sloper.Output.Layout, Sloper.Docs.Schema;
+  Sloper.Core.OperationInfo, Sloper.Core.FileInfo, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Docs.Schema;
 
 const
   // Every member outside the objects, with values that make the writer write it
@@ -76,12 +76,19 @@ const
     ' "bold": true, "italic": true}],' +
     ' "titleBlock": {"corner": "topRight", "fields": ["pattern.name", "date"], "everyPage": true}}';
 
+  FULL_DRAPE =
+    '{"format": "drape", "version": 1, "units": "mm", "name": "Dress", "nextId": 2,' +
+    ' "sources": [{"id": 1, "pattern": "dress.sloper", "measurementFile": "sizes.slm", "size": "38"}],' +
+    ' "body": {"kind": "measurements", "measurementFile": "me.slm", "size": "40"}, "gap": 15,' +
+    ' "placements": [{"source": 1, "piece": 42, "copy": 2, "position": [10, -170, 900], "rotation": [0, 90, 0]}]}';
+
 // The file as the program writes it after reading Text
 function ReadBack(const FormatName, Text: string): string;
 var
   Pattern: TPattern;
   MeasurementSet: TMeasurementSet;
   Layout: TLayout;
+  Drape: TDrape;
   Err: string;
 begin
   Result := '';
@@ -104,6 +111,16 @@ begin
         Result := MeasurementSet.SaveToText;
     finally
       FreeAndNil(MeasurementSet);
+    end;
+  end
+  else if FormatName = DRAPE_FORMAT then
+  begin
+    Drape := TDrape.Create;
+    try
+      if Drape.LoadFromText(Text, Err) then
+        Result := Drape.SaveToText;
+    finally
+      FreeAndNil(Drape);
     end;
   end
   else
@@ -158,6 +175,8 @@ begin
     Texts := [FULL_PATTERN]
   else if FormatName = MEASUREMENT_FORMAT then
     Texts := [FULL_MEASUREMENTS, FULL_SIZE_TABLE]
+  else if FormatName = DRAPE_FORMAT then
+    Texts := [FULL_DRAPE]
   else
     Texts := [FULL_LAYOUT];
   Result := TStringList.Create;

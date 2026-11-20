@@ -8,10 +8,12 @@ the program itself, so they always match the version they were built with.
 - [Operations and objects](operations.md): every kind of point, edge, transform,
   piece, seam and note, with its members as pattern files and the Automation
   API write them.
-- [File formats](files.md): pattern, measurement and layout files, member by
-  member, with a JSON Schema for each ([pattern](schemas/pattern.schema.json),
+- [File formats](files.md): pattern, measurement, layout and drape files,
+  member by member, with a JSON Schema for each
+  ([pattern](schemas/pattern.schema.json),
   [measurements](schemas/measurements.schema.json),
-  [layout](schemas/layout.schema.json)) to check a file against.
+  [layout](schemas/layout.schema.json), [drape](schemas/drape.schema.json)) to
+  check a file against.
 - [Keyboard shortcuts](shortcuts.md): the keys and mouse actions of the three
   apps.
 - [Icons](icons.md): what each button and menu icon of the three apps does,

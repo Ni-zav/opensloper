@@ -273,3 +273,74 @@ Version 1. JSON Schema, for files of this version: [layout.schema.json](schemas/
 }
 ```
 
+## Drape (`.sdrape`)
+
+Made by opensloper-drape: the pieces of one or more patterns placed round a body in 3D, for draping in Blender. Positions are in mm: x to the body's left, y towards its back, z up, the body facing -y with its feet at z = 0.
+
+Version 1. JSON Schema, for files of this version: [drape.schema.json](schemas/drape.schema.json).
+
+| Member | Value | Required | Description |
+| --- | --- | --- | --- |
+| `format` | one of: `drape` | yes | What the file is; a file with another value does not load |
+| `version` | whole number | yes | The version of the format, from 1. The apps read every older version and always write the current one; they refuse a file newer than they know |
+| `units` | one of: `mm` |  | Always mm: values in this file are millimetres |
+| `name` | text |  | The drape's name |
+| `nextId` | whole number |  | The next source ID to hand out |
+| `sources` | list | yes | The patterns placed, each with the measurements to draw it with |
+| `sources[].id` | whole number | yes | The source's ID, which placements refer to |
+| `sources[].pattern` | text | yes | The pattern file, relative to the layout's folder |
+| `sources[].measurementFile` | text |  | The measurement file, relative to the layout's folder; the pattern's own when left out |
+| `sources[].size` | text |  | The size, for a size table; its first size when left out |
+| `body` | group |  | The body the pieces are placed on |
+| `body.kind` | one of: `measurements`, `none` | yes | measurements: a generic body built from a measurement set; none: no body, for accessories |
+| `body.measurementFile` | text |  | The body's measurement file, relative to the drape file's folder; the first source's when left out |
+| `body.size` | text |  | The body's size, for a size table; the first source's when left out |
+| `gap` | number |  | How far pieces are placed off the body and apart across a seam |
+| `placements` | list |  | Where each copy of each piece is placed; a copy not listed is left out |
+| `placements[].source` | whole number | yes | The source the piece is from |
+| `placements[].piece` | whole number | yes | The piece's ID in that source's pattern |
+| `placements[].copy` | whole number |  | Which copy, from 1, for a piece cut more than once |
+| `placements[].position[]` | list, each number | yes | Where the piece's anchor goes: x, y and z. The anchor is the middle of its grainline, else the middle of its seam line's extent |
+| `placements[].rotation[]` | list, each number | yes | The turns in degrees about x, then y, then z, anticlockwise looking from the positive end of each axis: Blender's XYZ Euler angles. Unturned, a piece stands upright facing -y, as drawn |
+
+### Example
+
+```json
+{
+  "format": "drape",
+  "version": 1,
+  "units": "mm",
+  "name": "Skirt",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "skirt.sloper",
+      "measurementFile": "sizes.slm",
+      "size": "38"
+    }
+  ],
+  "body": {
+    "kind": "measurements"
+  },
+  "gap": 20,
+  "placements": [
+    {
+      "source": 1,
+      "piece": 42,
+      "copy": 1,
+      "position": [
+        0,
+        -170,
+        900
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}
+```
+

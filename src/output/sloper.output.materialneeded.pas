@@ -32,7 +32,7 @@ unit Sloper.Output.MaterialNeeded;
 interface
 
 uses
-  SysUtils, Sloper.Core.Units, Sloper.Output.Layout;
+  SysUtils, Sloper.Core.Units, Sloper.Output.Layout, Sloper.Core.PatternSources;
 
 type
   TMaterialNeedKind = (mnNoSize, mnRoll, mnSheet);
@@ -350,7 +350,7 @@ end;
 function LayoutMaterialNeeds(Layout: TLayout): TMaterialNeedArray;
 var
   Groups: TGatheredArray;
-  Source: TLayoutSource;
+  Source: TPatternSource;
   Index, Place: integer;
   Piece: TPieceObject;
   Material: TPatternMaterial;

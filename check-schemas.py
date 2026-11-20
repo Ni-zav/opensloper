@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Checks the file format schemas in docs/reference/schemas/ and every pattern,
-# measurement and layout file under the folders given against them. A schema
+# measurement, layout and drape file under the folders given against them. A schema
 # describes its format's current version, so files of older versions (kept in
 # tests/files/v<n>/ to test upgrading) are counted but not checked.
 # Usage: python3 check-schemas.py [FOLDER...] (by default docs and tests, as opensloper-make.sh docs runs it)
@@ -11,7 +11,7 @@ import sys
 from jsonschema import Draft202012Validator
 
 SCHEMAS = pathlib.Path(__file__).resolve().parent / "docs" / "reference" / "schemas"
-EXTENSIONS = {".sloper": "pattern", ".slm": "measurements", ".slayout": "layout"}
+EXTENSIONS = {".sloper": "pattern", ".slm": "measurements", ".slayout": "layout", ".sdrape": "drape"}
 
 
 def main(folders):

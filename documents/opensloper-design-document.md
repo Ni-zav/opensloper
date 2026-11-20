@@ -19,7 +19,7 @@ Goals:
 - Automatic piece detection instead of manually tracing outlines in order
 - Seam allowance, notches, grainlines and true-scale tiled printing
 - Garments and accessories in fabric and leather, with output for cutting machines
-- A small, maintainable codebase with a pure-Pascal core
+- A small, maintainable codebase with a pure-Pascal core and few dependencies (see Dependencies)
 
 ### Technology and licence
 
@@ -40,6 +40,19 @@ Licence decisions:
 - Code translated from Valentina or Seamly2D keeps their copyright line alongside the project's.
 - An About box shows the licence and no-warranty notice.
 - User documentation in `docs/` is licensed CC BY-SA 4.0 (see Documentation).
+
+#### Why Pascal
+
+Lazarus and Free Pascal were chosen over C++, the language of Valentina and Seamly2D, and over the usual modern choices (TypeScript, Java, Rust) for these reasons:
+
+- **Few dependencies.** The compiler's own libraries (FCL and LCL) cover the GUI, JSON, XML, SQLite, file handling and testing (FPCUnit), so the project needs only three third-party packages (see Dependencies). In TypeScript, Java or Rust the same app would pull in hundreds of packages through npm, Maven or Cargo, most of them indirect, each able to change, break the build or be withdrawn.
+- **It will still build in ten years.** Free Pascal changes slowly and keeps old code compiling; Pascal written decades ago still builds. Patterns are kept and reused for years, so the program that opens them has to outlast fashions in tooling.
+- **Native apps from one toolkit.** The LCL draws with each platform's own widgets (Qt on Linux, Cocoa on macOS, Win32 on Windows) from one source, with a form designer, menus, actions and dialogs built in. The result is a single native executable per app, with no runtime, virtual machine or browser engine to ship.
+- **Fast to build and to run.** The compiler builds the whole project in seconds, and compiled code is fast enough to re-evaluate a pattern on every drag.
+- **Readable.** Pascal reads close to plain English, which suits a project whose code is meant to be studied and borrowed by others, and keeps it approachable for contributors who are not full-time programmers.
+- **Reaches the web too.** Free Pascal compiles to WebAssembly, so the same core can run in a browser (see Web version) without a second engine in another language.
+
+What it costs: a smaller pool of developers than C++, TypeScript or Rust; more code written by hand where other languages have a ready-made library; and memory managed by hand, which the coding standards (`FreeAndNil`, `try`/`finally`) and leak checks in the tests (heaptrc) keep in order.
 
 Practices from day one: git repository, internal units in mm, UI text in `resourcestring` sections for translation, and occasional builds on a second OS.
 
@@ -219,7 +232,43 @@ opensloper/
 
 ### Dependencies
 
-Third-party and personal Pascal libraries are git submodules under `src/packages/`, pinned to known-good commits. A submodule bump is its own commit, the build scripts run `git submodule update --init --recursive`, and every package must be GPLv3-compatible with an explicit licence file.
+OpenSloper keeps its dependencies to a minimum, and this is a deliberate design choice, not an accident of size. Every dependency is code the project does not control: it can change, break, be withdrawn, change licence or carry a security problem in. Few dependencies keep the apps buildable for years, the licence position simple, and output under the project's own control.
+
+**What the apps depend on:**
+
+| Kind | What | Notes |
+| --- | --- | --- |
+| Compiler and libraries | Free Pascal, Lazarus (FCL, LCL, LazUtils) | GUI, JSON, XML, SQLite, file handling, FPCUnit |
+| Third-party packages | Clipper2, BGRABitmap | Submodules, see the table below |
+| Our own packages | ConsoleTools | Submodule, MIT |
+| Data | Tabler Icons | SVG files in `data/icons`, MIT; nothing linked |
+| Platform | Qt bindings (`libQt5Pas` / `libQt6Pas`) on Linux | Runtime library for the Qt widgetset |
+
+**Build-time tools** are not shipped and do not touch the apps' code: Zensical builds the documentation, JEDI Code Format formats source, and the Wasm build uses the development compiler and a WASI shim. The apps build and run without any of them.
+
+**Written ourselves instead.** Where a library would have been larger than the job, or would have taken control of the output, the project has its own small unit:
+
+| Unit | Instead of | Why |
+| --- | --- | --- |
+| Formula parser (`Sloper.Core.Formula`) | TFPExpressionParser | Its error positions and accepted syntax did not fit; our syntax is small (see Formula engine) |
+| PDF writer (`TPDFWriter`) | fcl-pdf | Exact scale, uncompressed, and the same layout gives the same bytes, so tests compare whole files |
+| DXF writer | A DXF library | R12 is simple, and deterministic output can be tested the same way |
+| JSON layout | fpjson's own formatting | Fixed key order and number spelling, so files diff cleanly in git (fpjson still parses) |
+
+**Rules for adding a dependency.** A new package is added only when all of these hold:
+
+1. **The problem is hard.** Polygon clipping, font shaping, antialiased drawing: things that take months to get right. A small, well-defined format or algorithm is written in the project instead.
+2. **Its licence is GPLv3-compatible** and stated in a licence file in its repository.
+3. **It is Pascal, or has no build step of its own.** Pure Pascal compiles for every target, including WebAssembly. A C or C++ library needs a binding and a native build on every platform, and is a last resort.
+4. **The core stays LCL-free.** Anything used by `src/core` must not depend on the LCL or a GUI.
+5. **It can be maintained by us if it is abandoned.** It is small enough to fork, as Clipper2 already is.
+6. **It is pinned.** It is a submodule at a known commit, added and updated in commits of its own, and `opensloper-make.sh test` passes before and after.
+
+A dependency used only by one optional feature is kept out of the core and the other apps, so leaving that feature out removes the dependency too.
+
+**Dependencies, the web version and the server.** The Wasm engine follows the same rules, since it is the same core. The TypeScript editor and the Django server (see Web version) live in ecosystems with many packages; there, dependencies are kept to what the job needs, versions are locked (`package-lock.json`, a pinned requirements file), and nothing they use reaches the engine.
+
+**Submodules.** Third-party and personal Pascal libraries are git submodules under `src/packages/`, pinned to known-good commits. A submodule bump is its own commit, the build scripts run `git submodule update --init --recursive`, and every package must be GPLv3-compatible with an explicit licence file.
 
 | Package | Use | Licence |
 | --- | --- | --- |
@@ -248,6 +297,7 @@ Testing runs throughout development; the LCL-free core means most logic is teste
 - UI kept thin, so what matters can be tested without it
 - End-to-end checks drive `opensloper-cli serve` through the Automation API and its renders; the GUI is checked by hand on a private Xvfb display
 - `opensloper-make.sh test` and `opensloper-make.sh check` before every commit
+- A dependency bump (a submodule moved to a new commit) is its own commit, and `opensloper-make.sh test` passes before it is made
 - `opensloper-make.sh pr-check` before a pull request: format, check, test and build in turn, stopping at the first that fails (issue #40)
 - Once the web build exists, `opensloper-make.sh test` also compiles the core for `wasm32-wasip1` and runs the regression patterns through the Wasm module, so the browser engine gives the same results as the desktop
 

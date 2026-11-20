@@ -490,7 +490,7 @@ cmd_devdocs() {
 # (default Homebrew's openssl@3). Linux uses the system's OpenSSL.
 
 # The bundle's file types: the design app opens them all, and hands
-# measurement files and layouts to the apps beside it
+# measurement files, layouts and drape files to the apps beside it
 plist_document_type() {
   cat <<EOF
     <dict>
@@ -539,8 +539,9 @@ write_readme() {
     echo
     case "$platform" in
       Linux)
-        echo "Run opensloper-design (the pattern editor), opensloper-measurements or"
-        echo "opensloper-publish from this folder; keep the data folder beside them."
+        echo "Run opensloper-design (the pattern editor), opensloper-measurements,"
+        echo "opensloper-publish or opensloper-drape from this folder; keep the data"
+        echo "folder beside them."
         echo "opensloper-cli is the command-line tool."
         echo
         if [ -n "${BUNDLE_LIBS:-}" ]; then
@@ -569,7 +570,8 @@ write_readme() {
         ;;
       macOS)
         echo "Drag OpenSloper.app to Applications and open it: it is the pattern editor,"
-        echo "and its File menu opens the measurements editor and the publish window."
+        echo "and its File menu opens the measurements editor and the publish and drape"
+        echo "windows."
         echo "It is not signed by Apple. If macOS says it cannot be opened or is damaged,"
         echo "run this once in Terminal:"
         echo "  xattr -cr /Applications/OpenSloper.app"
@@ -577,9 +579,9 @@ write_readme() {
         echo "Built for Apple silicon (arm64)."
         ;;
       Windows)
-        echo "Run opensloper-design.exe (the pattern editor), opensloper-measurements.exe"
-        echo "or opensloper-publish.exe from this folder; keep the data folder beside"
-        echo "them. opensloper-cli.exe is the command-line tool. The setup.exe download"
+        echo "Run opensloper-design.exe (the pattern editor), opensloper-measurements.exe,"
+        echo "opensloper-publish.exe or opensloper-drape.exe from this folder; keep the"
+        echo "data folder beside them. opensloper-cli.exe is the command-line tool. The setup.exe download"
         echo "installs the same programs, with Start menu entries and file types."
         echo
         echo "To keep settings and recent files in this folder rather than in AppData,"
@@ -719,7 +721,7 @@ package_deb() {
   rm -rf "$deb"
   mkdir -p "$deb/DEBIAN" "$deb/usr/lib/opensloper" "$deb/usr/bin" "$deb/usr/share/applications" \
     "$deb/usr/share/icons/hicolor/scalable/apps" "$deb/usr/share/mime/packages" "$deb/usr/share/doc/opensloper"
-  for app in opensloper-design opensloper-publish opensloper-measurements opensloper-cli; do
+  for app in opensloper-design opensloper-publish opensloper-measurements opensloper-drape opensloper-cli; do
     cp -p "$root/$app" "$deb/usr/lib/opensloper/"
     ln -s "../lib/opensloper/$app" "$deb/usr/bin/$app"
   done
@@ -752,9 +754,10 @@ Priority: optional
 Homepage: https://github.com/opensloper/opensloper
 Description: parametric sewing pattern drafting
  OpenSloper drafts sewing patterns from body measurements and formulas, so
- a pattern redrafts itself for every size. It has three apps: the pattern
- editor, a measurements editor and a publish app that lays out, tiles and
- prints the pieces, with opensloper-cli for the command line.
+ a pattern redrafts itself for every size. It has four apps: the pattern
+ editor, a measurements editor, a publish app that lays out, tiles and
+ prints the pieces, and a drape app that places them on a dress form for
+ draping in Blender, with opensloper-cli for the command line.
 EOF
   dpkg-deb --root-owner-group --build "$deb" "release/dist/opensloper_${VERSION}_$arch.deb" >/dev/null
   echo "release/dist/opensloper_${VERSION}_$arch.deb"
@@ -790,7 +793,7 @@ cmd_package() {
     exit 2
   fi
   VERSION=$(app_version)
-  local apps=(opensloper-design opensloper-publish opensloper-measurements opensloper-cli)
+  local apps=(opensloper-design opensloper-publish opensloper-measurements opensloper-drape opensloper-cli)
   local dist=release/dist stage=release/stage arch name root bundle app lib size iconset
   rm -rf "$stage"
   mkdir -p "$dist" "$stage"
@@ -815,7 +818,7 @@ cmd_package() {
         for lib in $BUNDLE_LIBS; do
           cp -L "$lib" "$root/lib/"
         done
-        for app in opensloper-design opensloper-publish opensloper-measurements; do
+        for app in opensloper-design opensloper-publish opensloper-measurements opensloper-drape; do
           patchelf --set-rpath '$ORIGIN/lib' "$root/$app"
         done
       fi
@@ -824,7 +827,7 @@ cmd_package() {
       cp resources/linux/*.desktop "$root/share/applications/"
       cp resources/linux/opensloper.xml "$root/share/mime/packages/"
       # Named as the desktop entries' Icon lines name them
-      cp resources/opensloper-design.svg resources/opensloper-publish.svg resources/opensloper-measure.svg \
+      cp resources/opensloper-design.svg resources/opensloper-publish.svg resources/opensloper-measure.svg resources/opensloper-drape.svg \
         "$root/share/icons/"
       cp LICENSE CHANGELOG.md "$root/"
       write_readme "$root/README.txt" Linux
@@ -880,12 +883,14 @@ cmd_package() {
 $(plist_document_type "OpenSloper pattern" pattern)
 $(plist_document_type "OpenSloper measurements" measurements)
 $(plist_document_type "OpenSloper layout" layout)
+$(plist_document_type "OpenSloper drape" drape)
   </array>
   <key>UTExportedTypeDeclarations</key>
   <array>
 $(plist_exported_type "OpenSloper pattern" pattern sloper)
 $(plist_exported_type "OpenSloper measurements" measurements slm)
 $(plist_exported_type "OpenSloper layout" layout slayout)
+$(plist_exported_type "OpenSloper drape" drape sdrape)
   </array>
 </dict>
 </plist>

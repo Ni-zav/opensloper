@@ -143,7 +143,7 @@ resourcestring
     'click it first if you were typing in a panel.';
   rsDocKeys = 'Keys';
   rsDocIconsTitle = 'Icons';
-  rsDocIconsIntro = 'What each button and menu icon in the three apps does, app by app, in the order the app shows them. ' +
+  rsDocIconsIntro = 'What each button and menu icon in the apps does, app by app, in the order the app shows them. ' +
     'Hover over a button in the app to see its name. The icons are from [Tabler Icons](https://tabler.io/icons), under the ' +
     'MIT licence.';
   rsDocIcon = 'Icon';

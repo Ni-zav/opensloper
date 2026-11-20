@@ -49,9 +49,18 @@ type
 
   TDrapeFaceArray = array of TDrapeFace;
 
+  // A seam's line between its sides, on screen as the faces are
+  TDrapeLine = record
+    From, Onto: TVec2;
+  end;
+
+  TDrapeLineArray = array of TDrapeLine;
+
 // The scene from back to front. A drape with no body (or bkNone) draws only
 // its pieces.
 function BuildDrapeScene(Drape: TDrape; const Camera: TDrapeCamera): TDrapeFaceArray;
+// The drape's seam links on screen, to draw over the faces
+function DrapeSceneLines(Drape: TDrape; const Camera: TDrapeCamera): TDrapeLineArray;
 // The index of the frontmost piece face under Point, or -1; the body is never
 // picked
 function DrapePieceAt(const Faces: TDrapeFaceArray; const Point: TVec2): integer;
@@ -272,6 +281,18 @@ begin
     if Index <= High(Pieces) then
       Insert(Pieces[Index].Face, Result, Length(Result));
   end;
+end;
+
+function DrapeSceneLines(Drape: TDrape; const Camera: TDrapeCamera): TDrapeLineArray;
+var
+  Link: TDrapeSeamLink;
+  Line: TDrapeLine;
+  Depth: double;
+begin
+  Result := nil;
+  for Link in Drape.SeamLinks do
+    if Camera.Project(Link.From, Line.From, Depth) and Camera.Project(Link.Onto, Line.Onto, Depth) then
+      Insert(Line, Result, Length(Result));
 end;
 
 function DrapePieceAt(const Faces: TDrapeFaceArray; const Point: TVec2): integer;

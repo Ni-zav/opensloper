@@ -186,6 +186,7 @@ type
     procedure TestLargeIgnoresExclusions;
     procedure TestLargeNarrowRollRefused;
     procedure TestPublishProgram;
+    procedure TestDrapeProgram;
     procedure TestMeasurementsProgram;
     procedure TestCompanionInSiblingFolder;
     procedure TestWatchWaitsForAStableFile;
@@ -1641,6 +1642,27 @@ begin
     AssertEquals('source tree', ConcatPaths([Sub, Name]), TAppPaths.MeasurementsProgramIn(FFolder));
   finally
     DeleteFile(ConcatPaths([Sub, Name]));
+    RemoveDir(Sub);
+  end;
+end;
+
+procedure TTestLayout.TestDrapeProgram;
+var
+  Name: string;
+  Sub, Reason: string;
+begin
+  AssertEquals('not there', '', TAppPaths.DrapeProgramIn(FFolder));
+  Name := 'opensloper-drape' {$IFDEF WINDOWS} + '.exe' {$ENDIF};
+  Sub := ConcatPaths([FFolder, 'drape']);
+  ForceDirectories(Sub);
+  try
+    AssertTrue(Reason, WriteTextFile(ConcatPaths([Sub, Name]), '', Reason));
+    AssertEquals('source tree', ConcatPaths([Sub, Name]), TAppPaths.DrapeProgramIn(FFolder));
+    AssertTrue(Reason, WriteTextFile(ConcatPaths([FFolder, Name]), '', Reason));
+    AssertEquals('beside it first', ConcatPaths([FFolder, Name]), TAppPaths.DrapeProgramIn(FFolder));
+  finally
+    DeleteFile(ConcatPaths([Sub, Name]));
+    DeleteFile(ConcatPaths([FFolder, Name]));
     RemoveDir(Sub);
   end;
 end;

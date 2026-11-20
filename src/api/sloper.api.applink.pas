@@ -37,6 +37,8 @@ const
   // A publish window showing the layout in params.layout comes to the front
   APP_LINK_SHOW = 'show';
   APP_LINK_LAYOUT_PARAM = 'layout';
+  // A drape window showing the drape file in params.drape does the same
+  APP_LINK_DRAPE_PARAM = 'drape';
   // The result: {"done": true} when the window did what was asked
   APP_LINK_DONE = 'done';
   // The preferences in the settings file changed: read them again. Sent to

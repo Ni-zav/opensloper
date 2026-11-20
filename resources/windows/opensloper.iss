@@ -58,6 +58,7 @@ Type: filesandordirs; Name: "{app}\data\help"
 Name: "{autoprograms}\OpenSloper"; Filename: "{app}\opensloper-design.exe"
 Name: "{autoprograms}\OpenSloper Measurements"; Filename: "{app}\opensloper-measurements.exe"
 Name: "{autoprograms}\OpenSloper Publish"; Filename: "{app}\opensloper-publish.exe"
+Name: "{autoprograms}\OpenSloper Drape"; Filename: "{app}\opensloper-drape.exe"
 Name: "{autodesktop}\OpenSloper"; Filename: "{app}\opensloper-design.exe"; Tasks: desktopicon
 
 [Registry]
@@ -79,6 +80,12 @@ Root: HKA; Subkey: "Software\Classes\.slayout\OpenWithProgids"; ValueType: strin
 Root: HKA; Subkey: "Software\Classes\OpenSloper.Layout"; ValueType: string; ValueName: ""; ValueData: "OpenSloper layout"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\OpenSloper.Layout\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\opensloper-publish.exe,0"
 Root: HKA; Subkey: "Software\Classes\OpenSloper.Layout\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\opensloper-publish.exe"" ""%1"""
+
+Root: HKA; Subkey: "Software\Classes\.sdrape"; ValueType: string; ValueName: ""; ValueData: "OpenSloper.Drape"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.sdrape\OpenWithProgids"; ValueType: string; ValueName: "OpenSloper.Drape"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\OpenSloper.Drape"; ValueType: string; ValueName: ""; ValueData: "OpenSloper drape"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\OpenSloper.Drape\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\opensloper-drape.exe,0"
+Root: HKA; Subkey: "Software\Classes\OpenSloper.Drape\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\opensloper-drape.exe"" ""%1"""
 
 [Run]
 Filename: "{app}\opensloper-design.exe"; Description: "{cm:LaunchProgram,OpenSloper}"; Flags: nowait postinstall skipifsilent

@@ -48,6 +48,7 @@ nav = [
     "publish/printing.md",
     "publish/other-output.md",
   ] },
+  { "Drape" = "drape/index.md" },
   { "Scripting" = "scripting/index.md" },
   { "Reference" = [
     "reference/index.md",

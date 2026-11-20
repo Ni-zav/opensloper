@@ -18,6 +18,7 @@ On macOS, Cmd takes the place of Ctrl, except in Ctrl+Tab and Ctrl+Shift+Tab, wh
 | ++ctrl+shift+s++ | Save under another name |
 | ++ctrl+m++ | Open a measurement set for the pattern |
 | ++ctrl+p++ | Lay out and print the pattern in the publish app |
+| ++ctrl+d++ | Place the pattern's pieces on a body in the drape app |
 | ++ctrl+q++ | Quit |
 
 ### Edit
@@ -221,4 +222,7 @@ On macOS, Cmd takes the place of Ctrl, except in Ctrl+Tab and Ctrl+Shift+Tab, wh
 | The wheel | Zoom in or out |
 | Drag | Drag away from the pieces to turn the view round the body |
 | ++drag a piece++ | Drag a piece to move it across the view; with Shift, towards or away from you |
+| ++ctrl+drag a piece++ | Move the piece round the body, keeping its distance and turning it to keep facing out |
+| ++right-drag a piece++ | Turn the piece about its anchor: across the view about the vertical, up and down about the view's horizontal |
+| ++shift+right-drag a piece++ | Turn the piece in 15° steps |
 

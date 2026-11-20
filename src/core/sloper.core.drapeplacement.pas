@@ -89,6 +89,14 @@ function PlacedNormal(const Placement: TDrapePlacement): TVec3;
 // The mirror image across the YZ plane, for the other copy of a mirrored pair
 // placed as its partner's left or right
 function MirroredPlacement(const Placement: TDrapePlacement): TDrapePlacement;
+// The placement turned about Axis through its anchor, which stays put
+function TurnedPlacement(const Placement: TDrapePlacement; const Axis: TVec3; AngleDeg: double): TDrapePlacement;
+// The placement taken round the body's centre line (the Z axis) by AngleDeg,
+// keeping its distance and height and turning with it, so a piece facing out
+// keeps facing out
+function RoundBodyPlacement(const Placement: TDrapePlacement; AngleDeg: double): TDrapePlacement;
+// The angle to the nearest multiple of Step
+function SnappedAngle(AngleDeg, Step: double): double;
 // A placement standing upright in front of the body, facing the viewer
 function UprightPlacement(const Position: TVec3): TDrapePlacement;
 // The middle of a polygon's area; the middle of its extent when it has none
@@ -231,6 +239,28 @@ function MirroredPlacement(const Placement: TDrapePlacement): TDrapePlacement;
 begin
   Result.Position := Vec3(-Placement.Position.X, Placement.Position.Y, Placement.Position.Z);
   Result.Rotation := Vec3(Placement.Rotation.X, -Placement.Rotation.Y, -Placement.Rotation.Z);
+end;
+
+function TurnedPlacement(const Placement: TDrapePlacement; const Axis: TVec3; AngleDeg: double): TDrapePlacement;
+begin
+  Result.Position := Placement.Position;
+  Result.Rotation := Mat3ToEuler(Mat3Then(Mat3TurnAbout(Axis, AngleDeg), PlacementMatrix(Placement)));
+end;
+
+function RoundBodyPlacement(const Placement: TDrapePlacement; AngleDeg: double): TDrapePlacement;
+var
+  Turn: TMat3;
+begin
+  Turn := Mat3TurnZ(AngleDeg);
+  Result.Position := Turn.Apply(Placement.Position);
+  Result.Rotation := Mat3ToEuler(Mat3Then(Turn, PlacementMatrix(Placement)));
+end;
+
+function SnappedAngle(AngleDeg, Step: double): double;
+begin
+  Result := AngleDeg;
+  if Step > 0 then
+    Result := Round(AngleDeg / Step) * Step;
 end;
 
 function UprightPlacement(const Position: TVec3): TDrapePlacement;

@@ -17,9 +17,12 @@
 }
 
 // The drape app's 3D view: the body and the placed pieces as
-// Sloper.Core.DrapeScene gives them, filled back to front. Dragging the
-// background turns the view round the body, the middle button pans, the wheel
-// zooms, and dragging a piece moves it, one undo step per drag.
+// Sloper.Core.DrapeScene gives them, filled back to front, with lines across
+// each seam between placed pieces. Dragging the background turns the view
+// round the body, the middle button pans and the wheel zooms. Dragging a piece
+// moves it across the view (with Shift, towards or away), with the modifier
+// round the body, and with the right button turns it about its anchor (with
+// Shift, in 15 degree steps); each drag is one undo step.
 unit Sloper.Drape.View;
 
 {$mode ObjFPC}{$H+}
@@ -31,7 +34,7 @@ uses
   Sloper.Core.DrapeScene, Sloper.Document.DrapeDocument;
 
 type
-  TDrapeDrag = (ddNone, ddOrbit, ddPan, ddMove);
+  TDrapeDrag = (ddNone, ddOrbit, ddPan, ddMove, ddTurn, ddRoundBody);
 
   TDrapeCanvas = class(TCustomControl)
   private
@@ -52,6 +55,9 @@ type
     procedure SetSelected(AValue: integer);
     procedure SetCamera(const AValue: TDrapeCamera);
     function ScreenPoint(X, Y: integer): TVec2;
+    // The dragged piece turned by the drag so far: across the screen about
+    // the vertical, up and down about the view's right
+    function TurnedFrom(X, Y: integer; Snap: boolean): TDrapePlacement;
     procedure CameraChanged;
   protected
     procedure Paint; override;
@@ -78,6 +84,7 @@ type
 
 resourcestring
   rsDrapeMovePiece = 'Move Piece';
+  rsDrapeTurnPiece = 'Turn Piece';
 
 implementation
 
@@ -103,6 +110,11 @@ const
   SELECTED_EDGE_WIDTH = 3;
   // Below this many pixels a press is a click, not a drag
   DRAG_THRESHOLD = 3;
+  // Degrees a piece turns, or goes round the body, per pixel dragged
+  TURN_DEGREES_PER_PIXEL = 0.5;
+  // Turns snap to this with Shift
+  TURN_SNAP = 15;
+  SEAM_LINE_COLOR: TColor = $002F6BE0;
 
 constructor TDrapeCanvas.Create(AOwner: TComponent);
 begin
@@ -117,6 +129,20 @@ end;
 function TDrapeCanvas.ScreenPoint(X, Y: integer): TVec2;
 begin
   Result := Vec2(X - ClientWidth / 2, Y - ClientHeight / 2);
+end;
+
+function TDrapeCanvas.TurnedFrom(X, Y: integer; Snap: boolean): TDrapePlacement;
+var
+  Across, Tip: double;
+begin
+  Across := (X - FDragStart.X) * TURN_DEGREES_PER_PIXEL;
+  Tip := (Y - FDragStart.Y) * TURN_DEGREES_PER_PIXEL;
+  if Snap then
+  begin
+    Across := SnappedAngle(Across, TURN_SNAP);
+    Tip := SnappedAngle(Tip, TURN_SNAP);
+  end;
+  Result := TurnedPlacement(TurnedPlacement(FDragFrom, Vec3(0, 0, 1), Across), FCamera.Right, Tip);
 end;
 
 procedure TDrapeCanvas.CameraChanged;
@@ -151,6 +177,7 @@ var
   Points: array of TPoint;
   Index: integer;
   Middle: TVec2;
+  Line: TDrapeLine;
 begin
   Canvas.Brush.Color := Color;
   Canvas.FillRect(ClientRect);
@@ -180,6 +207,10 @@ begin
       Canvas.Pen.Color := PIECE_EDGE_COLOR;
     Canvas.Polygon(Points);
   end;
+  Canvas.Pen.Color := SEAM_LINE_COLOR;
+  Canvas.Pen.Width := 1;
+  for Line in DrapeSceneLines(FDocument.Drape, FCamera) do
+    Canvas.Line(Round(Line.From.X + Middle.X), Round(Line.From.Y + Middle.Y), Round(Line.Onto.X + Middle.X), Round(Line.Onto.Y + Middle.Y));
 end;
 
 procedure TDrapeCanvas.ShowView(View: TDrapeView);
@@ -260,17 +291,28 @@ begin
   FLastPoint := FDragStart;
   if Button = mbMiddle then
     FDrag := ddPan
-  else if Button = mbLeft then
+  else if Button in [mbLeft, mbRight] then
   begin
     Picked := DrapePieceAt(BuildDrapeScene(FDocument.Drape, FCamera), ScreenPoint(X, Y));
     if Picked >= 0 then
     begin
       Selected := Picked;
       FDragFrom := FDocument.Drape.Items[Picked].Placement;
-      FDocument.BeginChange(rsDrapeMovePiece);
-      FDrag := ddMove;
+      if Button = mbRight then
+      begin
+        FDocument.BeginChange(rsDrapeTurnPiece);
+        FDrag := ddTurn;
+      end
+      else
+      begin
+        FDocument.BeginChange(rsDrapeMovePiece);
+        if ssModifier in Shift then
+          FDrag := ddRoundBody
+        else
+          FDrag := ddMove;
+      end;
     end
-    else
+    else if Button = mbLeft then
       FDrag := ddOrbit;
   end;
 end;
@@ -305,6 +347,16 @@ begin
       FDocument.Drape.Items[FSelected].Placement := Moved;
       FDocument.LiveUpdate;
     end;
+    ddTurn:
+    begin
+      FDocument.Drape.Items[FSelected].Placement := TurnedFrom(X, Y, ssShift in Shift);
+      FDocument.LiveUpdate;
+    end;
+    ddRoundBody:
+    begin
+      FDocument.Drape.Items[FSelected].Placement := RoundBodyPlacement(FDragFrom, (X - FDragStart.X) * TURN_DEGREES_PER_PIXEL);
+      FDocument.LiveUpdate;
+    end;
   end;
   FLastPoint := Point(X, Y);
 end;
@@ -313,7 +365,7 @@ procedure TDrapeCanvas.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: i
 begin
   inherited MouseUp(Button, Shift, X, Y);
   case FDrag of
-    ddMove:
+    ddMove, ddTurn, ddRoundBody:
     begin
       // A click without a drag only selects; an unchanged file adds no step
       if Max(Abs(X - FDragStart.X), Abs(Y - FDragStart.Y)) < DRAG_THRESHOLD then
@@ -331,7 +383,7 @@ end;
 // adds no step, and the patterns are not read again as CancelChange would
 procedure TDrapeCanvas.CancelDrag;
 begin
-  if FDrag = ddMove then
+  if FDrag in [ddMove, ddTurn, ddRoundBody] then
   begin
     FDocument.Drape.Items[FSelected].Placement := FDragFrom;
     FDocument.EndChange;

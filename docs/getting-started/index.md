@@ -78,7 +78,7 @@ If you cloned without `--recursive`, fetch the libraries first with
 ## Preferences
 
 Edit → Preferences… sets the unit you work in (mm, cm or inches), the grid
-spacing and the printer calibration. The three apps share them. A new pattern
+spacing and the printer calibration. The apps share them. A new pattern
 takes the unit from Preferences; a pattern keeps the unit it was made in, and
 Tools → Convert Pattern Units… changes it.
 

@@ -21,6 +21,7 @@ direct way of drawing.
 | **opensloper-measurements** | Records measurements: one person's, or a size table |
 | **opensloper-design** | Drafts patterns: points, lines and curves by formula, then pieces, seams and markings |
 | **opensloper-publish** | Lays pieces out on pages or a roll and prints or exports them |
+| **opensloper-drape** | Places pieces round a dress form in 3D, for draping in Blender |
 | **opensloper-cli** | Checks and exports patterns from the command line, and lets scripts drive a pattern |
 
 ## Where to start
@@ -36,6 +37,8 @@ direct way of drawing.
   pieces.
 - [The publish window](publish/index.md): laying out pieces and printing them
   at true size.
+- [The drape window](drape/index.md): placing pieces round a dress form, for
+  draping in Blender.
 - [Scripting](scripting/index.md): drafting and checking patterns from a
   program, or with an AI assistant such as Claude.
 - [Reference](reference/index.md): formula functions, file formats, keyboard

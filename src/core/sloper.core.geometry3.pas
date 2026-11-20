@@ -61,6 +61,9 @@ function Mat3Then(const B, A: TMat3): TMat3;
 function Mat3TurnX(AngleDeg: double): TMat3;
 function Mat3TurnY(AngleDeg: double): TMat3;
 function Mat3TurnZ(AngleDeg: double): TMat3;
+// A turn about an axis through the origin, anticlockwise looking from the
+// axis's head towards the origin; a zero axis gives no turn
+function Mat3TurnAbout(const Axis: TVec3; AngleDeg: double): TMat3;
 // Turns about X, then Y, then Z, each about the fixed axes: Blender's XYZ
 // Euler order, so the same three numbers set rotation_euler there
 function EulerToMat3(const Angles: TVec3): TMat3;
@@ -212,6 +215,28 @@ begin
   Result.M[0, 1] := -S;
   Result.M[1, 0] := S;
   Result.M[1, 1] := C;
+end;
+
+// Rodrigues' formula: R = I cos + (1 - cos) a aᵀ + sin [a]x
+function Mat3TurnAbout(const Axis: TVec3; AngleDeg: double): TMat3;
+var
+  A: TVec3;
+  C, S, T: double;
+begin
+  A := Axis.Normalized;
+  if A.Length < EPSILON then
+    Exit(Mat3Identity);
+  SinCos(DegToRad(AngleDeg), S, C);
+  T := 1 - C;
+  Result.M[0, 0] := C + T * A.X * A.X;
+  Result.M[0, 1] := T * A.X * A.Y - S * A.Z;
+  Result.M[0, 2] := T * A.X * A.Z + S * A.Y;
+  Result.M[1, 0] := T * A.Y * A.X + S * A.Z;
+  Result.M[1, 1] := C + T * A.Y * A.Y;
+  Result.M[1, 2] := T * A.Y * A.Z - S * A.X;
+  Result.M[2, 0] := T * A.Z * A.X - S * A.Y;
+  Result.M[2, 1] := T * A.Z * A.Y + S * A.X;
+  Result.M[2, 2] := C + T * A.Z * A.Z;
 end;
 
 function EulerToMat3(const Angles: TVec3): TMat3;

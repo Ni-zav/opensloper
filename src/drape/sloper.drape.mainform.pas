@@ -28,7 +28,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, fpjson, Sloper.API.AppLink,
-  Sloper.Core.PatternSources, Sloper.Core.DrapeFile, Sloper.Core.DrapePlacement, Sloper.Document.DrapeDocument, Sloper.Drape.View,
+  Sloper.Core.PatternSources, Sloper.Core.DrapeFile, Sloper.Core.DrapePlacement, Sloper.Core.Seam, Sloper.Document.DrapeDocument, Sloper.Drape.View,
   Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt, Sloper.UI.ProblemsPanel;
 
 type
@@ -48,6 +48,10 @@ type
     FBodySetLabel, FSelectionLabel: TLabel;
     FGapEdit: TFloatSpinEdit;
     FPositionEdits, FRotationEdits: array[0..2] of TFloatSpinEdit;
+    // The seams the selected piece can be aligned along, as listed
+    FSeamBox: TListBox;
+    FSeams: TSeamObjectArray;
+    FAlignButton, FFoldButton: TButton;
     // What each line of the Pieces tab stands for
     FPieceCopies: TDrapePieceCopyArray;
     FCommands: TCommandSet;
@@ -108,6 +112,8 @@ type
     procedure PieceBoxClick(Sender: TObject);
     procedure PieceBoxDoubleClick(Sender: TObject);
     procedure PlacementEditChange(Sender: TObject);
+    procedure AlignClick(Sender: TObject);
+    procedure SeamBoxClick(Sender: TObject);
     procedure ProblemSelect(Sender: TObject; const Key: string);
     procedure ViewKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     procedure TabsCollapsedChange(Sender: TObject);
@@ -189,6 +195,11 @@ resourcestring
   rsTurnX = 'About X, first:';
   rsTurnY = 'About Y:';
   rsTurnZ = 'About Z, last:';
+  rsSeamsGroup = 'Seams to placed pieces';
+  rsSeamsNone = 'No seam joins this piece to a placed one';
+  rsAlignToSeam = 'Align to Seam';
+  rsFoldOverSeam = 'Fold Over Seam';
+  rsAlignChange = 'Align to Seam';
   rsCopyCaption = '%s, %s (copy %d of %d)';
   rsCopyCaptionOne = '%s, %s';
   rsNoProblems = 'No problems';
@@ -543,6 +554,15 @@ begin
     FRotationEdits[Axis] := AddSpin(TURN_CAPTIONS[Axis], -HALF_TURN, HALF_TURN, TURN_STEP);
     FRotationEdits[Axis].OnChange := @PlacementEditChange;
   end;
+  BeginGroup(rsSeamsGroup);
+  FSeamBox := TListBox.Create(Self);
+  PlaceRow(FSeamBox);
+  FSeamBox.Height := LIST_HEIGHT;
+  FSeamBox.OnClick := @SeamBoxClick;
+  FSeamBox.OnDblClick := @AlignClick;
+  FAlignButton := AddButton(rsAlignToSeam, @AlignClick);
+  FFoldButton := AddButton(rsFoldOverSeam, @AlignClick);
+  FFoldButton.Tag := 1;
   EndGroup;
 end;
 
@@ -671,7 +691,8 @@ end;
 
 procedure TDrapeForm.RefreshPropertiesTab;
 var
-  Axis: integer;
+  Axis, Keep: integer;
+  Seam: TSeamObject;
   Placement: TDrapePlacement;
   Copy: TDrapePieceCopy;
   Has: boolean;
@@ -706,6 +727,25 @@ begin
       FRotationEdits[Axis].Value := Values[Axis];
       FRotationEdits[Axis].Enabled := Has;
     end;
+    FSeams := nil;
+    if Has then
+      FSeams := FDocument.Drape.AlignableSeams(Copy);
+    Keep := FSeamBox.ItemIndex;
+    FSeamBox.Items.BeginUpdate;
+    try
+      FSeamBox.Items.Clear;
+      for Seam in FSeams do
+        FSeamBox.Items.Add(Seam.DisplayName);
+      if Has and (Length(FSeams) = 0) then
+        FSeamBox.Items.Add(rsSeamsNone);
+    finally
+      FSeamBox.Items.EndUpdate;
+    end;
+    if Length(FSeams) > 0 then
+      FSeamBox.ItemIndex := EnsureRange(Keep, 0, High(FSeams));
+    FSeamBox.Enabled := Length(FSeams) > 0;
+    FAlignButton.Enabled := Length(FSeams) > 0;
+    FFoldButton.Enabled := Length(FSeams) > 0;
   finally
     FRefreshing := False;
   end;
@@ -1130,6 +1170,29 @@ begin
   FDocument.EndChange(PLACEMENT_MERGE_KEY);
 end;
 
+// Align (Tag 0) lays the piece beside its partner across the seam; Fold Over
+// (Tag 1) turns it over about the seam onto the partner
+procedure TDrapeForm.AlignClick(Sender: TObject);
+var
+  Copy: TDrapePieceCopy;
+  Placement: TDrapePlacement;
+  Index: integer;
+begin
+  Index := FSeamBox.ItemIndex;
+  if not SelectedCopy(Copy) or (Index < 0) or (Index > High(FSeams)) then
+    Exit;
+  if not FDocument.Drape.AlignToSeam(Copy, FSeams[Index], TComponent(Sender).Tag = 1, Placement) then
+    Exit;
+  FDocument.BeginChange(rsAlignChange);
+  FDocument.Drape.Place(Copy, Placement);
+  FDocument.EndChange;
+end;
+
+procedure TDrapeForm.SeamBoxClick(Sender: TObject);
+begin
+  RefreshCommands;
+end;
+
 procedure TDrapeForm.ProblemSelect(Sender: TObject; const Key: string);
 begin
   if StartsStr(ITEM_KEY, Key) then
@@ -1160,10 +1223,23 @@ begin
     ShowStatus(Format(rsReloaded, [Names]));
 end;
 
+// Comes to the front when asked to show the drape file open here. Nothing on
+// screen reads the preferences yet.
 function TDrapeForm.AppLinkMessage(const Method: string; Params: TJSONObject): boolean;
+var
+  DrapeFile: string;
 begin
-  // Nothing on screen reads the preferences yet
-  Result := Method = APP_LINK_PREFERENCES;
+  if Method = APP_LINK_PREFERENCES then
+    Exit(True);
+  Result := (Method = APP_LINK_SHOW) and GetJSONString(Params, APP_LINK_DRAPE_PARAM, DrapeFile) and
+    (FDocument.Drape.FileName <> '') and SameFileName(ExpandFileName(FDocument.Drape.FileName), ExpandFileName(DrapeFile));
+  if not Result then
+    Exit;
+  if WindowState = wsMinimized then
+    WindowState := wsNormal;
+  Application.Restore;
+  ShowOnTop;
+  Application.BringToFront;
 end;
 
 procedure TDrapeForm.CloseAsked(Sender: TObject; var CanClose: boolean);

@@ -65,6 +65,18 @@ type
 
   TDrapeItemArray = array of TDrapeItem;
 
+  // A line between the two sides of a seam, at its start, middle or end, as
+  // the view draws them so a piece far from its partner stands out
+  TDrapeSeamLink = record
+    Seam: TSeamObject;
+    // The item on side A
+    Item: integer;
+    From, Onto: TVec3;
+  end;
+
+  TDrapeSeamLinkArray = array of TDrapeSeamLink;
+  TSeamObjectArray = array of TSeamObject;
+
   // A problem with the file, and the index of the item it is about or -1
   TDrapeProblem = record
     Text: string;
@@ -88,6 +100,9 @@ type
     function GuessAlongSeams: integer;
     function GuessMirroredCopies: integer;
     function GuessRest: integer;
+    // A placed copy of the other side of Seam from Copy, preferring one on the
+    // same side of the body (left with left), as a seam joins them
+    function FindPartner(const Copy: TDrapePieceCopy; Seam: TSeamObject; out OnSideB: boolean; out PartnerIndex: integer): boolean;
     // The longest seam joining Copy to a placed copy that it can be aligned to
     function LongestPlacedSeam(const Copy: TDrapePieceCopy; out Seam: TSeamObject; out Length: double): boolean;
   public
@@ -133,6 +148,10 @@ type
     // copy, Gap apart; Folded turns it over about the seam. False when the
     // copy is not in the seam or no copy of the other side is placed.
     function AlignToSeam(const Copy: TDrapePieceCopy; Seam: TSeamObject; Folded: boolean; out Placement: TDrapePlacement): boolean;
+    // The seams, darts left out, that join Copy to a placed copy
+    function AlignableSeams(const Copy: TDrapePieceCopy): TSeamObjectArray;
+    // Three lines (start, middle, end) for each seam between placed copies
+    function SeamLinks: TDrapeSeamLinkArray;
     // Places every unplaced copy that can be, as a first guess: the largest
     // piece of each source in front of the body, pieces sewn to a placed one
     // along their seam, the other of a mirrored pair as its mirror image, and
@@ -147,6 +166,9 @@ type
 function CopyIsMirrored(Piece: TPieceObject; Copy: integer): boolean;
 function DrapePieceCopy(SourceId: integer; const PieceKey: string; Copy: integer): TDrapePieceCopy;
 function DrapeFileVersions: TFormatVersions;
+// What the drape app opens for a pattern: the drape file named after it when
+// there is one, else the pattern, which starts a new one
+function DrapeTargetFor(const PatternFile: string): string;
 
 resourcestring
   rsDrapeWrongFormat = 'This is not a drape file';
@@ -197,6 +219,13 @@ end;
 function SameCopy(const First, Second: TDrapePieceCopy): boolean;
 begin
   Result := (First.SourceId = Second.SourceId) and (First.PieceKey = Second.PieceKey) and (First.Copy = Second.Copy);
+end;
+
+function DrapeTargetFor(const PatternFile: string): string;
+begin
+  Result := ChangeFileExt(PatternFile, DRAPE_EXTENSION);
+  if not FileExists(Result) then
+    Result := PatternFile;
 end;
 
 function DrapeFileVersions: TFormatVersions;
@@ -599,42 +628,64 @@ end;
 // The ends of a seam side's run on one piece, in the seam's direction, as
 // drafted: from the start of its first entry on the piece to the end of its
 // last. False when the side has no entry on the piece.
-function SideEnds(Pattern: TPattern; Seam: TSeamObject; Piece: TPieceObject; OnSideB: boolean; out First, Last: TVec2): boolean;
+// The run of a seam side on one piece, in the seam's direction, as drafted:
+// from the start of its first entry on the piece, through the point halfway
+// along it, to the end of its last. False when the side has no entry on the
+// piece.
+function SideRun(Pattern: TPattern; Seam: TSeamObject; Piece: TPieceObject; OnSideB: boolean; out First, Middle, Last: TVec2): boolean;
 var
   Side: TSeamSide;
   Entry: TSeamEntry;
-  Edge: TEdgeObject;
+  Edges: array of TEdgeObject;
+  Forward: array of boolean;
   Node: TObject;
-  Found: boolean;
-  Start, Finish: TVec2;
+  Index: integer;
+  Total, Along: double;
+
+  function PointOn(EdgeIndex: integer; Distance: double): TVec2;
+  begin
+    if Forward[EdgeIndex] then
+      Result := Edges[EdgeIndex].PointAtLength(Distance)
+    else
+      Result := Edges[EdgeIndex].PointAtLength(Edges[EdgeIndex].Length - Distance);
+  end;
+
 begin
+  First := Vec2(0, 0);
+  Middle := First;
+  Last := First;
   if OnSideB then
     Side := Seam.SideB
   else
     Side := Seam.SideA;
-  Found := False;
-  First := Vec2(0, 0);
-  Last := Vec2(0, 0);
+  Edges := nil;
+  Forward := nil;
+  Total := 0;
   for Entry in Side do
     if Entry.PieceKey = Piece.Key then
     begin
       Node := Pattern.FindNode(Entry.EdgeKey);
       if not (Node is TEdgeObject) then
         Continue;
-      Edge := TEdgeObject(Node);
-      Start := Edge.PointAtLength(0);
-      Finish := Edge.PointAtLength(Edge.Length);
-      if not Seam.RunsForward(Piece, Entry, OnSideB) then
-      begin
-        Start := Edge.PointAtLength(Edge.Length);
-        Finish := Edge.PointAtLength(0);
-      end;
-      if not Found then
-        First := Start;
-      Last := Finish;
-      Found := True;
+      Insert(TEdgeObject(Node), Edges, Length(Edges));
+      Insert(Seam.RunsForward(Piece, Entry, OnSideB), Forward, Length(Forward));
+      Total := Total + TEdgeObject(Node).Length;
     end;
-  Result := Found;
+  if Length(Edges) = 0 then
+    Exit(False);
+  First := PointOn(0, 0);
+  Last := PointOn(High(Edges), Edges[High(Edges)].Length);
+  Along := Total / 2;
+  for Index := 0 to High(Edges) do
+  begin
+    if (Along <= Edges[Index].Length) or (Index = High(Edges)) then
+    begin
+      Middle := PointOn(Index, Min(Along, Edges[Index].Length));
+      Break;
+    end;
+    Along := Along - Edges[Index].Length;
+  end;
+  Result := True;
 end;
 
 function SideHasPiece(const Side: TSeamSide; const PieceKey: string): boolean;
@@ -647,22 +698,17 @@ begin
   Result := False;
 end;
 
-function TDrape.AlignToSeam(const Copy: TDrapePieceCopy; Seam: TSeamObject; Folded: boolean; out Placement: TDrapePlacement): boolean;
+function TDrape.FindPartner(const Copy: TDrapePieceCopy; Seam: TSeamObject; out OnSideB: boolean; out PartnerIndex: integer): boolean;
 var
   Piece, Partner: TPieceObject;
-  OnSideB: boolean;
   Other: TSeamSide;
   Entry: TSeamEntry;
-  PartnerCopy, Candidate: TDrapePieceCopy;
-  Index, PartnerIndex: integer;
+  Candidate: TDrapePieceCopy;
+  Index: integer;
   Mirrored: boolean;
-  EdgeStart, EdgeEnd, PartnerStart, PartnerEnd, PartnerAnchor: TVec2;
-  PartnerMirrored: boolean;
-  Partnered: TDrapePlacement;
-  Pattern: TPattern;
 begin
-  Placement := Default(TDrapePlacement);
-  PartnerCopy := Default(TDrapePieceCopy);
+  PartnerIndex := -1;
+  OnSideB := False;
   if not FindPiece(Copy, Piece) or not CanPlace(Piece) then
     Exit(False);
   OnSideB := SideHasPiece(Seam.SideB, Piece.Key) and not SideHasPiece(Seam.SideA, Piece.Key);
@@ -675,8 +721,6 @@ begin
   Mirrored := CopyIsMirrored(Piece, Copy.Copy);
   // A placed copy of the other side, preferring one on the same side of the
   // body (left with left) as a seam joins
-  PartnerIndex := -1;
-  Partner := nil;
   for Entry in Other do
     for Index := 0 to High(Items) do
     begin
@@ -685,25 +729,102 @@ begin
         Continue;
       if not FindPiece(Candidate, Partner) or not CanPlace(Partner) then
         Continue;
-      if (PartnerIndex < 0) or (CopyIsMirrored(Partner, Candidate.Copy) = Mirrored) then
-      begin
+      if (PartnerIndex < 0) or ((CopyIsMirrored(Partner, Candidate.Copy) = Mirrored) and
+        (CopyIsMirrored(Partner, Items[PartnerIndex].Piece.Copy) <> Mirrored)) then
         PartnerIndex := Index;
-        PartnerCopy := Candidate;
-      end;
     end;
-  if (PartnerIndex < 0) or not FindPiece(PartnerCopy, Partner) then
+  Result := PartnerIndex >= 0;
+end;
+
+function TDrape.AlignToSeam(const Copy: TDrapePieceCopy; Seam: TSeamObject; Folded: boolean; out Placement: TDrapePlacement): boolean;
+var
+  Piece, Partner: TPieceObject;
+  OnSideB, Mirrored, PartnerMirrored: boolean;
+  PartnerIndex: integer;
+  EdgeStart, EdgeMiddle, EdgeEnd, PartnerStart, PartnerMiddle, PartnerEnd, PartnerAnchor: TVec2;
+  Partnered: TDrapePlacement;
+  Pattern: TPattern;
+begin
+  Placement := Default(TDrapePlacement);
+  if not FindPartner(Copy, Seam, OnSideB, PartnerIndex) or not FindPiece(Copy, Piece) or not FindPiece(Items[PartnerIndex].Piece, Partner) then
     Exit(False);
   Pattern := FindSource(Copy.SourceId).Pattern;
-  if not SideEnds(Pattern, Seam, Piece, OnSideB, EdgeStart, EdgeEnd) or not SideEnds(Pattern, Seam, Partner, not OnSideB, PartnerStart, PartnerEnd) then
+  if not SideRun(Pattern, Seam, Piece, OnSideB, EdgeStart, EdgeMiddle, EdgeEnd) or not SideRun(Pattern, Seam, Partner, not
+    OnSideB, PartnerStart, PartnerMiddle, PartnerEnd) then
     Exit(False);
+  Mirrored := CopyIsMirrored(Piece, Copy.Copy);
   Partnered := Items[PartnerIndex].Placement;
-  PartnerMirrored := CopyIsMirrored(Partner, PartnerCopy.Copy);
+  PartnerMirrored := CopyIsMirrored(Partner, Items[PartnerIndex].Piece.Copy);
   PartnerAnchor := PieceAnchor(Partner);
   Placement := AlignedPlacement(PlacePoint(PartnerStart, PartnerAnchor, PartnerMirrored, Partnered),
     PlacePoint(PartnerEnd, PartnerAnchor, PartnerMirrored, Partnered),
     PlacePoint(PolygonMiddle(PlacedSeamLine(Partner)), PartnerAnchor, PartnerMirrored, Partnered), PlacedNormal(Partnered),
     EdgeStart, EdgeEnd, PolygonMiddle(PlacedSeamLine(Piece)), PieceAnchor(Piece), Mirrored, Gap, Folded);
   Result := True;
+end;
+
+function IsDart(Seam: TSeamObject; const PieceKey: string): boolean;
+begin
+  Result := SideHasPiece(Seam.SideA, PieceKey) and SideHasPiece(Seam.SideB, PieceKey);
+end;
+
+function TDrape.AlignableSeams(const Copy: TDrapePieceCopy): TSeamObjectArray;
+var
+  Source: TPatternSource;
+  Index, PartnerIndex: integer;
+  Seam: TSeamObject;
+  OnSideB: boolean;
+begin
+  Result := nil;
+  Source := FindSource(Copy.SourceId);
+  if not Assigned(Source) or not Assigned(Source.Pattern) then
+    Exit;
+  for Index := 0 to Source.Pattern.ObjectCount - 1 do
+    if Source.Pattern.Objects[Index] is TSeamObject then
+    begin
+      Seam := TSeamObject(Source.Pattern.Objects[Index]);
+      if (Seam.State = esValid) and Seam.UsesPiece(Copy.PieceKey) and not IsDart(Seam, Copy.PieceKey) and
+        FindPartner(Copy, Seam, OnSideB, PartnerIndex) then
+        Insert(Seam, Result, Length(Result));
+    end;
+end;
+
+function TDrape.SeamLinks: TDrapeSeamLinkArray;
+var
+  ItemIndex, PartnerIndex, Index: integer;
+  Copy: TDrapePieceCopy;
+  Seam: TSeamObject;
+  Piece, Partner: TPieceObject;
+  OnSideB: boolean;
+  Pattern: TPattern;
+  Own, Theirs: array[0..2] of TVec2;
+  Link: TDrapeSeamLink;
+begin
+  Result := nil;
+  for ItemIndex := 0 to High(Items) do
+  begin
+    Copy := Items[ItemIndex].Piece;
+    if not FindPiece(Copy, Piece) then
+      Continue;
+    Pattern := FindSource(Copy.SourceId).Pattern;
+    for Seam in AlignableSeams(Copy) do
+    begin
+      // Once per seam and pair: from the copy on side A
+      if not FindPartner(Copy, Seam, OnSideB, PartnerIndex) or OnSideB or not FindPiece(Items[PartnerIndex].Piece, Partner) then
+        Continue;
+      if not SideRun(Pattern, Seam, Piece, False, Own[0], Own[1], Own[2]) or not SideRun(Pattern, Seam, Partner, True, Theirs[0], Theirs[1], Theirs[2]) then
+        Continue;
+      for Index := 0 to 2 do
+      begin
+        Link.Seam := Seam;
+        Link.Item := ItemIndex;
+        Link.From := PlacePoint(Own[Index], PieceAnchor(Piece), CopyIsMirrored(Piece, Copy.Copy), Items[ItemIndex].Placement);
+        Link.Onto := PlacePoint(Theirs[Index], PieceAnchor(Partner), CopyIsMirrored(Partner, Items[PartnerIndex].Piece.Copy),
+          Items[PartnerIndex].Placement);
+        Insert(Link, Result, Length(Result));
+      end;
+    end;
+  end;
 end;
 
 function TDrape.LongestPlacedSeam(const Copy: TDrapePieceCopy; out Seam: TSeamObject; out Length: double): boolean;
@@ -725,7 +846,7 @@ begin
       // A dart joins a piece to itself, which places nothing
       if not Candidate.UsesPiece(Copy.PieceKey) or (Candidate.State <> esValid) then
         Continue;
-      if SideHasPiece(Candidate.SideA, Copy.PieceKey) and SideHasPiece(Candidate.SideB, Copy.PieceKey) then
+      if IsDart(Candidate, Copy.PieceKey) then
         Continue;
       if (Candidate.LengthA > Length) and AlignToSeam(Copy, Candidate, False, Placement) then
       begin

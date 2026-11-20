@@ -29,7 +29,7 @@ uses
   Sloper.Core.Shortcuts;
 
 type
-  TAppIcon = (aiNew, aiOpen, aiSave, aiSaveAs, aiMeasurements, aiPublish, aiExportDraft, aiQuit,
+  TAppIcon = (aiNew, aiOpen, aiSave, aiSaveAs, aiMeasurements, aiPublish, aiDrape, aiExportDraft, aiQuit,
     aiUndo, aiRedo, aiCut, aiCopy, aiPaste, aiDelete,
     aiZoomIn, aiZoomOut, aiFit, aiTrueSize, aiZoomArea, aiSidePanel, aiLabels, aiPieceFills, aiAbout, aiUserGuide,
     aiSelect, aiPoint, aiLine, aiCurve, aiPiece, aiNotch, aiSeam,
@@ -61,7 +61,7 @@ type
 
 const
   APP_ICON_NAMES: array[TAppIcon] of string = ('file-plus', 'folder-open', 'device-floppy', 'file-pencil',
-    'ruler-measure', 'printer', 'file-type-svg', 'logout',
+    'ruler-measure', 'printer', 'hanger', 'file-type-svg', 'logout',
     'arrow-back-up', 'arrow-forward-up', 'cut', 'copy', 'clipboard', 'trash',
     'zoom-in', 'zoom-out', 'zoom-scan', 'zoom-reset', 'zoom-in-area', 'layout-sidebar-right', 'tag', 'bucket', 'info-circle', 'help-circle',
     'pointer', 'point', 'line', 'vector-bezier', 'polygon', 'triangle-inverted', 'needle-thread',
@@ -139,6 +139,7 @@ resourcestring
   rsIconOpenSet = 'Open Set…';
   rsIconEditSet = 'Edit in Measurements App…';
   rsIconPublish = 'Publish…';
+  rsIconDrape = 'Drape…';
   rsIconExportDraft = 'Export Draft SVG…';
   rsIconCut = 'Cut';
   rsIconCopy = 'Copy';
@@ -223,6 +224,7 @@ resourcestring
   rsIconOpenSetText = 'Choose the measurement set the pattern is drafted from';
   rsIconEditSetText = 'Open the measurement set in the measurements app, checked against the pattern';
   rsIconPublishText = 'Lay out and print the pattern in the publish app';
+  rsIconDrapeText = 'Place the pattern''s pieces on a body in the drape app, for draping in Blender';
   rsIconExportDraftText = 'Save the draft as an SVG drawing, as it shows on the canvas';
   rsIconCutText = 'Copy the selection and delete it';
   rsIconCopyText = 'Copy the selection, to paste in this or another pattern';
@@ -413,6 +415,7 @@ begin
   AddKey(aiMeasurements, rsIconOpenSet, kcOpenMeasurements, rsIconOpenSetText);
   Menu := rsIconMenuFile;
   AddKey(aiPublish, rsIconPublish, kcPublish, rsIconPublishText);
+  AddKey(aiDrape, rsIconDrape, kcDrape, rsIconDrapeText);
   Add(aiExportDraft, rsIconExportDraft, rsIconExportDraftText);
 
   Start(saDesign, ipTools, rsIconMenuTools);

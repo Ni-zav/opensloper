@@ -78,6 +78,7 @@ type
     procedure MenuFileSaveAsClick(Sender: TObject);
     procedure MenuFileMeasurementsClick(Sender: TObject);
     procedure MenuFilePublishClick(Sender: TObject);
+    procedure MenuFileDrapeClick(Sender: TObject);
     procedure MenuFileExportDraftClick(Sender: TObject);
     procedure MenuFileQuitClick(Sender: TObject);
     procedure MenuEditUndoClick(Sender: TObject);
@@ -115,7 +116,7 @@ type
     FUndoAction, FRedoAction, FPieceFillsAction, FProblemsAction, FDependentsAction, FSideAction, FRulersAction, FAnnotationsAction: TAction;
     FHidePieceAction, FShowPiecesAction, FIsolateAction, FBringToFrontAction, FSendToBackAction: TAction;
     // Enabled only while there is something for them to work on
-    FSaveAction, FSaveAsAction, FExportDraftAction, FPublishAction, FFitAction: TAction;
+    FSaveAction, FSaveAsAction, FExportDraftAction, FPublishAction, FDrapeAction, FFitAction: TAction;
     FDeleteAction, FLockAction, FUnlockAction: TAction;
     FRulerTop: TPanel;
     FRulerCorner: TRulerCorner;
@@ -264,7 +265,7 @@ uses
   Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.UI.ObjectList, Sloper.Core.JSON, Sloper.Output.DraftSVG,
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
-  Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.Evaluator, Sloper.Core.Variables,
+  Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Core.Evaluator, Sloper.Core.Variables,
   Sloper.API.Server, Sloper.API.Endpoint;
 
 const
@@ -300,6 +301,7 @@ resourcestring
   rsMenuMeasurementsOpen = '&Open Set...';
   rsMenuMeasurementsEdit = '&Edit in Measurements App...';
   rsMenuFilePublish = '&Publish...';
+  rsMenuFileDrape = '&Drape...';
   rsMenuFileExportDraft = 'E&xport Draft SVG...';
   rsExportDraftFilter = 'SVG (*.svg)|*.svg';
   rsExportDraftUnnamed = 'draft';
@@ -311,6 +313,9 @@ resourcestring
   rsMeasurementsAppFailed = 'The measurements app could not be started: %s';
   rsMeasurementsReloaded = '%s changed, so it was read again';
   rsPublishFailed = 'The publish app could not be started: %s';
+  rsDrapeSaveFirst = 'The drape app reads the saved file. Save your changes first?';
+  rsDrapeMissing = 'The drape app (opensloper-drape) was not found beside this program.';
+  rsDrapeFailed = 'The drape app could not be started: %s';
   rsMenuFileQuit = '&Quit';
   rsMenuEdit = '&Edit';
   rsMenuEditUndo = '&Undo';
@@ -819,7 +824,8 @@ begin
 end;
 
 // Files opened from the desktop while the app runs: on macOS the app bundle
-// is the design app, so measurement files and layouts go to their own apps
+// is the design app, so measurement files, layouts and drape files go to
+// their own apps
 procedure TMainForm.SystemOpenFiles(Sender: TObject; const FileNames: array of string);
 var
   FileName, Extension: string;
@@ -831,6 +837,8 @@ begin
       StartApp(TAppPaths.MeasurementsProgram, rsMeasurementsAppMissing, rsMeasurementsAppFailed, [FileName])
     else if Extension = LAYOUT_EXTENSION then
       StartApp(TAppPaths.PublishProgram, rsPublishMissing, rsPublishFailed, [FileName])
+    else if Extension = DRAPE_EXTENSION then
+      StartApp(TAppPaths.DrapeProgram, rsDrapeMissing, rsDrapeFailed, [FileName])
     else if ConfirmDiscard then
       OpenFile(FileName);
   end;
@@ -898,6 +906,8 @@ end;
 
 // The File, Edit and View commands from the form, and the top toolbar
 procedure TMainForm.CreateCommands;
+var
+  DrapeItem: TMenuItem;
 begin
   MenuFileNew.Action := FCommands.NewAction(rsMenuFileNew, aiNew, @MenuFileNewClick, CommandShortCut(kcNew));
   MenuFileOpen.Action := FCommands.NewAction(rsMenuFileOpen, aiOpen, @MenuFileOpenClick, CommandShortCut(kcOpen));
@@ -914,6 +924,11 @@ begin
   FCommands.AddMenuItem(MenuFileMeasurements, FCommands.NewAction(rsMenuMeasurementsEdit, aiOpen, @MeasurementsEditSet));
   FPublishAction := FCommands.NewAction(rsMenuFilePublish, aiPublish, @MenuFilePublishClick, CommandShortCut(kcPublish));
   MenuFilePublish.Action := FPublishAction;
+  // Built here, beside Publish..., as the form file does not have it
+  FDrapeAction := FCommands.NewAction(rsMenuFileDrape, aiDrape, @MenuFileDrapeClick, CommandShortCut(kcDrape));
+  DrapeItem := TMenuItem.Create(MenuFile);
+  DrapeItem.Action := FDrapeAction;
+  MenuFile.Insert(MenuFile.IndexOf(MenuFilePublish) + 1, DrapeItem);
   FExportDraftAction := FCommands.NewAction(rsMenuFileExportDraft, aiExportDraft, @MenuFileExportDraftClick);
   MenuFileExportDraft.Action := FExportDraftAction;
   MenuFileQuit.Action := FCommands.NewAction(rsMenuFileQuit, aiQuit, @MenuFileQuitClick, CommandShortCut(kcQuit));
@@ -965,6 +980,7 @@ begin
   FCommands.AddDivider;
   FCommands.AddButton(FOpenSetAction);
   FCommands.AddButton(MenuFilePublish.Action);
+  FCommands.AddButton(FDrapeAction);
   FCommands.AddButton(MenuFileExportDraft.Action);
 end;
 
@@ -1795,6 +1811,7 @@ begin
   FSaveAsAction.Enabled := FDocument.Modified or (FDocument.FileName <> '');
   FExportDraftAction.Enabled := HasObjects;
   FPublishAction.Enabled := Length(FDocument.Pattern.PieceList) > 0;
+  FDrapeAction.Enabled := FPublishAction.Enabled;
   FFitAction.Enabled := HasObjects;
   FDeleteAction.Enabled := HasSelection;
   FLockAction.Enabled := HasSelection;
@@ -2079,6 +2096,41 @@ begin
   end;
   if not Shown then
     StartApp(TAppPaths.PublishProgram, rsPublishMissing, rsPublishFailed, [PublishTargetFor(FDocument.FileName)]);
+end;
+
+// As Publish...: a drape window already showing the pattern's drape file comes
+// to the front; only when none does is another started
+procedure TMainForm.MenuFileDrapeClick(Sender: TObject);
+var
+  Params: TJSONObject;
+  Shown: boolean;
+begin
+  if TAppPaths.DrapeProgram = '' then
+  begin
+    MessageDlg(rsDrapeMissing, mtError, [mbOK], 0);
+    Exit;
+  end;
+  if FDocument.FileName = '' then
+  begin
+    if not Save then
+      Exit;
+  end
+  else if FDocument.Modified then
+    case MessageDlg(rsDrapeSaveFirst, mtConfirmation, [mbYes, mbNo, mbCancel], 0) of
+      mrYes:
+        if not Save then
+          Exit;
+      mrCancel:
+        Exit;
+    end;
+  Params := TJSONObject.Create([APP_LINK_DRAPE_PARAM, ExpandFileName(ChangeFileExt(FDocument.FileName, DRAPE_EXTENSION))]);
+  try
+    Shown := SendToApp(DRAPE_KIND, APP_LINK_SHOW, Params);
+  finally
+    FreeAndNil(Params);
+  end;
+  if not Shown then
+    StartApp(TAppPaths.DrapeProgram, rsDrapeMissing, rsDrapeFailed, [DrapeTargetFor(FDocument.FileName)]);
 end;
 
 procedure TMainForm.MenuFileQuitClick(Sender: TObject);

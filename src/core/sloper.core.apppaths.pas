@@ -61,6 +61,9 @@ type
     // below it or beside its folder. Empty when it is in none of these.
     class function PublishProgram: string;
     class function PublishProgramIn(const Folder: string): string;
+    // opensloper-drape, found the same way; '' when it is not there
+    class function DrapeProgram: string;
+    class function DrapeProgramIn(const Folder: string): string;
     // opensloper-measurements, found the same way; '' when it is not there
     class function MeasurementsProgram: string;
     class function MeasurementsProgramIn(const Folder: string): string;
@@ -116,6 +119,7 @@ const
   SETTINGS_FILE_NAME = 'settings.json';
   RECENT_FILES_FILE_NAME = 'recent-files.json';
   PUBLISH_FOLDER = 'publish';
+  DRAPE_FOLDER = 'drape';
   MEASUREMENTS_FOLDER = 'measurements';
   DATA_FOLDER = 'data';
   CATALOGUE_FILE_NAME = 'measurement-catalogue.json';
@@ -128,9 +132,11 @@ const
   BUNDLE_LIBRARY_FOLDER = 'Frameworks';
   {$IFDEF WINDOWS}
   PUBLISH_FILE_NAME = 'opensloper-publish.exe';
+  DRAPE_FILE_NAME = 'opensloper-drape.exe';
   MEASUREMENTS_FILE_NAME = 'opensloper-measurements.exe';
   {$ELSE}
   PUBLISH_FILE_NAME = 'opensloper-publish';
+  DRAPE_FILE_NAME = 'opensloper-drape';
   MEASUREMENTS_FILE_NAME = 'opensloper-measurements';
   {$ENDIF}
   // Beside the program, one or two folders up (the source tree), and in
@@ -299,6 +305,16 @@ end;
 class function TAppPaths.PublishProgramIn(const Folder: string): string;
 begin
   Result := CompanionIn(Folder, PUBLISH_FOLDER, PUBLISH_FILE_NAME);
+end;
+
+class function TAppPaths.DrapeProgram: string;
+begin
+  Result := DrapeProgramIn(ExeDir);
+end;
+
+class function TAppPaths.DrapeProgramIn(const Folder: string): string;
+begin
+  Result := CompanionIn(Folder, DRAPE_FOLDER, DRAPE_FILE_NAME);
 end;
 
 class function TAppPaths.CatalogueFile: string;

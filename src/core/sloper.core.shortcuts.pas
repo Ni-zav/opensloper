@@ -38,7 +38,7 @@ type
     skMouse);   // a mouse action, perhaps with keys held
 
   TKeyCommand = (
-    kcNew, kcOpen, kcSave, kcSaveAs, kcImport, kcExportMeasurements, kcExportPDF, kcPrint, kcOpenMeasurements, kcPublish, kcQuit,
+    kcNew, kcOpen, kcSave, kcSaveAs, kcImport, kcExportMeasurements, kcExportPDF, kcPrint, kcOpenMeasurements, kcPublish, kcDrape, kcQuit,
     kcUndo, kcRedo, kcCut, kcCopy, kcPaste, kcSelectNext, kcSelectPrevious, kcPreferences,
     kcZoomIn, kcZoomOut, kcFit, kcTrueSize, kcRulers, kcReload,
     kcToolSelect, kcToolZoom, kcToolPoint, kcToolLine, kcToolCurve, kcToolCircle, kcToolRectangle, kcToolPiece, kcToolNotch,
@@ -48,7 +48,7 @@ type
     kcEditCell, kcCommitCell, kcRevertCell,
     kcScroll, kcScrollSideways, kcWheelZoom, kcPublishWheelZoom, kcPanMiddle, kcPanSpace, kcCycle, kcExtendCurve, kcPickList,
     kcExcludePage,
-    kcGuessPlacements, kcUnplacePiece, kcDrapeWheelZoom, kcDrapeOrbit, kcDrapeMove);
+    kcGuessPlacements, kcUnplacePiece, kcDrapeWheelZoom, kcDrapeOrbit, kcDrapeMove, kcDrapeRoundBody, kcDrapeTurn, kcDrapeTurnSnap);
 
   // smMod is Ctrl, or Cmd on macOS; smCtrl is the Control key on every
   // platform, for the few keys macOS keeps for itself with Cmd (Cmd+Tab)
@@ -87,6 +87,7 @@ resourcestring
   rsKeyPrint = 'Print the layout';
   rsKeyOpenMeasurements = 'Open a measurement set for the pattern';
   rsKeyPublish = 'Lay out and print the pattern in the publish app';
+  rsKeyDrape = 'Place the pattern''s pieces on a body in the drape app';
   rsKeyQuit = 'Quit';
   rsKeyUndo = 'Undo';
   rsKeyRedo = 'Redo';
@@ -143,6 +144,9 @@ resourcestring
   rsKeyDrapeWheelZoom = 'Zoom in or out';
   rsKeyDrapeOrbit = 'Drag away from the pieces to turn the view round the body';
   rsKeyDrapeMove = 'Drag a piece to move it across the view; with Shift, towards or away from you';
+  rsKeyDrapeRoundBody = 'Move the piece round the body, keeping its distance and turning it to keep facing out';
+  rsKeyDrapeTurn = 'Turn the piece about its anchor: across the view about the vertical, up and down about the view''s horizontal';
+  rsKeyDrapeTurnSnap = 'Turn the piece in 15° steps';
 
 implementation
 
@@ -175,6 +179,7 @@ begin
     kcPrint: Result := Info('Mod+P', skCommand, sgFile, [saPublish], rsKeyPrint);
     kcOpenMeasurements: Result := Info('Mod+M', skCommand, sgFile, [saDesign], rsKeyOpenMeasurements);
     kcPublish: Result := Info('Mod+P', skCommand, sgFile, [saDesign], rsKeyPublish);
+    kcDrape: Result := Info('Mod+D', skCommand, sgFile, [saDesign], rsKeyDrape);
     kcQuit: Result := Info('Mod+Q', skCommand, sgFile, ALL_APPS, rsKeyQuit);
     kcUndo: Result := Info('Mod+Z', skCommand, sgEdit, ALL_APPS, rsKeyUndo);
     kcRedo: Result := Info('Mod+Shift+Z', skCommand, sgEdit, ALL_APPS, rsKeyRedo);
@@ -230,6 +235,9 @@ begin
     kcDrapeWheelZoom: Result := Info('Wheel', skMouse, sgMouse, [saDrape], rsKeyDrapeWheelZoom);
     kcDrapeOrbit: Result := Info('Drag', skMouse, sgMouse, [saDrape], rsKeyDrapeOrbit);
     kcDrapeMove: Result := Info('Drag a piece', skMouse, sgMouse, [saDrape], rsKeyDrapeMove);
+    kcDrapeRoundBody: Result := Info('Mod+Drag a piece', skMouse, sgMouse, [saDrape], rsKeyDrapeRoundBody);
+    kcDrapeTurn: Result := Info('Right-drag a piece', skMouse, sgMouse, [saDrape], rsKeyDrapeTurn);
+    kcDrapeTurnSnap: Result := Info('Shift+Right-drag a piece', skMouse, sgMouse, [saDrape], rsKeyDrapeTurnSnap);
   end;
 end;
 

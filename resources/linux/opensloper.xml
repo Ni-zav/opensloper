@@ -20,4 +20,10 @@
     <icon name="opensloper-publish"/>
     <glob pattern="*.slayout"/>
   </mime-type>
+  <mime-type type="application/x-opensloper-drape">
+    <comment>OpenSloper drape</comment>
+    <sub-class-of type="application/json"/>
+    <icon name="opensloper-drape"/>
+    <glob pattern="*.sdrape"/>
+  </mime-type>
 </mime-info>

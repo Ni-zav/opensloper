@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OpenSloper Drape
+GenericName=Pattern Draping
+Comment=Place pattern pieces on a dress form for draping in Blender
+Exec=opensloper-drape %f
+Icon=opensloper-drape
+Terminal=false
+Categories=Graphics;Engineering;
+StartupWMClass=opensloper-drape
+MimeType=application/x-opensloper-drape;

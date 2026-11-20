@@ -39,6 +39,7 @@ type
     procedure TestEulerOrderIsXYZ;
     procedure TestEulerRoundTrip;
     procedure TestEulerGimbalLock;
+    procedure TestTurnAboutAxis;
   end;
 
   TTestDrapePlacement = class(TOSTestCase)
@@ -63,6 +64,9 @@ type
     procedure TestDragFollowsScreen;
     procedure TestPerspectiveShrinksFarPoints;
     procedure TestAlignedPlacementBesideItsPartner;
+    procedure TestTurnedPlacementKeepsAnchor;
+    procedure TestRoundBodyKeepsFacingOut;
+    procedure TestSnappedAngle;
   end;
 
   TTestBodyForm = class(TOSTestCase)
@@ -111,6 +115,8 @@ type
     procedure TestSceneBackToFront;
     procedure TestScenePicksPieces;
     procedure TestSceneWrongSide;
+    procedure TestAlignableSeams;
+    procedure TestSeamLinks;
     procedure TestSceneWithoutBody;
   end;
 
@@ -201,7 +207,59 @@ begin
       AssertNear(Format('at %d,%d', [Row, Col]), Original.M[Row, Col], Again.M[Row, Col], 1e-9);
 end;
 
+procedure TTestGeometry3.TestTurnAboutAxis;
+var
+  Index: integer;
+  Turn, Expected: TMat3;
+  Row, Col: integer;
+begin
+  for Index := -2 to 2 do
+  begin
+    Turn := Mat3TurnAbout(Vec3(0, 0, 5), Index * 40);
+    Expected := Mat3TurnZ(Index * 40);
+    for Row := 0 to 2 do
+      for Col := 0 to 2 do
+        AssertNear('about Z', Expected.M[Row, Col], Turn.M[Row, Col], 1e-12);
+  end;
+  AssertVecNear('about the diagonal, a third turn', Vec3(0, 1, 0), Mat3TurnAbout(Vec3(1, 1, 1), 120).Apply(Vec3(1, 0, 0)), 1e-9);
+  AssertVecNear('no axis', Vec3(1, 2, 3), Mat3TurnAbout(Vec3(0, 0, 0), 30).Apply(Vec3(1, 2, 3)));
+end;
+
 { TTestDrapePlacement }
+
+procedure TTestDrapePlacement.TestTurnedPlacementKeepsAnchor;
+var
+  Placement, Turned: TDrapePlacement;
+begin
+  Placement := UprightPlacement(Vec3(100, -200, 900));
+  Turned := TurnedPlacement(Placement, Vec3(0, 0, 1), 90);
+  AssertVecNear('anchor stays', Placement.Position, Turned.Position);
+  AssertVecNear('faces the body''s left', Vec3(1, 0, 0), PlacedNormal(Turned), 1e-9);
+  // Turning about the view's right tips it back
+  Turned := TurnedPlacement(Placement, Vec3(1, 0, 0), 30);
+  AssertNear('tipped', 30, Turned.Rotation.X, 1e-9);
+end;
+
+procedure TTestDrapePlacement.TestRoundBodyKeepsFacingOut;
+var
+  Placement, Moved: TDrapePlacement;
+begin
+  Placement := UprightPlacement(Vec3(0, -200, 900));
+  Moved := RoundBodyPlacement(Placement, 90);
+  AssertVecNear('to the body''s left', Vec3(200, 0, 900), Moved.Position, 1e-9);
+  AssertVecNear('facing out', Vec3(1, 0, 0), PlacedNormal(Moved), 1e-9);
+  Moved := RoundBodyPlacement(Placement, 180);
+  AssertVecNear('behind', Vec3(0, 200, 900), Moved.Position, 1e-9);
+  AssertVecNear('facing the back', Vec3(0, 1, 0), PlacedNormal(Moved), 1e-9);
+end;
+
+procedure TTestDrapePlacement.TestSnappedAngle;
+begin
+  AssertNear('down', 30, SnappedAngle(37, 15));
+  AssertNear('up', 45, SnappedAngle(38, 15));
+  AssertNear('negative', -15, SnappedAngle(-16, 15));
+  AssertNear('no step', 37, SnappedAngle(37, 0));
+end;
 
 procedure TTestDrapePlacement.SetUp;
 begin
@@ -936,6 +994,31 @@ begin
   // Above the pieces there is only the form, which is not picked
   Camera.Project(Vec3(0, 0, DefaultBodyMeasures.ShoulderHeight), Screen, Depth);
   AssertEquals('nothing', -1, DrapePieceAt(Faces, Screen));
+end;
+
+procedure TTestDrapeFile.TestAlignableSeams;
+begin
+  AssertEquals('nothing placed', 0, Length(FDrape.AlignableSeams(BackCopy)));
+  FDrape.Place(FrontCopy, UprightPlacement(Vec3(0, -170, 1000)));
+  AssertEquals('the side seam', 1, Length(FDrape.AlignableSeams(BackCopy)));
+  AssertSame('it', FSideSeam, FDrape.AlignableSeams(BackCopy)[0]);
+end;
+
+procedure TTestDrapeFile.TestSeamLinks;
+var
+  Links: TDrapeSeamLinkArray;
+  Link: TDrapeSeamLink;
+begin
+  AssertEquals('none before placing', 0, Length(FDrape.SeamLinks));
+  FDrape.Body.Kind := bkNone;
+  FDrape.GuessPlacements;
+  Links := FDrape.SeamLinks;
+  AssertEquals('start, middle and end', 3, Length(Links));
+  // Laid flat beside each other, each side's point is the gap from the other's
+  for Link in Links do
+    AssertNear('the gap', FDrape.Gap, Distance3(Link.From, Link.Onto), 1e-6);
+  AssertNear('middle halfway down', (Links[0].From.Z + Links[2].From.Z) / 2, Links[1].From.Z, 1e-6);
+  AssertEquals('on screen', 3, Length(DrapeSceneLines(FDrape, DefaultDrapeCamera)));
 end;
 
 procedure TTestDrapeFile.TestSceneWrongSide;

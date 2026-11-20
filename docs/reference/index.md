@@ -14,9 +14,8 @@ the program itself, so they always match the version they were built with.
   [measurements](schemas/measurements.schema.json),
   [layout](schemas/layout.schema.json), [drape](schemas/drape.schema.json)) to
   check a file against.
-- [Keyboard shortcuts](shortcuts.md): the keys and mouse actions of the three
-  apps.
-- [Icons](icons.md): what each button and menu icon of the three apps does,
+- [Keyboard shortcuts](shortcuts.md): the keys and mouse actions of the apps.
+- [Icons](icons.md): what each button and menu icon of the apps does,
   where to find it, and its keys.
 - [Command line](cli.md): `opensloper-cli` commands, options and exit codes.
 - [Automation API](api.md): the JSON-RPC methods `opensloper-cli serve` answers,

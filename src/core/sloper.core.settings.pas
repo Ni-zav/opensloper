@@ -97,10 +97,11 @@ type
     NameColumnShare: double;
     LabelMode: TLabelMode;
     ShowSidePanel: boolean;
-    // The tab open in the design app's side panel and in the publish app, by
-    // key; '' for the first. The apps leave a key they do not know.
+    // The tab open in the design app's side panel, the publish app and the
+    // drape app, by key; '' for the first. The apps leave a key they do not know.
     SideTab: string;
     PublishTab: string;
+    DrapeTab: string;
     // Rulers along the top and left of the drafting canvas
     ShowRulers: boolean;
     // Whether the drafting canvas fills pieces with their material
@@ -160,6 +161,9 @@ function SaveUserPublishTab(const Key: string; out ErrorMessage: string): boolea
 function SavePublishTabToFile(const FileName, Key: string; out ErrorMessage: string): boolean;
 // The publish app's open tab when it was last closed; '' when unknown
 function UserPublishTab: string;
+// The drape app's, as the publish app's
+function SaveUserDrapeTab(const Key: string; out ErrorMessage: string): boolean;
+function UserDrapeTab: string;
 
 resourcestring
   rsSettingsWrongFormat = 'This is not an OpenSloper settings file';
@@ -222,6 +226,7 @@ begin
   ShowSidePanel := True;
   SideTab := '';
   PublishTab := '';
+  DrapeTab := '';
   ShowRulers := True;
   ShowPieceFills := True;
   ShowProblems := True;
@@ -350,6 +355,8 @@ begin
       Obj.Add('sideTab', SideTab);
     if PublishTab <> '' then
       Obj.Add('publishTab', PublishTab);
+    if DrapeTab <> '' then
+      Obj.Add('drapeTab', DrapeTab);
     Obj.Add('showRulers', ShowRulers);
     Obj.Add('showPieceFills', ShowPieceFills);
     Obj.Add('showProblems', ShowProblems);
@@ -413,6 +420,8 @@ begin
       SideTab := TextValue;
     if GetJSONString(Obj, 'publishTab', TextValue) then
       PublishTab := TextValue;
+    if GetJSONString(Obj, 'drapeTab', TextValue) then
+      DrapeTab := TextValue;
     if GetJSONBoolean(Obj, 'showRulers', Shown) then
       ShowRulers := Shown;
     if GetJSONBoolean(Obj, 'showPieceFills', Shown) then
@@ -562,6 +571,36 @@ begin
   try
     Settings.LoadFromFile(TAppPaths.SettingsFile, Reason);
     Result := Settings.PublishTab;
+  finally
+    FreeAndNil(Settings);
+  end;
+end;
+
+function SaveUserDrapeTab(const Key: string; out ErrorMessage: string): boolean;
+var
+  Settings: TAppSettings;
+begin
+  TAppPaths.ForceDir(TAppPaths.ConfigDir);
+  Settings := TAppSettings.Create;
+  try
+    if not Settings.LoadFromFile(TAppPaths.SettingsFile, ErrorMessage) then
+      Exit(False);
+    Settings.DrapeTab := Key;
+    Result := Settings.SaveToFile(TAppPaths.SettingsFile, ErrorMessage);
+  finally
+    FreeAndNil(Settings);
+  end;
+end;
+
+function UserDrapeTab: string;
+var
+  Settings: TAppSettings;
+  Reason: string;
+begin
+  Settings := TAppSettings.Create;
+  try
+    Settings.LoadFromFile(TAppPaths.SettingsFile, Reason);
+    Result := Settings.DrapeTab;
   finally
     FreeAndNil(Settings);
   end;

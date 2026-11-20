@@ -33,7 +33,7 @@ uses
   SysUtils;
 
 type
-  TRecentList = (rlPatterns, rlMeasurements, rlLayouts);
+  TRecentList = (rlPatterns, rlMeasurements, rlLayouts, rlDrapes);
 
 const
   MAX_RECENT_FILES = 10;
@@ -86,7 +86,7 @@ uses
 const
   RECENT_FORMAT = 'opensloper-recent-files';
   RECENT_VERSION = 1;
-  LIST_NAMES: array[TRecentList] of string = ('design', 'measurements', 'publish');
+  LIST_NAMES: array[TRecentList] of string = ('design', 'measurements', 'publish', 'drape');
   // Between the folders of a relative path in the file, on every platform
   SAVED_DELIM = '/';
   PARENT_FOLDER = '..';

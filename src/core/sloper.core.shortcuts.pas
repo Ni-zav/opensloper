@@ -16,7 +16,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 }
 
-// The keys and mouse actions of the three apps, for the apps themselves and
+// The keys and mouse actions of the four apps, for the apps themselves and
 // the Keyboard shortcuts page. The apps take the keys of their menu commands
 // and drafting tools from here; the other keys are handled in the canvases
 // and listed here to be documented. No LCL dependency.
@@ -27,7 +27,7 @@ unit Sloper.Core.Shortcuts;
 interface
 
 type
-  TShortcutApp = (saDesign, saMeasurements, saPublish);
+  TShortcutApp = (saDesign, saMeasurements, saPublish, saDrape);
   TShortcutApps = set of TShortcutApp;
 
   TShortcutGroup = (sgFile, sgEdit, sgView, sgTools, sgCanvas, sgPanels, sgMouse);
@@ -47,7 +47,8 @@ type
     kcRemovePiece, kcClearSelection,
     kcEditCell, kcCommitCell, kcRevertCell,
     kcScroll, kcScrollSideways, kcWheelZoom, kcPublishWheelZoom, kcPanMiddle, kcPanSpace, kcCycle, kcExtendCurve, kcPickList,
-    kcExcludePage);
+    kcExcludePage,
+    kcGuessPlacements, kcUnplacePiece, kcDrapeWheelZoom, kcDrapeOrbit, kcDrapeMove);
 
   // smMod is Ctrl, or Cmd on macOS; smCtrl is the Control key on every
   // platform, for the few keys macOS keeps for itself with Cmd (Cmd+Tab)
@@ -137,6 +138,11 @@ resourcestring
   rsKeyPickList = 'With the Select tool, list everything under the pointer, to pick one; with a drawing tool, stop the ' +
     'line or curve';
   rsKeyExcludePage = 'Leave a page out of the print, or put it back';
+  rsKeyGuessPlacements = 'Place every piece not yet placed where it would likely go';
+  rsKeyUnplacePiece = 'Take the selected piece off the body, so it is left out; Backspace does the same';
+  rsKeyDrapeWheelZoom = 'Zoom in or out';
+  rsKeyDrapeOrbit = 'Drag away from the pieces to turn the view round the body';
+  rsKeyDrapeMove = 'Drag a piece to move it across the view; with Shift, towards or away from you';
 
 implementation
 
@@ -144,7 +150,7 @@ uses
   SysUtils, StrUtils;
 
 const
-  ALL_APPS = [saDesign, saMeasurements, saPublish];
+  ALL_APPS = [saDesign, saMeasurements, saPublish, saDrape];
 
 function Info(const AKeys: string; AKind: TShortcutKind; AGroup: TShortcutGroup; AApps: TShortcutApps;
   const ADescription: string): TShortcutInfo;
@@ -159,7 +165,7 @@ end;
 function ShortcutInfo(Command: TKeyCommand): TShortcutInfo;
 begin
   case Command of
-    kcNew: Result := Info('Mod+N', skCommand, sgFile, [saDesign, saMeasurements], rsKeyNew);
+    kcNew: Result := Info('Mod+N', skCommand, sgFile, [saDesign, saMeasurements, saDrape], rsKeyNew);
     kcOpen: Result := Info('Mod+O', skCommand, sgFile, ALL_APPS, rsKeyOpen);
     kcSave: Result := Info('Mod+S', skCommand, sgFile, ALL_APPS, rsKeySave);
     kcSaveAs: Result := Info('Mod+Shift+S', skCommand, sgFile, ALL_APPS, rsKeySaveAs);
@@ -178,12 +184,12 @@ begin
     kcSelectNext: Result := Info('Ctrl+Tab', skCommand, sgEdit, [saDesign], rsKeySelectNext);
     kcSelectPrevious: Result := Info('Ctrl+Shift+Tab', skCommand, sgEdit, [saDesign], rsKeySelectPrevious);
     kcPreferences: Result := Info('Mod+Comma', skCommand, sgEdit, ALL_APPS, rsKeyPreferences);
-    kcZoomIn: Result := Info('Mod+Plus', skCommand, sgView, [saDesign, saPublish], rsKeyZoomIn);
-    kcZoomOut: Result := Info('Mod+Minus', skCommand, sgView, [saDesign, saPublish], rsKeyZoomOut);
-    kcFit: Result := Info('Mod+0', skCommand, sgView, [saDesign, saPublish], rsKeyFit);
+    kcZoomIn: Result := Info('Mod+Plus', skCommand, sgView, [saDesign, saPublish, saDrape], rsKeyZoomIn);
+    kcZoomOut: Result := Info('Mod+Minus', skCommand, sgView, [saDesign, saPublish, saDrape], rsKeyZoomOut);
+    kcFit: Result := Info('Mod+0', skCommand, sgView, [saDesign, saPublish, saDrape], rsKeyFit);
     kcTrueSize: Result := Info('Mod+1', skCommand, sgView, [saDesign], rsKeyTrueSize);
     kcRulers: Result := Info('Mod+R', skCommand, sgView, [saDesign], rsKeyRulers);
-    kcReload: Result := Info('Mod+R', skCommand, sgView, [saPublish], rsKeyReload);
+    kcReload: Result := Info('Mod+R', skCommand, sgView, [saPublish, saDrape], rsKeyReload);
     kcToolSelect: Result := Info('S', skCommand, sgTools, [saDesign], rsKeyToolSelect);
     kcToolZoom: Result := Info('Z', skCommand, sgTools, [saDesign, saPublish], rsKeyToolZoom);
     kcToolPoint: Result := Info('P', skCommand, sgTools, [saDesign], rsKeyToolPoint);
@@ -205,7 +211,7 @@ begin
     kcSeamPreviousSide: Result := Info('Shift+Tab', skFixed, sgCanvas, [saDesign], rsKeySeamPreviousSide);
     kcMakeSeam: Result := Info('Enter', skFixed, sgCanvas, [saDesign], rsKeyMakeSeam);
     kcRemovePiece: Result := Info('Delete', skFixed, sgCanvas, [saPublish], rsKeyRemovePiece);
-    kcClearSelection: Result := Info('Escape', skFixed, sgCanvas, [saPublish], rsKeyClearSelection);
+    kcClearSelection: Result := Info('Escape', skFixed, sgCanvas, [saPublish, saDrape], rsKeyClearSelection);
     kcEditCell: Result := Info('F2', skFixed, sgPanels, [saDesign, saMeasurements], rsKeyEditCell);
     kcCommitCell: Result := Info('Enter', skFixed, sgPanels, [saDesign, saMeasurements], rsKeyCommitCell);
     kcRevertCell: Result := Info('Escape', skFixed, sgPanels, [saDesign, saMeasurements], rsKeyRevertCell);
@@ -213,12 +219,17 @@ begin
     kcScrollSideways: Result := Info('Shift+Wheel', skMouse, sgMouse, [saDesign], rsKeyScrollSideways);
     kcWheelZoom: Result := Info('Mod+Wheel', skMouse, sgMouse, [saDesign], rsKeyWheelZoom);
     kcPublishWheelZoom: Result := Info('Wheel', skMouse, sgMouse, [saPublish], rsKeyPublishWheelZoom);
-    kcPanMiddle: Result := Info('Middle-drag', skMouse, sgMouse, [saDesign, saPublish], rsKeyPanMiddle);
+    kcPanMiddle: Result := Info('Middle-drag', skMouse, sgMouse, [saDesign, saPublish, saDrape], rsKeyPanMiddle);
     kcPanSpace: Result := Info('Space+Drag', skMouse, sgMouse, [saDesign, saPublish], rsKeyPanSpace);
     kcCycle: Result := Info('Alt+Click', skMouse, sgMouse, [saDesign], rsKeyCycle);
     kcExtendCurve: Result := Info('Shift+Click', skMouse, sgMouse, [saDesign], rsKeyExtendCurve);
     kcPickList: Result := Info('Right-click', skMouse, sgMouse, [saDesign], rsKeyPickList);
     kcExcludePage: Result := Info('Right-click', skMouse, sgMouse, [saPublish], rsKeyExcludePage);
+    kcGuessPlacements: Result := Info('Mod+G', skCommand, sgEdit, [saDrape], rsKeyGuessPlacements);
+    kcUnplacePiece: Result := Info('Delete', skFixed, sgCanvas, [saDrape], rsKeyUnplacePiece);
+    kcDrapeWheelZoom: Result := Info('Wheel', skMouse, sgMouse, [saDrape], rsKeyDrapeWheelZoom);
+    kcDrapeOrbit: Result := Info('Drag', skMouse, sgMouse, [saDrape], rsKeyDrapeOrbit);
+    kcDrapeMove: Result := Info('Drag a piece', skMouse, sgMouse, [saDrape], rsKeyDrapeMove);
   end;
 end;
 

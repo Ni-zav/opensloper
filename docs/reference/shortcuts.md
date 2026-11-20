@@ -176,3 +176,49 @@ On macOS, Cmd takes the place of Ctrl, except in Ctrl+Tab and Ctrl+Shift+Tab, wh
 | ++space++ and drag | Pan |
 | Right-click | Leave a page out of the print, or put it back |
 
+## Drape app
+
+### File
+
+| Keys | What it does |
+| --- | --- |
+| ++ctrl+n++ | New file |
+| ++ctrl+o++ | Open a file |
+| ++ctrl+s++ | Save |
+| ++ctrl+shift+s++ | Save under another name |
+| ++ctrl+q++ | Quit |
+
+### Edit
+
+| Keys | What it does |
+| --- | --- |
+| ++ctrl+z++ | Undo |
+| ++ctrl+shift+z++ | Redo |
+| ++ctrl+comma++ | Preferences |
+| ++ctrl+g++ | Place every piece not yet placed where it would likely go |
+
+### View
+
+| Keys | What it does |
+| --- | --- |
+| ++ctrl+plus++ | Zoom in |
+| ++ctrl+minus++ | Zoom out |
+| ++ctrl+0++ | Fit everything in the window |
+| ++ctrl+r++ | Read the patterns again |
+
+### On the canvas
+
+| Keys | What it does |
+| --- | --- |
+| ++escape++ | Cancel a drag, or clear the selection |
+| ++delete++ | Take the selected piece off the body, so it is left out; Backspace does the same |
+
+### Mouse
+
+| Keys | What it does |
+| --- | --- |
+| Drag with the middle button | Pan |
+| The wheel | Zoom in or out |
+| Drag | Drag away from the pieces to turn the view round the body |
+| ++drag a piece++ | Drag a piece to move it across the view; with Shift, towards or away from you |
+

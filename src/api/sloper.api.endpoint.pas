@@ -48,6 +48,7 @@ const
   DESIGN_KIND = 'design';
   MEASUREMENTS_KIND = 'measurements';
   PUBLISH_KIND = 'publish';
+  DRAPE_KIND = 'drape';
 
 type
   TAutomationEndpoint = record

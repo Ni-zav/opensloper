@@ -121,6 +121,7 @@ resourcestring
   rsIconMenuToolsMarkings = 'Tools → Markings';
   rsIconMenuToolsTransform = 'Tools → Transform';
   rsIconMenuHelp = 'Help';
+  rsIconMenuPieces = 'Pieces';
 
   rsIconNew = 'New';
   rsIconOpen = 'Open…';
@@ -320,6 +321,21 @@ resourcestring
   rsIconCheckText = 'Show what a pattern needs that the set does not have';
   rsIconStopCheckText = 'Close the pattern the set is being checked against';
   rsIconOpenLayoutText = 'Open a layout';
+  rsIconNewDrapeText = 'Start a drape file from a pattern, every piece placed by a guess';
+  rsIconOpenDrapeText = 'Open a drape file';
+  rsIconFitBody = 'Fit Body';
+  rsIconFitBodyText = 'Show the whole body and every piece';
+  rsIconReloadDrapeText = 'Read the patterns and the body''s measurements again';
+  rsIconGuess = 'Guess Placements';
+  rsIconGuessText = 'Place every piece not yet placed where it would likely go';
+  rsIconFlipPiece = 'Flip';
+  rsIconFlipPieceText = 'Turn the selected piece round to face the other way';
+  rsIconUnplace = 'Unplace';
+  rsIconUnplaceText = 'Take the selected piece off the body, so it is left out';
+  rsIconTabDrapePatternsText = 'The patterns placed, and the body they are placed on';
+  rsIconTabDrapePiecesText = 'Every piece, placed or not; choose one to select it';
+  rsIconTabDrapePropertiesText = 'Where the selected piece is placed and how it is turned';
+  rsIconTabDrapeProblemsText = 'Pieces left out, pieces gone and files that cannot be read; choose one to select its piece';
   rsIconExportPDFText = 'Export the layout as a PDF';
   rsIconExportSVGText = 'Export the layout as SVG: true size, pieces where they lie';
   rsIconExportDXFText = 'Export the layout as DXF-AAMA, for pattern software';
@@ -542,6 +558,38 @@ begin
   Add(aiProblems, rsIconTabProblems, rsIconTabPublishProblemsText);
 
   Start(saPublish, ipMenu, rsIconMenuFile);
+  AddKey(aiSaveAs, rsIconSaveAs, kcSaveAs, rsIconSaveAsText);
+  AddKey(aiQuit, rsIconQuit, kcQuit, rsIconQuitText);
+  Menu := rsIconMenuEdit;
+  AddKey(aiPreferences, rsIconPreferences, kcPreferences, rsIconPreferencesText);
+  Menu := rsIconMenuHelp;
+  Add(aiUserGuide, rsIconUserGuide, rsIconUserGuideText);
+  Add(aiAbout, rsIconAbout, rsIconAboutText);
+
+  Start(saDrape, ipToolbar, rsIconMenuFile);
+  AddKey(aiNew, rsIconNew, kcNew, rsIconNewDrapeText);
+  AddKey(aiOpen, rsIconOpen, kcOpen, rsIconOpenDrapeText);
+  AddKey(aiSave, rsIconSave, kcSave, rsIconSaveText);
+  Menu := rsIconMenuEdit;
+  AddKey(aiUndo, rsIconUndo, kcUndo, rsIconUndoText);
+  AddKey(aiRedo, rsIconRedo, kcRedo, rsIconRedoText);
+  Menu := rsIconMenuView;
+  AddKey(aiZoomIn, rsIconZoomIn, kcZoomIn, rsIconZoomInText);
+  AddKey(aiZoomOut, rsIconZoomOut, kcZoomOut, rsIconZoomOutText);
+  AddKey(aiFit, rsIconFitBody, kcFit, rsIconFitBodyText);
+  AddKey(aiReload, rsIconReload, kcReload, rsIconReloadDrapeText);
+  Menu := rsIconMenuPieces;
+  AddKey(aiWand, rsIconGuess, kcGuessPlacements, rsIconGuessText);
+  Add(aiMirror, rsIconFlipPiece, rsIconFlipPieceText);
+  AddKey(aiDelete, rsIconUnplace, kcUnplacePiece, rsIconUnplaceText);
+
+  Start(saDrape, ipSideTabs, '');
+  Add(aiPatternsTab, rsIconTabPatterns, rsIconTabDrapePatternsText);
+  Add(aiPiecesTab, rsIconTabPieces, rsIconTabDrapePiecesText);
+  Add(aiPropertiesTab, rsIconTabProperties, rsIconTabDrapePropertiesText);
+  Add(aiProblems, rsIconTabProblems, rsIconTabDrapeProblemsText);
+
+  Start(saDrape, ipMenu, rsIconMenuFile);
   AddKey(aiSaveAs, rsIconSaveAs, kcSaveAs, rsIconSaveAsText);
   AddKey(aiQuit, rsIconQuit, kcQuit, rsIconQuitText);
   Menu := rsIconMenuEdit;

@@ -43,7 +43,7 @@ const
   // every window as a notification, without params.
   APP_LINK_PREFERENCES = 'preferences';
   // The kinds every app's window listens on
-  APP_KINDS: array[0..2] of string = (DESIGN_KIND, MEASUREMENTS_KIND, PUBLISH_KIND);
+  APP_KINDS: array[0..3] of string = (DESIGN_KIND, MEASUREMENTS_KIND, PUBLISH_KIND, DRAPE_KIND);
 
 type
   // On the main thread in an app; True when this window did what was asked.

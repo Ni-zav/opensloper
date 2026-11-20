@@ -28,7 +28,7 @@ uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement,
   Sloper.Core.DrapeFile, Sloper.Core.Measurements,
-  Sloper.Core.BodyForm;
+  Sloper.Core.BodyForm, Sloper.Core.DrapeScene, Sloper.Document.DrapeDocument;
 
 type
   TTestGeometry3 = class(TOSTestCase)
@@ -108,6 +108,17 @@ type
     procedure TestProblems;
     procedure TestGuessUsesTheBody;
     procedure TestMissingBodyFile;
+    procedure TestSceneBackToFront;
+    procedure TestScenePicksPieces;
+    procedure TestSceneWrongSide;
+    procedure TestSceneWithoutBody;
+  end;
+
+  TTestDrapeDocument = class(TOSTestCase)
+  published
+    procedure TestUndoAndRedo;
+    procedure TestCancelRestores;
+    procedure TestSkirtFrontDrawnOverForm;
   end;
 
 implementation
@@ -886,7 +897,163 @@ begin
   AssertTrue('the default form', Measures.Height > 0);
 end;
 
+procedure TTestDrapeFile.TestSceneBackToFront;
+var
+  Faces: TDrapeFaceArray;
+  Index, Last: integer;
+  Camera: TDrapeCamera;
+  Screen: TVec2;
+  Depth: double;
+begin
+  FDrape.GuessPlacements;
+  Faces := BuildDrapeScene(FDrape, DefaultDrapeCamera);
+  AssertTrue('body and pieces', Length(Faces) > 2);
+  for Index := 1 to High(Faces) do
+    AssertTrue('back to front', Faces[Index].Depth <= Faces[Index - 1].Depth);
+  // The front hangs in front of the form, so it is drawn over it
+  Camera := DefaultDrapeCamera;
+  Camera.Project(FDrape.Items[FDrape.IndexOf(FrontCopy)].Placement.Position, Screen, Depth);
+  Last := -1;
+  for Index := 0 to High(Faces) do
+    if PointInPolygon(Screen, Faces[Index].Points) then
+      Last := Index;
+  AssertTrue('covers something', Last >= 0);
+  AssertEquals('the front on top', FDrape.IndexOf(FrontCopy), Faces[Last].Item);
+end;
+
+procedure TTestDrapeFile.TestScenePicksPieces;
+var
+  Camera: TDrapeCamera;
+  Screen: TVec2;
+  Depth: double;
+  Faces: TDrapeFaceArray;
+begin
+  FDrape.GuessPlacements;
+  Camera := DefaultDrapeCamera;
+  Faces := BuildDrapeScene(FDrape, Camera);
+  Camera.Project(FDrape.Items[FDrape.IndexOf(FrontCopy)].Placement.Position, Screen, Depth);
+  AssertEquals('the front', FDrape.IndexOf(FrontCopy), DrapePieceAt(Faces, Screen));
+  // Above the pieces there is only the form, which is not picked
+  Camera.Project(Vec3(0, 0, DefaultBodyMeasures.ShoulderHeight), Screen, Depth);
+  AssertEquals('nothing', -1, DrapePieceAt(Faces, Screen));
+end;
+
+procedure TTestDrapeFile.TestSceneWrongSide;
+var
+  Face: TDrapeFace;
+  Faces: TDrapeFaceArray;
+begin
+  FDrape.Body.Kind := bkNone;
+  FDrape.Place(FrontCopy, UprightPlacement(Vec3(0, -200, 1000)));
+  for Face in BuildDrapeScene(FDrape, DefaultDrapeCamera) do
+    AssertFalse('right side from the front', Face.WrongSide);
+  Faces := BuildDrapeScene(FDrape, CameraForView(DefaultDrapeCamera, tvBack));
+  AssertEquals('one piece', 1, Length(Faces));
+  AssertTrue('wrong side from the back', Faces[0].WrongSide);
+end;
+
+procedure TTestDrapeFile.TestSceneWithoutBody;
+begin
+  FDrape.Body.Kind := bkNone;
+  AssertEquals('nothing placed, nothing drawn', 0, Length(BuildDrapeScene(FDrape, DefaultDrapeCamera)));
+end;
+
+{ TTestDrapeDocument }
+
+procedure TTestDrapeDocument.TestUndoAndRedo;
+var
+  Document: TDrapeDocument;
+  Source: TPatternSource;
+begin
+  Document := TDrapeDocument.Create;
+  try
+    AssertFalse('new', Document.Modified);
+    Document.BeginChange('Add');
+    Source := Document.Drape.AddSource('a.sloper', '', '');
+    Document.Drape.Place(DrapePieceCopy(Source.Id, '3', 1), UprightPlacement(Vec3(1, 2, 3)));
+    Document.EndChange;
+    AssertTrue('modified', Document.Modified);
+    AssertEquals('undo named', 'Add', Document.UndoDescription);
+    Document.BeginChange('Move');
+    Document.Drape.Place(DrapePieceCopy(Source.Id, '3', 1), UprightPlacement(Vec3(5, 2, 3)));
+    Document.EndChange;
+    Document.Undo;
+    AssertNear('moved back', 1, Document.Drape.Items[0].Placement.Position.X);
+    Document.Redo;
+    AssertNear('moved again', 5, Document.Drape.Items[0].Placement.Position.X);
+    Document.Undo;
+    Document.Undo;
+    AssertEquals('nothing', 0, Length(Document.Drape.Items));
+    AssertFalse('as saved', Document.Modified);
+  finally
+    FreeAndNil(Document);
+  end;
+end;
+
+// The skirt block example, guessed and seen from low down to the form's right,
+// as it first showed wrongly: the front lies wholly in front of the form, so
+// it is on top all over
+procedure TTestDrapeDocument.TestSkirtFrontDrawnOverForm;
+var
+  Document: TDrapeDocument;
+  Camera: TDrapeCamera;
+  Faces: TDrapeFaceArray;
+  Points: TVec3Array;
+  Anchor: TVec3;
+  Screen: TVec2;
+  Depth: double;
+  Item, Index, Last, Corner, Step: integer;
+  Front: TDrapePieceCopy;
+begin
+  Document := TDrapeDocument.Create;
+  try
+    Document.NewForPattern(ConcatPaths([ExtractFileDir(ExtractFileDir(ExpandFileName(ParamStr(0)))), 'docs', 'examples', 'skirt-block',
+      'skirt-block.sloper']));
+    AssertTrue('placed', Length(Document.Drape.Items) > 0);
+    // The first guess is the largest piece, in front of the form
+    Front := Document.Drape.Items[0].Piece;
+    Item := Document.Drape.IndexOf(Front);
+    Camera := DefaultDrapeCamera;
+    Camera.Target := Vec3(-400, 0, 750);
+    Camera.Yaw := -44;
+    Camera.Pitch := -16;
+    Faces := BuildDrapeScene(Document.Drape, Camera);
+    AssertTrue(Document.Drape.PlacedOutline(Front, Points));
+    Anchor := Document.Drape.Items[Item].Placement.Position;
+    for Corner := 0 to High(Points) do
+      for Step := 1 to 9 do
+      begin
+        Camera.Project(Anchor + (Points[Corner] - Anchor) * (Step / 10), Screen, Depth);
+        Last := -1;
+        for Index := 0 to High(Faces) do
+          if PointInPolygon(Screen, Faces[Index].Points) then
+            Last := Index;
+        AssertTrue('covers something', Last >= 0);
+        AssertEquals(Format('the front on top towards corner %d at %d tenths', [Corner, Step]), Item, Faces[Last].Item);
+      end;
+  finally
+    FreeAndNil(Document);
+  end;
+end;
+
+procedure TTestDrapeDocument.TestCancelRestores;
+var
+  Document: TDrapeDocument;
+begin
+  Document := TDrapeDocument.Create;
+  try
+    Document.BeginChange('Gap');
+    Document.Drape.Gap := 50;
+    Document.CancelChange;
+    AssertNear('gap back', DEFAULT_DRAPE_GAP, Document.Drape.Gap);
+    AssertFalse('no step', Document.CanUndo);
+  finally
+    FreeAndNil(Document);
+  end;
+end;
+
 initialization
+  RegisterTest(TTestDrapeDocument);
   RegisterTest(TTestGeometry3);
   RegisterTest(TTestDrapePlacement);
   RegisterTest(TTestBodyForm);

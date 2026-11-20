@@ -158,6 +158,7 @@ resourcestring
   rsDocAppDesign = 'Design app';
   rsDocAppMeasurements = 'Measurements app';
   rsDocAppPublish = 'Publish app';
+  rsDocAppDrape = 'Drape app';
   rsDocShortcutFile = 'File';
   rsDocShortcutEdit = 'Edit';
   rsDocShortcutView = 'View';
@@ -228,7 +229,7 @@ const
   KEY_WORD_TEXTS: array[0..5] of string = (rsDocKeyArrows, rsDocKeyWheel, rsDocKeyDrag, rsDocKeyClick, rsDocKeyMiddleDrag,
     rsDocKeyRightClick);
   ARROW_KEYS: array[0..3] of string = ('Left', 'Right', 'Up', 'Down');
-  SHORTCUT_APP_TITLES: array[TShortcutApp] of string = (rsDocAppDesign, rsDocAppMeasurements, rsDocAppPublish);
+  SHORTCUT_APP_TITLES: array[TShortcutApp] of string = (rsDocAppDesign, rsDocAppMeasurements, rsDocAppPublish, rsDocAppDrape);
   SHORTCUT_GROUP_TITLES: array[TShortcutGroup] of string = (rsDocShortcutFile, rsDocShortcutEdit, rsDocShortcutView, rsDocShortcutTools,
     rsDocShortcutCanvas, rsDocShortcutPanels, rsDocShortcutMouse);
   ICON_PLACE_TITLES: array[TIconPlace] of string = (rsDocIconsToolbar, rsDocIconsTools, rsDocIconsSideTabs, rsDocIconsMenu,

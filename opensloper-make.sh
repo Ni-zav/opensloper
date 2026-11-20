@@ -211,6 +211,7 @@ cmd_build() {
   "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/design/opensloper_design.lpi "$@"
   "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/publish/opensloper_publish.lpi "$@"
   "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/measurements/opensloper_measurements.lpi "$@"
+  "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/drape/opensloper_drape.lpi "$@"
 }
 
 # check: the coding standards that the formatter cannot enforce (see

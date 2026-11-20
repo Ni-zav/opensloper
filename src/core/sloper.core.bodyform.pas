@@ -215,6 +215,7 @@ const
   KEY_ARMPIT_HEIGHT = 'height_armpit';
   KEY_BUST_HEIGHT = 'height_bust_point';
   KEY_WAIST_HEIGHT = 'height_waist';
+  KEY_BACK_LENGTH = 'neck_back_to_waist';
   KEY_HIP_HEIGHT = 'height_hip';
   KEY_NECK = 'neck_circumference';
   KEY_HIGH_BUST = 'high_bust_circumference';
@@ -260,33 +261,57 @@ end;
 function BodyMeasuresFrom(Measurements: TMeasurementSet; SizeIndex: integer): TBodyMeasures;
 var
   Measures: TBodyMeasures;
+  BackLength: double;
+  HasBackLength, HasWaistHeight: boolean;
 
-  function Value(const Key: string; Fallback: double): double;
+// The set's value for Key, when it has one above 0
+  function Given(const Key: string; out Found: double): boolean;
   var
     Measurement: TMeasurement;
     Index: integer;
   begin
-    Result := Fallback;
+    Found := 0;
     Measurement := nil;
     if Assigned(Measurements) then
       Measurement := Measurements.Find(Key);
     Index := SizeIndex;
     if Assigned(Measurement) and (Index < 0) then
       Index := Measurements.SizeIndex;
-    if Assigned(Measurement) and Measurement.HasValueFor(Index) and (Measurement.ValueFor(Index) > 0) then
-      Result := Measurement.ValueFor(Index)
-    else
+    Result := Assigned(Measurement) and Measurement.HasValueFor(Index) and (Measurement.ValueFor(Index) > 0);
+    if Result then
+      Found := Measurement.ValueFor(Index);
+  end;
+
+  function Value(const Key: string; Fallback: double): double;
+  begin
+    if not Given(Key, Result) then
+    begin
+      Result := Fallback;
       Insert(Key, Measures.Estimated, Length(Measures.Estimated));
+    end;
   end;
 
 begin
   Measures := Default(TBodyMeasures);
   Measures.Height := Value(KEY_HEIGHT, STANDARD_HEIGHT);
-  Measures.NeckHeight := Value(KEY_NECK_HEIGHT, Measures.Height * NECK_HEIGHT_SHARE);
+  // The back length, nape to waist, sets one of the two heights from the
+  // other when only one is measured, or the waist from the neck's share
+  // when neither is: a bodice block's set often has it and no heights. It
+  // is measured down the back's curve, so the drop is a little less, which
+  // is left out.
+  HasBackLength := Given(KEY_BACK_LENGTH, BackLength) and (BackLength < Measures.Height);
+  HasWaistHeight := Given(KEY_WAIST_HEIGHT, Measures.WaistHeight);
+  if HasBackLength and HasWaistHeight then
+    Measures.NeckHeight := Value(KEY_NECK_HEIGHT, Measures.WaistHeight + BackLength)
+  else
+    Measures.NeckHeight := Value(KEY_NECK_HEIGHT, Measures.Height * NECK_HEIGHT_SHARE);
   Measures.ShoulderHeight := Value(KEY_SHOULDER_HEIGHT, Measures.Height * SHOULDER_HEIGHT_SHARE);
   Measures.ArmpitHeight := Value(KEY_ARMPIT_HEIGHT, Measures.Height * ARMPIT_HEIGHT_SHARE);
   Measures.BustHeight := Value(KEY_BUST_HEIGHT, Measures.Height * BUST_HEIGHT_SHARE);
-  Measures.WaistHeight := Value(KEY_WAIST_HEIGHT, Measures.Height * WAIST_HEIGHT_SHARE);
+  if HasBackLength and (BackLength < Measures.NeckHeight) then
+    Measures.WaistHeight := Value(KEY_WAIST_HEIGHT, Measures.NeckHeight - BackLength)
+  else
+    Measures.WaistHeight := Value(KEY_WAIST_HEIGHT, Measures.Height * WAIST_HEIGHT_SHARE);
   Measures.HipHeight := Value(KEY_HIP_HEIGHT, Measures.Height * HIP_HEIGHT_SHARE);
   // The catalogue has no height for the high hip: halfway down
   Measures.HighHipHeight := (Measures.WaistHeight + Measures.HipHeight) / 2;

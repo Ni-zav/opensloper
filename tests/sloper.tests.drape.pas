@@ -81,6 +81,7 @@ type
     procedure TestMeshIsClosedAndFacesOut;
     procedure TestFigureStandsFacingForwards;
     procedure TestSizeOfATable;
+    procedure TestBackLengthPlacesTheWaist;
   end;
 
   // A front and a back joined by a side seam, in a drape file
@@ -532,6 +533,38 @@ begin
   Result.Add('hip_circumference', 1000);
   Result.Add('height_waist', 1060);
   Result.Add('neck_circumference', 370);
+end;
+
+// A set with the back length but no heights, as a bodice block's often has,
+// puts the waist that far below the neck
+procedure TTestBodyForm.TestBackLengthPlacesTheWaist;
+var
+  BodySet: TMeasurementSet;
+  Measures: TBodyMeasures;
+begin
+  BodySet := TMeasurementSet.Create;
+  try
+    BodySet.Add('height', 1700);
+    BodySet.Add('neck_back_to_waist', 410);
+    Measures := BodyMeasuresFrom(BodySet);
+    AssertNear('the neck by its share', 1700 * 0.845, Measures.NeckHeight);
+    AssertNear('the waist below it', 1700 * 0.845 - 410, Measures.WaistHeight);
+    BodySet.Add('height_back_neck', 1450);
+    AssertNear('below the measured neck', 1040, BodyMeasuresFrom(BodySet).WaistHeight);
+    BodySet.Add('height_waist', 1060);
+    Measures := BodyMeasuresFrom(BodySet);
+    AssertNear('both measured: the waist as measured', 1060, Measures.WaistHeight);
+    AssertNear('and the neck', 1450, Measures.NeckHeight);
+  finally
+    FreeAndNil(BodySet);
+  end;
+  BodySet := SampleSet;
+  try
+    BodySet.Add('neck_back_to_waist', 420);
+    AssertNear('the neck above the measured waist', 1480, BodyMeasuresFrom(BodySet).NeckHeight);
+  finally
+    FreeAndNil(BodySet);
+  end;
 end;
 
 procedure TTestBodyForm.TestDefaultFormIsWhole;

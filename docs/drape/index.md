@@ -7,8 +7,9 @@ and never changes them.
 
 !!! note "Being built"
     The window and placing pieces are done, and the command line writes the
-    files Blender needs (see [Export for Blender](#export-for-blender)). The
-    Blender script and running Blender are not built yet; see
+    files Blender needs and runs Blender on them (see [Export for
+    Blender](#export-for-blender)). Running Blender from the drape window is
+    not built yet; see
     [issue #11](https://github.com/opensloper/opensloper/issues/11).
 
 ## Start a drape
@@ -123,10 +124,12 @@ Problems. Nothing is ever written back to a pattern.
 ## Export for Blender
 
 `opensloper-cli drape` writes a saved drape as the files Blender's cloth
-simulation needs, beside the drape file unless `-o` names the scene file:
+simulation needs, beside the drape file unless `-o` names the scene file.
+With `--run` it runs [Blender](https://www.blender.org) on them too, which
+sews the pieces round the body and saves the result as `skirt.blend`:
 
 ```
-opensloper-cli drape skirt.sdrape
+opensloper-cli drape skirt.sdrape --run
 ```
 
 | File | What it holds |
@@ -134,6 +137,7 @@ opensloper-cli drape skirt.sdrape
 | `skirt.pieces.obj` | Each placed piece as a mesh of small, even triangles, made from its seam line (the seam allowance left out), opened out on a fold |
 | `skirt.body.obj` | The body, when the drape has one |
 | `skirt.blender.json` | Where each piece goes, its material and colour, and which vertices each seam sews together |
+| `skirt.blender.py` | The script that drapes them in Blender |
 
 `--spacing` sets how far apart the mesh's points are, 10 mm unless given:
 smaller follows curves more closely but simulates more slowly. Both sides of
@@ -149,3 +153,33 @@ right is sewn left to left however you placed them; when one side has fewer
 copies, the copy placed furthest from them is the one left open. Clicking the
 problem selects it. The scene file is
 described on the [File formats](../reference/files.md) page.
+
+### Draping in Blender
+
+The script is written for Blender 5.2, and may need changes for other
+versions. `--run` looks for Blender on the path, and on Windows and macOS
+where its installer puts it; `--blender` gives the program instead. To run
+the script yourself:
+
+```
+blender --background --python skirt.blender.py
+```
+
+It joins each pattern's pieces into one cloth object, with an edge between
+every pair of points a seam sews, and the body pushes the cloth away. For
+the first 40 frames the seams close with no gravity, so the pieces do not
+fall before they are sewn; then gravity comes on and the garment settles,
+up to frame 120 (`--frames` changes this). Each piece keeps its own group
+of vertices and its material's colour, and the texture coordinates are the
+fabric's own size in metres, so a photo of the fabric can be laid on it at
+its real scale. Open `skirt.blend` in Blender to look round the garment:
+it opens at the last frame, and playing it back shows the pieces being
+sewn.
+
+Simulating takes a while: a bodice at the 10 mm spacing takes about a
+minute and a half. A larger `--spacing` is quicker for a first look.
+
+After `--` the script takes options of its own, such as
+`--frames`, `--sewing-frames`, `--mass` (each vertex's, in kg),
+`--quality` and `--no-simulate` (set up the scene without running it);
+`blender --background --python skirt.blender.py -- --help` lists them.

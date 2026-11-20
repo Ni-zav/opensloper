@@ -64,10 +64,10 @@ opensloper-cli pack LAYOUT
 
 ### drape
 
-Export a drape file for Blender's cloth simulation: the pieces' and the body's meshes as OBJ, and a scene file with the placements and the vertices each seam sews
+Export a drape file for Blender's cloth simulation: the pieces' and the body's meshes as OBJ, a scene file with the placements and the vertices each seam sews, and the script that drapes them; with --run, run Blender on it
 
 ```
-opensloper-cli drape DRAPE [-o FILE] [--spacing=MM]
+opensloper-cli drape DRAPE [-o FILE] [--spacing=MM] [--run] [--blender=PROGRAM] [--frames=N]
 ```
 
 ### materials
@@ -120,6 +120,9 @@ opensloper-cli doc
 | `--upto` | name | export-draft: draw only this object and those before it, as the pattern was when it was added |
 | `--width` | pixels | export-draft: the width of a png in pixels, from 16 to 4096; default: 1600 |
 | `--spacing` | mm | drape: how far apart the mesh's points are, in mm; default: 10 |
+| `--run` |  | drape: run Blender on the files written, which saves the draped result as NAME.blend |
+| `--blender` | program | drape: the Blender program to run; default: blender on the path, or where its installer puts it |
+| `--frames` | n | drape: how many frames Blender simulates; default: 120 |
 | `--connect` |  | serve: work on the pattern open in the design window, which must allow assistants to connect (Assistance menu, or --automation) |
 | `--url` | url | check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com |
 | `--ca-file` | file | check-connection: trust the certificates in this PEM file, in place of those OpenSloper uses |
@@ -141,4 +144,4 @@ After the command, in this order; each command takes the ones it needs.
 | --- | --- |
 | 0 | Success |
 | 1 | check: the pattern has problems |
-| 2 | A usage error, a file that could not be read or written, or check-connection: no answer |
+| 2 | A usage error, a file that could not be read or written, check-connection: no answer, or drape --run: Blender could not be found or did not finish |

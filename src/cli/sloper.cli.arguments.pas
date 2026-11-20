@@ -84,8 +84,11 @@ resourcestring
   rsCmdExportDraft = 'Export a pattern''s draft as SVG or a PNG image, as the drafting window shows it';
   rsCmdLayout = 'Start a layout file for a pattern, with every piece placed';
   rsCmdMeasurements = 'List a measurement file, set a value, or see what a pattern needs that it lacks';
-  rsCmdDrape = 'Export a drape file for Blender''s cloth simulation: the pieces'' and the body''s meshes as OBJ, and a scene file ' +
-    'with the placements and the vertices each seam sews';
+  rsCmdDrape = 'Export a drape file for Blender''s cloth simulation: the pieces'' and the body''s meshes as OBJ, a scene file ' +
+    'with the placements and the vertices each seam sews, and the script that drapes them; with --run, run Blender on it';
+  rsOptRun = 'drape: run Blender on the files written, which saves the draped result as NAME.blend';
+  rsOptBlender = 'drape: the Blender program to run; default: blender on the path, or where its installer puts it';
+  rsOptFrames = 'drape: how many frames Blender simulates; default: 120';
   rsCmdPack = 'Pack a layout''s pieces and rewrite the layout file';
   rsCmdMaterials = 'Estimate how much of each material a layout''s patterns, or one pattern, need to cut';
   rsCmdServe = 'Answer JSON-RPC 2.0 on stdin and stdout, one message per line, as the Automation API and as an MCP server';
@@ -95,7 +98,8 @@ resourcestring
     'topic, list the topics';
   rsExitSuccess = 'Success';
   rsExitProblems = 'check: the pattern has problems';
-  rsExitFailure = 'A usage error, a file that could not be read or written, or check-connection: no answer';
+  rsExitFailure = 'A usage error, a file that could not be read or written, check-connection: no answer, or drape --run: ' +
+    'Blender could not be found or did not finish';
 
 const
   CLI_TITLE = 'opensloper-cli';
@@ -108,12 +112,12 @@ const
     (Name: 'measurements'; Usage: 'measurements list FILE [-s SIZE] [--json]' + LineEnding +
     'measurements set FILE KEY VALUE [-s SIZE] [-d TEXT]' + LineEnding + 'measurements missing FILE PATTERN'; Description: rsCmdMeasurements),
     (Name: 'pack'; Usage: 'pack LAYOUT'; Description: rsCmdPack),
-    (Name: 'drape'; Usage: 'drape DRAPE [-o FILE] [--spacing=MM]'; Description: rsCmdDrape),
+    (Name: 'drape'; Usage: 'drape DRAPE [-o FILE] [--spacing=MM] [--run] [--blender=PROGRAM] [--frames=N]'; Description: rsCmdDrape),
     (Name: 'materials'; Usage: 'materials LAYOUT|PATTERN [--json]'; Description: rsCmdMaterials),
     (Name: 'serve'; Usage: 'serve [--connect]'; Description: rsCmdServe),
     (Name: 'check-connection'; Usage: 'check-connection [--url=URL] [--ca-file=FILE]'; Description: rsCmdCheckConnection),
     (Name: 'doc'; Usage: 'doc TOPIC [-o FILE]' + LineEnding + 'doc'; Description: rsCmdDoc));
-  CLI_OPTIONS: array[0..15] of TCliOption = (
+  CLI_OPTIONS: array[0..18] of TCliOption = (
     (Name: 'help'; Short: '-h'; Long: '--help'; Parameter: ''; Description: rsOptHelp),
     (Name: 'version'; Short: '-V'; Long: '--version'; Parameter: ''; Description: rsOptVersion),
     (Name: 'measurements'; Short: '-m'; Long: '--measurements'; Parameter: 'file'; Description: rsOptMeasurements),
@@ -127,6 +131,9 @@ const
     (Name: 'upto'; Short: ''; Long: '--upto'; Parameter: 'name'; Description: rsOptUpTo),
     (Name: 'width'; Short: ''; Long: '--width'; Parameter: 'pixels'; Description: rsOptWidth),
     (Name: 'spacing'; Short: ''; Long: '--spacing'; Parameter: 'mm'; Description: rsOptSpacing),
+    (Name: 'run'; Short: ''; Long: '--run'; Parameter: ''; Description: rsOptRun),
+    (Name: 'blender'; Short: ''; Long: '--blender'; Parameter: 'program'; Description: rsOptBlender),
+    (Name: 'frames'; Short: ''; Long: '--frames'; Parameter: 'n'; Description: rsOptFrames),
     (Name: 'connect'; Short: ''; Long: '--connect'; Parameter: ''; Description: rsOptConnect),
     (Name: 'url'; Short: ''; Long: '--url'; Parameter: 'url'; Description: rsOptUrl),
     (Name: 'ca-file'; Short: ''; Long: '--ca-file'; Parameter: 'file'; Description: rsOptCaFile));

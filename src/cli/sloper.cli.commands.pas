@@ -59,6 +59,11 @@ resourcestring
   rsCheckBlocked = 'Blocked by these problems: %d more';
   rsDrapeNeedsDrape = 'The drape command needs a drape file (%s). Make one with opensloper-drape.';
   rsDrapeSpacing = 'The spacing must be a number of millimetres from %s to %s, such as 10';
+  rsDrapeFrames = 'The frames must be a whole number from %d to %d, such as 120';
+  rsDrapeHowToRun = 'To drape it, run: blender --background --python "%s"';
+  rsDrapeNoBlender = 'Blender was not found. Install Blender %s, or give its program with --blender';
+  rsDrapeBlenderFailed = 'Blender stopped with code %d:';
+  rsDrapeRunning = 'Running %s';
   rsExportNeedsLayout = 'The export command needs a layout file (%s). Make one with the layout command.';
   rsWroteFile = 'Wrote %s';
   rsDraftFormat = 'export-draft writes svg or png, not "%s"';
@@ -80,6 +85,7 @@ uses
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
   Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.PatternSources,
   Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Core.Mesher, Sloper.Core.DrapeFile, Sloper.Output.DrapeExport,
+  Sloper.Output.BlenderRun, Sloper.Core.AppPaths,
   Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection,
   Sloper.Assistant.Http;
 
@@ -528,11 +534,64 @@ begin
   end;
 end;
 
-function RunDrape(const DrapeFile, OutputOption, SpacingOption: string): integer;
+type
+  // Shows Blender's progress as it runs
+  TBlenderReporter = class
+  public
+    procedure Line(const Text: string);
+  end;
+
+procedure TBlenderReporter.Line(const Text: string);
+var
+  Progress: string;
+begin
+  if BlenderProgress(Text, Progress) then
+  begin
+    WriteLn(CliOut^, Progress);
+    Flush(CliOut^);
+  end;
+end;
+
+// Runs Blender on the script written; the result is the exit code
+function RunDrapeInBlender(const Files: TDrapeExportFiles; const BlenderOption: string; Frames: integer): integer;
+var
+  Blender, Err, Line: string;
+  Reporter: TBlenderReporter;
+  Outcome: TBlenderRun;
+begin
+  Blender := FindBlender(BlenderOption);
+  if Blender = '' then
+  begin
+    WriteLn(CliErr^, Format(rsDrapeNoBlender, [BLENDER_SCRIPT_VERSION]));
+    Exit(EXIT_FAILURE);
+  end;
+  WriteLn(CliOut^, Format(rsDrapeRunning, [Blender]));
+  Reporter := TBlenderReporter.Create;
+  try
+    if not RunBlender(Blender, Files.Script, Frames, @Reporter.Line, Outcome, Err) then
+    begin
+      WriteLn(CliErr^, Err);
+      Exit(EXIT_FAILURE);
+    end;
+  finally
+    FreeAndNil(Reporter);
+  end;
+  if Outcome.ExitCode <> 0 then
+  begin
+    WriteLn(CliErr^, Format(rsDrapeBlenderFailed, [Outcome.ExitCode]));
+    for Line in Outcome.Tail do
+      WriteLn(CliErr^, Line);
+    Exit(EXIT_FAILURE);
+  end;
+  Result := EXIT_SUCCESS;
+end;
+
+function RunDrape(const DrapeFile, OutputOption, SpacingOption, FramesOption, BlenderOption: string; RunIt: boolean): integer;
 var
   Drape: TDrape;
   Target, Err: string;
   Spacing: double;
+  Frames: integer;
   Problems: TDrapeProblemArray;
   Problem: TDrapeProblem;
   Settings: TFormatSettings;
@@ -553,6 +612,12 @@ begin
       Settings)]));
     Exit(EXIT_FAILURE);
   end;
+  Frames := DEFAULT_DRAPE_FRAMES;
+  if (FramesOption <> '') and (not TryStrToInt(FramesOption, Frames) or (Frames < MIN_DRAPE_FRAMES) or (Frames > MAX_DRAPE_FRAMES)) then
+  begin
+    WriteLn(CliErr^, Format(rsDrapeFrames, [MIN_DRAPE_FRAMES, MAX_DRAPE_FRAMES]));
+    Exit(EXIT_FAILURE);
+  end;
   if not CheckFileExists(DrapeFile) then
     Exit(EXIT_FAILURE);
   Target := OutputOption;
@@ -566,7 +631,7 @@ begin
       Exit(EXIT_FAILURE);
     end;
     Drape.LoadSources;
-    if not ExportDrape(Drape, Target, Spacing, Problems, Err) then
+    if not ExportDrape(Drape, Target, Spacing, TAppPaths.BlenderScriptFile, Problems, Err) then
     begin
       WriteLn(CliErr^, Err);
       Exit(EXIT_FAILURE);
@@ -578,7 +643,20 @@ begin
     if Drape.Body.Kind <> bkNone then
       WriteLn(CliOut^, Format(rsWroteFile, [Files.Body]));
     WriteLn(CliOut^, Format(rsWroteFile, [Files.Scene]));
-    Result := EXIT_SUCCESS;
+    // Without the script, its warning is already written
+    if TAppPaths.BlenderScriptFile = '' then
+      if RunIt then
+        Exit(EXIT_FAILURE)
+      else
+        Exit(EXIT_SUCCESS);
+    WriteLn(CliOut^, Format(rsWroteFile, [Files.Script]));
+    if not RunIt then
+    begin
+      WriteLn(CliOut^, Format(rsDrapeHowToRun, [Files.Script]));
+      Exit(EXIT_SUCCESS);
+    end;
+    // The script says where it saved
+    Result := RunDrapeInBlender(Files, BlenderOption, Frames);
   finally
     FreeAndNil(Drape);
   end;
@@ -856,7 +934,8 @@ begin
     else if CommandName = 'pack' then
       Result := RunPack(PatternFile)
     else if CommandName = 'drape' then
-      Result := RunDrape(PatternFile, Parser.GetOptionValueAsString('output'), Parser.GetOptionValueAsString('spacing'))
+      Result := RunDrape(PatternFile, Parser.GetOptionValueAsString('output'), Parser.GetOptionValueAsString('spacing'),
+        Parser.GetOptionValueAsString('frames'), Parser.GetOptionValueAsString('blender'), Parser.IsOption('run'))
     else if CommandName = 'materials' then
       Result := RunMaterials(PatternFile, Parser.IsOption('json'))
     else if CommandName = 'export-draft' then

@@ -26,7 +26,8 @@
 // mirrored in its mesh, its triangles turned round so they face the right
 // side of the fabric. The body is in the drape's frame. Everything is in mm,
 // with Blender's axes; the texture coordinates are the piece's own, in metres.
-// Described in the design document under "Drape app and Blender export".
+// The script that drapes them in Blender (data/blender/drape.py) is copied
+// beside them as NAME.blender.py. Described in the design document under "Drape app and Blender export".
 unit Sloper.Output.DrapeExport;
 
 {$mode ObjFPC}{$H+}
@@ -44,7 +45,9 @@ const
 type
   // The files of an export, all in one folder
   TDrapeExportFiles = record
-    Scene, Pieces, Body: string;
+    Scene, Pieces, Body, Script: string;
+    // What the script saves once it has run
+    Blend: string;
   end;
 
   // What is written: the drape meshed and paired, the items that become
@@ -71,12 +74,15 @@ function DrapeObjectName(Drape: TDrape; Item: integer): string;
 function DrapeSceneText(Drape: TDrape; const Exported: TDrapeExport; const PiecesFile, BodyFile: string; Spacing: double): string;
 function DrapePiecesOBJ(Drape: TDrape; const Exported: TDrapeExport): string;
 function BodyOBJ(const Mesh: TBodyMesh): string;
-// Writes the scene and its meshes; the body's only when there is one. False,
-// with a message, when a file cannot be written.
-function ExportDrape(Drape: TDrape; const SceneFile: string; Spacing: double; out Problems: TDrapeProblemArray;
+// Writes the scene and its meshes, the body's only when there is one, and a
+// copy of ScriptSource, the Blender script; with none (or '') the script is
+// left out, with a problem. False, with a message, when a file cannot be
+// written.
+function ExportDrape(Drape: TDrape; const SceneFile: string; Spacing: double; const ScriptSource: string; out Problems: TDrapeProblemArray;
   out ErrorMessage: string): boolean;
 
 resourcestring
+  rsDrapeExportNoScript = 'The Blender script is missing from the program''s data folder, so %s was not written';
   rsDrapeExportNotMeshed = '%s: %s (copy %d) could not be meshed, so it is left out';
 
 implementation
@@ -93,6 +99,7 @@ const
   // fabric's real size
   UV_PER_MM = 0.001;
   UV_DECIMALS = 6;
+  BLEND_EXTENSION = '.blend';
   OBJ_HEADER = '# OpenSloper drape export, in mm with Blender''s axes (x left of the body, y to its back, z up)';
 
 function DrapeExportTarget(const DrapeFile: string): string;
@@ -112,6 +119,8 @@ begin
   Result.Scene := SceneFile;
   Result.Pieces := Base + BLENDER_PIECES_EXTENSION;
   Result.Body := Base + BLENDER_BODY_EXTENSION;
+  Result.Script := Base + BLENDER_SCRIPT_EXTENSION;
+  Result.Blend := Base + BLEND_EXTENSION;
 end;
 
 function ObjNumber(Value: double; Decimals: integer): string;
@@ -376,11 +385,13 @@ begin
   end;
 end;
 
-function ExportDrape(Drape: TDrape; const SceneFile: string; Spacing: double; out Problems: TDrapeProblemArray;
+function ExportDrape(Drape: TDrape; const SceneFile: string; Spacing: double; const ScriptSource: string; out Problems: TDrapeProblemArray;
   out ErrorMessage: string): boolean;
 var
   Files: TDrapeExportFiles;
   Exported: TDrapeExport;
+  Script: string;
+  Problem: TDrapeProblem;
 begin
   Files := DrapeExportFiles(SceneFile);
   Exported := BuildDrapeExport(Drape, Spacing);
@@ -390,6 +401,16 @@ begin
     (not Exported.HasBody or WriteTextFile(Files.Body, BodyOBJ(Exported.Body), ErrorMessage)) and
     WriteTextFile(Files.Scene, DrapeSceneText(Drape, Exported, ExtractFileName(Files.Pieces), ExtractFileName(Files.Body), Spacing),
     ErrorMessage);
+  if not Result then
+    Exit;
+  if (ScriptSource = '') or not FileExists(ScriptSource) then
+  begin
+    Problem.Text := Format(rsDrapeExportNoScript, [ExtractFileName(Files.Script)]);
+    Problem.Item := -1;
+    Insert(Problem, Problems, Length(Problems));
+  end
+  else
+    Result := ReadTextFile(ScriptSource, Script, ErrorMessage) and WriteTextFile(Files.Script, Script, ErrorMessage);
 end;
 
 end.

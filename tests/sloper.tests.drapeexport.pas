@@ -27,7 +27,7 @@ interface
 uses
   SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement, Sloper.Core.DrapeFile,
-  Sloper.Core.BodyForm, Sloper.Output.DrapeExport;
+  Sloper.Core.BodyForm, Sloper.Output.DrapeExport, Sloper.Output.BlenderRun;
 
 type
   // The objects of an OBJ file: their names, vertices and triangles, which
@@ -63,6 +63,17 @@ type
     procedure TestBody;
     procedure TestNoBody;
     procedure TestUnplacedLeftOut;
+    procedure TestScriptFound;
+    procedure TestBlenderParameters;
+    procedure TestBlenderProgress;
+    procedure TestRunReadsLinesAndCode;
+  end;
+
+  // Keeps the lines a run passes on
+  TLineCatcher = class
+  public
+    Lines: TStringArray;
+    procedure Line(const Text: string);
   end;
 
 // Reads the OBJ text the export writes
@@ -71,7 +82,10 @@ function ParseObj(const Text: string): TObjObjectArray;
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.Core.Mesher;
+  {$IFDEF UNIX}
+  BaseUnix,
+  {$ENDIF}
+  Classes, Sloper.Core.JSON, Sloper.Core.Mesher, Sloper.Core.AppPaths;
 
 const
   SPACING = 10;
@@ -413,6 +427,75 @@ begin
     FreeAndNil(Root);
   end;
 end;
+
+procedure TLineCatcher.Line(const Text: string);
+begin
+  Insert(Text, Lines, Length(Lines));
+end;
+
+procedure TTestDrapeExport.TestScriptFound;
+var
+  Script, Err: string;
+begin
+  AssertTrue('in data/blender', TAppPaths.BlenderScriptFile <> '');
+  AssertTrue(Err, ReadTextFile(TAppPaths.BlenderScriptFile, Script, Err));
+  // The script reads the files the export names, by the names it gives them
+  AssertTrue('scene format', Pos('SCENE_FORMAT = "' + BLENDER_FORMAT + '"', Script) > 0);
+  AssertTrue('scene version', Pos('SCENE_VERSION = ' + IntToStr(BLENDER_VERSION), Script) > 0);
+  AssertTrue('script name', Pos('SCRIPT_SUFFIX = "' + BLENDER_SCRIPT_EXTENSION + '"', Script) > 0);
+  AssertTrue('scene name', Pos('SCENE_SUFFIX = "' + BLENDER_EXTENSION + '"', Script) > 0);
+  AssertTrue('frames', Pos('DEFAULT_FRAMES = ' + IntToStr(DEFAULT_DRAPE_FRAMES), Script) > 0);
+  AssertTrue('Blender version', Pos('BLENDER_VERSION = (' + StringReplace(BLENDER_SCRIPT_VERSION, '.', ', ', []) + ')', Script) > 0);
+end;
+
+procedure TTestDrapeExport.TestBlenderParameters;
+var
+  Parameters: TStringArray;
+begin
+  Parameters := BlenderParameters('skirt.blender.py', 80);
+  AssertEquals('in the background', '--background', Parameters[0]);
+  AssertTrue('the script', string.Join(' ', Parameters).Contains('--python skirt.blender.py -- --frames 80'));
+  AssertTrue('a failing script fails Blender', string.Join(' ', Parameters).Contains('--python-exit-code 1'));
+end;
+
+procedure TTestDrapeExport.TestBlenderProgress;
+var
+  Text: string;
+begin
+  AssertTrue(BlenderProgress('OpenSloper: frame 3 of 120', Text));
+  AssertEquals('frame 3 of 120', Text);
+  AssertFalse(BlenderProgress('Blender 5.2.2 LTS', Text));
+end;
+
+// A stand-in for Blender, a shell script, shows how lines and the exit code come back
+procedure TTestDrapeExport.TestRunReadsLinesAndCode;
+{$IFDEF UNIX}
+var
+  Fake, Err: string;
+  Catcher: TLineCatcher;
+  Outcome: TBlenderRun;
+begin
+  Fake := IncludeTrailingPathDelimiter(GetTempDir) + 'sloper-fake-blender-' + IntToStr(Random(MaxInt));
+  AssertTrue(Err, WriteTextFile(Fake, '#!/bin/sh' + #10 + 'echo "Blender 5.2"' + #10 + 'echo "OpenSloper: frame 1 of 2"' + #10 +
+    'echo "Traceback" >&2' + #10 + 'printf "last"' + #10 + 'exit 3' + #10, Err));
+  Catcher := TLineCatcher.Create;
+  try
+    AssertEquals(0, FpChmod(Fake, &755));
+    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 2, @Catcher.Line, Outcome, Err));
+    AssertEquals('code', 3, Outcome.ExitCode);
+    AssertEquals('every line, the last without an end', 4, Length(Catcher.Lines));
+    AssertEquals('OpenSloper: frame 1 of 2', Catcher.Lines[1]);
+    AssertEquals('the rest kept to show', 3, Length(Outcome.Tail));
+    AssertEquals('last', Outcome.Tail[2]);
+  finally
+    FreeAndNil(Catcher);
+    DeleteFile(Fake);
+  end;
+end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
 
 initialization
   RegisterTest(TTestDrapeExport);

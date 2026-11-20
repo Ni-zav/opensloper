@@ -77,6 +77,10 @@ type
     // The fonts bundled for drawing text into images, data/fonts
     class function FontDir: string;
     class function FontDirIn(const Folder: string): string;
+    // The script that drapes an export in Blender, data/blender/drape.py; ''
+    // when it is not there
+    class function BlenderScriptFile: string;
+    class function BlenderScriptFileIn(const Folder: string): string;
     // The user guide's front page in the offline copy of the site that the
     // downloads ship in data/help; '' when there is none, as in the source tree
     class function UserGuideFile: string;
@@ -125,6 +129,8 @@ const
   CATALOGUE_FILE_NAME = 'measurement-catalogue.json';
   ICON_FOLDER = 'icons';
   FONT_FOLDER = 'fonts';
+  BLENDER_FOLDER = 'blender';
+  BLENDER_SCRIPT_NAME = 'drape.py';
   USER_GUIDE_FOLDER = 'help';
   USER_GUIDE_PAGE = 'index.html';
   TRUSTED_CERTIFICATES_FILE_NAME = 'cacert.pem';
@@ -345,6 +351,16 @@ end;
 class function TAppPaths.FontDirIn(const Folder: string): string;
 begin
   Result := DataPathIn(Folder, FONT_FOLDER, True);
+end;
+
+class function TAppPaths.BlenderScriptFile: string;
+begin
+  Result := BlenderScriptFileIn(ExeDir);
+end;
+
+class function TAppPaths.BlenderScriptFileIn(const Folder: string): string;
+begin
+  Result := DataPathIn(Folder, ConcatPaths([BLENDER_FOLDER, BLENDER_SCRIPT_NAME]), False);
 end;
 
 class function TAppPaths.UserGuideFile: string;

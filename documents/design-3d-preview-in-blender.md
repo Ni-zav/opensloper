@@ -161,7 +161,7 @@ The script is generated next to the OBJ and JSON, for one Blender version stated
 5. Mesher in the core, with tests.
 6. Seam pairing feeding the mesher's outline resampling, with tests (built 2026-11-20, `Sloper.Core.DrapeMesh`).
 7. OBJ and seam JSON writer (pieces and body), CLI command, schemas (built 2026-11-20, `Sloper.Output.DrapeExport`, `opensloper-cli drape`; see the design document). Seams left open show in the app's Problems tab (built 2026-11-20).
-8. Blender script and running Blender from the app, checked by hand on the tutorial patterns in `docs/examples/`, garments and accessories.
+8. Blender script and running Blender from the app, checked by hand on the tutorial patterns in `docs/examples/`, garments and accessories. The script is built (2026-11-20, `data/blender/drape.py`, run by `opensloper-cli drape --run`, checked on the bodice block); running Blender from the app is still to do.
 9. User documentation, packaging the fourth app.
 10. Later: the user's own body.
 

@@ -62,6 +62,9 @@ type
     procedure TestDrape;
     procedure TestDrapeNeedsDrape;
     procedure TestDrapeBadSpacing;
+    procedure TestDrapeBadFrames;
+    procedure TestDrapeRunWithoutBlender;
+    procedure TestDrapeRunInBlender;
     procedure TestLayoutExtensionAnyCase;
     procedure TestExportDraft;
     procedure TestExportDraftUpToUnknown;
@@ -91,7 +94,7 @@ implementation
 uses
   Classes, StreamIO, fpjson, jsonparser, Sloper.Core.Version, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Units,
   Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout,
-  Sloper.Core.PatternSources, Sloper.Output.LayoutExport, Sloper.Core.DrapeFile,
+  Sloper.Core.PatternSources, Sloper.Output.LayoutExport, Sloper.Core.DrapeFile, Sloper.Core.AppPaths, Sloper.Output.BlenderRun,
   Sloper.Tests.TlsServer;
 
 function ExamplesFolder: string;
@@ -393,10 +396,13 @@ var
 begin
   AssertEquals(FErr, 0, Run(['drape', GuessedBodiceDrape]));
   AssertEquals('no warnings', '', FErr);
-  AssertEquals(3, Length(OutLines));
+  AssertEquals(5, Length(OutLines));
   AssertEquals(Format(rsWroteFile, [InFolder('bodice.pieces.obj')]), OutLines[0]);
   AssertEquals(Format(rsWroteFile, [InFolder('bodice.body.obj')]), OutLines[1]);
   AssertEquals(Format(rsWroteFile, [InFolder('bodice.blender.json')]), OutLines[2]);
+  AssertEquals(Format(rsWroteFile, [InFolder('bodice.blender.py')]), OutLines[3]);
+  AssertEquals(Format(rsDrapeHowToRun, [InFolder('bodice.blender.py')]), OutLines[4]);
+  AssertEquals('the script as the program has it', ReadWholeFile(TAppPaths.BlenderScriptFile), ReadWholeFile(InFolder('bodice.blender.py')));
   AssertTrue('body', FileExists(InFolder('bodice.body.obj')));
   Root := GetJSON(ReadWholeFile(InFolder('bodice.blender.json')));
   try
@@ -420,6 +426,30 @@ begin
   AssertEquals(EXIT_FAILURE, Run(['drape', GuessedBodiceDrape, '--spacing=0.5']));
   AssertEquals(Format(rsDrapeSpacing, ['2', '100']), FErr.Trim);
   AssertFalse('nothing written', FileExists(InFolder('bodice.blender.json')));
+end;
+
+procedure TTestCLI.TestDrapeBadFrames;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['drape', GuessedBodiceDrape, '--frames=0']));
+  AssertEquals(Format(rsDrapeFrames, [MIN_DRAPE_FRAMES, MAX_DRAPE_FRAMES]), FErr.Trim);
+end;
+
+procedure TTestCLI.TestDrapeRunWithoutBlender;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['drape', GuessedBodiceDrape, '--run', '--blender=' + InFolder('no-blender')]));
+  AssertEquals(Format(rsDrapeNoBlender, [BLENDER_SCRIPT_VERSION]), FErr.Trim);
+  AssertTrue('the files are written', FileExists(InFolder('bodice.blender.py')));
+end;
+
+// Only where Blender is installed: CI has none
+procedure TTestCLI.TestDrapeRunInBlender;
+begin
+  if FindBlender('') = '' then
+    Exit;
+  AssertEquals(FErr, 0, Run(['drape', GuessedBodiceDrape, '--run', '--frames=2', '--spacing=40']));
+  AssertTrue(FOut, Pos('frame 2 of 2', FOut) > 0);
+  AssertTrue('says where', OutLines[High(OutLines)].EndsWith(InFolder('bodice.blend')));
+  AssertTrue('saved', FileExists(InFolder('bodice.blend')));
 end;
 
 // Windows and macOS keep a file's name as typed, .SLAYOUT included

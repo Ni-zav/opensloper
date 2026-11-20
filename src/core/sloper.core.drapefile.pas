@@ -45,6 +45,7 @@ const
   BLENDER_EXTENSION = '.blender.json';
   BLENDER_PIECES_EXTENSION = '.pieces.obj';
   BLENDER_BODY_EXTENSION = '.body.obj';
+  BLENDER_SCRIPT_EXTENSION = '.blender.py';
 
 type
   // bkMeasurements builds a generic body from a measurement set; bkNone has no

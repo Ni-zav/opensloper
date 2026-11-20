@@ -1,7 +1,7 @@
 # The drape window
 
-**opensloper-drape** places the pieces of one or more patterns round a dress
-form in 3D, the way they are worn, ready for draping in Blender's cloth
+**opensloper-drape** places the pieces of one or more patterns round a body in
+3D, the way they are worn, ready for draping in Blender's cloth
 simulation. A drape is saved as a `.sdrape` file. It reads the saved patterns
 and never changes them.
 
@@ -24,8 +24,7 @@ a drape file or a pattern.
 
 ## Parts of the window
 
-- **The view**, on the left: the dress form on its stand and the placed
-  pieces. A piece seen from its wrong side is drawn paler, so one facing the
+- **The view**, on the left: the body and the placed pieces. A piece seen from its wrong side is drawn paler, so one facing the
   wrong way stands out. Thin lines cross each seam between placed pieces, at
   its start, middle and end, so you can see which edges are sewn together.
 - **Tabs**, on the right, one open at a time, as in the other apps:
@@ -39,18 +38,21 @@ a drape file or a pattern.
 
 ## The body
 
-The body is a **dress form**: a torso from the neck to below the hips on a
-stand, with no head, arms or legs. It is built from a measurement set: its
-waist, bust, hip, neck and high hip are as round as the measurements say, at
-the heights they give, and the shoulders as wide as the shoulder width. A
-measurement the set does not have is worked out from the height.
+The body is a **figure** standing on the floor: a torso, legs, arms hanging a
+little out from the sides, hands, feet and a head. Its feet point to the front,
+so you can tell which way it faces from any side; View → Front looks at it
+from there. It is built from a measurement set: its waist, bust, hip, neck and
+high hip are as round as the measurements say, at the heights they give, and
+so are its thighs, knees, calves, ankles, upper arms, elbows, wrists and head;
+its arms, hands and feet are as long as measured. A measurement the set does
+not have is worked out from the height.
 
-By default the form uses the first pattern's measurements and size. On the
+By default the figure uses the first pattern's measurements and size. On the
 Patterns tab, **Choose Measurements…** picks another measurement file, **Use
 the First Pattern's** goes back, and **Size** picks the size of a size table.
-**No body** leaves the form out, for bags and other accessories.
+**No body** leaves the figure out, for bags and other accessories.
 
-The **gap** is how far pieces are placed off the form and apart across a
+The **gap** is how far pieces are placed off the body and apart across a
 seam, 20 mm by default, so the simulation has room to pull them in.
 
 ## Look around
@@ -72,13 +74,13 @@ A new drape places every piece by a guess, and Pieces → Guess Placements
 (++ctrl+g++) does the same for pieces not yet placed:
 
 1. The largest piece of each pattern stands upright by its grainline in front
-   of the form.
+   of the body.
 2. Each piece sewn to a placed piece goes beside it along their longest seam.
 3. The second of a pair cut mirrored goes as the mirror image of the first,
    on the other side of the body.
-4. Pieces with no seams wait in a row beside the form.
+4. Pieces with no seams wait in a row beside the body.
 
-The guess is a strip of pieces in front of the form, not a garment: wrap it
+The guess is a strip of pieces in front of the body, not a garment: wrap it
 round the body by hand. Click a piece to select it, then:
 
 | To | Do this |

@@ -15,7 +15,7 @@ flowchart LR
 | Measurements `.slm` | opensloper-measurements | One person's measurements, or a size table with a value for each size |
 | Pattern `.sloper` | opensloper-design | The formulas that place every point and line, and the pieces, seams, markings and notes |
 | Layout `.slayout` | opensloper-publish | Where each piece goes on the pages or roll, for one or more patterns |
-| Drape `.sdrape` | opensloper-drape | Where each piece goes round a dress form in 3D, for one or more patterns |
+| Drape `.sdrape` | opensloper-drape | Where each piece goes round a body in 3D, for one or more patterns |
 
 ## Measurements
 
@@ -39,7 +39,7 @@ change to a pattern shows in its layouts.
 
 ## Drapes
 
-A drape places the pieces of one or more patterns round a dress form built
+A drape places the pieces of one or more patterns round a body built
 from a measurement set, for draping in Blender; see [The drape
 window](../drape/index.md). Like a layout, it reads the patterns when it opens.
 

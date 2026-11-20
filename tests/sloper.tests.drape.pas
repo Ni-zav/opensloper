@@ -79,6 +79,7 @@ type
     procedure TestRingsMatchCircumferences;
     procedure TestRingsGoUp;
     procedure TestMeshIsClosedAndFacesOut;
+    procedure TestFigureStandsFacingForwards;
     procedure TestSizeOfATable;
   end;
 
@@ -541,7 +542,7 @@ begin
   AssertTrue('height', Measures.Height > 0);
   AssertTrue('all estimated', Length(Measures.Estimated) > 10);
   AssertTrue('waist below bust', Measures.WaistHeight < Measures.BustHeight);
-  AssertTrue('mesh', Length(BuildDressForm(Measures).Triangles) > 0);
+  AssertTrue('mesh', Length(BuildBodyForm(Measures).Triangles) > 0);
 end;
 
 procedure TTestBodyForm.TestTakesMeasurements;
@@ -579,7 +580,7 @@ begin
     FreeAndNil(BodySet);
   end;
   Found := 0;
-  for Ring in DressFormRings(Measures) do
+  for Ring in TorsoRings(Measures) do
   begin
     if SameValue(Ring.Height, Measures.WaistHeight) then
     begin
@@ -609,7 +610,7 @@ begin
   Measures := DefaultBodyMeasures;
   // Heights out of order cannot fold the torso
   Measures.WaistHeight := Measures.BustHeight + 50;
-  Rings := DressFormRings(Measures);
+  Rings := TorsoRings(Measures);
   for Index := 1 to High(Rings) do
     AssertTrue(Format('ring %d above the one below', [Index]), Rings[Index].Height > Rings[Index - 1].Height);
 end;
@@ -631,7 +632,7 @@ var
   Edge: string;
   Ends: TStringArray;
 begin
-  Mesh := BuildDressForm(DefaultBodyMeasures);
+  Mesh := BuildBodyForm(DefaultBodyMeasures);
   Edges := TStringList.Create;
   try
     Edges.Sorted := True;
@@ -650,6 +651,33 @@ begin
     FreeAndNil(Edges);
   end;
   AssertTrue('faces out', MeshVolume(Mesh) > 0);
+end;
+
+procedure TTestBodyForm.TestFigureStandsFacingForwards;
+const
+  // The crown is the top of an ellipsoid drawn with rings, a little under it
+  CROWN_TOLERANCE = 10;
+var
+  Measures: TBodyMeasures;
+  Mesh: TBodyMesh;
+  Point, Low, High: TVec3;
+begin
+  Measures := DefaultBodyMeasures;
+  Mesh := BuildBodyForm(Measures);
+  Low := Mesh.Vertices[0];
+  High := Low;
+  for Point in Mesh.Vertices do
+  begin
+    Low := Vec3(Min(Low.X, Point.X), Min(Low.Y, Point.Y), Min(Low.Z, Point.Z));
+    High := Vec3(Max(High.X, Point.X), Max(High.Y, Point.Y), Max(High.Z, Point.Z));
+  end;
+  AssertNear('on the floor', 0, Low.Z, 1e-6);
+  AssertNear('as tall as the height', Measures.Height, High.Z, CROWN_TOLERANCE);
+  AssertTrue('no higher', High.Z <= Measures.Height + 1e-6);
+  AssertTrue('feet point forwards, past the torso', Low.Y < -BodyFrontDepth(Measures) - Measures.FootLength / 4);
+  AssertTrue('arms out past the shoulders', High.X > Measures.ShoulderWidth / 2 + Measures.ArmLength * Sin(DegToRad(ARM_ANGLE)) / 2);
+  AssertNear('left and right alike', -Low.X, High.X, 1e-6);
+  AssertTrue('arms hang out and down', (ArmDirection(1).X > 0) and (ArmDirection(1).Z < 0) and (ArmDirection(-1).X < 0));
 end;
 
 procedure TTestBodyForm.TestSizeOfATable;
@@ -947,7 +975,7 @@ begin
   AssertTrue('a body', FDrape.BodyMeasures(Measures));
   PlacedExtent(FrontCopy, Low, High);
   AssertNear('middle at the waist', 1040, (Low.Z + High.Z) / 2, 1e-6);
-  AssertNear('the gap in front of the form', -(DressFormFrontDepth(Measures) + FDrape.Gap), Low.Y, 1e-6);
+  AssertNear('the gap in front of the form', -(BodyFrontDepth(Measures) + FDrape.Gap), Low.Y, 1e-6);
   FDrape.Body.Kind := bkNone;
   AssertFalse('no body', FDrape.BodyMeasures(Measures));
 end;

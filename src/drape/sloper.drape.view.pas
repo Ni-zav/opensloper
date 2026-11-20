@@ -261,7 +261,7 @@ begin
   High := Low;
   if FDocument.Drape.BodyMeasures(Measures) then
   begin
-    Mesh := BuildDressForm(Measures);
+    Mesh := BuildBodyForm(Measures);
     for Point in Mesh.Vertices do
       Grow(Point);
   end;

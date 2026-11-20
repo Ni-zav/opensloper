@@ -354,7 +354,7 @@ begin
   if BodyMeasures(Measures) then
   begin
     Height := Measures.WaistHeight;
-    Depth := DressFormFrontDepth(Measures);
+    Depth := BodyFrontDepth(Measures);
   end;
 end;
 

@@ -160,7 +160,7 @@ begin
   Result := nil;
   if not Drape.BodyMeasures(Measures) then
     Exit;
-  Mesh := BuildDressForm(Measures);
+  Mesh := BuildBodyForm(Measures);
   Toward := -Camera.Forward;
   for Triangle in Mesh.Triangles do
   begin

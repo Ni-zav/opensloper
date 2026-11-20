@@ -174,7 +174,7 @@ resourcestring
   rsAddPattern = 'Add Pattern...';
   rsRemovePattern = 'Remove Pattern';
   rsBodyGroup = 'Body';
-  rsBodyDressForm = 'Dress form';
+  rsBodyFigure = 'Figure';
   rsBodyNone = 'No body';
   rsBodySet = 'Measurements:';
   rsBodySetOfPattern = 'The first pattern''s';
@@ -255,7 +255,7 @@ const
   GAP_MERGE_KEY = 'gap';
   HALF_TURN = 180;
   WHEEL_ZOOM_STEP = 1.25;
-  BODY_KIND_ITEMS: array[TDrapeBodyKind] of string = (rsBodyDressForm, rsBodyNone);
+  BODY_KIND_ITEMS: array[TDrapeBodyKind] of string = (rsBodyFigure, rsBodyNone);
   VIEW_CAPTIONS: array[TDrapeView] of string = (rsMenuFront, rsMenuBack, rsMenuLeft, rsMenuRight, rsMenuTop, rsMenuThreeQuarter);
 
 constructor TDrapeForm.Create(AOwner: TComponent);

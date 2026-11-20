@@ -19,7 +19,7 @@ Goals:
 - Automatic piece detection instead of manually tracing outlines in order
 - Seam allowance, notches, grainlines and true-scale tiled printing
 - Garments and accessories in fabric and leather, with output for cutting machines
-- A small, maintainable codebase with a pure-Pascal core and few dependencies (see Dependencies)
+- A small, maintainable codebase with a pure-Pascal core, built from what comes with the compiler (see Dependencies)
 
 ### Technology and licence
 
@@ -45,7 +45,7 @@ Licence decisions:
 
 Lazarus and Free Pascal were chosen over C++, the language of Valentina and Seamly2D, and over the usual modern choices (TypeScript, Java, Rust) for these reasons:
 
-- **Few dependencies.** The compiler's own libraries (FCL and LCL) cover the GUI, JSON, XML, SQLite, file handling and testing (FPCUnit), so the project needs only three third-party packages (see Dependencies). In TypeScript, Java or Rust the same app would pull in hundreds of packages through npm, Maven or Cargo, most of them indirect, each able to change, break the build or be withdrawn.
+- **Everything comes with the compiler.** The compiler's own libraries (FCL and LCL) cover the GUI, JSON, XML, SQLite, file handling and testing (FPCUnit), so beyond them the project needs only three small packages (see Dependencies), with no separate framework to install or upgrade. In TypeScript, Java or Rust the same app would pull in hundreds of packages through npm, Maven or Cargo, most of them indirect, each able to change, break the build or be withdrawn. Seamly2D and Valentina do not have that problem: their library count is about the same as ours (see Dependencies). The difference is that their main dependency, Qt, is a large framework installed and upgraded separately.
 - **It will still build in ten years.** Free Pascal changes slowly and keeps old code compiling; Pascal written decades ago still builds. Patterns are kept and reused for years, so the program that opens them has to outlast fashions in tooling.
 - **Native apps from one toolkit.** The LCL draws with each platform's own widgets (Qt on Linux, Cocoa on macOS, Win32 on Windows) from one source, with a form designer, menus, actions and dialogs built in. The result is a single native executable per app, with no runtime, virtual machine or browser engine to ship.
 - **Fast to build and to run.** The compiler builds the whole project in seconds, and compiled code is fast enough to re-evaluate a pattern on every drag.
@@ -233,6 +233,15 @@ opensloper/
 ### Dependencies
 
 OpenSloper keeps its dependencies to a minimum, and this is a deliberate design choice, not an accident of size. Every dependency is code the project does not control: it can change, break, be withdrawn, change licence or carry a security problem in. Few dependencies keep the apps buildable for years, the licence position simple, and output under the project's own control.
+
+**Compared with Seamly2D and Valentina.** The number of dependencies is not what sets OpenSloper apart: Seamly2D, like Valentina from the same codebase, also has only a few. Its developer guide lists the Qt 6 framework (with the Multimedia and Image Formats modules), Apache's xerces-c XML parser, the external `pdftops` program from Xpdf or Poppler for PS/EPS layouts, and the OpenGL, xkbcommon and xcb libraries Qt needs on Linux. Like us, it keeps its own libraries in the repository, such as qmuparser for formulas and vpropertyexplorer for the property panel. The differences are elsewhere:
+
+- **Qt is one very large dependency.** It plays the role the LCL and FCL play here, but it is installed separately (gigabytes, through Qt's installer), and the project has to follow Qt's release schedule; the move from Qt 5 to Qt 6 was a large porting job. Lazarus comes with its compiler and changes far more slowly.
+- **No outside programs for output.** Seamly2D's PS/EPS export calls `pdftops`, which each user or packager has to provide. OpenSloper's PDF, SVG and DXF writers are all inside the apps.
+- **No separate XML library.** Their XML parser is a C++ library of its own; our JSON files and the Seamly2D and Valentina XML import use the FCL that ships with the compiler.
+- **We depend on Qt too, on Linux.** The Qt widgetset needs `libQt5Pas`/`libQt6Pas` and Qt itself at run time. The exposure is smaller, since only the LCL's thin widget layer uses Qt and macOS and Windows do not need it, but it is a real dependency (the Platform row below).
+
+So the claim is not fewer packages but that everything the apps need comes with the compiler, with no separate framework to install or upgrade and no outside programs needed for output.
 
 **What the apps depend on:**
 

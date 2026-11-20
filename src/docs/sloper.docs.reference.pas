@@ -195,6 +195,7 @@ resourcestring
   rsDocApiGroupPieces = 'Pieces';
   rsDocApiGroupMaterials = 'Materials';
   rsDocApiGroupSeams = 'Seams';
+  rsDocApiGroupFeatures = 'Features';
   rsDocApiGroupNotes = 'Notes';
   rsDocApiGroupChecking = 'Checking and output';
   rsDocParameter = 'Parameter';
@@ -237,7 +238,7 @@ const
   OPERATION_GROUP_TITLES: array[TOperationGroup] of string = (rsDocGroupPoints, rsDocGroupEdges, rsDocGroupTransforms, rsDocGroupPieces,
     rsDocGroupAnnotations);
   API_GROUP_TITLES: array[TApiMethodGroup] of string = (rsDocApiGroupFiles, rsDocApiGroupMeasurements, rsDocApiGroupObjects,
-    rsDocApiGroupDrafting, rsDocApiGroupPieces, rsDocApiGroupMaterials, rsDocApiGroupSeams, rsDocApiGroupNotes,
+    rsDocApiGroupDrafting, rsDocApiGroupPieces, rsDocApiGroupMaterials, rsDocApiGroupSeams, rsDocApiGroupFeatures, rsDocApiGroupNotes,
     rsDocApiGroupChecking);
 
 // Characters that would end a table cell or start markup

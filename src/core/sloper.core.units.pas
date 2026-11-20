@@ -30,7 +30,8 @@ type
 
   // Lengths a new object starts with
   TStartingLength = (slPieceAllowance, slSeamTolerance, slArcRadius, slOffsetDistance, slCornerRadius, slStitchSpacing,
-    slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch);
+    slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch,
+    slLapStitch, slFlyExtension, slFlyStitch, slFlyShieldWidth, slFlyShieldExtra, slFeatureGap);
 
 const
   MEASURE_UNIT_NAMES: array[TMeasureUnit] of string = ('mm', 'cm', 'in');
@@ -52,7 +53,13 @@ const
     ('3', '0.3', '0.125'),    // match dot
     ('200', '20', '8'),       // zip length
     ('20', '2', '0.75'),      // allowance along a zip
-    ('7', '0.7', '0.25'));    // zip topstitching from the seam
+    ('7', '0.7', '0.25'),     // zip topstitching from the seam
+    ('10', '1', '0.375'),     // a lapped zip's stitching from the seam
+    ('40', '4', '1.5'),       // a fly front's extension past the centre front
+    ('30', '3', '1.25'),      // a fly front's stitching from the centre front
+    ('40', '4', '1.5'),       // a fly shield's width, folded
+    ('20', '2', '0.75'),      // how far a fly shield runs past the zip
+    ('50', '5', '2'));        // the room between the pattern and a piece a feature adds
 
 // The unit with this name (mm, cm or in, any case)
 function MeasureUnitFromName(const AName: string; out AUnit: TMeasureUnit): boolean;

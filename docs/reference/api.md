@@ -614,6 +614,24 @@ No parameters.
 
 Returns: `suggestions`, each with `sideA`, `sideB`, whether the edge is `shared`, and the length `difference`.
 
+## Features
+
+### `feature_zip`
+
+Puts a zip along a piece's edge, as the Features tab does, in one undo step: a ZipStop point at the zip's length, the edge split there, the opening's own allowance, a notch at the stop on every piece using the edge, the style's topstitching, and for a fly front a fly shield piece cut on the fold beside the pattern. They are ordinary objects. Its length starts as #zip_length, a variable the first zip adds. When the edge is in a seam with another edge, that side needs a zip too.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `edge` | ID or name | yes | The edge the zip opens along, on one or more pieces |
+| `style` | one of: `centred`, `invisible`, `lapped`, `flyFront` |  | centred: topstitched either side; invisible: no topstitching; lapped: one side over the zip, stitched down and across the stop; flyFront: stitched as a J at the fly's width, with a fly shield. Default centred |
+| `from` | one of: `start`, `end` |  | The end of the edge the opening starts from. Default start |
+| `length` | formula |  | The zip's length. Default #zip_length |
+| `allowance` | formula |  | The allowance along the opening; for a fly front, its extension past the seam. Default the style's |
+| `stitch` | formula |  | How far the topstitching is from the seam. Default the style's |
+| `shieldWidth` | formula |  | A fly shield's width as worn; it is cut on the fold. Default 40 mm |
+
+Returns: `stop`, `opening` and `rest` (the edge's two parts) and `shield` (a fly front's) as `get_object` gives them, `stitching` the topstitching's objects, `pieces` the IDs of the pieces it went into, and `otherSide`, whether a seam joins the edge to another that needs a zip too.
+
 ## Notes
 
 ### `add_note`

@@ -28,7 +28,9 @@ unit Sloper.API.Methods;
 interface
 
 type
-  TApiMethodGroup = (agFiles, agMeasurements, agObjects, agDrafting, agPieces, agMaterials, agSeams, agNotes, agChecking);
+  // Features, sewing details applied in one step, are named feature_ and the
+  // feature, as feature_zip
+  TApiMethodGroup = (agFiles, agMeasurements, agObjects, agDrafting, agPieces, agMaterials, agSeams, agFeatures, agNotes, agChecking);
 
   TApiParamKind = (
     apTarget,     // the object it acts on: "id" (a number) or "name"
@@ -151,6 +153,22 @@ resourcestring
   rsApiRectangleHeight = 'How far down the opposite corner is';
   rsApiRectangleReturns = 'The four lines';
   rsApiRoundCorner = 'Rounds the corner where two edges meet with an arc.';
+  rsApiInsertZip = 'Puts a zip along a piece''s edge, as the Features tab does, in one undo step: a ZipStop point at the ' +
+    'zip''s length, the edge split there, the opening''s own allowance, a notch at the stop on every piece using the edge, ' +
+    'the style''s topstitching, and for a fly front a fly shield piece cut on the fold beside the pattern. They are ordinary ' +
+    'objects. Its length starts as #zip_length, a variable the first zip adds. When the edge is in a seam with another ' +
+    'edge, that side needs a zip too.';
+  rsApiZipReturns = '`stop`, `opening` and `rest` (the edge''s two parts) and `shield` (a fly front''s) as `get_object` ' +
+    'gives them, `stitching` the topstitching''s objects, `pieces` the IDs of the pieces it went into, and `otherSide`, ' +
+    'whether a seam joins the edge to another that needs a zip too';
+  rsApiZipEdge = 'The edge the zip opens along, on one or more pieces';
+  rsApiZipStyle = 'centred: topstitched either side; invisible: no topstitching; lapped: one side over the zip, stitched down ' +
+    'and across the stop; flyFront: stitched as a J at the fly''s width, with a fly shield. Default centred';
+  rsApiZipFrom = 'The end of the edge the opening starts from. Default start';
+  rsApiZipLength = 'The zip''s length. Default #zip_length';
+  rsApiZipAllowance = 'The allowance along the opening; for a fly front, its extension past the seam. Default the style''s';
+  rsApiZipStitch = 'How far the topstitching is from the seam. Default the style''s';
+  rsApiZipShield = 'A fly shield''s width as worn; it is cut on the fold. Default 40 mm';
   rsApiCornerEdgeA = 'The first edge';
   rsApiCornerEdgeB = 'The second edge';
   rsApiCornerRadius = 'The arc''s radius';
@@ -322,7 +340,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units;
+  SysUtils, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units, Sloper.Core.Features;
 
 var
   Table: TApiMethodArray;
@@ -466,6 +484,14 @@ begin
   P('edgeA', apReference, True, rsApiCornerEdgeA);
   P('edgeB', apReference, True, rsApiCornerEdgeB);
   P('radius', apFormula, True, rsApiCornerRadius);
+  Method('feature_zip', agFeatures, rsApiInsertZip, rsApiZipReturns);
+  P('edge', apReference, True, rsApiZipEdge);
+  P('style', apChoice, False, rsApiZipStyle, string.Join(', ', ZIP_STYLE_NAMES));
+  P('from', apChoice, False, rsApiZipFrom, 'start, end');
+  P('length', apFormula, False, rsApiZipLength);
+  P('allowance', apFormula, False, rsApiZipAllowance);
+  P('stitch', apFormula, False, rsApiZipStitch);
+  P('shieldWidth', apFormula, False, rsApiZipShield);
   Method('convert_edge', agDrafting, rsApiConvertEdge, rsApiReturnsObject);
   Target;
   P('to', apChoice, True, rsApiConvertEdgeTo, 'line, curve');

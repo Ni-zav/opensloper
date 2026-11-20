@@ -39,9 +39,9 @@ type
     FEdgeKey: string;
     FKinds: TListBox;
     FSettings: TGroupBox;
-    FEdgeLabel, FLengthLabel, FAllowanceLabel, FStitchLabel, FNote: TLabel;
+    FEdgeLabel, FLengthLabel, FAllowanceLabel, FStitchLabel, FShieldLabel, FNote: TLabel;
     FStyleBox, FFromBox: TComboBox;
-    FLengthEdit, FAllowanceEdit, FStitchEdit: TEdit;
+    FLengthEdit, FAllowanceEdit, FStitchEdit, FShieldEdit: TEdit;
     FApply: TButton;
     FNextTop: integer;
     FOnMessage: TFeaturesMessageEvent;
@@ -52,6 +52,8 @@ type
     procedure StartingValues;
     procedure Refresh;
     procedure StyleChange(Sender: TObject);
+    // The style's own captions and which fields it takes
+    procedure ShowStyle;
     procedure ApplyClick(Sender: TObject);
     procedure Say(const AText: string);
   public
@@ -67,6 +69,13 @@ resourcestring
   rsFeaturesStyle = 'Style';
   rsFeaturesCentred = 'Centred, topstitched either side';
   rsFeaturesInvisible = 'Invisible, nothing showing';
+  rsFeaturesLapped = 'Lapped, one side over the zip';
+  rsFeaturesFlyFront = 'Fly front, with a fly shield';
+  rsFeaturesExtension = 'Fly extension past the seam (%s)';
+  rsFeaturesLap = 'Lap stitching from the seam (%s)';
+  rsFeaturesFly = 'Fly stitching from the seam (%s)';
+  rsFeaturesShield = 'Fly shield width (%s)';
+  rsFeaturesZipShield = '%s, with a fly shield beside the pattern';
   rsFeaturesLength = 'Length (%s)';
   rsFeaturesFrom = 'Starts from';
   rsFeaturesFromPoint = 'The %s end';
@@ -75,8 +84,9 @@ resourcestring
   rsFeaturesApply = '&Apply';
   rsFeaturesAlong = 'Along %s';
   rsFeaturesChooseEdge = 'Select an edge of a piece on the canvas.';
-  rsFeaturesZipNote = 'Apply splits the edge where the zip stops, gives the opening its allowance, notches the stop and, ' +
-    'for a centred zip, adds the topstitching. They are ordinary objects, to change as you like; one Undo takes them all off.';
+  rsFeaturesZipNote = 'Apply splits the edge where the zip stops, gives the opening its allowance, notches the stop, ' +
+    'adds the style''s topstitching and, for a fly front, a fly shield piece. They are ordinary objects, to change as you ' +
+    'like; one Undo takes them all off.';
   rsFeaturesUndoZip = 'Insert Zip';
   rsFeaturesZipDone = 'Zip added along %s';
   rsFeaturesZipOtherSide = '%s; its seam joins another edge, which needs a zip too';
@@ -115,6 +125,8 @@ begin
   FStyleBox.Style := csDropDownList;
   FStyleBox.Items.Add(rsFeaturesCentred);
   FStyleBox.Items.Add(rsFeaturesInvisible);
+  FStyleBox.Items.Add(rsFeaturesLapped);
+  FStyleBox.Items.Add(rsFeaturesFlyFront);
   FStyleBox.ItemIndex := 0;
   FStyleBox.OnChange := @StyleChange;
   Place(FStyleBox);
@@ -131,6 +143,9 @@ begin
   FStitchLabel := AddLabel('');
   FStitchEdit := TEdit.Create(Self);
   Place(FStitchEdit);
+  FShieldLabel := AddLabel('');
+  FShieldEdit := TEdit.Create(Self);
+  Place(FShieldEdit);
   FApply := TButton.Create(Self);
   FApply.Caption := rsFeaturesApply;
   FApply.AutoSize := True;
@@ -138,7 +153,7 @@ begin
   Place(FApply);
   FApply.Align := alNone;
   FApply.Anchors := [akLeft, akTop];
-  FApply.AnchorSide[akTop].Control := FStitchEdit;
+  FApply.AnchorSide[akTop].Control := FShieldEdit;
   FApply.AnchorSide[akTop].Side := asrBottom;
   FApply.BorderSpacing.Top := ControlGap;
   FNote := TLabel.Create(Self);
@@ -202,21 +217,46 @@ begin
   Refresh;
 end;
 
-// A new or opened pattern, or another unit, starts the fields again
+// A new or opened pattern, or another unit, starts the fields again, at the
+// chosen style's widths
 procedure TFeaturesPanel.StartingValues;
 var
   Spec: TZipSpec;
-  UnitText: string;
 begin
-  Spec := DefaultZip(FDocument.Pattern, '');
+  Spec := DefaultZip(FDocument.Pattern, '', TZipStyle(Max(FStyleBox.ItemIndex, 0)));
   FLengthEdit.Text := Spec.Length;
   FAllowanceEdit.Text := Spec.Allowance;
   FStitchEdit.Text := Spec.StitchDistance;
-  UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
-  FLengthLabel.Caption := Format(rsFeaturesLength, [UnitText]);
-  FAllowanceLabel.Caption := Format(rsFeaturesAllowance, [UnitText]);
-  FStitchLabel.Caption := Format(rsFeaturesStitch, [UnitText]);
+  FShieldEdit.Text := Spec.ShieldWidth;
   FGeneration := FDocument.Generation;
+  ShowStyle;
+end;
+
+procedure TFeaturesPanel.ShowStyle;
+var
+  UnitText: string;
+  Style: TZipStyle;
+begin
+  Style := TZipStyle(Max(FStyleBox.ItemIndex, 0));
+  UnitText := MEASURE_UNIT_NAMES[muMillimetre];
+  if Assigned(FDocument) then
+    UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
+  FLengthLabel.Caption := Format(rsFeaturesLength, [UnitText]);
+  if Style = zsFlyFront then
+    FAllowanceLabel.Caption := Format(rsFeaturesExtension, [UnitText])
+  else
+    FAllowanceLabel.Caption := Format(rsFeaturesAllowance, [UnitText]);
+  case Style of
+    zsLapped: FStitchLabel.Caption := Format(rsFeaturesLap, [UnitText]);
+    zsFlyFront: FStitchLabel.Caption := Format(rsFeaturesFly, [UnitText]);
+    else
+      FStitchLabel.Caption := Format(rsFeaturesStitch, [UnitText]);
+  end;
+  FShieldLabel.Caption := Format(rsFeaturesShield, [UnitText]);
+  FStitchEdit.Enabled := Style <> zsInvisible;
+  FStitchLabel.Enabled := FStitchEdit.Enabled;
+  FShieldEdit.Enabled := Style = zsFlyFront;
+  FShieldLabel.Enabled := FShieldEdit.Enabled;
 end;
 
 function PointName(Document: TPatternDocument; const Key: string): string;
@@ -262,10 +302,13 @@ begin
   StyleChange(nil);
 end;
 
+// A style starts with its own widths: a fly is wider than a lap
 procedure TFeaturesPanel.StyleChange(Sender: TObject);
 begin
-  FStitchEdit.Enabled := FStyleBox.ItemIndex = Ord(zsCentred);
-  FStitchLabel.Enabled := FStitchEdit.Enabled;
+  if Assigned(FDocument) and Assigned(Sender) then
+    StartingValues
+  else
+    ShowStyle;
 end;
 
 procedure TFeaturesPanel.Say(const AText: string);
@@ -283,12 +326,12 @@ var
 begin
   if not Assigned(FDocument) or FDocument.ChangeOpen then
     Exit;
-  Spec := DefaultZip(FDocument.Pattern, FEdgeKey);
-  Spec.Style := TZipStyle(FStyleBox.ItemIndex);
+  Spec := DefaultZip(FDocument.Pattern, FEdgeKey, TZipStyle(FStyleBox.ItemIndex));
   Spec.FromEnd := FFromBox.ItemIndex = 1;
   Spec.Length := Trim(FLengthEdit.Text);
   Spec.Allowance := Trim(FAllowanceEdit.Text);
   Spec.StitchDistance := Trim(FStitchEdit.Text);
+  Spec.ShieldWidth := Trim(FShieldEdit.Text);
   EdgeName := PointName(FDocument, FEdgeKey);
   FDocument.BeginChange(rsFeaturesUndoZip);
   if not InsertZip(FDocument.Pattern, Spec, Made) then
@@ -305,6 +348,8 @@ begin
     Exit;
   end;
   Done := Format(rsFeaturesZipDone, [EdgeName]);
+  if Made.ShieldKey <> '' then
+    Done := Format(rsFeaturesZipShield, [Done]);
   if Made.OtherSide then
     Done := Format(rsFeaturesZipOtherSide, [Done]);
   Say(Done);

@@ -55,6 +55,7 @@ type
   published
     procedure TestCircleArcAndCircleCircle;
     procedure TestRectangleCornerAndOffset;
+    procedure TestInsertZip;
     procedure TestMarkings;
     procedure TestSetRole;
     procedure TestSetMarker;
@@ -164,7 +165,7 @@ implementation
 uses
   base64, Sloper.Output.Layout,
   Sloper.Core.Arrange, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Variables,
-  Sloper.Core.Draft, Sloper.Core.PieceDetect, Sloper.Core.Units, Sloper.Core.PatternMaterials;
+  Sloper.Core.Draft, Sloper.Core.PieceDetect, Sloper.Core.Units, Sloper.Core.PatternMaterials, Sloper.Core.Features;
 
 function PathParams(const Path: string): string;
 var
@@ -506,6 +507,34 @@ begin
   Call('add_material', '{"name": "Leather"}');
   Call('set_material', '{"material": "Leather", "allowance": 0}');
   AssertEquals(0, TJSONArray(Answer.Find('materials')).Objects[1].Get('allowance', -1.0), 1e-9);
+end;
+
+// The Features tab's zip, in one call and one undo step
+procedure TTestAPI.TestInsertZip;
+var
+  Edges: TJSONArray;
+  Right: string;
+begin
+  Call('add_point', '{"type": "freePoint", "name": "O", "x": 0, "y": 0}');
+  Call('add_rectangle', '{"corner": "O", "width": 100, "height": 300, "role": "outline"}');
+  Edges := TJSONArray(FReply.Find('result'));
+  Right := Edges.Objects[1].Get('name', '');
+  Call('create_piece', '{"x": 50, "y": 150, "name": "Front"}');
+  Call('feature_zip', Format('{"edge": "%s", "style": "sideways"}', [Right]));
+  AssertEquals('an unknown style', RPC_INVALID_PARAMS, ErrorCode);
+  Call('feature_zip', Format('{"edge": "%s", "length": 400}', [Right]));
+  AssertTrue(ErrorText, Pos('does not fit', ErrorText) > 0);
+  Call('feature_zip', Format('{"edge": "%s", "style": "flyFront"}', [Right]));
+  AssertEquals(ZIP_STOP_NAME, TJSONObject(Answer.Find('stop')).Get('name', ''));
+  AssertEquals('valid', TJSONObject(Answer.Find('opening')).Get('state', ''));
+  AssertEquals('the J', 2, TJSONArray(Answer.Find('stitching')).Count);
+  AssertEquals('the front', 1, TJSONArray(Answer.Find('pieces')).Count);
+  AssertEquals(FLY_SHIELD_NAME, TJSONObject(Answer.Find('shield')).Get('name', ''));
+  AssertFalse('no seam to another edge', Answer.Get('otherSide', True));
+  Call('get_object', '{"name": "Front"}');
+  Call('undo', '{}');
+  Call('get_object', Format('{"name": "%s"}', [ZIP_STOP_NAME]));
+  AssertTrue('one undo takes it all off', ErrorCode <> 0);
 end;
 
 procedure TTestAPI.TestCircleArcAndCircleCircle;

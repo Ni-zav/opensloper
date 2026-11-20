@@ -122,6 +122,7 @@ type
     function DoSplitEdge(Params: TJSONObject): TJSONData;
     function DoAddRectangle(Params: TJSONObject): TJSONData;
     function DoRoundCorner(Params: TJSONObject): TJSONData;
+    function DoFeatureZip(Params: TJSONObject): TJSONData;
     function DoCreatePiece(Params: TJSONObject): TJSONData;
     function DoSetEdgeAllowance(Params: TJSONObject): TJSONData;
     function TargetPiece(Params: TJSONObject): TPieceObject;
@@ -212,6 +213,7 @@ resourcestring
   rsApiUnlock = 'Unlock';
   rsApiAdd = 'Add %s';
   rsApiSplit = 'Split edge';
+  rsApiInsertZipChange = 'Insert Zip';
   rsApiUnknownType = 'There is no type "%s"; use one of: %s';
   rsApiBadChoice = 'Parameter "%s" must be one of: %s';
   rsApiBadNodes = 'A curve path needs a "nodes" list, each with a point and angle';
@@ -270,6 +272,7 @@ implementation
 uses
   Sloper.Core.Arrange, Sloper.Core.EvalTypes, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Core.PatternCheck, Sloper.Core.PatternFile, Sloper.Core.Pattern,
   Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.Geometry, Sloper.Core.PieceDetect, Sloper.Core.SeamSuggest, Sloper.Core.Transform,
+  Sloper.Core.Features,
   Sloper.Core.Settings, Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.UnitConvert, Sloper.Core.Fragment, base64,
   Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.Garment, Sloper.Output.GarmentSVG, Sloper.Output.GarmentPNG,
   Sloper.Output.LayoutExport, Sloper.Core.Version, Sloper.API.Methods;
@@ -1653,6 +1656,56 @@ begin
   Result := AddedNode(FDocument.Pattern.AddRoundCorner(EdgeA, EdgeB, Radius));
 end;
 
+// The Features tab's zip, as one undo step
+function TApiServer.DoFeatureZip(Params: TJSONObject): TJSONData;
+var
+  Spec: TZipSpec;
+  Made: TZipMade;
+  Text, Key: string;
+  Answer: TJSONObject;
+  List: TJSONArray;
+begin
+  Spec := DefaultZip(FDocument.Pattern, Reference(Params, 'edge'), TZipStyle(ChoiceParam(Params, 'style', ZIP_STYLE_NAMES)));
+  Spec.FromEnd := ChoiceParam(Params, 'from', ['start', 'end']) = 1;
+  Text := OptionalFormula(Params, 'length');
+  if Text <> '' then
+    Spec.Length := Text;
+  Text := OptionalFormula(Params, 'allowance');
+  if Text <> '' then
+    Spec.Allowance := Text;
+  Text := OptionalFormula(Params, 'stitch');
+  if Text <> '' then
+    Spec.StitchDistance := Text;
+  Text := OptionalFormula(Params, 'shieldWidth');
+  if Text <> '' then
+    Spec.ShieldWidth := Text;
+  BeginChange(rsApiInsertZipChange);
+  if not InsertZip(FDocument.Pattern, Spec, Made) then
+    RefuseChange;
+  EndChange;
+  Answer := TJSONObject.Create;
+  try
+    Answer.Add('stop', NodeToJSON(FDocument, FDocument.Pattern.FindNode(Made.StopKey)));
+    Answer.Add('opening', NodeToJSON(FDocument, FDocument.Pattern.FindNode(Made.OpeningKey)));
+    Answer.Add('rest', NodeToJSON(FDocument, FDocument.Pattern.FindNode(Made.RestKey)));
+    List := TJSONArray.Create;
+    Answer.Add('stitching', List);
+    for Key in Made.StitchKeys do
+      List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+    List := TJSONArray.Create;
+    Answer.Add('pieces', List);
+    for Key in Made.PieceKeys do
+      List.Add(StrToInt(Key));
+    if Made.ShieldKey <> '' then
+      Answer.Add('shield', NodeToJSON(FDocument, FDocument.Pattern.FindNode(Made.ShieldKey)));
+    Answer.Add('otherSide', Made.OtherSide);
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
 function TApiServer.DoSplitEdge(Params: TJSONObject): TJSONData;
 var
   Edge, Point, FirstKey, SecondKey: string;
@@ -2617,6 +2670,7 @@ begin
     'split_edge': Result := DoSplitEdge(Params);
     'add_rectangle': Result := DoAddRectangle(Params);
     'round_corner': Result := DoRoundCorner(Params);
+    'feature_zip': Result := DoFeatureZip(Params);
     'create_piece': Result := DoCreatePiece(Params);
     'set_edge_allowance': Result := DoSetEdgeAllowance(Params);
     'set_grainline': Result := DoSetGrainline(Params);

@@ -53,12 +53,17 @@ type
     procedure TestZipInCentimetres;
     procedure TestZipTooLongIsRefused;
     procedure TestZipNeedsAPiece;
+    procedure TestLappedZipStitchesAcrossTheStop;
+    procedure TestFlyFrontStitchesAJ;
+    procedure TestFlyFrontEitherWayRound;
+    procedure TestFlyFrontAddsAShield;
+    procedure TestStylesStartWithTheirOwnWidths;
   end;
 
 implementation
 
 uses
-  SysUtils, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.PieceDetect, Sloper.Core.Units;
+  SysUtils, Math, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.PieceDetect, Sloper.Core.Units;
 
 procedure TTestFeatures.SetUp;
 begin
@@ -276,6 +281,122 @@ begin
   AssertFalse('no piece', Zip(Line.Key, Made));
   AssertTrue(FPattern.LastError, Pos('no piece', FPattern.LastError) > 0);
   AssertFalse('no edge', Zip('', Made));
+end;
+
+function StyledZip(Pattern: TPattern; const EdgeKey: string; Style: TZipStyle; out Made: TZipMade): boolean;
+begin
+  Result := InsertZip(Pattern, DefaultZip(Pattern, EdgeKey, Style), Made);
+end;
+
+// The lap's stitching runs down the opening and turns across to the seam at the stop
+procedure TTestFeatures.TestLappedZipStitchesAcrossTheStop;
+var
+  Piece: TPieceObject;
+  Right: string;
+  Made: TZipMade;
+  Down, Across: TEdgeObject;
+begin
+  Piece := Panel(0, 100, 300, Right);
+  AssertTrue(FPattern.LastError, StyledZip(FPattern, Right, zsLapped, Made));
+  AssertEquals('down and across', 2, Length(Made.StitchKeys));
+  Down := TEdgeObject(FPattern.FindNode(Made.StitchKeys[0]));
+  Across := TEdgeObject(FPattern.FindNode(Made.StitchKeys[1]));
+  AssertTrue(Down.Message, Down.State = esValid);
+  AssertTrue(Across.Message, Across.State = esValid);
+  AssertNear('the lap, 10 mm in', 90, Down.PointAtLength(50).X);
+  AssertTrue('stitched', Across.Role = erStitch);
+  AssertNear('across the lap', 10, Across.Length);
+  AssertNear('at the stop', 200, Across.PointAtLength(5).Y);
+  AssertEquals('the lap''s allowance', '20', FPattern.FormulaText(Piece, Piece.OverrideField(Piece.PathIndexOf(Made.OpeningKey))));
+  AssertEquals('no shield', '', Made.ShieldKey);
+end;
+
+// The fly's stitching runs down at the fly's width and curves in to the stop
+procedure TTestFeatures.TestFlyFrontStitchesAJ;
+var
+  Piece: TPieceObject;
+  Right: string;
+  Made: TZipMade;
+  Straight, Curve: TEdgeObject;
+  Middle: TVec2;
+begin
+  Piece := Panel(0, 100, 300, Right);
+  AssertTrue(FPattern.LastError, StyledZip(FPattern, Right, zsFlyFront, Made));
+  AssertEquals('the extension', '40', FPattern.FormulaText(Piece, Piece.OverrideField(Piece.PathIndexOf(Made.OpeningKey))));
+  AssertEquals('straight and curved', 2, Length(Made.StitchKeys));
+  Straight := TEdgeObject(FPattern.FindNode(Made.StitchKeys[0]));
+  Curve := TEdgeObject(FPattern.FindNode(Made.StitchKeys[1]));
+  AssertTrue(Straight.Message, Straight.State = esValid);
+  AssertTrue(Curve.Message, Curve.State = esValid);
+  AssertTrue('stitched', (Straight.Role = erStitch) and (Curve.Role = erStitch));
+  AssertNear('30 mm in', 70, Straight.PointAtLength(50).X);
+  AssertNear('down to where it curves', 170, Straight.Length);
+  AssertPointsNear('the curve starts there', Vec2(70, 170), Curve.PointAtLength(0));
+  AssertPointsNear('and ends at the stop', Vec2(100, 200), Curve.PointAtLength(Curve.Length));
+  Middle := Curve.PointAtLength(Curve.Length / 2);
+  AssertTrue('rounding the corner', (Middle.X > 70) and (Middle.X < 100) and (Middle.Y > 170) and (Middle.Y < 200));
+  AssertTrue('inside the corner''s square', Distance(Middle, Vec2(70, 200)) < Distance(Vec2(85, 185), Vec2(70, 200)) + 5);
+end;
+
+procedure TTestFeatures.TestFlyFrontEitherWayRound;
+var
+  Right, Back: string;
+  Made: TZipMade;
+  Curve: TEdgeObject;
+begin
+  PanelSides(0, 100, 300, Right, Back);
+  AssertTrue(FPattern.LastError, StyledZip(FPattern, Back, zsFlyFront, Made));
+  AssertNear('30 mm in from the left', 30, TEdgeObject(FPattern.FindNode(Made.StitchKeys[0])).PointAtLength(50).X);
+  Curve := TEdgeObject(FPattern.FindNode(Made.StitchKeys[1]));
+  AssertPointsNear('to the stop', Vec2(0, 200), Curve.PointAtLength(Curve.Length));
+end;
+
+// A separate piece behind the zip, cut on the fold, beside the pattern
+procedure TTestFeatures.TestFlyFrontAddsAShield;
+var
+  Right: string;
+  Made: TZipMade;
+  Shield: TPieceObject;
+  Low, High: TVec2;
+  Point: TVec2;
+begin
+  Panel(0, 100, 300, Right);
+  AssertTrue(FPattern.LastError, StyledZip(FPattern, Right, zsFlyFront, Made));
+  Shield := TPieceObject(FPattern.FindNode(Made.ShieldKey));
+  AssertNotNull('a shield', Shield);
+  AssertTrue(Shield.Message, Shield.State = esValid);
+  AssertEquals(FLY_SHIELD_NAME, Shield.Name);
+  AssertTrue('on the fold', Shield.FoldEdgeKey <> '');
+  Low := Shield.Outline[0];
+  High := Shield.Outline[0];
+  for Point in Shield.Outline do
+  begin
+    Low := Vec2(Min(Low.X, Point.X), Min(Low.Y, Point.Y));
+    High := Vec2(Max(High.X, Point.X), Max(High.Y, Point.Y));
+  end;
+  AssertNear('its width, doubled on the fold', 40, High.X - Low.X);
+  AssertNear('a little longer than the zip', 220, High.Y - Low.Y);
+  AssertTrue('beside the pattern', Low.X > 110);
+  // Its length follows the zip's
+  AssertTrue(FPattern.LastError, FPattern.SetFormula(FPattern.FindVariable(ZIP_LENGTH_VARIABLE), 'formula', '180'));
+  FPattern.Evaluate;
+  High.Y := Shield.Outline[0].Y;
+  Low.Y := High.Y;
+  for Point in Shield.Outline do
+  begin
+    Low.Y := Min(Low.Y, Point.Y);
+    High.Y := Max(High.Y, Point.Y);
+  end;
+  AssertNear('follows the zip', 200, High.Y - Low.Y);
+end;
+
+procedure TTestFeatures.TestStylesStartWithTheirOwnWidths;
+begin
+  AssertEquals('7', DefaultZip(FPattern, '', zsCentred).StitchDistance);
+  AssertEquals('10', DefaultZip(FPattern, '', zsLapped).StitchDistance);
+  AssertEquals('30', DefaultZip(FPattern, '', zsFlyFront).StitchDistance);
+  AssertEquals('40', DefaultZip(FPattern, '', zsFlyFront).Allowance);
+  AssertEquals('20', DefaultZip(FPattern, '', zsLapped).Allowance);
 end;
 
 initialization

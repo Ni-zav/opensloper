@@ -64,6 +64,9 @@ type
 
 // The placed items meshed at about Spacing (mm), and their seams paired
 function MeshDrape(Drape: TDrape; Spacing: double = DEFAULT_MESH_SPACING): TDrapeMeshing;
+// The seams left open on a copy, as MeshDrape finds them, without meshing: quick
+// enough to run on every change
+function DrapeSeamProblems(Drape: TDrape; Spacing: double = DEFAULT_MESH_SPACING): TDrapeProblemArray;
 
 resourcestring
   rsDrapeSeamOpen = '%s: seam %s is left open on a copy of %s, as no copy of %s is left to sew it to';
@@ -181,6 +184,8 @@ type
     function MeshItem(Item: integer; out PinVertex: TMeshIndexArray): TFlatMesh;
   public
     constructor Create(ADrape: TDrape; ASpacing: double);
+    // Pairs every seam's points, finding the seams left open
+    procedure PairAll;
     function Run: TDrapeMeshing;
   end;
 
@@ -540,11 +545,37 @@ var
   Group: TSeamInstanceArray;
   Points, Candidate: TVec3Array;
   Entry: TSeamEntry;
-  Index, Key, Main, Best, Choice: integer;
+  Index, Key, Main, Best, Choice, Turn, Later: integer;
   BestDistance, Gap: double;
   Point, Other: TVec3;
   Complete: boolean;
   MainPiece, Missing: TPieceObject;
+  Order: array of integer;
+  Reach: array of double;
+
+// Once for a copy, though both its halves on a fold may be left open
+  procedure AddProblem(const Text: string; Item: integer);
+  var
+    Known: TDrapeProblem;
+  begin
+    for Known in FProblems do
+      if (Known.Item = Item) and (Known.Text = Text) then
+        Exit;
+    SetLength(FProblems, Length(FProblems) + 1);
+    FProblems[High(FProblems)].Text := Text;
+    FProblems[High(FProblems)].Item := Item;
+  end;
+
+  // How near two instances' stretches of the seam come
+  function Closest(const First, Second: TVec3Array): double;
+  var
+    Near, Far: TVec3;
+  begin
+    Result := Infinity;
+    for Near in First do
+      for Far in Second do
+        Result := Min(Result, Distance3(Near, Far));
+  end;
 
   procedure AddKey(const PieceKey: string);
   var
@@ -579,11 +610,38 @@ begin
     if Length(Instances[Key]) > Length(Instances[Main]) then
       Main := Key;
   end;
+  // The main piece's copies choose in turn, the one nearest a copy of another
+  // piece first, so a copy left open is one placed away from the rest
+  Order := nil;
+  Reach := nil;
+  SetLength(Order, Length(Instances[Main]));
+  SetLength(Reach, Length(Instances[Main]));
+  for Index := 0 to High(Order) do
+  begin
+    Order[Index] := Index;
+    Reach[Index] := Infinity;
+    Points := InstancePoints(Seam, Instances[Main][Index], Keys[Main]);
+    for Key := 0 to High(Keys) do
+      if Key <> Main then
+        for Choice := 0 to High(Instances[Key]) do
+          Reach[Index] := Min(Reach[Index], Closest(Points, InstancePoints(Seam, Instances[Key][Choice], Keys[Key])));
+  end;
+  for Turn := 1 to High(Order) do
+  begin
+    Later := Turn;
+    while (Later > 0) and (Reach[Order[Later]] < Reach[Order[Later - 1]]) do
+    begin
+      Index := Order[Later];
+      Order[Later] := Order[Later - 1];
+      Order[Later - 1] := Index;
+      Dec(Later);
+    end;
+  end;
   Group := nil;
   SetLength(Group, Length(Keys));
-  for Index := 0 to High(Instances[Main]) do
+  for Turn := 0 to High(Order) do
   begin
-    Group[Main] := Instances[Main][Index];
+    Group[Main] := Instances[Main][Order[Turn]];
     Points := InstancePoints(Seam, Group[Main], Keys[Main]);
     Complete := True;
     for Key := 0 to High(Keys) do
@@ -611,10 +669,8 @@ begin
       begin
         MainPiece := FLines[Group[Main].Item].Piece;
         Missing := FLines[Instances[Key][0].Item].Piece;
-        SetLength(FProblems, Length(FProblems) + 1);
-        FProblems[High(FProblems)].Text := Format(rsDrapeSeamOpen, [ExtractFileName(Source.PatternFile), Seam.DisplayName,
-          MainPiece.DisplayName, Missing.DisplayName]);
-        FProblems[High(FProblems)].Item := Group[Main].Item;
+        AddProblem(Format(rsDrapeSeamOpen, [ExtractFileName(Source.PatternFile), Seam.DisplayName, MainPiece.DisplayName,
+          Missing.DisplayName]), Group[Main].Item);
         Complete := False;
         Break;
       end;
@@ -740,8 +796,7 @@ end;
 
 function TDrapeMesher.Run: TDrapeMeshing;
 var
-  Source: TPatternSource;
-  Index, Item: integer;
+  Item: integer;
   PinVertices: array of TMeshIndexArray;
   Pair: TPinPair;
   Sewn: TDrapeSeamPair;
@@ -749,14 +804,7 @@ var
   Name: string;
 begin
   Result := Default(TDrapeMeshing);
-  FPairs := nil;
-  FProblems := nil;
-  PrepareLines;
-  for Source in FDrape.Sources do
-    if Assigned(Source.Pattern) then
-      for Index := 0 to Source.Pattern.ObjectCount - 1 do
-        if (Source.Pattern.Objects[Index] is TSeamObject) and (Source.Pattern.Objects[Index].State = esValid) then
-          PairSeam(Source, TSeamObject(Source.Pattern.Objects[Index]));
+  PairAll;
   SetLength(Result.Meshes, Length(FLines));
   PinVertices := nil;
   SetLength(PinVertices, Length(FLines));
@@ -788,6 +836,34 @@ begin
     FreeAndNil(Seen);
   end;
   Result.Problems := FProblems;
+end;
+
+procedure TDrapeMesher.PairAll;
+var
+  Source: TPatternSource;
+  Index: integer;
+begin
+  FPairs := nil;
+  FProblems := nil;
+  PrepareLines;
+  for Source in FDrape.Sources do
+    if Assigned(Source.Pattern) then
+      for Index := 0 to Source.Pattern.ObjectCount - 1 do
+        if (Source.Pattern.Objects[Index] is TSeamObject) and (Source.Pattern.Objects[Index].State = esValid) then
+          PairSeam(Source, TSeamObject(Source.Pattern.Objects[Index]));
+end;
+
+function DrapeSeamProblems(Drape: TDrape; Spacing: double): TDrapeProblemArray;
+var
+  Mesher: TDrapeMesher;
+begin
+  Mesher := TDrapeMesher.Create(Drape, Spacing);
+  try
+    Mesher.PairAll;
+    Result := Mesher.FProblems;
+  finally
+    FreeAndNil(Mesher);
+  end;
 end;
 
 function MeshDrape(Drape: TDrape; Spacing: double): TDrapeMeshing;

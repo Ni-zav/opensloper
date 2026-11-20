@@ -55,6 +55,8 @@ type
     procedure TestMirroredCopiesSewnByPlacement;
     procedure TestFoldHalvesEachSewn;
     procedure TestOpenSeamIsAProblem;
+    procedure TestSeamProblemsWithoutMeshing;
+    procedure TestOpenFoldHalvesListedOnce;
   end;
 
 implementation
@@ -372,6 +374,48 @@ begin
   AssertEquals('one front sewn', 21, Length(Meshing.Pairs));
   AssertEquals('problems', 1, Length(Meshing.Problems));
   AssertEquals('open', Format(rsDrapeSeamOpen, ['dress.sloper', 'Side', 'Front', 'Back']), Meshing.Problems[0].Text);
+end;
+
+// The drape app lists open seams as it changes, without meshing every piece
+procedure TTestDrapeMesh.TestSeamProblemsWithoutMeshing;
+var
+  Front, Back: TPieceObject;
+  Problems: TDrapeProblemArray;
+  FirstFront: integer;
+begin
+  FrontAndBack(Front, Back);
+  AssertTrue(FPattern.LastError, FPattern.SetCut(Front, 2, True));
+  FPattern.Evaluate;
+  FirstFront := Place(Front, 1, -200);
+  Place(Front, 2, 200);
+  Place(Back, 1, 300);
+  Problems := DrapeSeamProblems(FDrape);
+  AssertEquals('problems', 1, Length(Problems));
+  AssertEquals('open', Format(rsDrapeSeamOpen, ['dress.sloper', 'Side', 'Front', 'Back']), Problems[0].Text);
+  AssertEquals('on the front far from the back', FirstFront, Problems[0].Item);
+  Place(Back, 1, -300);
+  AssertEquals('the other front open once the back moves', 1, Length(DrapeSeamProblems(FDrape)));
+  AssertEquals('the other front', FirstFront + 1, DrapeSeamProblems(FDrape)[0].Item);
+end;
+
+// Both halves of a copy on a fold may be left open; the copy is listed once
+procedure TTestDrapeMesh.TestOpenFoldHalvesListedOnce;
+var
+  Front, Back: TPieceObject;
+  Problems: TDrapeProblemArray;
+  First, Second: integer;
+begin
+  FrontAndBack(Front, Back);
+  AssertTrue(FPattern.LastError, FPattern.SetFoldEdge(Front, EdgeBetween(Front, Vec2(0, 0), Vec2(0, 200))));
+  AssertTrue(FPattern.LastError, FPattern.SetCut(Front, 2, False));
+  FPattern.Evaluate;
+  First := Place(Front, 1, 0);
+  Second := Place(Front, 2, 1000);
+  Place(Back, 1, 300);
+  Problems := DrapeSeamProblems(FDrape);
+  AssertEquals('one for each front', 2, Length(Problems));
+  AssertEquals('the half far from the back', First, Problems[0].Item);
+  AssertEquals('the other front', Second, Problems[1].Item);
 end;
 
 initialization

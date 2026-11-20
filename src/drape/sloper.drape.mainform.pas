@@ -226,7 +226,7 @@ implementation
 uses
   LCLType, Math, StrUtils, Sloper.Core.Geometry3, Sloper.Core.Piece, Sloper.Core.RecentFiles, Sloper.Core.Settings,
   Sloper.Core.IconSet, Sloper.Core.JSON, Sloper.UI.Spacing, Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
-  Sloper.API.Endpoint;
+  Sloper.API.Endpoint, Sloper.Core.DrapeMesh;
 
 const
   SIDE_WIDTH = 320;
@@ -759,7 +759,7 @@ var
   Shown: string;
 begin
   Listed := nil;
-  for Problem in FDocument.Drape.Problems do
+  for Problem in Concat(FDocument.Drape.Problems, DrapeSeamProblems(FDocument.Drape)) do
   begin
     Index := Length(Listed);
     SetLength(Listed, Index + 1);

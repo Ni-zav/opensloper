@@ -35,7 +35,7 @@ a drape file or a pattern.
     | Patterns | The patterns placed, the body and its measurements, and the gap |
     | Pieces | Every piece, placed or not; double-click one not placed to place it by a guess |
     | Properties | Where the selected piece is placed and how it is turned, and the seams that join it to placed pieces |
-    | Problems | Pieces left out, pieces gone from their pattern, and files that cannot be read |
+    | Problems | Pieces left out, pieces gone from their pattern, seams left open, and files that cannot be read |
 
 ## The body
 
@@ -142,5 +142,10 @@ along the seam as easing would. Darts are left open, for the simulation to
 sew shut.
 
 Pieces that are not placed are left out, and a seam with a copy missing on
-one side is left open; the command lists both as warnings. The scene file is
+one side is left open; the command lists both as warnings, and the drape
+window's Problems tab lists them as you place pieces. A copy is sewn to the
+nearest copy of the piece across each seam, so a pair cut as a left and a
+right is sewn left to left however you placed them; when one side has fewer
+copies, the copy placed furthest from them is the one left open. Clicking the
+problem selects it. The scene file is
 described on the [File formats](../reference/files.md) page.

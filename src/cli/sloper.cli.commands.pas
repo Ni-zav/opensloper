@@ -57,6 +57,8 @@ resourcestring
   rsCheckClean = '%s: no problems (%d objects)';
   rsCheckProblems = '%s: problems found: %d';
   rsCheckBlocked = 'Blocked by these problems: %d more';
+  rsDrapeNeedsDrape = 'The drape command needs a drape file (%s). Make one with opensloper-drape.';
+  rsDrapeSpacing = 'The spacing must be a number of millimetres from %s to %s, such as 10';
   rsExportNeedsLayout = 'The export command needs a layout file (%s). Make one with the layout command.';
   rsWroteFile = 'Wrote %s';
   rsDraftFormat = 'export-draft writes svg or png, not "%s"';
@@ -77,7 +79,8 @@ uses
   SysUtils, fpjson, ConsoleTools, Sloper.CLI.Arguments, Sloper.Docs.Reference, Sloper.Core.Version, Sloper.Core.JSON,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
   Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.PatternSources,
-  Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection,
+  Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Core.Mesher, Sloper.Core.DrapeFile, Sloper.Output.DrapeExport,
+  Sloper.Output.MaterialNeeded, Sloper.API.MCP, Sloper.API.Connection,
   Sloper.Assistant.Http;
 
 var
@@ -525,6 +528,62 @@ begin
   end;
 end;
 
+function RunDrape(const DrapeFile, OutputOption, SpacingOption: string): integer;
+var
+  Drape: TDrape;
+  Target, Err: string;
+  Spacing: double;
+  Problems: TDrapeProblemArray;
+  Problem: TDrapeProblem;
+  Settings: TFormatSettings;
+  Files: TDrapeExportFiles;
+begin
+  Settings := DefaultFormatSettings;
+  Settings.DecimalSeparator := '.';
+  if not SameText(ExtractFileExt(DrapeFile), DRAPE_EXTENSION) then
+  begin
+    WriteLn(CliErr^, Format(rsDrapeNeedsDrape, [DRAPE_EXTENSION]));
+    Exit(EXIT_FAILURE);
+  end;
+  Spacing := DEFAULT_MESH_SPACING;
+  if (SpacingOption <> '') and (not TryStrToFloat(SpacingOption, Spacing, Settings) or (Spacing < MIN_DRAPE_SPACING) or
+    (Spacing > MAX_DRAPE_SPACING)) then
+  begin
+    WriteLn(CliErr^, Format(rsDrapeSpacing, [FloatToStr(MIN_DRAPE_SPACING, Settings), FloatToStr(MAX_DRAPE_SPACING,
+      Settings)]));
+    Exit(EXIT_FAILURE);
+  end;
+  if not CheckFileExists(DrapeFile) then
+    Exit(EXIT_FAILURE);
+  Target := OutputOption;
+  if Target = '' then
+    Target := DrapeExportTarget(DrapeFile);
+  Drape := TDrape.Create;
+  try
+    if not Drape.LoadFromFile(DrapeFile, Err) then
+    begin
+      WriteLn(CliErr^, Format(rsLoadFailed, [DrapeFile, Err]));
+      Exit(EXIT_FAILURE);
+    end;
+    Drape.LoadSources;
+    if not ExportDrape(Drape, Target, Spacing, Problems, Err) then
+    begin
+      WriteLn(CliErr^, Err);
+      Exit(EXIT_FAILURE);
+    end;
+    for Problem in Problems do
+      WriteLn(CliErr^, Format(rsWarning, [Problem.Text]));
+    Files := DrapeExportFiles(Target);
+    WriteLn(CliOut^, Format(rsWroteFile, [Files.Pieces]));
+    if Drape.Body.Kind <> bkNone then
+      WriteLn(CliOut^, Format(rsWroteFile, [Files.Body]));
+    WriteLn(CliOut^, Format(rsWroteFile, [Files.Scene]));
+    Result := EXIT_SUCCESS;
+  finally
+    FreeAndNil(Drape);
+  end;
+end;
+
 function LoadMeasurements(const FileName: string; Measurements: TMeasurementSet): boolean;
 var
   Err: string;
@@ -796,6 +855,8 @@ begin
         Parser.GetOptionValueAsString('output'))
     else if CommandName = 'pack' then
       Result := RunPack(PatternFile)
+    else if CommandName = 'drape' then
+      Result := RunDrape(PatternFile, Parser.GetOptionValueAsString('output'), Parser.GetOptionValueAsString('spacing'))
     else if CommandName = 'materials' then
       Result := RunMaterials(PatternFile, Parser.IsOption('json'))
     else if CommandName = 'export-draft' then

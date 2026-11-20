@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Checks the file format schemas in docs/reference/schemas/ and every pattern,
-# measurement, layout and drape file under the folders given against them. A schema
+# measurement, layout, drape and Blender scene file under the folders given against them. A schema
 # describes its format's current version, so files of older versions (kept in
 # tests/files/v<n>/ to test upgrading) are counted but not checked.
 # Usage: python3 check-schemas.py [FOLDER...] (by default docs and tests, as opensloper-make.sh docs runs it)
@@ -11,7 +11,14 @@ import sys
 from jsonschema import Draft202012Validator
 
 SCHEMAS = pathlib.Path(__file__).resolve().parent / "docs" / "reference" / "schemas"
-EXTENSIONS = {".sloper": "pattern", ".slm": "measurements", ".slayout": "layout", ".sdrape": "drape"}
+EXTENSIONS = {".sloper": "pattern", ".slm": "measurements", ".slayout": "layout", ".sdrape": "drape", ".blender.json": "blender"}
+
+
+def kind_of(path):
+    for extension, kind in EXTENSIONS.items():
+        if path.name.endswith(extension):
+            return kind
+    return None
 
 
 def main(folders):
@@ -23,7 +30,7 @@ def main(folders):
     failed = checked = older = 0
     for folder in folders:
         for path in sorted(pathlib.Path(folder).rglob("*")):
-            kind = EXTENSIONS.get(path.suffix)
+            kind = kind_of(path)
             if kind is None or not path.is_file():
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))

@@ -6,8 +6,9 @@ simulation. A drape is saved as a `.sdrape` file. It reads the saved patterns
 and never changes them.
 
 !!! note "Being built"
-    The window and placing pieces are done. Writing the files Blender needs
-    and running Blender are not built yet; see
+    The window and placing pieces are done, and the command line writes the
+    files Blender needs (see [Export for Blender](#export-for-blender)). The
+    Blender script and running Blender are not built yet; see
     [issue #11](https://github.com/opensloper/opensloper/issues/11).
 
 ## Start a drape
@@ -118,3 +119,28 @@ The drape follows its patterns: when a pattern or measurement file is saved,
 the drape reads it again within a second or two. New pieces wait on the
 Pieces tab, and a placed piece that is gone from its pattern is listed under
 Problems. Nothing is ever written back to a pattern.
+
+## Export for Blender
+
+`opensloper-cli drape` writes a saved drape as the files Blender's cloth
+simulation needs, beside the drape file unless `-o` names the scene file:
+
+```
+opensloper-cli drape skirt.sdrape
+```
+
+| File | What it holds |
+| --- | --- |
+| `skirt.pieces.obj` | Each placed piece as a mesh of small, even triangles, made from its seam line (the seam allowance left out), opened out on a fold |
+| `skirt.body.obj` | The body, when the drape has one |
+| `skirt.blender.json` | Where each piece goes, its material and colour, and which vertices each seam sews together |
+
+`--spacing` sets how far apart the mesh's points are, 10 mm unless given:
+smaller follows curves more closely but simulates more slowly. Both sides of
+a seam get the same number of points, spread evenly, so any ease is spread
+along the seam as easing would. Darts are left open, for the simulation to
+sew shut.
+
+Pieces that are not placed are left out, and a seam with a copy missing on
+one side is left open; the command lists both as warnings. The scene file is
+described on the [File formats](../reference/files.md) page.

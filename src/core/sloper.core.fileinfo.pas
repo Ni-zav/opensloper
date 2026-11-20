@@ -44,7 +44,8 @@ type
   end;
   TFileFormatInfoArray = array of TFileFormatInfo;
 
-// The pattern, measurement, layout and drape files, in that order
+// The pattern, measurement, layout and drape files, then the Blender scene the
+// drape is exported to, in that order
 function FileFormatInfos: TFileFormatInfoArray;
 function FindFileFormatInfo(const FormatName: string; out Info: TFileFormatInfo): boolean;
 // The member with this name, such as sources[].id, or a list of values named
@@ -173,6 +174,38 @@ resourcestring
     'the middle of its seam line''s extent';
   rsFileDrapeRotation = 'The turns in degrees about x, then y, then z, anticlockwise looking from the positive end ' +
     'of each axis: Blender''s XYZ Euler angles. Unturned, a piece stands upright facing -y, as drawn';
+
+  rsFileBlenderTitle = 'Blender scene';
+  rsFileBlenderSummary = 'Written by opensloper-cli drape from a drape file, for Blender''s cloth simulation, and never ' +
+    'read back. Its meshes are OBJ files beside it, in mm with the drape''s axes: the pieces'', each in its own frame ' +
+    'with its anchor at the origin and the right side of the fabric facing -y, and the body''s, as placed. Vertices ' +
+    'are counted from 0 within each object, in the order the OBJ file lists them.';
+  rsFileBlenderVersion = 'The version of the format, from 1';
+  rsFileBlenderName = 'The drape''s name';
+  rsFileBlenderPieces = 'The pieces'' OBJ file, relative to this file''s folder: one object for each entry of objects, ' +
+    'in the same order and with the same names';
+  rsFileBlenderBody = 'The body''s OBJ file, relative to this file''s folder; left out when the drape has no body';
+  rsFileBlenderSpacing = 'About how far apart the meshes'' points are';
+  rsFileBlenderObjects = 'Every placed copy of a piece that could be meshed';
+  rsFileBlenderObjectName = 'Its object''s name in the OBJ file: the pattern file''s name, the piece''s and the copy';
+  rsFileBlenderSource = 'The drape file''s source the piece is from';
+  rsFileBlenderPiece = 'The piece''s ID in its pattern';
+  rsFileBlenderCopy = 'Which copy of the piece, from 1';
+  rsFileBlenderMirrored = 'Whether the copy is cut mirrored, as the left of a pair; its mesh is mirrored already';
+  rsFileBlenderMaterial = 'The name of the material it is cut from; left out when it has none';
+  rsFileBlenderColor = 'The colour to show it in, as #RRGGBB';
+  rsFileBlenderVertices = 'How many vertices its mesh has';
+  rsFileBlenderPosition = 'Where its origin goes: the object''s location';
+  rsFileBlenderRotation = 'Its turns in degrees, in Blender''s XYZ Euler order: the object''s rotation_euler';
+  rsFileBlenderSeams = 'The seams between placed copies, each with the vertices it sews together';
+  rsFileBlenderSeamSource = 'The source the seam is from';
+  rsFileBlenderSeam = 'The seam''s ID in its pattern';
+  rsFileBlenderSeamName = 'The seam''s name';
+  rsFileBlenderPairs = 'Pairs of vertices to sew together, each an object (its place in objects, from 0) and a vertex of it';
+  rsFileBlenderFirst = 'The first vertex''s object, from 0';
+  rsFileBlenderFirstVertex = 'The first vertex, from 0';
+  rsFileBlenderSecond = 'The second vertex''s object, from 0';
+  rsFileBlenderSecondVertex = 'The second vertex, from 0';
 
 implementation
 
@@ -350,6 +383,54 @@ const
     '        0,' + LineEnding +
     '        0,' + LineEnding +
     '        0' + LineEnding +
+    '      ]' + LineEnding +
+    '    }' + LineEnding +
+    '  ]' + LineEnding +
+    '}';
+
+  BLENDER_EXAMPLE =
+    '{' + LineEnding +
+    '  "format": "blender",' + LineEnding +
+    '  "version": 1,' + LineEnding +
+    '  "units": "mm",' + LineEnding +
+    '  "name": "Skirt",' + LineEnding +
+    '  "pieces": "skirt.pieces.obj",' + LineEnding +
+    '  "body": "skirt.body.obj",' + LineEnding +
+    '  "spacing": 10,' + LineEnding +
+    '  "objects": [' + LineEnding +
+    '    {' + LineEnding +
+    '      "name": "skirt Front 1",' + LineEnding +
+    '      "source": 1,' + LineEnding +
+    '      "piece": 42,' + LineEnding +
+    '      "copy": 1,' + LineEnding +
+    '      "mirrored": false,' + LineEnding +
+    '      "material": "Main",' + LineEnding +
+    '      "color": "#5B8DB8",' + LineEnding +
+    '      "vertices": 412,' + LineEnding +
+    '      "position": [' + LineEnding +
+    '        0,' + LineEnding +
+    '        -170,' + LineEnding +
+    '        900' + LineEnding +
+    '      ],' + LineEnding +
+    '      "rotation": [' + LineEnding +
+    '        0,' + LineEnding +
+    '        0,' + LineEnding +
+    '        0' + LineEnding +
+    '      ]' + LineEnding +
+    '    }' + LineEnding +
+    '  ],' + LineEnding +
+    '  "seams": [' + LineEnding +
+    '    {' + LineEnding +
+    '      "source": 1,' + LineEnding +
+    '      "seam": 57,' + LineEnding +
+    '      "name": "Side",' + LineEnding +
+    '      "pairs": [' + LineEnding +
+    '        {' + LineEnding +
+    '          "first": 0,' + LineEnding +
+    '          "firstVertex": 12,' + LineEnding +
+    '          "second": 1,' + LineEnding +
+    '          "secondVertex": 40' + LineEnding +
+    '        }' + LineEnding +
     '      ]' + LineEnding +
     '    }' + LineEnding +
     '  ]' + LineEnding +
@@ -544,6 +625,35 @@ begin
   M('placements[].copy', mkWhole, rsFilePlacementCopy);
   R('placements[].position[]', mkSize, rsFileDrapePosition);
   R('placements[].rotation[]', mkSize, rsFileDrapeRotation);
+
+  FileFormat(BLENDER_FORMAT, BLENDER_EXTENSION, BLENDER_VERSION, rsFileBlenderTitle, rsFileBlenderSummary, BLENDER_EXAMPLE);
+  R('format', mkChoice, rsFileFormat, BLENDER_FORMAT);
+  R('version', mkWhole, rsFileBlenderVersion);
+  R('units', mkChoice, rsFileUnitsMM, 'mm');
+  M('name', mkText, rsFileBlenderName);
+  R('pieces', mkText, rsFileBlenderPieces);
+  M('body', mkText, rsFileBlenderBody);
+  R('spacing', mkSize, rsFileBlenderSpacing);
+  R('objects', mkList, rsFileBlenderObjects);
+  R('objects[].name', mkText, rsFileBlenderObjectName);
+  R('objects[].source', mkWhole, rsFileBlenderSource);
+  R('objects[].piece', mkWhole, rsFileBlenderPiece);
+  R('objects[].copy', mkWhole, rsFileBlenderCopy);
+  R('objects[].mirrored', mkFlag, rsFileBlenderMirrored);
+  M('objects[].material', mkText, rsFileBlenderMaterial);
+  R('objects[].color', mkText, rsFileBlenderColor);
+  R('objects[].vertices', mkWhole, rsFileBlenderVertices);
+  R('objects[].position[]', mkSize, rsFileBlenderPosition);
+  R('objects[].rotation[]', mkSize, rsFileBlenderRotation);
+  R('seams', mkList, rsFileBlenderSeams);
+  R('seams[].source', mkWhole, rsFileBlenderSeamSource);
+  R('seams[].seam', mkWhole, rsFileBlenderSeam);
+  M('seams[].name', mkText, rsFileBlenderSeamName);
+  R('seams[].pairs', mkList, rsFileBlenderPairs);
+  R('seams[].pairs[].first', mkWhole, rsFileBlenderFirst);
+  R('seams[].pairs[].firstVertex', mkWhole, rsFileBlenderFirstVertex);
+  R('seams[].pairs[].second', mkWhole, rsFileBlenderSecond);
+  R('seams[].pairs[].secondVertex', mkWhole, rsFileBlenderSecondVertex);
 end;
 
 function FileFormatInfos: TFileFormatInfoArray;

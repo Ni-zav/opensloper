@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.opensloper.com/reference/schemas/blender.schema.json",
+  "$comment": "Generated from the program by opensloper-cli doc blender.schema.json; do not edit it by hand.",
+  "title": "OpenSloper blender scene file (.blender.json)",
+  "description": "Written by opensloper-cli drape from a drape file, for Blender's cloth simulation, and never read back. Its meshes are OBJ files beside it, in mm with the drape's axes: the pieces', each in its own frame with its anchor at the origin and the right side of the fabric facing -y, and the body's, as placed. Vertices are counted from 0 within each object, in the order the OBJ file lists them.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "description": "What the file is; a file with another value does not load",
+      "const": "blender"
+    },
+    "version": {
+      "description": "The version of the format, from 1",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "units": {
+      "description": "Always mm: values in this file are millimetres",
+      "const": "mm"
+    },
+    "name": {
+      "description": "The drape's name",
+      "type": "string"
+    },
+    "pieces": {
+      "description": "The pieces' OBJ file, relative to this file's folder: one object for each entry of objects, in the same order and with the same names",
+      "type": "string"
+    },
+    "body": {
+      "description": "The body's OBJ file, relative to this file's folder; left out when the drape has no body",
+      "type": "string"
+    },
+    "spacing": {
+      "description": "About how far apart the meshes' points are",
+      "type": "number"
+    },
+    "objects": {
+      "description": "Every placed copy of a piece that could be meshed",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Its object's name in the OBJ file: the pattern file's name, the piece's and the copy",
+            "type": "string"
+          },
+          "source": {
+            "description": "The drape file's source the piece is from",
+            "type": "integer"
+          },
+          "piece": {
+            "description": "The piece's ID in its pattern",
+            "type": "integer"
+          },
+          "copy": {
+            "description": "Which copy of the piece, from 1",
+            "type": "integer"
+          },
+          "mirrored": {
+            "description": "Whether the copy is cut mirrored, as the left of a pair; its mesh is mirrored already",
+            "type": "boolean"
+          },
+          "material": {
+            "description": "The name of the material it is cut from; left out when it has none",
+            "type": "string"
+          },
+          "color": {
+            "description": "The colour to show it in, as #RRGGBB",
+            "type": "string"
+          },
+          "vertices": {
+            "description": "How many vertices its mesh has",
+            "type": "integer"
+          },
+          "position": {
+            "description": "Where its origin goes: the object's location",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "rotation": {
+            "description": "Its turns in degrees, in Blender's XYZ Euler order: the object's rotation_euler",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "piece",
+          "copy",
+          "mirrored",
+          "color",
+          "vertices",
+          "position",
+          "rotation"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "seams": {
+      "description": "The seams between placed copies, each with the vertices it sews together",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "description": "The source the seam is from",
+            "type": "integer"
+          },
+          "seam": {
+            "description": "The seam's ID in its pattern",
+            "type": "integer"
+          },
+          "name": {
+            "description": "The seam's name",
+            "type": "string"
+          },
+          "pairs": {
+            "description": "Pairs of vertices to sew together, each an object (its place in objects, from 0) and a vertex of it",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "first": {
+                  "description": "The first vertex's object, from 0",
+                  "type": "integer"
+                },
+                "firstVertex": {
+                  "description": "The first vertex, from 0",
+                  "type": "integer"
+                },
+                "second": {
+                  "description": "The second vertex's object, from 0",
+                  "type": "integer"
+                },
+                "secondVertex": {
+                  "description": "The second vertex, from 0",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "first",
+                "firstVertex",
+                "second",
+                "secondVertex"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "source",
+          "seam",
+          "pairs"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "units",
+    "pieces",
+    "spacing",
+    "objects",
+    "seams"
+  ],
+  "additionalProperties": false
+}

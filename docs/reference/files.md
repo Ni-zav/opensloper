@@ -344,3 +344,90 @@ Version 1. JSON Schema, for files of this version: [drape.schema.json](schemas/d
 }
 ```
 
+## Blender scene (`.blender.json`)
+
+Written by opensloper-cli drape from a drape file, for Blender's cloth simulation, and never read back. Its meshes are OBJ files beside it, in mm with the drape's axes: the pieces', each in its own frame with its anchor at the origin and the right side of the fabric facing -y, and the body's, as placed. Vertices are counted from 0 within each object, in the order the OBJ file lists them.
+
+Version 1. JSON Schema, for files of this version: [blender.schema.json](schemas/blender.schema.json).
+
+| Member | Value | Required | Description |
+| --- | --- | --- | --- |
+| `format` | one of: `blender` | yes | What the file is; a file with another value does not load |
+| `version` | whole number | yes | The version of the format, from 1 |
+| `units` | one of: `mm` | yes | Always mm: values in this file are millimetres |
+| `name` | text |  | The drape's name |
+| `pieces` | text | yes | The pieces' OBJ file, relative to this file's folder: one object for each entry of objects, in the same order and with the same names |
+| `body` | text |  | The body's OBJ file, relative to this file's folder; left out when the drape has no body |
+| `spacing` | number | yes | About how far apart the meshes' points are |
+| `objects` | list | yes | Every placed copy of a piece that could be meshed |
+| `objects[].name` | text | yes | Its object's name in the OBJ file: the pattern file's name, the piece's and the copy |
+| `objects[].source` | whole number | yes | The drape file's source the piece is from |
+| `objects[].piece` | whole number | yes | The piece's ID in its pattern |
+| `objects[].copy` | whole number | yes | Which copy of the piece, from 1 |
+| `objects[].mirrored` | true or false | yes | Whether the copy is cut mirrored, as the left of a pair; its mesh is mirrored already |
+| `objects[].material` | text |  | The name of the material it is cut from; left out when it has none |
+| `objects[].color` | text | yes | The colour to show it in, as #RRGGBB |
+| `objects[].vertices` | whole number | yes | How many vertices its mesh has |
+| `objects[].position[]` | list, each number | yes | Where its origin goes: the object's location |
+| `objects[].rotation[]` | list, each number | yes | Its turns in degrees, in Blender's XYZ Euler order: the object's rotation_euler |
+| `seams` | list | yes | The seams between placed copies, each with the vertices it sews together |
+| `seams[].source` | whole number | yes | The source the seam is from |
+| `seams[].seam` | whole number | yes | The seam's ID in its pattern |
+| `seams[].name` | text |  | The seam's name |
+| `seams[].pairs` | list | yes | Pairs of vertices to sew together, each an object (its place in objects, from 0) and a vertex of it |
+| `seams[].pairs[].first` | whole number | yes | The first vertex's object, from 0 |
+| `seams[].pairs[].firstVertex` | whole number | yes | The first vertex, from 0 |
+| `seams[].pairs[].second` | whole number | yes | The second vertex's object, from 0 |
+| `seams[].pairs[].secondVertex` | whole number | yes | The second vertex, from 0 |
+
+### Example
+
+```json
+{
+  "format": "blender",
+  "version": 1,
+  "units": "mm",
+  "name": "Skirt",
+  "pieces": "skirt.pieces.obj",
+  "body": "skirt.body.obj",
+  "spacing": 10,
+  "objects": [
+    {
+      "name": "skirt Front 1",
+      "source": 1,
+      "piece": 42,
+      "copy": 1,
+      "mirrored": false,
+      "material": "Main",
+      "color": "#5B8DB8",
+      "vertices": 412,
+      "position": [
+        0,
+        -170,
+        900
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "seams": [
+    {
+      "source": 1,
+      "seam": 57,
+      "name": "Side",
+      "pairs": [
+        {
+          "first": 0,
+          "firstVertex": 12,
+          "second": 1,
+          "secondVertex": 40
+        }
+      ]
+    }
+  ]
+}
+```
+

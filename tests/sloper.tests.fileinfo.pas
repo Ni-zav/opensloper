@@ -42,7 +42,8 @@ implementation
 
 uses
   SysUtils, Classes, fpjson, Sloper.Core.JSON, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Measurements,
-  Sloper.Core.OperationInfo, Sloper.Core.FileInfo, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Docs.Schema;
+  Sloper.Core.OperationInfo, Sloper.Core.FileInfo, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Docs.Schema,
+  Sloper.Output.DrapeExport, Sloper.Core.Mesher;
 
 const
   // Every member outside the objects, with values that make the writer write it
@@ -82,7 +83,28 @@ const
     ' "body": {"kind": "measurements", "measurementFile": "me.slm", "size": "40"}, "gap": 15,' +
     ' "placements": [{"source": 1, "piece": 42, "copy": 2, "position": [10, -170, 900], "rotation": [0, 90, 0]}]}';
 
-// The file as the program writes it after reading Text
+// The Blender scene of the bodice block example, placed by guesses, with every
+// member the export writes
+function FullBlenderScene: string;
+var
+  Drape: TDrape;
+begin
+  Drape := TDrape.Create;
+  try
+    Drape.FileName := ConcatPaths([ExtractFileDir(ExtractFileDir(ExpandFileName(ParamStr(0)))), 'docs', 'examples', 'bodice-block',
+      'bodice.sdrape']);
+    Drape.Name := 'Bodice';
+    Drape.AddSource('bodice-block.sloper', '', '');
+    Drape.LoadSources;
+    Drape.GuessPlacements;
+    Result := DrapeSceneText(Drape, BuildDrapeExport(Drape), 'bodice.pieces.obj', 'bodice.body.obj', DEFAULT_MESH_SPACING);
+  finally
+    FreeAndNil(Drape);
+  end;
+end;
+
+// The file as the program writes it after reading Text. A Blender scene is
+// never read, so it is only laid out again as the program lays out JSON.
 function ReadBack(const FormatName, Text: string): string;
 var
   Pattern: TPattern;
@@ -90,10 +112,20 @@ var
   Layout: TLayout;
   Drape: TDrape;
   Err: string;
+  Root: TJSONObject;
 begin
   Result := '';
   Err := '';
-  if FormatName = PATTERN_FORMAT then
+  if FormatName = BLENDER_FORMAT then
+  begin
+    if ParseJSONObject(Text, Root, Err) then
+    try
+      Result := JSONToText(Root);
+    finally
+      FreeAndNil(Root);
+    end;
+  end
+  else if FormatName = PATTERN_FORMAT then
   begin
     Pattern := TPattern.Create;
     try
@@ -139,7 +171,7 @@ end;
 
 // The names of every member Item has, nested ones as list[].member and
 // group.member; a pattern's objects are left to the operations table's test
-procedure CollectMembers(Item: TJSONObject; const Prefix: string; Names: TStrings);
+procedure CollectMembers(Item: TJSONObject; const Prefix: string; Names: TStrings; InPattern: boolean);
 var
   Index, Element: integer;
   FullName: string;
@@ -149,18 +181,18 @@ begin
   begin
     FullName := Prefix + Item.Names[Index];
     Value := Item.Items[Index];
-    if (FullName = 'objects') and (Prefix = '') then
+    if InPattern and (FullName = 'objects') and (Prefix = '') then
     begin
       Names.Add('objects');
       Continue;
     end;
     Names.Add(FullName);
     if Value.JSONType = jtObject then
-      CollectMembers(TJSONObject(Value), FullName + '.', Names)
+      CollectMembers(TJSONObject(Value), FullName + '.', Names, InPattern)
     else if Value.JSONType = jtArray then
       for Element := 0 to Value.Count - 1 do
         if Value.Items[Element].JSONType = jtObject then
-          CollectMembers(TJSONObject(Value.Items[Element]), FullName + '[].', Names);
+          CollectMembers(TJSONObject(Value.Items[Element]), FullName + '[].', Names, InPattern);
   end;
 end;
 
@@ -177,6 +209,8 @@ begin
     Texts := [FULL_MEASUREMENTS, FULL_SIZE_TABLE]
   else if FormatName = DRAPE_FORMAT then
     Texts := [FULL_DRAPE]
+  else if FormatName = BLENDER_FORMAT then
+    Texts := [FullBlenderScene]
   else
     Texts := [FULL_LAYOUT];
   Result := TStringList.Create;
@@ -187,7 +221,7 @@ begin
     if not ParseJSONObject(ReadBack(FormatName, Text), Root, Err) then
       raise EAssertionFailedError.Create(Err);
     try
-      CollectMembers(Root, '', Result);
+      CollectMembers(Root, '', Result, FormatName = PATTERN_FORMAT);
     finally
       FreeAndNil(Root);
     end;

@@ -61,7 +61,8 @@ resourcestring
   rsOptSize = 'check, layout: the size to use from a size table, default the first; measurements: the size to list or set';
   rsOptDescription = 'measurements set: the description; default: keep the one it has';
   rsOptJSON = 'check: print every computed value as JSON; materials: print the estimate, in mm; measurements list: print the file';
-  rsOptOutput = 'layout, export, export-draft, doc: the file to write';
+  rsOptOutput = 'layout, export, export-draft, doc: the file to write; drape: the scene file, with the meshes written beside it';
+  rsOptSpacing = 'drape: how far apart the mesh''s points are, in mm; default: 10';
   rsOptLabels = 'export-draft: name the points and pieces';
   rsOptUpTo = 'export-draft: draw only this object and those before it, as the pattern was when it was added';
   rsOptFormat = 'export: pdf, svg, dxf or machine-dxf; default: the extension of --output, or pdf. export-draft: svg or png; ' +
@@ -73,8 +74,8 @@ resourcestring
   rsOptUrl = 'check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com';
   rsOptCaFile = 'check-connection: trust the certificates in this PEM file, in place of those OpenSloper uses';
   rsArgCommand = 'Command to run';
-  rsArgPattern = 'Pattern file (.sloper), layout file (.slayout) to export or estimate, for measurements: list, set or missing, ' +
-    'or for doc: the topic';
+  rsArgPattern = 'Pattern file (.sloper), layout file (.slayout) to export or estimate, drape file (.sdrape) to export, for ' +
+    'measurements: list, set or missing, or for doc: the topic';
   rsArgFile = 'measurements: the measurement file (.slm)';
   rsArgKey = 'measurements set: the key; measurements missing: the pattern file';
   rsArgValue = 'measurements set: the value in mm';
@@ -83,6 +84,8 @@ resourcestring
   rsCmdExportDraft = 'Export a pattern''s draft as SVG or a PNG image, as the drafting window shows it';
   rsCmdLayout = 'Start a layout file for a pattern, with every piece placed';
   rsCmdMeasurements = 'List a measurement file, set a value, or see what a pattern needs that it lacks';
+  rsCmdDrape = 'Export a drape file for Blender''s cloth simulation: the pieces'' and the body''s meshes as OBJ, and a scene file ' +
+    'with the placements and the vertices each seam sews';
   rsCmdPack = 'Pack a layout''s pieces and rewrite the layout file';
   rsCmdMaterials = 'Estimate how much of each material a layout''s patterns, or one pattern, need to cut';
   rsCmdServe = 'Answer JSON-RPC 2.0 on stdin and stdout, one message per line, as the Automation API and as an MCP server';
@@ -96,7 +99,7 @@ resourcestring
 
 const
   CLI_TITLE = 'opensloper-cli';
-  CLI_COMMANDS: array[0..9] of TCliCommand = (
+  CLI_COMMANDS: array[0..10] of TCliCommand = (
     (Name: 'check'; Usage: 'check PATTERN [-m FILE] [-s SIZE] [--json]'; Description: rsCmdCheck),
     (Name: 'export'; Usage: 'export LAYOUT [-o FILE] [--format=FORMAT] [--profile=NAME]'; Description: rsCmdExport),
     (Name: 'export-draft'; Usage: 'export-draft PATTERN [-o FILE] [-m FILE] [-s SIZE] [--format=FORMAT] [--width=PIXELS] [--labels] [--upto=NAME]';
@@ -105,11 +108,12 @@ const
     (Name: 'measurements'; Usage: 'measurements list FILE [-s SIZE] [--json]' + LineEnding +
     'measurements set FILE KEY VALUE [-s SIZE] [-d TEXT]' + LineEnding + 'measurements missing FILE PATTERN'; Description: rsCmdMeasurements),
     (Name: 'pack'; Usage: 'pack LAYOUT'; Description: rsCmdPack),
+    (Name: 'drape'; Usage: 'drape DRAPE [-o FILE] [--spacing=MM]'; Description: rsCmdDrape),
     (Name: 'materials'; Usage: 'materials LAYOUT|PATTERN [--json]'; Description: rsCmdMaterials),
     (Name: 'serve'; Usage: 'serve [--connect]'; Description: rsCmdServe),
     (Name: 'check-connection'; Usage: 'check-connection [--url=URL] [--ca-file=FILE]'; Description: rsCmdCheckConnection),
     (Name: 'doc'; Usage: 'doc TOPIC [-o FILE]' + LineEnding + 'doc'; Description: rsCmdDoc));
-  CLI_OPTIONS: array[0..14] of TCliOption = (
+  CLI_OPTIONS: array[0..15] of TCliOption = (
     (Name: 'help'; Short: '-h'; Long: '--help'; Parameter: ''; Description: rsOptHelp),
     (Name: 'version'; Short: '-V'; Long: '--version'; Parameter: ''; Description: rsOptVersion),
     (Name: 'measurements'; Short: '-m'; Long: '--measurements'; Parameter: 'file'; Description: rsOptMeasurements),
@@ -122,6 +126,7 @@ const
     (Name: 'labels'; Short: ''; Long: '--labels'; Parameter: ''; Description: rsOptLabels),
     (Name: 'upto'; Short: ''; Long: '--upto'; Parameter: 'name'; Description: rsOptUpTo),
     (Name: 'width'; Short: ''; Long: '--width'; Parameter: 'pixels'; Description: rsOptWidth),
+    (Name: 'spacing'; Short: ''; Long: '--spacing'; Parameter: 'mm'; Description: rsOptSpacing),
     (Name: 'connect'; Short: ''; Long: '--connect'; Parameter: ''; Description: rsOptConnect),
     (Name: 'url'; Short: ''; Long: '--url'; Parameter: 'url'; Description: rsOptUrl),
     (Name: 'ca-file'; Short: ''; Long: '--ca-file'; Parameter: 'file'; Description: rsOptCaFile));

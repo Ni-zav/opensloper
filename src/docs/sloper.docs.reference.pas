@@ -31,8 +31,8 @@ const
   // A page is written to docs/reference/TOPIC.md, and a schema, whose topic is
   // its file name, to docs/reference/schemas/TOPIC; opensloper.py, the Python
   // client of the Automation API, to docs/reference/opensloper.py
-  DOC_TOPICS: array[0..11] of string = ('functions', 'operations', 'files', 'shortcuts', 'icons', 'cli', 'api', 'pattern.schema.json',
-    'measurements.schema.json', 'layout.schema.json', 'drape.schema.json',
+  DOC_TOPICS: array[0..12] of string = ('functions', 'operations', 'files', 'shortcuts', 'icons', 'cli', 'api', 'pattern.schema.json',
+    'measurements.schema.json', 'layout.schema.json', 'drape.schema.json', 'blender.schema.json',
     'opensloper.py');
 
 // The page or schema for Topic; False when there is no such topic

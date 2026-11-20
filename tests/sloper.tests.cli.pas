@@ -41,6 +41,8 @@ type
     function OutLines: TStringArray;
     // The tote bag, with Main and Lining given a width in cm
     function SizedToteBag(MainWidth, LiningWidth: double): string;
+    // A drape file of the bodice block with every piece placed by a guess
+    function GuessedBodiceDrape: string;
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -57,6 +59,9 @@ type
     procedure TestExportNeedsLayout;
     procedure TestExportBadFormat;
     procedure TestPack;
+    procedure TestDrape;
+    procedure TestDrapeNeedsDrape;
+    procedure TestDrapeBadSpacing;
     procedure TestLayoutExtensionAnyCase;
     procedure TestExportDraft;
     procedure TestExportDraftUpToUnknown;
@@ -86,7 +91,7 @@ implementation
 uses
   Classes, StreamIO, fpjson, jsonparser, Sloper.Core.Version, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Units,
   Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout,
-  Sloper.Core.PatternSources, Sloper.Output.LayoutExport,
+  Sloper.Core.PatternSources, Sloper.Output.LayoutExport, Sloper.Core.DrapeFile,
   Sloper.Tests.TlsServer;
 
 function ExamplesFolder: string;
@@ -359,6 +364,62 @@ begin
   AssertEquals(FErr, 0, Run(['pack', Layout]));
   AssertTrue(FOut, FOut.StartsWith('Packed '));
   AssertTrue(FOut, FOut.Trim.EndsWith(Layout));
+end;
+
+function TTestCLI.GuessedBodiceDrape: string;
+var
+  Drape: TDrape;
+  Reason: string;
+begin
+  CopyExample(ConcatPaths(['bodice-block', 'bodice.slm']));
+  CopyExample(ConcatPaths(['bodice-block', 'bodice-block.sloper']));
+  Result := InFolder('bodice.sdrape');
+  Drape := TDrape.Create;
+  try
+    Drape.FileName := Result;
+    Drape.Name := 'Bodice';
+    Drape.AddSource('bodice-block.sloper', '', '');
+    Drape.LoadSources;
+    AssertTrue('placed', Drape.GuessPlacements > 0);
+    AssertTrue(Reason, Drape.SaveToFile(Result, Reason));
+  finally
+    FreeAndNil(Drape);
+  end;
+end;
+
+procedure TTestCLI.TestDrape;
+var
+  Root: TJSONData;
+begin
+  AssertEquals(FErr, 0, Run(['drape', GuessedBodiceDrape]));
+  AssertEquals('no warnings', '', FErr);
+  AssertEquals(3, Length(OutLines));
+  AssertEquals(Format(rsWroteFile, [InFolder('bodice.pieces.obj')]), OutLines[0]);
+  AssertEquals(Format(rsWroteFile, [InFolder('bodice.body.obj')]), OutLines[1]);
+  AssertEquals(Format(rsWroteFile, [InFolder('bodice.blender.json')]), OutLines[2]);
+  AssertTrue('body', FileExists(InFolder('bodice.body.obj')));
+  Root := GetJSON(ReadWholeFile(InFolder('bodice.blender.json')));
+  try
+    AssertEquals('blender', Root.FindPath('format').AsString);
+    AssertEquals('bodice.pieces.obj', Root.FindPath('pieces').AsString);
+    AssertEquals('the back and front, opened out', 2, Root.FindPath('objects').Count);
+    AssertTrue('the darts sewn', Root.FindPath('seams').Count > 0);
+  finally
+    FreeAndNil(Root);
+  end;
+end;
+
+procedure TTestCLI.TestDrapeNeedsDrape;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['drape', CopyExample(ConcatPaths(['bodice-block', 'bodice-block.sloper']))]));
+  AssertEquals(Format(rsDrapeNeedsDrape, ['.sdrape']), FErr.Trim);
+end;
+
+procedure TTestCLI.TestDrapeBadSpacing;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['drape', GuessedBodiceDrape, '--spacing=0.5']));
+  AssertEquals(Format(rsDrapeSpacing, ['2', '100']), FErr.Trim);
+  AssertFalse('nothing written', FileExists(InFolder('bodice.blender.json')));
 end;
 
 // Windows and macOS keep a file's name as typed, .SLAYOUT included

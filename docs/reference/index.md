@@ -9,11 +9,11 @@ the program itself, so they always match the version they were built with.
   piece, seam and note, with its members as pattern files and the Automation
   API write them.
 - [File formats](files.md): pattern, measurement, layout and drape files,
-  member by member, with a JSON Schema for each
-  ([pattern](schemas/pattern.schema.json),
+  and the Blender scene a drape is exported to, member by member, with a
+  JSON Schema for each ([pattern](schemas/pattern.schema.json),
   [measurements](schemas/measurements.schema.json),
-  [layout](schemas/layout.schema.json), [drape](schemas/drape.schema.json)) to
-  check a file against.
+  [layout](schemas/layout.schema.json), [drape](schemas/drape.schema.json),
+  [Blender scene](schemas/blender.schema.json)) to check a file against.
 - [Keyboard shortcuts](shortcuts.md): the keys and mouse actions of the apps.
 - [Icons](icons.md): what each button and menu icon of the apps does,
   where to find it, and its keys.

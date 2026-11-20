@@ -109,6 +109,7 @@ uses
   Sloper.Tests.Drape,
   Sloper.Tests.Mesher,
   Sloper.Tests.DrapeMesh,
+  Sloper.Tests.DrapeExport,
   Sloper.Tests.PieceView,
   Sloper.Tests.Locking;
 

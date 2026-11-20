@@ -38,6 +38,13 @@ const
   DRAPE_EXTENSION = '.sdrape';
   // How far (mm) pieces are placed off the body and apart across a seam
   DEFAULT_DRAPE_GAP = 20;
+  // The scene file the drape is exported to for Blender
+  // (Sloper.Output.DrapeExport), with its meshes beside it: written, never read
+  BLENDER_FORMAT = 'blender';
+  BLENDER_VERSION = 1;
+  BLENDER_EXTENSION = '.blender.json';
+  BLENDER_PIECES_EXTENSION = '.pieces.obj';
+  BLENDER_BODY_EXTENSION = '.body.obj';
 
 type
   // bkMeasurements builds a generic body from a measurement set; bkNone has no

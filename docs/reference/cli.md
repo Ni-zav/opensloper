@@ -62,6 +62,14 @@ Pack a layout's pieces and rewrite the layout file
 opensloper-cli pack LAYOUT
 ```
 
+### drape
+
+Export a drape file for Blender's cloth simulation: the pieces' and the body's meshes as OBJ, and a scene file with the placements and the vertices each seam sews
+
+```
+opensloper-cli drape DRAPE [-o FILE] [--spacing=MM]
+```
+
 ### materials
 
 Estimate how much of each material a layout's patterns, or one pattern, need to cut
@@ -105,12 +113,13 @@ opensloper-cli doc
 | `-s`, `--size` | size | check, layout: the size to use from a size table, default the first; measurements: the size to list or set |
 | `-d`, `--description` | text | measurements set: the description; default: keep the one it has |
 | `--json` |  | check: print every computed value as JSON; materials: print the estimate, in mm; measurements list: print the file |
-| `-o`, `--output` | file | layout, export, export-draft, doc: the file to write |
+| `-o`, `--output` | file | layout, export, export-draft, doc: the file to write; drape: the scene file, with the meshes written beside it |
 | `--format` | format | export: pdf, svg, dxf or machine-dxf; default: the extension of --output, or pdf. export-draft: svg or png; default: the extension of --output, or svg |
 | `--profile` | name | export: a machine profile from the settings, in place of the layout's |
 | `--labels` |  | export-draft: name the points and pieces |
 | `--upto` | name | export-draft: draw only this object and those before it, as the pattern was when it was added |
 | `--width` | pixels | export-draft: the width of a png in pixels, from 16 to 4096; default: 1600 |
+| `--spacing` | mm | drape: how far apart the mesh's points are, in mm; default: 10 |
 | `--connect` |  | serve: work on the pattern open in the design window, which must allow assistants to connect (Assistance menu, or --automation) |
 | `--url` | url | check-connection: the API to reach; default: ANTHROPIC_BASE_URL, or https://api.anthropic.com |
 | `--ca-file` | file | check-connection: trust the certificates in this PEM file, in place of those OpenSloper uses |
@@ -121,7 +130,7 @@ After the command, in this order; each command takes the ones it needs.
 
 | Argument | Description |
 | --- | --- |
-| `pattern` | Pattern file (.sloper), layout file (.slayout) to export or estimate, for measurements: list, set or missing, or for doc: the topic |
+| `pattern` | Pattern file (.sloper), layout file (.slayout) to export or estimate, drape file (.sdrape) to export, for measurements: list, set or missing, or for doc: the topic |
 | `file` | measurements: the measurement file (.slm) |
 | `key` | measurements set: the key; measurements missing: the pattern file |
 | `value` | measurements set: the value in mm |

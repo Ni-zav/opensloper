@@ -625,9 +625,6 @@ begin
     Points := PlacePoints(PlacedSeamLine(Piece), PieceAnchor(Piece), CopyIsMirrored(Piece, Copy.Copy), Items[Index].Placement);
 end;
 
-// The ends of a seam side's run on one piece, in the seam's direction, as
-// drafted: from the start of its first entry on the piece to the end of its
-// last. False when the side has no entry on the piece.
 // The run of a seam side on one piece, in the seam's direction, as drafted:
 // from the start of its first entry on the piece, through the point halfway
 // along it, to the end of its last. False when the side has no entry on the

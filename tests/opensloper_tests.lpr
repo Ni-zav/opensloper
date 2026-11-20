@@ -108,6 +108,7 @@ uses
   Sloper.Tests.Garment,
   Sloper.Tests.Drape,
   Sloper.Tests.Mesher,
+  Sloper.Tests.DrapeMesh,
   Sloper.Tests.PieceView,
   Sloper.Tests.Locking;
 

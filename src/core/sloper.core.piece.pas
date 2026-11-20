@@ -58,6 +58,7 @@ type
   end;
 
   TPiecePath = array of TPieceEdge;
+  TPieceEdgeStarts = array of integer;
 
   // gkAngle lays the grainline through the piece's middle at a formula angle;
   // gkPoints runs it between two points
@@ -124,6 +125,7 @@ type
   private
     FPath: TPiecePath;
     FOutline: TVec2Array;
+    FEdgeStarts: TPieceEdgeStarts;
     FCutLine: TVec2Array;
     FGrainKind: TGrainKind;
     FGrainStartKey, FGrainEndKey: string;
@@ -140,7 +142,8 @@ type
     FMaterialKey: string;
     FFillColor: string;
     FFillStyle: TPieceFillStyle;
-    function BuildOutline(Context: TEvalContext; DefaultWidth: double; out Outline: TVec2Array; out Widths, EdgeWidths: TDoubleArray): TEvalState;
+    function BuildOutline(Context: TEvalContext; DefaultWidth: double; out Outline: TVec2Array; out Widths, EdgeWidths: TDoubleArray;
+      out EdgeStarts: TPieceEdgeStarts): TEvalState;
     function ComputeGrainline(Context: TEvalContext; const Points: TVec2Array; out Line: TLine2): TEvalState;
     function ComputeNotch(Context: TEvalContext; Index: integer; const EdgeWidths: TDoubleArray; Anticlockwise: boolean;
       out Mark: TNotchMark): TEvalState;
@@ -211,6 +214,9 @@ type
     property Path: TPiecePath read FPath;
     // Last good seam line, closed without repeating its first point
     property Outline: TVec2Array read FOutline;
+    // Where each edge of the path starts in Outline, from the last good
+    // evaluation; an edge runs to where the next starts, the last to the end
+    property EdgeStarts: TPieceEdgeStarts read FEdgeStarts;
     // Last good cutting line, clockwise, closed without repeating its first point
     property CutLine: TVec2Array read FCutLine;
     property GrainKind: TGrainKind read FGrainKind;
@@ -604,7 +610,7 @@ begin
 end;
 
 function TPieceObject.BuildOutline(Context: TEvalContext; DefaultWidth: double; out Outline: TVec2Array;
-  out Widths, EdgeWidths: TDoubleArray): TEvalState;
+  out Widths, EdgeWidths: TDoubleArray; out EdgeStarts: TPieceEdgeStarts): TEvalState;
 var
   Index, Added, PointIndex: integer;
   Node: TEvalNode;
@@ -617,6 +623,8 @@ begin
   Widths := nil;
   EdgeWidths := nil;
   SetLength(EdgeWidths, Length(FPath));
+  EdgeStarts := nil;
+  SetLength(EdgeStarts, Length(FPath));
   First := nil;
   Previous := nil;
   LastEnd := Vec2(0, 0);
@@ -640,6 +648,7 @@ begin
       Exit(Fail(esInvalid, Format(rsPieceGap, [Previous.DisplayName, Node.DisplayName])));
     // Each point of the edge but its last starts a segment of this width
     Added := Length(Outline);
+    EdgeStarts[Index] := Added;
     SetLength(Outline, Added + High(Points));
     SetLength(Widths, Added + High(Points));
     for PointIndex := 0 to High(Points) - 1 do
@@ -811,6 +820,7 @@ var
   Width: double;
   Points, Cut: TVec2Array;
   Widths, EdgeWidths: TDoubleArray;
+  Starts: TPieceEdgeStarts;
   Line: TLine2;
   Marks: TNotchMarkArray;
   NewMarkings: TMarkingMarkArray;
@@ -822,7 +832,7 @@ begin
     Exit(esError);
   if Width < 0 then
     Exit(Fail(esInvalid, rsPieceNegativeAllowance));
-  Result := BuildOutline(Context, Width, Points, Widths, EdgeWidths);
+  Result := BuildOutline(Context, Width, Points, Widths, EdgeWidths, Starts);
   if Result <> esValid then
     Exit;
   if Abs(SignedArea(Points)) < PIECE_JOIN_TOLERANCE then
@@ -851,6 +861,7 @@ begin
   end;
   FMarkingMarks := NewMarkings;
   FOutline := Points;
+  FEdgeStarts := Starts;
   FCutLine := Cut;
   FGrainline := Line;
   FNotchMarks := Marks;

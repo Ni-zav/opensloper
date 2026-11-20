@@ -76,6 +76,12 @@ function PieceAnchor(Piece: TPieceObject): TVec2;
 // The seam line as the piece is placed: for a piece on a fold, opened out, the
 // half as drafted followed by its mirror image across the fold
 function PlacedSeamLine(Piece: TPieceObject): TVec2Array;
+// For a piece on a fold, where PlacedSeamLine starts in its Outline: the end of
+// the fold edge, which runs from the point before it. Of the Outline's Count
+// points, point I is PlacedSeamLine's (I - Start) mod Count, and in mirror
+// image Count - 1 + (Start - 1 - I) mod Count, but for the two fold ends,
+// which it lists once. -1 when the piece is not on a fold.
+function PlacedFoldStart(Piece: TPieceObject): integer;
 // A drafted point in the piece's own frame: x along X, y (down) along -Z, the
 // anchor at the origin and the right side of the fabric facing -Y. Mirrored
 // (a second copy cut mirrored) turns x round, giving the left of a pair.
@@ -166,29 +172,38 @@ begin
   Result := Distance(Point, Line.ClosestPoint(Point, True)) <= FOLD_TOLERANCE;
 end;
 
+function PlacedFoldStart(Piece: TPieceObject): integer;
+var
+  Outline: TVec2Array;
+  Count, Index: integer;
+  Fold: TLine2;
+begin
+  Result := -1;
+  Outline := Piece.Outline;
+  Count := Length(Outline);
+  if not Piece.OnFold or (Count < 3) then
+    Exit;
+  Fold := Piece.FoldLine;
+  for Index := 0 to Count - 1 do
+    if OnLine(Outline[Index], Fold) and OnLine(Outline[(Index + 1) mod Count], Fold) then
+      Exit((Index + 1) mod Count);
+end;
+
 function PlacedSeamLine(Piece: TPieceObject): TVec2Array;
 var
   Outline: TVec2Array;
-  Count, Index, Start, Step: integer;
+  Count, Start, Step: integer;
   Fold: TLine2;
 begin
   Outline := Piece.Outline;
   Result := Copy(Outline);
   Count := Length(Outline);
-  if not Piece.OnFold or (Count < 3) then
-    Exit;
-  Fold := Piece.FoldLine;
   // The fold edge runs from Outline[Start - 1] to Outline[Start]; the half
   // goes from its end round to its start, then back in mirror image
-  Start := -1;
-  for Index := 0 to Count - 1 do
-    if OnLine(Outline[Index], Fold) and OnLine(Outline[(Index + 1) mod Count], Fold) then
-    begin
-      Start := (Index + 1) mod Count;
-      Break;
-    end;
+  Start := PlacedFoldStart(Piece);
   if Start < 0 then
     Exit;
+  Fold := Piece.FoldLine;
   Result := nil;
   SetLength(Result, 2 * Count - 2);
   for Step := 0 to Count - 1 do

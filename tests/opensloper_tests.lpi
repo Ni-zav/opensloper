@@ -321,6 +321,11 @@
         <UnitName Value="Sloper.Tests.Mesher"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.drapemesh.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.DrapeMesh"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.pieceview.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.PieceView"/>

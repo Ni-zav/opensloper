@@ -159,7 +159,7 @@ The script is generated next to the OBJ and JSON, for one Blender version stated
 3. Body from measurements in the core (`Sloper.Core.BodyForm`), with tests.
 4. The drape app: sources and keeping in step, commands with undo, the 3D view, camera, moving and turning, Align to Seam; the design app's menu item to open a pattern in it.
 5. Mesher in the core, with tests.
-6. Seam pairing feeding the mesher's outline resampling, with tests.
+6. Seam pairing feeding the mesher's outline resampling, with tests (built 2026-11-20, `Sloper.Core.DrapeMesh`).
 7. OBJ and seam JSON writer (pieces and body), CLI command, schemas.
 8. Blender script and running Blender from the app, checked by hand on the tutorial patterns in `docs/examples/`, garments and accessories.
 9. User documentation, packaging the fourth app.

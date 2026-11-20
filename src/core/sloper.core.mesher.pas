@@ -40,6 +40,8 @@ const
   DEFAULT_MESH_SPACING = 10;
   // Rounds of smoothing the inner points
   DEFAULT_SMOOTHING = 3;
+  // The outline turning by more than this (degrees) at a point keeps it
+  MESH_CORNER_ANGLE = 20;
 
 type
   TMeshTriangle = record
@@ -48,6 +50,7 @@ type
 
   TMeshTriangleArray = array of TMeshTriangle;
   TBooleanArray = array of boolean;
+  TMeshIndexArray = array of integer;
 
   TFlatMesh = record
     Points: TVec2Array;
@@ -64,7 +67,13 @@ type
 // kept points is divided evenly. A point is kept when Keep says so (Keep may
 // be nil or shorter) or when the outline turns there by more than a corner.
 // Closed, without repeating its first point.
-function ResampleOutline(const Points: TVec2Array; const Keep: TBooleanArray; Spacing: double): TVec2Array;
+function ResampleOutline(const Points: TVec2Array; const Keep: TBooleanArray; Spacing: double): TVec2Array; overload;
+// As above; KeptAt gives, for each of Points, its index in the result when it
+// is kept, else -1
+function ResampleOutline(const Points: TVec2Array; const Keep: TBooleanArray; Spacing: double;
+  out KeptAt: TMeshIndexArray): TVec2Array; overload;
+// How far a polyline turns at Point, in degrees: 0 straight on, 180 straight back
+function TurnAt(const Previous, Point, Next: TVec2): double;
 // A mesh of the inside of a closed outline, used as it is (resample it first),
 // in either direction. Empty when it has fewer than three points or no area.
 function MeshPolygon(const Outline: TVec2Array; Spacing: double; Smoothing: integer = DEFAULT_SMOOTHING): TFlatMesh;
@@ -79,8 +88,6 @@ uses
   Math, Generics.Collections, Sloper.Core.Numeric, Sloper.Core.DrapePlacement;
 
 const
-  // The outline turning by more than this (degrees) at a point keeps it
-  CORNER_ANGLE = 20;
   // Inner points closer than this share of the spacing to the outline are left out
   MIN_INNER_DISTANCE_SHARE = 0.5;
   // Outline edges shorter than this share of the spacing are not split again
@@ -372,6 +379,14 @@ end;
 
 function ResampleOutline(const Points: TVec2Array; const Keep: TBooleanArray; Spacing: double): TVec2Array;
 var
+  KeptAt: TMeshIndexArray;
+begin
+  Result := ResampleOutline(Points, Keep, Spacing, KeptAt);
+end;
+
+function ResampleOutline(const Points: TVec2Array; const Keep: TBooleanArray; Spacing: double;
+  out KeptAt: TMeshIndexArray): TVec2Array;
+var
   Count, Index, Start, Next, Step, Pieces, Walk: integer;
   Kept: array of boolean;
   Run: TVec2Array;
@@ -380,15 +395,23 @@ var
 begin
   Result := nil;
   Count := System.Length(Points);
+  KeptAt := nil;
+  SetLength(KeptAt, Count);
   if (Count < 3) or (Spacing <= 0) then
+  begin
+    for Index := 0 to Count - 1 do
+      KeptAt[Index] := Index;
     Exit(Copy(Points));
+  end;
+  for Index := 0 to Count - 1 do
+    KeptAt[Index] := -1;
   Kept := nil;
   SetLength(Kept, Count);
   Found := False;
   for Index := 0 to Count - 1 do
   begin
     Kept[Index] := ((Index < System.Length(Keep)) and Keep[Index]) or
-      (TurnAt(Points[(Index + Count - 1) mod Count], Points[Index], Points[(Index + 1) mod Count]) > CORNER_ANGLE);
+      (TurnAt(Points[(Index + Count - 1) mod Count], Points[Index], Points[(Index + 1) mod Count]) > MESH_CORNER_ANGLE);
     Found := Found or Kept[Index];
   end;
   // A smooth closed outline, such as a circle, starts anywhere
@@ -411,6 +434,7 @@ begin
     end;
     Length := PolylineLength(Run);
     Pieces := Max(1, Ceil(Length / Spacing - 1e-9));
+    KeptAt[Index] := System.Length(Result);
     System.Insert(Run[0], Result, System.Length(Result));
     Walk := 0;
     Along := 0;

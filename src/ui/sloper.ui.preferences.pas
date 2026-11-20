@@ -16,9 +16,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 }
 
-// The Preferences dialog, the same in all three apps: a General tab with the
-// unit, a Design tab with the grid and a Publish tab with the printer
-// calibration. What it saves goes straight to settings.json, read again first
+// The Preferences dialog, the same in every app: a General tab with the
+// unit, a Design tab with the grid, a Publish tab with the printer
+// calibration and a Drape tab with Blender. What it saves goes straight to settings.json, read again first
 // so the other apps' settings stay.
 unit Sloper.UI.Preferences;
 
@@ -30,7 +30,7 @@ uses
   Classes, Sloper.Core.Settings;
 
 type
-  TPreferencesTab = (ptGeneral, ptDesign, ptPublish);
+  TPreferencesTab = (ptGeneral, ptDesign, ptPublish, ptDrape);
 
 // Opens on FirstTab. True when the user saved changes, which Preferences
 // then holds; a file that cannot be written is reported and gives False.
@@ -67,6 +67,20 @@ resourcestring
   rsPreferencesGarmentLight = 'Light from (degrees)';
   rsPreferencesGarmentStrength = 'Shading strength (%)';
   rsPreferencesGarmentNote = 'How the Garment tab lights the pieces. 0° is from the right and 90° from above, so 135° is the upper left.';
+  rsPreferencesDrape = 'Drape';
+  rsPreferencesBlender = 'Blender';
+  rsPreferencesBlenderProgram = 'Program';
+  rsPreferencesBlenderBrowse = 'Choose...';
+  rsPreferencesBlenderNote = 'Leave it empty to use Blender on the path, or where its installer puts it. Draping is ' +
+    'written for Blender %s; download it from blender.org.';
+  rsPreferencesBlenderFound = 'Blender to run: %s';
+  rsPreferencesBlenderMissing = 'Blender was not found.';
+  rsPreferencesDraping = 'Draping';
+  rsPreferencesDrapeSpacing = 'Mesh spacing (mm)';
+  rsPreferencesDrapeFrames = 'Frames to simulate';
+  rsPreferencesDrapingNote = 'Pieces are meshed with points about this far apart. Closer points follow curves better ' +
+    'but simulate more slowly; 20 mm is quick for a first look. The seams are sewn in the first 40 frames, then the ' +
+    'garment settles.';
   rsPreferencesNotSaved = 'The preferences could not be saved: %s';
   rsPreferencesClaude = 'AI assistants';
   rsPreferencesClaudeKey = 'Anthropic API key';
@@ -84,7 +98,7 @@ implementation
 
 uses
   SysUtils, Math, Forms, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls, Spin, ButtonPanel, Dialogs, Sloper.Core.Measurements,
-  Sloper.Core.Units, Sloper.UI.Spacing, Sloper.Assistant.Key, Types;
+  Sloper.Core.Units, Sloper.UI.Spacing, Sloper.Assistant.Key, Sloper.Output.BlenderRun, Types;
 
 const
   DIALOG_WIDTH = 560;
@@ -96,6 +110,9 @@ const
   GRID_DECIMALS: array[TMeasureUnit] of integer = (1, 2, 4);
   GRID_INCREMENTS: array[TMeasureUnit] of double = (1, 0.1, 0.0625);
   CALIBRATION_INCREMENT = 0.001;
+  DRAPE_SPACING_DECIMALS = 1;
+  DRAPE_SPACING_INCREMENT = 1;
+  DRAPE_FRAMES_INCREMENT = 10;
   UNIT_CAPTIONS: array[TMeasureUnit] of string = (rsPreferencesUnitMillimetre, rsPreferencesUnitCentimetre, rsPreferencesUnitInch);
 
 type
@@ -110,7 +127,9 @@ type
     FShareMeasurementsBox: TCheckBox;
     FLightEdit, FStrengthEdit: TFloatSpinEdit;
     FMeasuredXLabel, FMeasuredYLabel: TLabel;
-    FKeyEdit: TEdit;
+    FKeyEdit, FBlenderEdit: TEdit;
+    FBlenderFound: TLabel;
+    FSpacingEdit, FFramesEdit: TFloatSpinEdit;
     FKeyShown: string;
     // The unit the measured sizes are typed in, which follows the Units box
     FMeasuredUnit: TMeasureUnit;
@@ -129,6 +148,9 @@ type
     procedure BuildGarmentGroup(Host: TScrollBox);
     procedure BuildClaudeGroup(Host: TScrollBox);
     procedure BuildPublishTab;
+    procedure BuildDrapeTab;
+    procedure BlenderChange(Sender: TObject);
+    procedure BlenderBrowseClick(Sender: TObject);
     function ExpectedSide: double;
     procedure ShowMeasuredUnit;
     procedure UnitChange(Sender: TObject);
@@ -168,6 +190,7 @@ begin
   BuildGeneralTab;
   BuildDesignTab;
   BuildPublishTab;
+  BuildDrapeTab;
 end;
 
 // A sheet scrolls only when the screen is too small for the whole dialog
@@ -371,6 +394,61 @@ begin
   AddRow(Rows, '', WorkOut);
 end;
 
+procedure TPreferencesDialog.BuildDrapeTab;
+var
+  Host: TScrollBox;
+  Group: TGroupBox;
+  Rows: TPanel;
+  Browse: TButton;
+begin
+  Host := AddTab(rsPreferencesDrape);
+  Group := AddGroup(Host, rsPreferencesBlender);
+  Rows := AddRows(Group);
+  FBlenderEdit := TEdit.Create(Self);
+  FBlenderEdit.OnChange := @BlenderChange;
+  AddRow(Rows, rsPreferencesBlenderProgram, FBlenderEdit);
+  Browse := TButton.Create(Self);
+  Browse.Caption := rsPreferencesBlenderBrowse;
+  Browse.AutoSize := True;
+  Browse.OnClick := @BlenderBrowseClick;
+  AddRow(Rows, '', Browse);
+  FBlenderFound := AddNote(Group, '');
+  AddNote(Group, Format(rsPreferencesBlenderNote, [BLENDER_SCRIPT_VERSION]));
+  Group := AddGroup(Host, rsPreferencesDraping);
+  Rows := AddRows(Group);
+  FSpacingEdit := NewSpin(MIN_DRAPE_SPACING, MAX_DRAPE_SPACING, DRAPE_SPACING_INCREMENT, DRAPE_SPACING_DECIMALS);
+  AddRow(Rows, rsPreferencesDrapeSpacing, FSpacingEdit);
+  FFramesEdit := NewSpin(MIN_DRAPE_FRAMES, MAX_DRAPE_FRAMES, DRAPE_FRAMES_INCREMENT, 0);
+  AddRow(Rows, rsPreferencesDrapeFrames, FFramesEdit);
+  AddNote(Group, rsPreferencesDrapingNote);
+end;
+
+// Says which Blender will run, as the program is typed
+procedure TPreferencesDialog.BlenderChange(Sender: TObject);
+var
+  Found: string;
+begin
+  Found := FindBlender(Trim(FBlenderEdit.Text));
+  if Found = '' then
+    FBlenderFound.Caption := rsPreferencesBlenderMissing
+  else
+    FBlenderFound.Caption := Format(rsPreferencesBlenderFound, [Found]);
+end;
+
+procedure TPreferencesDialog.BlenderBrowseClick(Sender: TObject);
+var
+  Dialog: TOpenDialog;
+begin
+  Dialog := TOpenDialog.Create(Self);
+  try
+    Dialog.FileName := FBlenderEdit.Text;
+    if Dialog.Execute then
+      FBlenderEdit.Text := Dialog.FileName;
+  finally
+    FreeAndNil(Dialog);
+  end;
+end;
+
 // The screen the dialog opens on, less the panels and a margin for the
 // window frame, which the form's size leaves out
 function TPreferencesDialog.WorkArea: TRect;
@@ -440,6 +518,10 @@ begin
   FShareMeasurementsBox.Checked := Preferences.AssistantMeasurements;
   FLightEdit.Value := Preferences.GarmentLightAngle;
   FStrengthEdit.Value := Preferences.GarmentShadeStrength * 100;
+  FBlenderEdit.Text := Preferences.BlenderProgram;
+  BlenderChange(nil);
+  FSpacingEdit.Value := Preferences.DrapeSpacing;
+  FFramesEdit.Value := Preferences.DrapeFrames;
   FSquareBox.ItemIndex := 0;
   FMeasuredUnit := Preferences.MeasureUnit;
   ShowMeasuredUnit;
@@ -465,6 +547,9 @@ begin
   Result.AssistantMeasurements := FShareMeasurementsBox.Checked;
   Result.GarmentLightAngle := FLightEdit.Value;
   Result.GarmentShadeStrength := EnsureRange(FStrengthEdit.Value / 100, 0, 1);
+  Result.BlenderProgram := Trim(FBlenderEdit.Text);
+  Result.DrapeSpacing := EnsureRange(FSpacingEdit.Value, MIN_DRAPE_SPACING, MAX_DRAPE_SPACING);
+  Result.DrapeFrames := EnsureRange(Round(FFramesEdit.Value), MIN_DRAPE_FRAMES, MAX_DRAPE_FRAMES);
 end;
 
 // The side of the test square chosen, in mm

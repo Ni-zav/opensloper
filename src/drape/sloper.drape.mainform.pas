@@ -56,7 +56,7 @@ type
     FPieceCopies: TDrapePieceCopyArray;
     FCommands: TCommandSet;
     FSaveAction, FSaveAsAction, FUndoAction, FRedoAction, FReloadAction, FGuessAction, FFlipAction, FUnplaceAction,
-    FPerspectiveAction: TAction;
+    FPerspectiveAction, FBlenderAction: TAction;
     FRecent: TRecentMenu;
     FWatch: TTimer;
     FAppLink: TAppLink;
@@ -91,6 +91,7 @@ type
     procedure UndoClick(Sender: TObject);
     procedure RedoClick(Sender: TObject);
     procedure PreferencesClick(Sender: TObject);
+    procedure BlenderClick(Sender: TObject);
     procedure ZoomInClick(Sender: TObject);
     procedure ZoomOutClick(Sender: TObject);
     procedure FitClick(Sender: TObject);
@@ -141,6 +142,11 @@ resourcestring
   rsMenuSave = '&Save';
   rsMenuSaveAs = 'Save &As...';
   rsMenuQuit = '&Quit';
+  rsMenuBlender = '&Drape in Blender...';
+  rsBlenderNotFound = 'Blender was not found, so the files for it were written but not draped: %s. Install Blender %s, ' +
+    'or choose its program in Edit -> Preferences -> Drape.';
+  rsBlenderExportFailed = 'The files for Blender could not be written: %s';
+  rsBlenderNoScript = 'The Blender script is missing from the program''s data folder; reinstall OpenSloper.';
   rsMenuEdit = '&Edit';
   rsMenuUndo = '&Undo';
   rsMenuUndoNamed = '&Undo %s';
@@ -226,7 +232,8 @@ implementation
 uses
   LCLType, Math, StrUtils, Sloper.Core.Geometry3, Sloper.Core.Piece, Sloper.Core.RecentFiles, Sloper.Core.Settings,
   Sloper.Core.IconSet, Sloper.Core.JSON, Sloper.UI.Spacing, Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences,
-  Sloper.API.Endpoint, Sloper.Core.DrapeMesh;
+  Sloper.API.Endpoint, Sloper.Core.DrapeMesh, Sloper.Core.AppPaths, Sloper.Output.DrapeExport, Sloper.Output.BlenderRun,
+  Sloper.Drape.BlenderDialog;
 
 const
   SIDE_WIDTH = 320;
@@ -364,6 +371,7 @@ begin
   FGuessAction := FCommands.NewAction(rsMenuGuess, aiWand, @GuessClick, CommandShortCut(kcGuessPlacements));
   FFlipAction := FCommands.NewAction(rsMenuFlip, aiMirror, @FlipClick);
   FUnplaceAction := FCommands.NewAction(rsMenuUnplace, aiDelete, @UnplaceClick);
+  FBlenderAction := FCommands.NewAction(rsMenuBlender, aiDrape, @BlenderClick);
 
   Group := AddMenu(rsMenuFile);
   FCommands.AddMenuItem(Group, NewAction);
@@ -371,6 +379,8 @@ begin
   FRecent := TRecentMenu.Create(Self, Group, OpenItem, rlDrapes, @RecentOpen);
   FCommands.AddMenuItem(Group, FSaveAction);
   FCommands.AddMenuItem(Group, FSaveAsAction);
+  Group.AddSeparator;
+  FCommands.AddMenuItem(Group, FBlenderAction);
   Group.AddSeparator;
   FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuQuit, aiQuit, @QuitClick, CommandShortCut(kcQuit)));
   Group := AddMenu(rsMenuEdit);
@@ -413,6 +423,8 @@ begin
   FCommands.AddButton(FGuessAction);
   FCommands.AddButton(FFlipAction);
   FCommands.AddButton(FUnplaceAction);
+  FCommands.AddDivider;
+  FCommands.AddButton(FBlenderAction);
 end;
 
 function TDrapeForm.ScrollingRows(Side: TWinControl): TScrollBox;
@@ -803,6 +815,7 @@ begin
   FGuessAction.Enabled := Length(FDocument.Drape.Unplaced) > 0;
   FFlipAction.Enabled := HasSelection;
   FUnplaceAction.Enabled := HasSelection;
+  FBlenderAction.Enabled := Length(FDocument.Drape.Items) > 0;
 end;
 
 procedure TDrapeForm.ShowStatus(const AText: string);
@@ -941,8 +954,49 @@ procedure TDrapeForm.PreferencesClick(Sender: TObject);
 var
   Preferences: TPreferences;
 begin
-  if EditPreferences(Self, ptGeneral, Preferences) then
+  if EditPreferences(Self, ptDrape, Preferences) then
     TellApps(APP_LINK_PREFERENCES, FAppLink);
+end;
+
+// Writes the files Blender needs beside the drape file, then runs Blender on
+// them while a window shows how far it is
+procedure TDrapeForm.BlenderClick(Sender: TObject);
+var
+  Preferences: TPreferences;
+  Files: TDrapeExportFiles;
+  Problems: TDrapeProblemArray;
+  Blender, Reason, Script: string;
+  Written: boolean;
+begin
+  FView.CancelDrag;
+  if (FDocument.Drape.FileName = '') and not SaveAs then
+    Exit;
+  Script := TAppPaths.BlenderScriptFile;
+  if Script = '' then
+  begin
+    MessageDlg(rsBlenderNoScript, mtError, [mbOK], 0);
+    Exit;
+  end;
+  Preferences := UserPreferences;
+  Files := DrapeExportFiles(DrapeExportTarget(FDocument.Drape.FileName));
+  Screen.BeginWaitCursor;
+  try
+    Written := ExportDrape(FDocument.Drape, Files.Scene, Preferences.DrapeSpacing, Script, Problems, Reason);
+  finally
+    Screen.EndWaitCursor;
+  end;
+  if not Written then
+  begin
+    MessageDlg(Format(rsBlenderExportFailed, [Reason]), mtError, [mbOK], 0);
+    Exit;
+  end;
+  Blender := FindBlender(Preferences.BlenderProgram);
+  if Blender = '' then
+  begin
+    MessageDlg(Format(rsBlenderNotFound, [Files.Script, BLENDER_SCRIPT_VERSION]), mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  DrapeInBlender(Self, Blender, Files, Preferences.DrapeFrames);
 end;
 
 procedure TDrapeForm.ZoomInClick(Sender: TObject);

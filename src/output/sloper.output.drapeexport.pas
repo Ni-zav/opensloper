@@ -37,11 +37,6 @@ interface
 uses
   SysUtils, Sloper.Core.Mesher, Sloper.Core.BodyForm, Sloper.Core.DrapeFile, Sloper.Core.DrapeMesh;
 
-const
-  // The mesh spacing allowed, in mm
-  MIN_DRAPE_SPACING = 2;
-  MAX_DRAPE_SPACING = 100;
-
 type
   // The files of an export, all in one folder
   TDrapeExportFiles = record

@@ -94,7 +94,7 @@ implementation
 uses
   Classes, StreamIO, fpjson, jsonparser, Sloper.Core.Version, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Units,
   Sloper.Core.PatternCheck, Sloper.Core.Measurements, Sloper.CLI.Arguments, Sloper.CLI.Commands, Sloper.Output.Layout,
-  Sloper.Core.PatternSources, Sloper.Output.LayoutExport, Sloper.Core.DrapeFile, Sloper.Core.AppPaths, Sloper.Output.BlenderRun,
+  Sloper.Core.PatternSources, Sloper.Output.LayoutExport, Sloper.Core.DrapeFile, Sloper.Core.AppPaths, Sloper.Output.BlenderRun, Sloper.Core.Settings,
   Sloper.Tests.TlsServer;
 
 function ExamplesFolder: string;

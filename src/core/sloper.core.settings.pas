@@ -72,6 +72,11 @@ type
     // Whether Claude, in the window or connected to it, may read and change
     // the measurement values (see Privacy in the design)
     AssistantMeasurements: boolean;
+    // The drape app's Blender: its program, '' to find it; the mesh spacing
+    // (mm) and the frames it simulates
+    BlenderProgram: string;
+    DrapeSpacing: double;
+    DrapeFrames: integer;
   end;
 
 const
@@ -88,6 +93,13 @@ const
   // The sides of the PDF's test square: 4 in on Letter, 10 cm elsewhere
   METRIC_TEST_SQUARE_SIDE = 100;
   INCH_TEST_SQUARE_SIDE = 101.6;
+  // The drape export's mesh spacing in mm, and the frames Blender simulates
+  DEFAULT_DRAPE_SPACING = 10;
+  MIN_DRAPE_SPACING = 2;
+  MAX_DRAPE_SPACING = 100;
+  DEFAULT_DRAPE_FRAMES = 120;
+  MIN_DRAPE_FRAMES = 1;
+  MAX_DRAPE_FRAMES = 10000;
 
 type
   TAppSettings = class
@@ -187,6 +199,9 @@ begin
   Result.GarmentLightAngle := DEFAULT_GARMENT_LIGHT_ANGLE;
   Result.GarmentShadeStrength := DEFAULT_GARMENT_SHADE_STRENGTH;
   Result.AssistantMeasurements := True;
+  Result.BlenderProgram := '';
+  Result.DrapeSpacing := DEFAULT_DRAPE_SPACING;
+  Result.DrapeFrames := DEFAULT_DRAPE_FRAMES;
 end;
 
 function NoCalibration: TCalibration;
@@ -371,6 +386,10 @@ begin
     Obj.Add('garmentLightAngle', JSONFloat(Preferences.GarmentLightAngle));
     Obj.Add('garmentShadeStrength', JSONFloat(Preferences.GarmentShadeStrength));
     Obj.Add('assistantMeasurements', Preferences.AssistantMeasurements);
+    if Preferences.BlenderProgram <> '' then
+      Obj.Add('blenderProgram', Preferences.BlenderProgram);
+    Obj.Add('drapeSpacing', JSONFloat(Preferences.DrapeSpacing));
+    Obj.Add('drapeFrames', Preferences.DrapeFrames);
     if Length(MachineProfiles) > 0 then
       Obj.Add('machineProfiles', MachineProfilesToJSON(MachineProfiles));
     if Length(OutputProfiles) > 0 then
@@ -446,6 +465,12 @@ begin
       Preferences.GarmentShadeStrength := Number;
     if GetJSONBoolean(Obj, 'assistantMeasurements', Shown) then
       Preferences.AssistantMeasurements := Shown;
+    if GetJSONString(Obj, 'blenderProgram', TextValue) then
+      Preferences.BlenderProgram := TextValue;
+    if GetJSONNumber(Obj, 'drapeSpacing', Number) and (Number >= MIN_DRAPE_SPACING) and (Number <= MAX_DRAPE_SPACING) then
+      Preferences.DrapeSpacing := Number;
+    if GetJSONInteger(Obj, 'drapeFrames', Split) and (Split >= MIN_DRAPE_FRAMES) and (Split <= MAX_DRAPE_FRAMES) then
+      Preferences.DrapeFrames := Split;
     MachineProfiles := MachineProfilesFromJSON(Obj.Find('machineProfiles'));
     OutputProfiles := OutputProfilesFromJSON(Obj.Find('outputProfiles'));
     RolePresets := RolePresetsFromJSON(Obj.Find('rolePresets'));

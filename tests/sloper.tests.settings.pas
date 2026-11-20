@@ -310,6 +310,9 @@ begin
   FSettings.Preferences.GarmentLightAngle := 45;
   FSettings.Preferences.GarmentShadeStrength := 0.8;
   FSettings.Preferences.AssistantMeasurements := False;
+  FSettings.Preferences.BlenderProgram := '/opt/blender/blender';
+  FSettings.Preferences.DrapeSpacing := 15;
+  FSettings.Preferences.DrapeFrames := 200;
   Other := TAppSettings.Create;
   try
     AssertTrue(Err, Other.LoadFromText(FSettings.SaveToText, Err));
@@ -323,6 +326,9 @@ begin
     AssertNear('light', 45, Other.Preferences.GarmentLightAngle);
     AssertNear('strength', 0.8, Other.Preferences.GarmentShadeStrength);
     AssertFalse('measurements kept from Claude', Other.Preferences.AssistantMeasurements);
+    AssertEquals('Blender', '/opt/blender/blender', Other.Preferences.BlenderProgram);
+    AssertNear('spacing', 15, Other.Preferences.DrapeSpacing);
+    AssertEquals('frames', 200, Other.Preferences.DrapeFrames);
   finally
     FreeAndNil(Other);
   end;
@@ -345,6 +351,11 @@ begin
     ' "garmentLightAngle": -45}', Err));
   AssertNear('strength over 1', DEFAULT_GARMENT_SHADE_STRENGTH, FSettings.Preferences.GarmentShadeStrength);
   AssertNear('angle taken round', 315, FSettings.Preferences.GarmentLightAngle);
+  AssertTrue(Err, FSettings.LoadFromText('{"format": "opensloper-settings", "version": 1, "drapeSpacing": 0.5,' +
+    ' "drapeFrames": 0}', Err));
+  AssertNear('spacing too fine', DEFAULT_DRAPE_SPACING, FSettings.Preferences.DrapeSpacing);
+  AssertEquals('no frames', DEFAULT_DRAPE_FRAMES, FSettings.Preferences.DrapeFrames);
+  AssertEquals('Blender found when needed', '', FSettings.Preferences.BlenderProgram);
 end;
 
 procedure TTestSettings.TestSavingPreferencesKeepsTheRest;

@@ -33,9 +33,6 @@ uses
 const
   // The Blender version the script is written for
   BLENDER_SCRIPT_VERSION = '5.2';
-  DEFAULT_DRAPE_FRAMES = 120;
-  MIN_DRAPE_FRAMES = 1;
-  MAX_DRAPE_FRAMES = 10000;
 
 type
   // Called with each line Blender writes, as it writes it
@@ -43,6 +40,8 @@ type
 
   TBlenderRun = record
     ExitCode: integer;
+    // Stopped by the caller before it finished
+    Stopped: boolean;
     // The last lines Blender wrote that were not progress, to show when it fails
     Tail: TStringArray;
   end;
@@ -54,9 +53,12 @@ function FindBlender(const Configured: string): string;
 function BlenderParameters(const Script: string; Frames: integer): TStringArray;
 // The script's progress without its prefix; False for any other line
 function BlenderProgress(const Line: string; out Text: string): boolean;
+// The frame a progress text says the simulation is at, and how many there are
+function BlenderFrame(const Progress: string; out Frame, Total: integer): boolean;
 // Runs Blender and waits for it; False, with a message, when it cannot start.
-// A script that fails ends Blender with a code other than 0.
-function RunBlender(const Blender, Script: string; Frames: integer; OnLine: TBlenderLineEvent; out Run: TBlenderRun;
+// A script that fails ends Blender with a code other than 0. Setting Stop^,
+// from another thread, ends Blender early.
+function RunBlender(const Blender, Script: string; Frames: integer; OnLine: TBlenderLineEvent; Stop: PBoolean; out Run: TBlenderRun;
   out ErrorMessage: string): boolean;
 
 resourcestring
@@ -69,6 +71,9 @@ uses
 
 const
   PROGRESS_PREFIX = 'OpenSloper:';
+  FRAME_WORD = 'frame';
+  OF_WORD = 'of';
+  STOPPED_EXIT_CODE = 1;
   // Lines kept to show when Blender fails
   TAIL_LINES = 20;
   READ_BUFFER = 4096;
@@ -142,7 +147,18 @@ begin
     Text := '';
 end;
 
-function RunBlender(const Blender, Script: string; Frames: integer; OnLine: TBlenderLineEvent; out Run: TBlenderRun;
+function BlenderFrame(const Progress: string; out Frame, Total: integer): boolean;
+var
+  Words: TStringArray;
+begin
+  Frame := 0;
+  Total := 0;
+  Words := Progress.Split([' ']);
+  Result := (Length(Words) = 4) and (Words[0] = FRAME_WORD) and (Words[2] = OF_WORD) and TryStrToInt(Words[1], Frame) and
+    TryStrToInt(Words[3], Total) and (Total > 0);
+end;
+
+function RunBlender(const Blender, Script: string; Frames: integer; OnLine: TBlenderLineEvent; Stop: PBoolean; out Run: TBlenderRun;
   out ErrorMessage: string): boolean;
 var
   Runner: TProcess;
@@ -208,6 +224,12 @@ begin
     end;
     while Runner.Running do
     begin
+      if Assigned(Stop) and Stop^ then
+      begin
+        Runner.Terminate(STOPPED_EXIT_CODE);
+        Run.Stopped := True;
+        Break;
+      end;
       if Runner.Output.NumBytesAvailable > 0 then
         ReadAvailable
       else

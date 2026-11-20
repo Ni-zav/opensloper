@@ -51,6 +51,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Drape.View"/>
       </Unit>
+      <Unit>
+        <Filename Value="sloper.drape.blenderdialog.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Drape.BlenderDialog"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

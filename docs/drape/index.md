@@ -5,11 +5,9 @@
 simulation. A drape is saved as a `.sdrape` file. It reads the saved patterns
 and never changes them.
 
-!!! note "Being built"
-    The window and placing pieces are done, and the command line writes the
-    files Blender needs and runs Blender on them (see [Export for
-    Blender](#export-for-blender)). Running Blender from the drape window is
-    not built yet; see
+!!! note "New"
+    Draping is new, and so far tried on the bodice block; other garments
+    may need the settings tuned. See
     [issue #11](https://github.com/opensloper/opensloper/issues/11).
 
 ## Start a drape
@@ -121,12 +119,24 @@ the drape reads it again within a second or two. New pieces wait on the
 Pieces tab, and a placed piece that is gone from its pattern is listed under
 Problems. Nothing is ever written back to a pattern.
 
-## Export for Blender
+## Drape in Blender
 
-`opensloper-cli drape` writes a saved drape as the files Blender's cloth
-simulation needs, beside the drape file unless `-o` names the scene file.
-With `--run` it runs [Blender](https://www.blender.org) on them too, which
-sews the pieces round the body and saves the result as `skirt.blend`:
+File → **Drape in Blender…** (the hanger on the toolbar) sews the placed
+pieces round the body in [Blender](https://www.blender.org)'s cloth
+simulation. It writes the files Blender needs beside the drape file (saving
+a new drape first), then runs Blender in the background while a window shows
+which frame it is at; **Cancel** stops it. When it is done, **Open in
+Blender** opens the result, `skirt.blend`, to look round the garment. If
+Blender stops with an error, the window shows its last lines.
+
+Edit → Preferences → **Drape** sets which Blender to run (empty finds it on
+the path, or where its installer puts it, and the tab says which it found),
+the mesh spacing and how many frames to simulate. Without Blender the files
+are still written, and the app says where.
+
+From the command line, `opensloper-cli drape` writes the same files, beside
+the drape file unless `-o` names the scene file, and `--run` runs Blender on
+them:
 
 ```
 opensloper-cli drape skirt.sdrape --run

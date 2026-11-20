@@ -559,7 +559,11 @@ var
   Reporter: TBlenderReporter;
   Outcome: TBlenderRun;
 begin
-  Blender := FindBlender(BlenderOption);
+  // As the drape app does, the program set in Preferences unless given
+  if BlenderOption <> '' then
+    Blender := FindBlender(BlenderOption)
+  else
+    Blender := FindBlender(UserPreferences.BlenderProgram);
   if Blender = '' then
   begin
     WriteLn(CliErr^, Format(rsDrapeNoBlender, [BLENDER_SCRIPT_VERSION]));
@@ -568,7 +572,7 @@ begin
   WriteLn(CliOut^, Format(rsDrapeRunning, [Blender]));
   Reporter := TBlenderReporter.Create;
   try
-    if not RunBlender(Blender, Files.Script, Frames, @Reporter.Line, Outcome, Err) then
+    if not RunBlender(Blender, Files.Script, Frames, @Reporter.Line, nil, Outcome, Err) then
     begin
       WriteLn(CliErr^, Err);
       Exit(EXIT_FAILURE);

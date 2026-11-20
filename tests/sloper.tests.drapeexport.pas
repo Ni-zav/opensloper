@@ -67,6 +67,7 @@ type
     procedure TestBlenderParameters;
     procedure TestBlenderProgress;
     procedure TestRunReadsLinesAndCode;
+    procedure TestRunStops;
   end;
 
   // Keeps the lines a run passes on
@@ -85,7 +86,7 @@ uses
   {$IFDEF UNIX}
   BaseUnix,
   {$ENDIF}
-  Classes, Sloper.Core.JSON, Sloper.Core.Mesher, Sloper.Core.AppPaths;
+  Classes, Sloper.Core.JSON, Sloper.Core.Mesher, Sloper.Core.AppPaths, Sloper.Core.Settings;
 
 const
   SPACING = 10;
@@ -461,10 +462,15 @@ end;
 procedure TTestDrapeExport.TestBlenderProgress;
 var
   Text: string;
+  Frame, Total: integer;
 begin
   AssertTrue(BlenderProgress('OpenSloper: frame 3 of 120', Text));
   AssertEquals('frame 3 of 120', Text);
   AssertFalse(BlenderProgress('Blender 5.2.2 LTS', Text));
+  AssertTrue(BlenderFrame('frame 3 of 120', Frame, Total));
+  AssertEquals(3, Frame);
+  AssertEquals(120, Total);
+  AssertFalse('not a frame', BlenderFrame('importing the pieces', Frame, Total));
 end;
 
 // A stand-in for Blender, a shell script, shows how lines and the exit code come back
@@ -481,7 +487,7 @@ begin
   Catcher := TLineCatcher.Create;
   try
     AssertEquals(0, FpChmod(Fake, &755));
-    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 2, @Catcher.Line, Outcome, Err));
+    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 2, @Catcher.Line, nil, Outcome, Err));
     AssertEquals('code', 3, Outcome.ExitCode);
     AssertEquals('every line, the last without an end', 4, Length(Catcher.Lines));
     AssertEquals('OpenSloper: frame 1 of 2', Catcher.Lines[1]);
@@ -489,6 +495,33 @@ begin
     AssertEquals('last', Outcome.Tail[2]);
   finally
     FreeAndNil(Catcher);
+    DeleteFile(Fake);
+  end;
+end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
+
+// The window's Cancel ends a Blender that would run on
+procedure TTestDrapeExport.TestRunStops;
+{$IFDEF UNIX}
+var
+  Fake, Err: string;
+  Outcome: TBlenderRun;
+  Stop: boolean;
+  Started: QWord;
+begin
+  Fake := IncludeTrailingPathDelimiter(GetTempDir) + 'sloper-slow-blender-' + IntToStr(Random(MaxInt));
+  AssertTrue(Err, WriteTextFile(Fake, '#!/bin/sh' + #10 + 'sleep 30' + #10, Err));
+  try
+    AssertEquals(0, FpChmod(Fake, &755));
+    Stop := True;
+    Started := GetTickCount64;
+    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 2, nil, @Stop, Outcome, Err));
+    AssertTrue('stopped', Outcome.Stopped);
+    AssertTrue('at once', GetTickCount64 - Started < 5000);
+  finally
     DeleteFile(Fake);
   end;
 end;

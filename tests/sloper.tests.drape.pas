@@ -26,7 +26,9 @@ interface
 
 uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft,
-  Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement, Sloper.Core.DrapeFile;
+  Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement,
+  Sloper.Core.DrapeFile, Sloper.Core.Measurements,
+  Sloper.Core.BodyForm;
 
 type
   TTestGeometry3 = class(TOSTestCase)
@@ -63,6 +65,18 @@ type
     procedure TestAlignedPlacementBesideItsPartner;
   end;
 
+  TTestBodyForm = class(TOSTestCase)
+  private
+    function SampleSet: TMeasurementSet;
+  published
+    procedure TestDefaultFormIsWhole;
+    procedure TestTakesMeasurements;
+    procedure TestRingsMatchCircumferences;
+    procedure TestRingsGoUp;
+    procedure TestMeshIsClosedAndFacesOut;
+    procedure TestSizeOfATable;
+  end;
+
   // A front and a back joined by a side seam, in a drape file
   TTestDrapeFile = class(TOSTestCase)
   private
@@ -92,12 +106,23 @@ type
     procedure TestGuessPlacesEverything;
     procedure TestGuessMirrorsPair;
     procedure TestProblems;
+    procedure TestGuessUsesTheBody;
+    procedure TestMissingBodyFile;
   end;
 
 implementation
 
 uses
-  Math;
+  Classes, Math;
+
+function PolylineLength3(const Points: TVec3Array): double;
+var
+  Index: integer;
+begin
+  Result := 0;
+  for Index := 0 to High(Points) do
+    Result := Result + Distance3(Points[Index], Points[(Index + 1) mod Length(Points)]);
+end;
 
 const
   // Arbitrary turns that test every axis
@@ -411,6 +436,157 @@ begin
   AssertVecNear('faces back', Vec3(0, 1, 0), PlacedNormal(Placement), 1e-6);
 end;
 
+{ TTestBodyForm }
+
+function TTestBodyForm.SampleSet: TMeasurementSet;
+begin
+  Result := TMeasurementSet.Create;
+  Result.Add('height', 1700);
+  Result.Add('bust_circumference', 920);
+  Result.Add('waist_circumference', 740);
+  Result.Add('hip_circumference', 1000);
+  Result.Add('height_waist', 1060);
+  Result.Add('neck_circumference', 370);
+end;
+
+procedure TTestBodyForm.TestDefaultFormIsWhole;
+var
+  Measures: TBodyMeasures;
+begin
+  Measures := DefaultBodyMeasures;
+  AssertTrue('height', Measures.Height > 0);
+  AssertTrue('all estimated', Length(Measures.Estimated) > 10);
+  AssertTrue('waist below bust', Measures.WaistHeight < Measures.BustHeight);
+  AssertTrue('mesh', Length(BuildDressForm(Measures).Triangles) > 0);
+end;
+
+procedure TTestBodyForm.TestTakesMeasurements;
+var
+  BodySet: TMeasurementSet;
+  Measures: TBodyMeasures;
+  Key: string;
+begin
+  BodySet := SampleSet;
+  try
+    Measures := BodyMeasuresFrom(BodySet);
+  finally
+    FreeAndNil(BodySet);
+  end;
+  AssertNear('bust', 920, Measures.BustCircumference);
+  AssertNear('waist height', 1060, Measures.WaistHeight);
+  // Missing ones are shares of the given height
+  AssertNear('hip height', 1700 * 0.52, Measures.HipHeight);
+  for Key in Measures.Estimated do
+    AssertTrue('not estimated: ' + Key, (Key <> 'height') and (Key <> 'bust_circumference'));
+  AssertTrue('hip height estimated', Pos('height_hip', string.Join(',', Measures.Estimated)) > 0);
+end;
+
+procedure TTestBodyForm.TestRingsMatchCircumferences;
+var
+  BodySet: TMeasurementSet;
+  Measures: TBodyMeasures;
+  Ring: TBodyRing;
+  Found: integer;
+begin
+  BodySet := SampleSet;
+  try
+    Measures := BodyMeasuresFrom(BodySet);
+  finally
+    FreeAndNil(BodySet);
+  end;
+  Found := 0;
+  for Ring in DressFormRings(Measures) do
+  begin
+    if SameValue(Ring.Height, Measures.WaistHeight) then
+    begin
+      AssertNear('waist', 740, PolylineLength3(RingPoints(Ring)), 1e-6);
+      Inc(Found);
+    end;
+    if SameValue(Ring.Height, Measures.BustHeight) then
+    begin
+      AssertNear('bust', 920, PolylineLength3(RingPoints(Ring)), 1e-6);
+      Inc(Found);
+    end;
+    if SameValue(Ring.Height, Measures.HipHeight) then
+    begin
+      AssertNear('hip', 1000, PolylineLength3(RingPoints(Ring)), 1e-6);
+      Inc(Found);
+    end;
+  end;
+  AssertEquals('rings found', 3, Found);
+end;
+
+procedure TTestBodyForm.TestRingsGoUp;
+var
+  Measures: TBodyMeasures;
+  Rings: TBodyRingArray;
+  Index: integer;
+begin
+  Measures := DefaultBodyMeasures;
+  // Heights out of order cannot fold the torso
+  Measures.WaistHeight := Measures.BustHeight + 50;
+  Rings := DressFormRings(Measures);
+  for Index := 1 to High(Rings) do
+    AssertTrue(Format('ring %d above the one below', [Index]), Rings[Index].Height > Rings[Index - 1].Height);
+end;
+
+procedure TTestBodyForm.TestMeshIsClosedAndFacesOut;
+var
+  Mesh: TBodyMesh;
+  Edges: TStringList;
+  Triangle: TBodyTriangle;
+
+  procedure AddEdge(From, Onto: integer);
+  begin
+    // Each edge is used once each way in a closed, consistently turned mesh
+    AssertTrue(Format('edge %d-%d used once', [From, Onto]), Edges.IndexOf(Format('%d-%d', [From, Onto])) < 0);
+    Edges.Add(Format('%d-%d', [From, Onto]));
+  end;
+
+var
+  Edge: string;
+  Ends: TStringArray;
+begin
+  Mesh := BuildDressForm(DefaultBodyMeasures);
+  Edges := TStringList.Create;
+  try
+    Edges.Sorted := True;
+    for Triangle in Mesh.Triangles do
+    begin
+      AddEdge(Triangle.First, Triangle.Second);
+      AddEdge(Triangle.Second, Triangle.Third);
+      AddEdge(Triangle.Third, Triangle.First);
+    end;
+    for Edge in Edges do
+    begin
+      Ends := Edge.Split(['-']);
+      AssertTrue('edge ' + Edge + ' has its twin', Edges.IndexOf(Ends[1] + '-' + Ends[0]) >= 0);
+    end;
+  finally
+    FreeAndNil(Edges);
+  end;
+  AssertTrue('faces out', MeshVolume(Mesh) > 0);
+end;
+
+procedure TTestBodyForm.TestSizeOfATable;
+var
+  Table: TMeasurementSet;
+  Measures: TBodyMeasures;
+  Err: string;
+begin
+  Table := TMeasurementSet.Create;
+  try
+    AssertTrue(Err, Table.LoadFromText('{"format": "measurements", "version": 1, "units": "mm", "name": "Sizes", "notes": "",' +
+      ' "sizes": ["36", "38"], "measurements": [{"key": "waist_circumference", "values": [700, 740]}]}', Err));
+    Measures := BodyMeasuresFrom(Table, 1);
+    AssertNear('second size', 740, Measures.WaistCircumference);
+    Measures := BodyMeasuresFrom(Table, 0);
+    AssertNear('first size', 700, Measures.WaistCircumference);
+  finally
+    FreeAndNil(Table);
+  end;
+end;
+
 { TTestDrapeFile }
 
 procedure TTestDrapeFile.SetUp;
@@ -676,8 +852,43 @@ begin
   AssertEquals('unplaced', Format(rsDrapeUnplaced, ['dress.sloper', 'Back', 1, 1]), Problems[1].Text);
 end;
 
+procedure TTestDrapeFile.TestGuessUsesTheBody;
+var
+  Low, High: TVec3;
+  Measures: TBodyMeasures;
+begin
+  FSource.Measurements := TMeasurementSet.Create;
+  FSource.Measurements.Add('height_waist', 1040);
+  FDrape.GuessPlacements;
+  AssertTrue('a body', FDrape.BodyMeasures(Measures));
+  PlacedExtent(FrontCopy, Low, High);
+  AssertNear('middle at the waist', 1040, (Low.Z + High.Z) / 2, 1e-6);
+  AssertNear('the gap in front of the form', -(DressFormFrontDepth(Measures) + FDrape.Gap), Low.Y, 1e-6);
+  FDrape.Body.Kind := bkNone;
+  AssertFalse('no body', FDrape.BodyMeasures(Measures));
+end;
+
+procedure TTestDrapeFile.TestMissingBodyFile;
+var
+  Problem: TDrapeProblem;
+  Found: boolean;
+  Measures: TBodyMeasures;
+begin
+  FDrape.FileName := ConcatPaths([GetTempDir, 'drape-test.sdrape']);
+  FDrape.Body.MeasurementFile := 'no-such-file.slm';
+  FDrape.LoadBody;
+  Found := False;
+  for Problem in FDrape.Problems do
+    Found := Found or (Pos('no-such-file.slm', Problem.Text) > 0);
+  AssertTrue('said', Found);
+  // Still a whole form to place pieces on
+  AssertTrue('a body', FDrape.BodyMeasures(Measures));
+  AssertTrue('the default form', Measures.Height > 0);
+end;
+
 initialization
   RegisterTest(TTestGeometry3);
   RegisterTest(TTestDrapePlacement);
+  RegisterTest(TTestBodyForm);
   RegisterTest(TTestDrapeFile);
 end.

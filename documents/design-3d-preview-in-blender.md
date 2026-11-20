@@ -91,7 +91,7 @@ The placement maths (piece to frame, anchors, guesses, Align to Seam, projection
 
 ## Body
 
-A **generic body**: a simple form, not an anatomical body, sized from a measurement set.
+A **generic body**: a simple form, not an anatomical body, sized from a measurement set. **Built 2026-11-20 as a dress form** (a tailor's dummy, as in the icons): the torso only, from the neck to below the hips, on a stand; the arms, legs and head below are for later. See the design document.
 
 - **Built from measurements** (first version). A torso lofted through elliptical rings at the measured heights and circumferences (neck, bust, waist, high hip, hip), with a head from `head_circumference`, and arms and legs as tapered tubes from the arm and leg circumferences and lengths. A part whose measurements are missing is built from fixed proportions of `height`, so there is always a whole body. Ring depth against width comes from a fixed ratio per ring, as a dress form's. Core code (`Sloper.Core.BodyForm`), unit-tested (ring circumferences match the measurements within tolerance).
 - **Which measurements**: the file's body takes a measurement set and size of its own, by default the first source's.

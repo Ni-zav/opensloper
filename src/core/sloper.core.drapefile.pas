@@ -30,7 +30,7 @@ interface
 
 uses
   SysUtils, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources,
-  Sloper.Core.DrapePlacement, Sloper.Core.FileVersions;
+  Sloper.Core.DrapePlacement, Sloper.Core.FileVersions, Sloper.Core.Measurements, Sloper.Core.BodyForm;
 
 const
   DRAPE_FORMAT = 'drape';
@@ -76,7 +76,14 @@ type
   TDrape = class
   private
     FSources: TPatternSources;
+    // The body's own measurement set, when it names one, and why it could not
+    // be read
+    FBodySet: TMeasurementSet;
+    FBodyError: string;
     function GetSources: TPatternSourceList;
+    // Where guesses go: the height of the first piece's middle, and how far in
+    // front of the centre line the body reaches
+    procedure GuessFrame(out Height, Depth: double);
     function GuessFirstPieces: integer;
     function GuessAlongSeams: integer;
     function GuessMirroredCopies: integer;
@@ -98,7 +105,14 @@ type
     procedure RemoveSource(Source: TPatternSource);
     function FindSource(Id: integer): TPatternSource;
     function StoredPath(const Path: string): string;
+    // Reads the sources' files again, and the body's measurement set
     procedure LoadSources;
+    // Reads the body's measurement set again, as after the body changes
+    procedure LoadBody;
+    // The body's measurements: its own set, else the first source's, at the
+    // body's size, else the source's. False when there is no body; the default
+    // form when no set can be read.
+    function BodyMeasures(out Measures: TBodyMeasures): boolean;
     function SaveToText: string;
     function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
     function SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
@@ -148,6 +162,8 @@ resourcestring
   rsDrapeExtraCopy = '%s: %s is cut %d times now, but copy %d is still placed';
   rsDrapePieceFailing = '%s: %s cannot be placed: %s';
   rsDrapeUnplaced = '%s: %s (copy %d of %d) is not placed, so it is left out';
+  rsDrapeBodyProblem = 'The body: %s';
+  rsDrapeBodySize = 'Size "%s" is not in the body''s measurement set';
   rsDrapeNoPieces = '%s has no pieces. Make them in the drafting app and save the pattern';
 
 implementation
@@ -157,10 +173,9 @@ uses
 
 const
   BODY_KIND_NAMES: array[TDrapeBodyKind] of string = ('measurements', 'none');
-  // Where guesses go until the body is built from measurements: the height
-  // (mm) of the middle of the first piece, and how far in front of the centre
-  // line the body's front is
-  GUESS_HEIGHT = 1100;
+  // Where guesses go with no body: the height (mm) of the middle of the first
+  // piece, and how far in front of the centre line it goes, less the gap
+  GUESS_HEIGHT = 1000;
   GUESS_BODY_DEPTH = 150;
   // Pieces with no seams wait in a row this far (mm) to the body's right,
   // this far apart
@@ -200,6 +215,7 @@ end;
 
 destructor TDrape.Destroy;
 begin
+  FreeAndNil(FBodySet);
   FreeAndNil(FSources);
   inherited Destroy;
 end;
@@ -207,6 +223,8 @@ end;
 procedure TDrape.Clear;
 begin
   FSources.Clear;
+  FreeAndNil(FBodySet);
+  FBodyError := '';
   Name := '';
   Body := Default(TDrapeBody);
   Gap := DEFAULT_DRAPE_GAP;
@@ -246,6 +264,69 @@ end;
 procedure TDrape.LoadSources;
 begin
   FSources.LoadAll(FileName);
+  LoadBody;
+end;
+
+procedure TDrape.LoadBody;
+var
+  Path, Err: string;
+begin
+  FreeAndNil(FBodySet);
+  FBodyError := '';
+  if (Body.Kind = bkNone) or (Body.MeasurementFile = '') then
+    Exit;
+  Path := ResolveSourcePath(FileName, Body.MeasurementFile);
+  if not FileExists(Path) then
+  begin
+    FBodyError := Format(rsPatternSourcesNoFile, [Path]);
+    Exit;
+  end;
+  FBodySet := TMeasurementSet.Create;
+  if not FBodySet.LoadFromFile(Path, Err) then
+  begin
+    FBodyError := Err;
+    FreeAndNil(FBodySet);
+  end;
+end;
+
+function TDrape.BodyMeasures(out Measures: TBodyMeasures): boolean;
+var
+  BodySet: TMeasurementSet;
+  SizeIndex: integer;
+begin
+  Measures := DefaultBodyMeasures;
+  if Body.Kind = bkNone then
+    Exit(False);
+  Result := True;
+  if Body.MeasurementFile <> '' then
+    BodySet := FBodySet
+  else if (Sources.Count > 0) and (Sources[0].LoadError = '') then
+    BodySet := Sources[0].Measurements
+  else
+    BodySet := nil;
+  if not Assigned(BodySet) then
+    Exit;
+  SizeIndex := -1;
+  if Body.Size <> '' then
+  begin
+    SizeIndex := BodySet.IndexOfSize(Body.Size);
+    if SizeIndex < 0 then
+      Exit;
+  end;
+  Measures := BodyMeasuresFrom(BodySet, SizeIndex);
+end;
+
+procedure TDrape.GuessFrame(out Height, Depth: double);
+var
+  Measures: TBodyMeasures;
+begin
+  Height := GUESS_HEIGHT;
+  Depth := GUESS_BODY_DEPTH;
+  if BodyMeasures(Measures) then
+  begin
+    Height := Measures.WaistHeight;
+    Depth := DressFormFrontDepth(Measures);
+  end;
 end;
 
 function Vec3ToJSON(const Value: TVec3): TJSONArray;
@@ -663,10 +744,11 @@ var
   Piece: TPieceObject;
   LargestArea: double;
   Placed: boolean;
-  Turn: double;
+  Turn, Height, Depth: double;
   Placement: TDrapePlacement;
 begin
   Result := 0;
+  GuessFrame(Height, Depth);
   for Source in FSources.Items do
   begin
     Placed := False;
@@ -688,7 +770,7 @@ begin
     Turn := 0;
     if (Piece.GrainKind <> gkNone) and (Piece.Grainline.Length > EPSILON) then
       Turn := Piece.Grainline.Angle - 90;
-    Placement := UprightPlacement(Vec3(0, -(GUESS_BODY_DEPTH + Gap), GUESS_HEIGHT));
+    Placement := UprightPlacement(Vec3(0, -(Depth + Gap), Height));
     Placement.Rotation := Vec3(0, Turn, 0);
     Place(Largest, Placement);
     Inc(Result);
@@ -747,16 +829,17 @@ function TDrape.GuessRest: integer;
 var
   Copy: TDrapePieceCopy;
   Piece: TPieceObject;
-  Across: double;
+  Across, Height, Depth: double;
   Extent: TVec2;
 begin
   Result := 0;
+  GuessFrame(Height, Depth);
   Across := GUESS_ROW_SIDE;
   for Copy in Unplaced do
     if FindPiece(Copy, Piece) then
     begin
       Extent := PointsExtent(PlacedSeamLine(Piece));
-      Place(Copy, UprightPlacement(Vec3(-(Across + Extent.X / 2), -(GUESS_BODY_DEPTH + Gap), GUESS_HEIGHT)));
+      Place(Copy, UprightPlacement(Vec3(-(Across + Extent.X / 2), -(Depth + Gap), Height)));
       Across := Across + Extent.X + GUESS_ROW_STEP;
       Inc(Result);
     end;
@@ -788,8 +871,22 @@ var
   Index, PieceCount: integer;
   Piece: TPieceObject;
   Copy: TDrapePieceCopy;
+  BodySet: TMeasurementSet;
 begin
   Result := nil;
+  if FBodyError <> '' then
+    Add(Format(rsDrapeBodyProblem, [FBodyError]), -1);
+  if (Body.Kind <> bkNone) and (Body.Size <> '') then
+  begin
+    if Body.MeasurementFile <> '' then
+      BodySet := FBodySet
+    else if Sources.Count > 0 then
+      BodySet := Sources[0].Measurements
+    else
+      BodySet := nil;
+    if Assigned(BodySet) and (BodySet.IndexOfSize(Body.Size) < 0) then
+      Add(Format(rsDrapeBodySize, [Body.Size]), -1);
+  end;
   for Source in FSources.Items do
     if Source.LoadError <> '' then
       Add(Format(rsDrapeSourceProblem, [ExtractFileName(Source.PatternFile), Source.LoadError]), -1)

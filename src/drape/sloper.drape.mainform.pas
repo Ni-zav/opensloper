@@ -1052,7 +1052,7 @@ begin
     MessageDlg(Format(rsBlenderNotFound, [Files.Script, BLENDER_SCRIPT_VERSION]), mtInformation, [mbOK], 0);
     Exit;
   end;
-  DrapeInBlender(Self, Blender, Files, Preferences.DrapeFrames);
+  DrapeInBlender(Self, Blender, Script, Files, Preferences.DrapeFrames);
 end;
 
 procedure TDrapeForm.ZoomInClick(Sender: TObject);

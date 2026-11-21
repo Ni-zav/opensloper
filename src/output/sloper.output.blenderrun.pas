@@ -46,11 +46,20 @@ type
     Tail: TStringArray;
   end;
 
-// The Blender to run: Configured when given, else blender on the path, else
-// where its installer puts it on Windows and macOS; '' when none is found
+// The Blender to run: Configured when given, a path as it is or a name looked
+// for on the path, else blender on the path, else where its installer puts it
+// on Windows and macOS; '' when none is found. The current folder is never
+// searched, nor a relative folder on the path, so a program called blender
+// beside a downloaded drape is not run.
 function FindBlender(const Configured: string): string;
-// What Blender is given to run Script in the background, Frames frames
-function BlenderParameters(const Script: string; Frames: integer): TStringArray;
+// What Blender is given to run Script in the background on the scene file
+// Scene, Frames frames. Script is the program's own (TAppPaths.BlenderScriptFile),
+// not the copy the export writes beside the scene, which anyone who can write
+// to that folder could change between writing and running.
+function BlenderParameters(const Script, Scene: string; Frames: integer): TStringArray;
+// What Blender is given to open the saved Blend file for the user: with its
+// Python scripts and drivers left off, as the file needs none
+function BlenderOpenParameters(const Blend: string): TStringArray;
 // The script's progress without its prefix; False for any other line
 function BlenderProgress(const Line: string; out Text: string): boolean;
 // The frame a progress text says the simulation is at, and how many there are
@@ -58,7 +67,7 @@ function BlenderFrame(const Progress: string; out Frame, Total: integer): boolea
 // Runs Blender and waits for it; False, with a message, when it cannot start.
 // A script that fails ends Blender with a code other than 0. Setting Stop^,
 // from another thread, ends Blender early.
-function RunBlender(const Blender, Script: string; Frames: integer; OnLine: TBlenderLineEvent; Stop: PBoolean; out Run: TBlenderRun;
+function RunBlender(const Blender, Script, Scene: string; Frames: integer; OnLine: TBlenderLineEvent; Stop: PBoolean; out Run: TBlenderRun;
   out ErrorMessage: string): boolean;
 
 resourcestring
@@ -118,24 +127,68 @@ begin
 end;
 {$ENDIF}
 
+function IsAbsolutePath(const Path: string): boolean;
+begin
+  {$IFDEF WINDOWS}
+  // C:\folder or \\server\share
+  Result := ((Length(Path) >= 3) and (Path[2] = ':') and (Path[3] in ['\', '/'])) or Path.StartsWith('\\');
+  {$ELSE}
+  Result := Path.StartsWith(PathDelim);
+  {$ENDIF}
+end;
+
+// Name in the folders of the PATH variable that are absolute paths; FPC's
+// ExeSearch looks in the current folder first on Windows
+function SearchPath(const Name: string): string;
+var
+  Folder: string;
+begin
+  for Folder in GetEnvironmentVariable('PATH').Split([PathSeparator]) do
+  begin
+    Result := Folder;
+    {$IFDEF WINDOWS}
+    if (Length(Result) >= 2) and Result.StartsWith('"') and Result.EndsWith('"') then
+      Result := Copy(Result, 2, Length(Result) - 2);
+    {$ENDIF}
+    if not IsAbsolutePath(Result) then
+      Continue;
+    Result := ConcatPaths([Result, Name]);
+    if FileExists(Result) then
+      Exit;
+  end;
+  Result := '';
+end;
+
 function FindBlender(const Configured: string): string;
 begin
   if Configured <> '' then
   begin
-    if FileExists(Configured) then
-      Exit(ExpandFileName(Configured));
-    Exit(ExeSearch(Configured, GetEnvironmentVariable('PATH')));
+    // A path, as the user typed it; a relative one is from the current
+    // folder, which the command line's user chose
+    if Configured.Contains(PathDelim) {$IFDEF WINDOWS} or Configured.Contains('/') {$ENDIF} then
+    begin
+      if FileExists(Configured) then
+        Exit(ExpandFileName(Configured));
+      Exit('');
+    end;
+    Exit(SearchPath(Configured));
   end;
-  Result := ExeSearch(BLENDER_NAME, GetEnvironmentVariable('PATH'));
+  Result := SearchPath(BLENDER_NAME);
   if Result = '' then
     Result := InstalledBlender;
 end;
 
-function BlenderParameters(const Script: string; Frames: integer): TStringArray;
+function BlenderParameters(const Script, Scene: string; Frames: integer): TStringArray;
 begin
   // Factory settings, so the user's add-ons and preferences do not change the
   // result; a failing script ends Blender with 1
-  Result := ['--background', '--factory-startup', '--python-exit-code', '1', '--python', Script, '--', '--frames', IntToStr(Frames)];
+  Result := ['--background', '--factory-startup', '--python-exit-code', '1', '--python', Script, '--', '--scene', Scene, '--frames',
+    IntToStr(Frames)];
+end;
+
+function BlenderOpenParameters(const Blend: string): TStringArray;
+begin
+  Result := ['--disable-autoexec', Blend];
 end;
 
 function BlenderProgress(const Line: string; out Text: string): boolean;
@@ -158,7 +211,7 @@ begin
     TryStrToInt(Words[3], Total) and (Total > 0);
 end;
 
-function RunBlender(const Blender, Script: string; Frames: integer; OnLine: TBlenderLineEvent; Stop: PBoolean; out Run: TBlenderRun;
+function RunBlender(const Blender, Script, Scene: string; Frames: integer; OnLine: TBlenderLineEvent; Stop: PBoolean; out Run: TBlenderRun;
   out ErrorMessage: string): boolean;
 var
   Runner: TProcess;
@@ -210,7 +263,7 @@ begin
   Runner := TProcess.Create(nil);
   try
     Runner.Executable := Blender;
-    for Parameter in BlenderParameters(Script, Frames) do
+    for Parameter in BlenderParameters(Script, Scene, Frames) do
       Runner.Parameters.Add(Parameter);
     Runner.Options := [poUsePipes, poStderrToOutPut, poNoConsole];
     try

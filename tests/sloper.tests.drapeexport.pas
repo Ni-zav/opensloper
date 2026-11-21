@@ -63,8 +63,11 @@ type
     procedure TestBody;
     procedure TestNoBody;
     procedure TestUnplacedLeftOut;
+    procedure TestObjectNamesOnOneLine;
     procedure TestScriptFound;
     procedure TestBlenderParameters;
+    procedure TestOpenParameters;
+    procedure TestFindBlenderNotInCurrentFolder;
     procedure TestBlenderProgress;
     procedure TestRunReadsLinesAndCode;
     procedure TestRunStops;
@@ -429,6 +432,25 @@ begin
   end;
 end;
 
+// A pattern file's name can hold a line break on Linux; written into the OBJ
+// file as it is, it would add lines of its own
+procedure TTestDrapeExport.TestObjectNamesOnOneLine;
+var
+  Front, Back: TPieceObject;
+  Exported: TDrapeExport;
+  Objects: TObjObjectArray;
+  Text: string;
+begin
+  FSource.PatternFile := 'dress' + #10 + 'mtllib evil.mtl' + #13 + #9 + '.sloper';
+  FrontAndBack(Front, Back);
+  Exported := BuildDrapeExport(FDrape, SPACING);
+  AssertEquals('dress mtllib evil.mtl   Front 1', DrapeObjectName(FDrape, Exported.ObjectItems[0]));
+  Text := DrapePiecesOBJ(FDrape, Exported);
+  AssertEquals('no line of its own', 0, Pos(#10 + 'mtllib', Text));
+  Objects := ParseObj(Text);
+  AssertEquals(2, Length(Objects));
+end;
+
 procedure TLineCatcher.Line(const Text: string);
 begin
   Insert(Text, Lines, Length(Lines));
@@ -452,16 +474,60 @@ begin
   for Index := 1 to High(FABRIC_NAMES) do
     AssertTrue('fabric ' + FABRIC_NAMES[Index], Pos('"' + FABRIC_NAMES[Index] + '": (', Script) > 0);
   AssertTrue('the default', Pos('DEFAULT_FABRIC = "' + FABRIC_NAMES[Ord(fbCotton)] + '"', Script) > 0);
+  // The meshes are read from the scene's folder only, whatever it names
+  AssertTrue('pieces beside the scene', Pos('beside(folder, scene["pieces"])', Script) > 0);
+  AssertTrue('body beside the scene', Pos('beside(folder, scene["body"])', Script) > 0);
 end;
 
 procedure TTestDrapeExport.TestBlenderParameters;
 var
   Parameters: TStringArray;
 begin
-  Parameters := BlenderParameters('skirt.blender.py', 80);
+  // The program's own script, not the copy beside the scene, which anyone
+  // who can write to that folder could change
+  Parameters := BlenderParameters(ConcatPaths(['data', 'drape.py']), 'skirt.blender.json', 80);
   AssertEquals('in the background', '--background', Parameters[0]);
-  AssertTrue('the script', string.Join(' ', Parameters).Contains('--python skirt.blender.py -- --frames 80'));
+  AssertTrue('the script', string.Join(' ', Parameters).Contains('--python ' + ConcatPaths(['data', 'drape.py']) +
+    ' -- --scene skirt.blender.json --frames 80'));
   AssertTrue('a failing script fails Blender', string.Join(' ', Parameters).Contains('--python-exit-code 1'));
+  AssertTrue('without the user''s add-ons', string.Join(' ', Parameters).Contains('--factory-startup'));
+end;
+
+procedure TTestDrapeExport.TestOpenParameters;
+var
+  Parameters: TStringArray;
+begin
+  Parameters := BlenderOpenParameters('skirt.blend');
+  AssertEquals(2, Length(Parameters));
+  AssertEquals('no scripts in the file run', '--disable-autoexec', Parameters[0]);
+  AssertEquals('skirt.blend', Parameters[1]);
+end;
+
+// A program called blender in the current folder, such as one beside a
+// downloaded drape, is never the Blender run
+procedure TTestDrapeExport.TestFindBlenderNotInCurrentFolder;
+var
+  Folder, Fake, Name, Err, Previous: string;
+begin
+  Folder := IncludeTrailingPathDelimiter(GetTempDir) + 'sloper-find-blender-' + IntToStr(Random(MaxInt));
+  AssertTrue(ForceDirectories(Folder));
+  Name := 'sloper-planted-blender';
+  Fake := ConcatPaths([Folder, Name]);
+  AssertTrue(Err, WriteTextFile(Fake, '#!/bin/sh' + #10, Err));
+  {$IFDEF UNIX}
+  AssertEquals(0, FpChmod(Fake, &755));
+  {$ENDIF}
+  Previous := GetCurrentDir;
+  try
+    AssertTrue(SetCurrentDir(Folder));
+    AssertEquals('a name is looked for on the path only', '', FindBlender(Name));
+    AssertEquals('a path is taken as given', Fake, FindBlender(Fake));
+    AssertEquals('a relative path is from the current folder, as typed', Fake, FindBlender(ConcatPaths(['.', Name])));
+  finally
+    SetCurrentDir(Previous);
+    DeleteFile(Fake);
+    RemoveDir(Folder);
+  end;
 end;
 
 procedure TTestDrapeExport.TestBlenderProgress;
@@ -492,7 +558,7 @@ begin
   Catcher := TLineCatcher.Create;
   try
     AssertEquals(0, FpChmod(Fake, &755));
-    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 2, @Catcher.Line, nil, Outcome, Err));
+    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 'skirt.blender.json', 2, @Catcher.Line, nil, Outcome, Err));
     AssertEquals('code', 3, Outcome.ExitCode);
     AssertEquals('every line, the last without an end', 4, Length(Catcher.Lines));
     AssertEquals('OpenSloper: frame 1 of 2', Catcher.Lines[1]);
@@ -523,7 +589,7 @@ begin
     AssertEquals(0, FpChmod(Fake, &755));
     Stop := True;
     Started := GetTickCount64;
-    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 2, nil, @Stop, Outcome, Err));
+    AssertTrue(Err, RunBlender(Fake, 'skirt.blender.py', 'skirt.blender.json', 2, nil, @Stop, Outcome, Err));
     AssertTrue('stopped', Outcome.Stopped);
     AssertTrue('at once', GetTickCount64 - Started < 5000);
   finally

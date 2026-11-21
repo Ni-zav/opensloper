@@ -552,7 +552,8 @@ begin
   end;
 end;
 
-// Runs Blender on the script written; the result is the exit code
+// Runs Blender with the program's own script on the scene written; the
+// result is the exit code
 function RunDrapeInBlender(const Files: TDrapeExportFiles; const BlenderOption: string; Frames: integer): integer;
 var
   Blender, Err, Line: string;
@@ -572,7 +573,7 @@ begin
   WriteLn(CliOut^, Format(rsDrapeRunning, [Blender]));
   Reporter := TBlenderReporter.Create;
   try
-    if not RunBlender(Blender, Files.Script, Frames, @Reporter.Line, nil, Outcome, Err) then
+    if not RunBlender(Blender, TAppPaths.BlenderScriptFile, Files.Scene, Frames, @Reporter.Line, nil, Outcome, Err) then
     begin
       WriteLn(CliErr^, Err);
       Exit(EXIT_FAILURE);

@@ -29,9 +29,10 @@ interface
 uses
   Classes, Sloper.Output.DrapeExport;
 
-// Runs Blender on the export's script, frames Frames, while the window shows
-// how far it is; modal. True when Blender saved the result.
-function DrapeInBlender(AOwner: TComponent; const Blender: string; const Files: TDrapeExportFiles; Frames: integer): boolean;
+// Runs Blender with Script, the program's own, on the export's scene, frames
+// Frames, while the window shows how far it is; modal. True when Blender saved
+// the result.
+function DrapeInBlender(AOwner: TComponent; const Blender, Script: string; const Files: TDrapeExportFiles; Frames: integer): boolean;
 
 resourcestring
   rsBlenderTitle = 'Drape in Blender';
@@ -67,7 +68,7 @@ type
   TBlenderThread = class(TThread)
   private
     FDialog: TBlenderDialog;
-    FBlender, FScript: string;
+    FBlender, FScript, FScene: string;
     FFrames: integer;
     FLine: string;
     procedure Line(const Text: string);
@@ -82,7 +83,7 @@ type
     ErrorMessage: string;
     // Whether Blender started at all
     Ran: boolean;
-    constructor Create(ADialog: TBlenderDialog; const ABlender, AScript: string; AFrames: integer);
+    constructor Create(ADialog: TBlenderDialog; const ABlender, AScript, AScene: string; AFrames: integer);
   end;
 
   TBlenderDialog = class(TForm)
@@ -92,7 +93,7 @@ type
     FTail: TMemo;
     FCancelButton, FOpenButton: TButton;
     FThread: TBlenderThread;
-    FBlender, FBlend, FScript: string;
+    FBlender, FBlend, FScript, FScene: string;
     // Closing: the thread's last call must not touch the window
     FClosing: boolean;
     FFrames: integer;
@@ -104,7 +105,7 @@ type
   protected
     procedure DoShow; override;
   public
-    constructor CreateDialog(AOwner: TComponent; const ABlender: string; const Files: TDrapeExportFiles; AFrames: integer);
+    constructor CreateDialog(AOwner: TComponent; const ABlender, AScript: string; const Files: TDrapeExportFiles; AFrames: integer);
     destructor Destroy; override;
     procedure ShowProgress(const Line: string);
     procedure Finished;
@@ -121,11 +122,12 @@ begin
     Result := Format(rsMinutes, [Seconds div SECONDS_PER_MINUTE, Seconds mod SECONDS_PER_MINUTE]);
 end;
 
-constructor TBlenderThread.Create(ADialog: TBlenderDialog; const ABlender, AScript: string; AFrames: integer);
+constructor TBlenderThread.Create(ADialog: TBlenderDialog; const ABlender, AScript, AScene: string; AFrames: integer);
 begin
   FDialog := ADialog;
   FBlender := ABlender;
   FScript := AScript;
+  FScene := AScene;
   FFrames := AFrames;
   FreeOnTerminate := False;
   inherited Create(False);
@@ -133,7 +135,7 @@ end;
 
 procedure TBlenderThread.Execute;
 begin
-  Ran := RunBlender(FBlender, FScript, FFrames, @Line, @Stop, Outcome, ErrorMessage);
+  Ran := RunBlender(FBlender, FScript, FScene, FFrames, @Line, @Stop, Outcome, ErrorMessage);
   Synchronize(@ShowEnd);
 end;
 
@@ -153,7 +155,7 @@ begin
   FDialog.Finished;
 end;
 
-constructor TBlenderDialog.CreateDialog(AOwner: TComponent; const ABlender: string; const Files: TDrapeExportFiles; AFrames: integer);
+constructor TBlenderDialog.CreateDialog(AOwner: TComponent; const ABlender, AScript: string; const Files: TDrapeExportFiles; AFrames: integer);
 var
   Buttons: TPanel;
 begin
@@ -165,7 +167,8 @@ begin
   Constraints.MinWidth := Scale96ToForm(DIALOG_WIDTH);
   FBlender := ABlender;
   FBlend := Files.Blend;
-  FScript := Files.Script;
+  FScript := AScript;
+  FScene := Files.Scene;
   FFrames := AFrames;
   OnCloseQuery := @CloseAsked;
   FStatus := TLabel.Create(Self);
@@ -233,7 +236,7 @@ begin
   if Assigned(FThread) then
     Exit;
   FStartTick := GetTickCount64;
-  FThread := TBlenderThread.Create(Self, FBlender, FScript, FFrames);
+  FThread := TBlenderThread.Create(Self, FBlender, FScript, FScene, FFrames);
 end;
 
 procedure TBlenderDialog.ShowProgress(const Line: string);
@@ -303,11 +306,13 @@ end;
 procedure TBlenderDialog.OpenClick(Sender: TObject);
 var
   Runner: TProcess;
+  Parameter: string;
 begin
   Runner := TProcess.Create(nil);
   try
     Runner.Executable := FBlender;
-    Runner.Parameters.Add(FBlend);
+    for Parameter in BlenderOpenParameters(FBlend) do
+      Runner.Parameters.Add(Parameter);
     try
       Runner.Execute;
     except
@@ -320,11 +325,11 @@ begin
   Close;
 end;
 
-function DrapeInBlender(AOwner: TComponent; const Blender: string; const Files: TDrapeExportFiles; Frames: integer): boolean;
+function DrapeInBlender(AOwner: TComponent; const Blender, Script: string; const Files: TDrapeExportFiles; Frames: integer): boolean;
 var
   Dialog: TBlenderDialog;
 begin
-  Dialog := TBlenderDialog.CreateDialog(AOwner, Blender, Files, Frames);
+  Dialog := TBlenderDialog.CreateDialog(AOwner, Blender, Script, Files, Frames);
   try
     Dialog.ShowModal;
     Result := Dialog.FSaved;

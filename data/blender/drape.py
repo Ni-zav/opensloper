@@ -121,6 +121,12 @@ def read_scene(path):
     return scene
 
 
+def beside(folder, name):
+    """A file the scene names, always in the scene's own folder: a scene file
+    from elsewhere cannot point the script at other files."""
+    return os.path.join(folder, os.path.basename(name))
+
+
 def import_obj(path):
     """The objects the OBJ file holds, by name, in mm with the drape's axes."""
     before = set(bpy.data.objects)
@@ -312,8 +318,8 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.scene.unit_settings.length_unit = "MILLIMETERS"
     report("importing the pieces")
-    imported = import_obj(os.path.join(folder, scene["pieces"]))
-    body = add_body(os.path.join(folder, scene["body"])) if "body" in scene else None
+    imported = import_obj(beside(folder, scene["pieces"]))
+    body = add_body(beside(folder, scene["body"])) if "body" in scene else None
     by_source = {}
     for index, entry in enumerate(scene["objects"]):
         by_source.setdefault(entry["source"], []).append(index)

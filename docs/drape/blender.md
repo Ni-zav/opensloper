@@ -46,7 +46,11 @@ described on the [File formats](../reference/files.md) page.
 ## Draping in Blender
 
 The script is written for Blender 5.2, and may need changes for other
-versions. `--run` looks for Blender on the path, and on Windows and macOS
+versions. The drape app and `--run` always run the program's own copy of the
+script, with the scene file, so a changed `skirt.blender.py` beside it is
+never run for you; it is there to run yourself. **Open in Blender** opens the
+result with Blender's auto-run of Python scripts off, as the file needs none.
+`--run` looks for Blender on the path, never in the current folder, and on Windows and macOS
 where its installer puts it; `--blender` gives the program instead. To run
 the script yourself:
 

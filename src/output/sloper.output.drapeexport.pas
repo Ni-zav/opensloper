@@ -63,7 +63,8 @@ function DrapeExportTarget(const DrapeFile: string): string;
 // The meshes' files beside the scene file
 function DrapeExportFiles(const SceneFile: string): TDrapeExportFiles;
 function BuildDrapeExport(Drape: TDrape; Spacing: double = DEFAULT_MESH_SPACING): TDrapeExport;
-// Each object's name, as in both the scene and the pieces' OBJ
+// Each object's name, as in both the scene and the pieces' OBJ, with any
+// control characters made spaces
 function DrapeObjectName(Drape: TDrape; Item: integer): string;
 // The scene file's text; PiecesFile and BodyFile are the meshes' file names,
 // relative to its folder
@@ -169,6 +170,7 @@ var
   Piece: TPieceObject;
   Source: TPatternSource;
   PieceName: string;
+  Index: integer;
 begin
   Source := Drape.FindSource(Drape.Items[Item].Piece.SourceId);
   if Drape.FindPiece(Drape.Items[Item].Piece, Piece) then
@@ -176,6 +178,11 @@ begin
   else
     PieceName := Drape.Items[Item].Piece.PieceKey;
   Result := Format('%s %s %d', [ChangeFileExt(ExtractFileName(Source.PatternFile), ''), PieceName, Drape.Items[Item].Piece.Copy]);
+  // On one line, so the OBJ file's 'o' line cannot add lines of its own: a
+  // file name can hold a line break on Linux
+  for Index := 1 to Length(Result) do
+    if Result[Index] < ' ' then
+      Result[Index] := ' ';
 end;
 
 function Vec3ToJSON(const Value: TVec3): TJSONArray;

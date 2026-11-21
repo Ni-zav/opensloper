@@ -27,7 +27,7 @@ interface
 uses
   SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement, Sloper.Core.DrapeFile,
-  Sloper.Core.BodyForm, Sloper.Output.DrapeExport, Sloper.Output.BlenderRun;
+  Sloper.Core.BodyForm, Sloper.Core.Materials, Sloper.Output.DrapeExport, Sloper.Output.BlenderRun;
 
 type
   // The objects of an OBJ file: their names, vertices and triangles, which
@@ -437,6 +437,7 @@ end;
 procedure TTestDrapeExport.TestScriptFound;
 var
   Script, Err: string;
+  Index: integer;
 begin
   AssertTrue('in data/blender', TAppPaths.BlenderScriptFile <> '');
   AssertTrue(Err, ReadTextFile(TAppPaths.BlenderScriptFile, Script, Err));
@@ -447,6 +448,10 @@ begin
   AssertTrue('scene name', Pos('SCENE_SUFFIX = "' + BLENDER_EXTENSION + '"', Script) > 0);
   AssertTrue('frames', Pos('DEFAULT_FRAMES = ' + IntToStr(DEFAULT_DRAPE_FRAMES), Script) > 0);
   AssertTrue('Blender version', Pos('BLENDER_VERSION = (' + StringReplace(BLENDER_SCRIPT_VERSION, '.', ', ', []) + ')', Script) > 0);
+  // Cloth settings for every fabric a material can take, and cotton for none
+  for Index := 1 to High(FABRIC_NAMES) do
+    AssertTrue('fabric ' + FABRIC_NAMES[Index], Pos('"' + FABRIC_NAMES[Index] + '": (', Script) > 0);
+  AssertTrue('the default', Pos('DEFAULT_FABRIC = "' + FABRIC_NAMES[Ord(fbCotton)] + '"', Script) > 0);
 end;
 
 procedure TTestDrapeExport.TestBlenderParameters;

@@ -52,6 +52,7 @@ type
 // Asks for a colour, starting from Text; True when one was chosen
 function ChooseMaterialColor(Owner: TComponent; var Text: string): boolean;
 function MaterialFillCaption(Fill: TMaterialFill): string;
+function FabricCaption(Fabric: TFabric): string;
 // Hatching over Rect at the material's angle, in Ink
 procedure DrawSwatchHatching(Canvas: TCanvas; const Rect: TRect; Angle: double; Ink: TColor);
 function SwatchColor(const ColorText: string): TColor;
@@ -64,6 +65,14 @@ resourcestring
   rsMaterialFillHatch = 'Hatching';
   rsMaterialAllowance = 'Allowance';
   rsMaterialSize = 'Size';
+  rsFabricNone = 'Not set (drapes as cotton)';
+  rsFabricCotton = 'Cotton';
+  rsFabricSilk = 'Silk';
+  rsFabricJersey = 'Jersey (knit)';
+  rsFabricWool = 'Wool';
+  rsFabricDenim = 'Denim';
+  rsFabricCanvas = 'Canvas';
+  rsFabricLeather = 'Leather';
 
 implementation
 
@@ -111,6 +120,14 @@ begin
     Result := rsMaterialFillHatch
   else
     Result := rsMaterialFillTint;
+end;
+
+function FabricCaption(Fabric: TFabric): string;
+const
+  CAPTIONS: array[TFabric] of string = (rsFabricNone, rsFabricCotton, rsFabricSilk, rsFabricJersey, rsFabricWool, rsFabricDenim,
+    rsFabricCanvas, rsFabricLeather);
+begin
+  Result := CAPTIONS[Fabric];
 end;
 
 function SwatchColor(const ColorText: string): TColor;

@@ -751,6 +751,8 @@ begin
         Item.Add('length', JSONFloat(Pattern.Materials[Index].Length));
       if Pattern.Materials[Index].AllowTurns then
         Item.Add('allowTurns', True);
+      if Pattern.Materials[Index].Fabric <> fbNone then
+        Item.Add('fabric', FABRIC_NAMES[Ord(Pattern.Materials[Index].Fabric)]);
     end;
   except
     FreeAndNil(Result);
@@ -2007,7 +2009,7 @@ function TPatternLoader.LoadMaterials(Data: TJSONData): boolean;
 var
   Index, Choice: integer;
   Item: TJSONObject;
-  Id, AName, Color, Reason: string;
+  Id, AName, Color, Reason, FabricText: string;
   Material: TPatternMaterial;
 begin
   if not Assigned(Data) then
@@ -2050,6 +2052,9 @@ begin
       Exit(Missing('length'));
     if Assigned(Item.Find('allowTurns')) and not GetJSONBoolean(Item, 'allowTurns', Material.AllowTurns) then
       Exit(Missing('allowTurns'));
+    if Assigned(Item.Find('fabric')) and (not GetJSONString(Item, 'fabric', FabricText) or (FabricText = '') or not
+      FabricFromName(FabricText, Material.Fabric)) then
+      Exit(Missing('fabric'));
   end;
   Result := True;
 end;

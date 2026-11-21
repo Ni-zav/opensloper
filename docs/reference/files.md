@@ -47,6 +47,7 @@ Version 1. JSON Schema, for files of this version: [pattern.schema.json](schemas
 | `materials[].width` | number |  | How wide it is, in the pattern's unit; a width alone is a roll. Pieces wider are problems |
 | `materials[].length` | number |  | How long a sheet of it is, in the pattern's unit, with a width; left out for a roll |
 | `materials[].allowTurns` | true or false |  | Whether pieces may lie a quarter turn round on it, for material with no grain |
+| `materials[].fabric` | one of: `cotton`, `silk`, `jersey`, `wool`, `denim`, `canvas`, `leather` |  | How it drapes in Blender, from the drape app; left out, it drapes as cotton |
 | `view` | group |  | How the design app last showed the pattern; not part of undo |
 | `view.zoom` | number |  | The zoom |
 | `view.centre[]` | list, each number |  | The point in the middle of the window, as x and y in mm |
@@ -371,6 +372,7 @@ Version 1. JSON Schema, for files of this version: [blender.schema.json](schemas
 | `objects[].copy` | whole number | yes | Which copy of the piece, from 1 |
 | `objects[].mirrored` | true or false | yes | Whether the copy is cut mirrored, as the left of a pair; its mesh is mirrored already |
 | `objects[].material` | text |  | The name of the material it is cut from; left out when it has none |
+| `objects[].fabric` | one of: `cotton`, `silk`, `jersey`, `wool`, `denim`, `canvas`, `leather` |  | The fabric of its material, which sets how it drapes; left out, it drapes as cotton |
 | `objects[].color` | text | yes | The colour to show it in, as #RRGGBB |
 | `objects[].vertices` | whole number | yes | How many vertices its mesh has |
 | `objects[].position[]` | list, each number | yes | Where its origin goes: the object's location |
@@ -405,6 +407,7 @@ Version 1. JSON Schema, for files of this version: [blender.schema.json](schemas
       "copy": 1,
       "mirrored": false,
       "material": "Main",
+      "fabric": "cotton",
       "color": "#5B8DB8",
       "vertices": 412,
       "position": [

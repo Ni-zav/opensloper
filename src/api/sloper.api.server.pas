@@ -1983,6 +1983,8 @@ begin
         Item.Add('length', ReportFloat(Material.Length));
       if Material.AllowTurns then
         Item.Add('allowTurns', True);
+      if Material.Fabric <> fbNone then
+        Item.Add('fabric', FABRIC_NAMES[Ord(Material.Fabric)]);
     end;
     Reply.Add('cutList', FDocument.Pattern.CutList);
   except
@@ -1995,13 +1997,17 @@ end;
 function TApiServer.DoAddMaterial(Params: TJSONObject): TJSONData;
 var
   Fill: TMaterialFill;
+  Material: TPatternMaterial;
 begin
   BeginChange(rsApiMaterials);
   Fill := ffTint;
   if Assigned(Params) then
     Fill := TMaterialFill(ChoiceParam(Params, 'fill', MATERIAL_FILL_NAMES));
-  if not Assigned(FDocument.Pattern.AddMaterial(OptionalString(Params, 'name'), OptionalString(Params, 'color'), Fill)) then
+  Material := FDocument.Pattern.AddMaterial(OptionalString(Params, 'name'), OptionalString(Params, 'color'), Fill);
+  if not Assigned(Material) then
     RefuseChange;
+  if Assigned(Params) and Assigned(Params.Find('fabric')) then
+    FDocument.Pattern.SetMaterialFabric(Material, TFabric(ChoiceParam(Params, 'fabric', ApiFabricNames)));
   EndChange;
   Result := MaterialsToJSON;
 end;
@@ -2047,6 +2053,8 @@ begin
   end;
   if Assigned(Params.Find('allowTurns')) then
     FDocument.Pattern.SetMaterialAllowTurns(Material, BooleanParam(Params, 'allowTurns'));
+  if Assigned(Params.Find('fabric')) then
+    FDocument.Pattern.SetMaterialFabric(Material, TFabric(ChoiceParam(Params, 'fabric', ApiFabricNames)));
   EndChange;
   Result := MaterialsToJSON;
 end;

@@ -17,7 +17,7 @@
 }
 
 // The Materials dialog: the pattern's materials on the left, with New and
-// Delete, and the selected one's name, colour, fill, allowance and size on
+// Delete, and the selected one's name, colour, fill, allowance, size and fabric on
 // the right. Each change is its own undo step, made at once so the canvas behind
 // follows, so the dialog has only Close. A typed field commits on Enter
 // or on leaving the field, and Escape puts it back; a refused one keeps its
@@ -43,7 +43,7 @@ type
     FFields: TPanel;
     FNameEdit, FAllowanceEdit, FWidthEdit, FLengthEdit: TEdit;
     FSwatch: TPaintBox;
-    FFillBox: TComboBox;
+    FFillBox, FFabricBox: TComboBox;
     FTurnsBox: TCheckBox;
     FUnitLabels: array of TLabel;
     FReason: TLabel;
@@ -66,6 +66,7 @@ type
     procedure SwatchPaint(Sender: TObject);
     procedure FillChange(Sender: TObject);
     procedure TurnsClick(Sender: TObject);
+    procedure FabricChange(Sender: TObject);
     function IsTyped(Control: TWinControl): boolean;
     procedure ClearRefused;
     procedure EditKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
@@ -74,6 +75,9 @@ type
     procedure FormKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     function GetSplit: integer;
     procedure SetSplit(Width96: integer);
+    procedure FitContents;
+  protected
+    procedure DoShow; override;
   public
     constructor CreateFor(AOwner: TComponent; ADocument: TPatternDocument; Index: integer);
     destructor Destroy; override;
@@ -99,6 +103,8 @@ resourcestring
   rsMaterialsLengthHint = 'How long a sheet of it is, with a width; empty for a roll';
   rsMaterialsTurns = 'Allow &quarter turns (no grain)';
   rsMaterialsTurnsHint = 'Pieces may lie a quarter turn round on it, as on felt, foam or most leather boards';
+  rsMaterialsFabric = 'Fa&bric';
+  rsMaterialsFabricHint = 'How it drapes in Blender, from the drape app: its weight and how stiff it is';
   rsMaterialsClose = 'Close';
 
 implementation
@@ -109,6 +115,10 @@ uses
 const
   DIALOG_WIDTH96 = 640;
   DIALOG_HEIGHT96 = 500;
+  // Lines kept free for a refusal's reason under the fields
+  REASON_LINES = 2;
+  // Room kept round the window inside the screen's work area
+  FRAME_MARGIN96 = 48;
   DEFAULT_SPLIT96 = 300;
   MIN_SPLIT96 = 160;
   FIELDS_WIDTH96 = 260;
@@ -222,6 +232,7 @@ procedure TMaterialsDialog.BuildFields;
 var
   Row: TPanel;
   UnitLabel: TLabel;
+  Fabric: TFabric;
 
   function AddRow: TPanel;
   begin
@@ -311,9 +322,50 @@ begin
   FTurnsBox.ShowHint := True;
   FTurnsBox.OnClick := @TurnsClick;
 
+  AddCaption(FFields, rsMaterialsFabric);
+  FFabricBox := TComboBox.Create(Self);
+  FFabricBox.Parent := FFields;
+  FFabricBox.Align := alTop;
+  FFabricBox.Top := FFields.ControlCount * 100;
+  FFabricBox.Style := csDropDownList;
+  FFabricBox.Hint := rsMaterialsFabricHint;
+  FFabricBox.ShowHint := True;
+  for Fabric := Low(TFabric) to High(TFabric) do
+    FFabricBox.Items.Add(FabricCaption(Fabric));
+  FFabricBox.OnChange := @FabricChange;
+
   FReason := AddCaption(FFields, '');
   FReason.WordWrap := True;
   FReason.Font.Color := PROBLEM_INK;
+end;
+
+// The fields' height is only known once they are laid out with the real
+// font, so the window is fitted to them when shown, with room for a reason
+// under them, and then keeps that height: only its width changes, for the list
+procedure TMaterialsDialog.FitContents;
+var
+  Content, Limit: integer;
+  Control: TControl;
+begin
+  Content := 0;
+  for Control in FFields.GetEnumeratorControls do
+    if Control <> FReason then
+      Content := Max(Content, Control.Top + Control.Height + Control.BorderSpacing.Around + Control.BorderSpacing.Bottom);
+  Content := Content + ControlGap + REASON_LINES * Canvas.TextHeight('Ag');
+  if Owner is TCustomForm then
+    Limit := TCustomForm(Owner).Monitor.WorkareaRect.Height
+  else
+    Limit := Screen.WorkAreaRect.Height;
+  Height := Min(Height + Content - FFields.ClientHeight, Limit - Scale96ToScreen(FRAME_MARGIN96));
+  Constraints.MinHeight := Height;
+  Constraints.MaxHeight := Height;
+end;
+
+procedure TMaterialsDialog.DoShow;
+begin
+  inherited DoShow;
+  FitContents;
+  MoveToDefaultPosition;
 end;
 
 function TMaterialsDialog.GetSplit: integer;
@@ -368,11 +420,13 @@ begin
     begin
       FFillBox.ItemIndex := Ord(FDocument.Pattern.Materials[Index].Fill);
       FTurnsBox.Checked := FDocument.Pattern.Materials[Index].AllowTurns;
+      FFabricBox.ItemIndex := Ord(FDocument.Pattern.Materials[Index].Fabric);
     end
     else
     begin
       FFillBox.ItemIndex := -1;
       FTurnsBox.Checked := False;
+      FFabricBox.ItemIndex := -1;
     end;
   finally
     FShowing := False;
@@ -491,6 +545,12 @@ end;
 procedure TMaterialsDialog.TurnsClick(Sender: TObject);
 begin
   Commit(mfAllowTurns, BoolToStr(FTurnsBox.Checked, 'true', 'false'), nil);
+end;
+
+procedure TMaterialsDialog.FabricChange(Sender: TObject);
+begin
+  if FFabricBox.ItemIndex >= 0 then
+    Commit(mfFabric, FABRIC_NAMES[FFabricBox.ItemIndex], nil);
 end;
 
 function FieldOf(Dialog: TMaterialsDialog; Edit: TObject): TMaterialField;

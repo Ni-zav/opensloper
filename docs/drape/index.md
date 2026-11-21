@@ -217,7 +217,12 @@ blender --background --python skirt.blender.py
 
 It joins each pattern's pieces into one cloth object, with an edge between
 every pair of points a seam sews, and the body pushes the cloth away.
-Attached edges are pinned: onto the body, or where they are placed. For
+Attached edges are pinned: onto the body, or where they are placed. Each
+piece drapes as its material's **Fabric** (see
+[Material](../design/pieces.md#material)): heavier or stiffer for denim,
+canvas or leather, softer for silk or jersey, cotton when none is set. A
+pattern's pieces are one cloth in Blender, so their stiffness follows each
+piece's fabric but their weight is the average of them all. For
 the first 40 frames the seams close with no gravity, so the pieces do not
 fall before they are sewn; then gravity comes on and the garment settles,
 up to frame 120 (`--frames` changes this). Each piece keeps its own group
@@ -232,7 +237,7 @@ about a minute and a half, a straight skirt two minutes and a full circle
 skirt three and a half. A larger `--spacing` is quicker for a first look.
 
 After `--` the script takes options of its own, such as
-`--frames`, `--sewing-frames`, `--mass` (each vertex's, in kg),
+`--frames`, `--sewing-frames`, `--mass` (each vertex's, in kg, in place of the fabrics'),
 `--quality` and `--no-simulate` (set up the scene without running it);
 `blender --background --python skirt.blender.py -- --help` lists them.
 
@@ -249,6 +254,6 @@ Drape… in the design app opens:
 | Circle skirt | The two halves laid flat round the waist like a disc, waists attached, the figure without arms; the hem falls when gravity comes on. The waistband is left out |
 | Tote bag | No body: the bag's front and back and its lining hang from their attached top edges. The pocket and straps are left out |
 
-A canvas bag drapes as soft as cotton for now: every fabric is simulated
-alike, until materials carry hints of their own.
+The tote bag's outer material is canvas and its lining cotton. Even canvas
+sags a little from the top edge alone, more than a real canvas bag would.
 

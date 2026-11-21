@@ -35,7 +35,7 @@ type
   // The Measurements tab's columns, in order
   TMeasurementColumn = (mcKey, mcValue, mcDescription);
   // The fields of the Materials dialog
-  TMaterialField = (mfName, mfColor, mfFill, mfAllowance, mfWidth, mfLength, mfAllowTurns);
+  TMaterialField = (mfName, mfColor, mfFill, mfAllowance, mfWidth, mfLength, mfAllowTurns, mfFabric);
 
   // A measurement edited in the panel and not yet saved
   TPendingMeasurement = record
@@ -81,7 +81,8 @@ function MeasurementsSavedText(const Changes: TMeasurementChangeArray; const Fil
 // Sets a field of the pattern's material at Index as one undo step: a name,
 // a #RRGGBB colour, a fill as in pattern files (tint or hatch), an allowance,
 // width or length in the pattern's unit, empty for none, or true or false for
-// quarter turns. No width takes the length away too. Text the field already
+// quarter turns, or a fabric as in pattern files (empty for none). No width
+// takes the length away too. Text the field already
 // holds makes no step. False refuses it, with Reason saying why.
 function CommitMaterialField(Document: TPatternDocument; Index: integer; Field: TMaterialField; const Text: string;
   out Reason: string): boolean;
@@ -120,6 +121,8 @@ resourcestring
   rsPanelMaterialAllowance = 'Change material allowance';
   rsPanelBadSize = 'The size must be a number, such as 1500 or 150, or empty for none';
   rsPanelBadTurns = 'Quarter turns must be true or false';
+  rsPanelBadFabric = 'The fabric must be one of: %s';
+  rsPanelMaterialFabric = 'Change material fabric';
   rsPanelMaterialSize = 'Change material size';
   rsPanelMaterialTurns = 'Change material turns';
 
@@ -131,7 +134,7 @@ uses
 const
   MAX_MEASUREMENT_VALUE = 1e12;
   MATERIAL_FIELD_DESCRIPTIONS: array[TMaterialField] of string = (rsPanelRenameMaterial, rsPanelRecolorMaterial, rsPanelMaterialFill,
-    rsPanelMaterialAllowance, rsPanelMaterialSize, rsPanelMaterialSize, rsPanelMaterialTurns);
+    rsPanelMaterialAllowance, rsPanelMaterialSize, rsPanelMaterialSize, rsPanelMaterialTurns, rsPanelMaterialFabric);
   TURNS_TEXT: array[boolean] of string = ('false', 'true');
 
 function CommitVariableCell(Document: TPatternDocument; const Key: string; Column: TVariableColumn; const Text: string;
@@ -202,6 +205,8 @@ begin
         Result := FormatJSONFloat(Material.Length);
     mfAllowTurns:
       Result := TURNS_TEXT[Material.AllowTurns];
+    mfFabric:
+      Result := FABRIC_NAMES[Ord(Material.Fabric)];
   end;
 end;
 
@@ -214,6 +219,7 @@ var
   Fill: TMaterialFill;
   FillIndex: integer;
   Turns: boolean;
+  Fabric: TFabric;
 begin
   Reason := '';
   if (Index < 0) or (Index >= Document.Pattern.MaterialCount) then
@@ -227,6 +233,7 @@ begin
   Value := 0;
   Fill := ffTint;
   Turns := False;
+  Fabric := fbNone;
   // Checked before the change, so a refusal leaves no trace
   case Field of
     mfColor:
@@ -251,6 +258,9 @@ begin
         Turns := True
       else if not SameText(Entry, TURNS_TEXT[False]) then
         Reason := rsPanelBadTurns;
+    mfFabric:
+      if not FabricFromName(LowerCase(Entry), Fabric) then
+        Reason := Format(rsPanelBadFabric, [FabricNameList]);
   end;
   if Reason <> '' then
     Exit(False);
@@ -278,6 +288,11 @@ begin
     mfAllowTurns:
     begin
       Document.Pattern.SetMaterialAllowTurns(Material, Turns);
+      Result := True;
+    end;
+    mfFabric:
+    begin
+      Document.Pattern.SetMaterialFabric(Material, Fabric);
       Result := True;
     end;
     else

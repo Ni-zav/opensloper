@@ -36,11 +36,17 @@ const
   // As written in pattern files and the Automation API
   MATERIAL_FILL_NAMES: array[0..1] of string = ('tint', 'hatch');
   PIECE_FILL_NAMES: array[0..2] of string = ('material', 'tint', 'hatch');
+  // The fabrics a material drapes as in Blender, as written in pattern files,
+  // Blender scenes and the Automation API; '' for a material with none, which
+  // drapes as cotton. data/blender/drape.py has the cloth settings of each.
+  FABRIC_NAMES: array[0..7] of string = ('', 'cotton', 'silk', 'jersey', 'wool', 'denim', 'canvas', 'leather');
   // Told apart by hue and by lightness, so also with colour-blindness
   MATERIAL_PALETTE: array[0..5] of string = ('#5B8DB8', '#C9A227', '#2E9E7B', '#CC79A7', '#D55E00', '#7A5AA6');
 
 type
   TMaterialFill = (ffTint, ffHatch);
+  // How a material drapes in the simulation; fbNone drapes as cotton
+  TFabric = (fbNone, fbCotton, fbSilk, fbJersey, fbWool, fbDenim, fbCanvas, fbLeather);
   // A piece's own fill style: pfMaterial takes the material's
   TPieceFillStyle = (pfMaterial, pfTint, pfHatch);
 
@@ -59,6 +65,8 @@ type
     Width, Length: double;
     // For material with no grain, whose pieces may lie a quarter turn round
     AllowTurns: boolean;
+    // How it drapes in Blender
+    Fabric: TFabric;
   end;
 
   TPatternMaterialList = specialize TObjectList<TPatternMaterial>;
@@ -72,6 +80,10 @@ type
     HatchAngle: double;
   end;
 
+// The fabric named, as in FABRIC_NAMES; False for a name not there
+function FabricFromName(const AName: string; out Fabric: TFabric): boolean;
+// The fabrics' names, comma separated, none left out
+function FabricNameList: string;
 function IsMaterialColor(const Text: string): boolean;
 // Black for text that is not a colour
 function ParseMaterialColor(const Text: string): TMaterialColor;
@@ -97,6 +109,33 @@ const
   // The share of the material's colour in a printed or opaque tint; the rest is white
   MATERIAL_TINT_SHARE = 0.3;
   HATCH_ANGLES: array[0..3] of double = (45, 135, 0, 90);
+
+function FabricFromName(const AName: string; out Fabric: TFabric): boolean;
+var
+  Each: TFabric;
+begin
+  Fabric := fbNone;
+  for Each := Low(TFabric) to High(TFabric) do
+    if AName = FABRIC_NAMES[Ord(Each)] then
+    begin
+      Fabric := Each;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function FabricNameList: string;
+var
+  Index: integer;
+begin
+  Result := '';
+  for Index := 1 to High(FABRIC_NAMES) do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + FABRIC_NAMES[Index];
+  end;
+end;
 
 function IsMaterialColor(const Text: string): boolean;
 var

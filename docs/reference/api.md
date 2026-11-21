@@ -535,6 +535,7 @@ Adds a material.
 | `name` | text |  | Its name; by default the next free one |
 | `color` | text |  | Its colour, as #rrggbb |
 | `fill` | one of: `tint`, `hatch` |  | How pieces of it are filled |
+| `fabric` | one of: `none`, `cotton`, `silk`, `jersey`, `wool`, `denim`, `canvas`, `leather` |  | How it drapes in Blender, from the drape app; none drapes as cotton |
 
 Returns: The materials and the cut list, as `list_materials` gives them.
 
@@ -551,7 +552,7 @@ Returns: The materials and the cut list, as `list_materials` gives them.
 
 ### `set_material`
 
-Changes a material's colour, fill, seam allowance or size. Pieces that cannot fit its size are problems.
+Changes a material's colour, fill, seam allowance, size or fabric. Pieces that cannot fit its size are problems.
 
 | Parameter | Value | Required | Description |
 | --- | --- | --- | --- |
@@ -563,6 +564,7 @@ Changes a material's colour, fill, seam allowance or size. Pieces that cannot fi
 | `width` | number |  | Its width in the pattern's unit, 0 for none, which takes the length away too; a width alone is a roll |
 | `length` | number |  | The length of a sheet of it in the pattern's unit, with a width; 0 for a roll |
 | `allowTurns` | true or false |  | Whether pieces may lie a quarter turn round on it, for material with no grain |
+| `fabric` | one of: `none`, `cotton`, `silk`, `jersey`, `wool`, `denim`, `canvas`, `leather` |  | How it drapes in Blender, from the drape app; none drapes as cotton |
 
 Returns: The materials and the cut list, as `list_materials` gives them.
 

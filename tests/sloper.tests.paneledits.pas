@@ -69,7 +69,7 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.JSON, Sloper.Core.PatternMaterials,
+  SysUtils, Sloper.Core.Materials, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.JSON, Sloper.Core.PatternMaterials,
   Sloper.Core.Pattern;
 
 procedure TTestPanelEdits.SetUp;
@@ -454,6 +454,14 @@ begin
   AssertEquals('700', MaterialFieldText(FDocument, 0, mfLength));
   AssertTrue(Reason, CommitMaterialField(FDocument, 0, mfAllowTurns, 'true', Reason));
   AssertEquals('true', MaterialFieldText(FDocument, 0, mfAllowTurns));
+  AssertEquals('no fabric', '', MaterialFieldText(FDocument, 0, mfFabric));
+  AssertFalse('not a fabric', CommitMaterialField(FDocument, 0, mfFabric, 'tweed', Reason));
+  AssertEquals(Format(rsPanelBadFabric, [FabricNameList]), Reason);
+  AssertTrue(Reason, CommitMaterialField(FDocument, 0, mfFabric, 'Denim', Reason));
+  AssertEquals('denim', MaterialFieldText(FDocument, 0, mfFabric));
+  AssertEquals('Change material fabric', FDocument.UndoDescription);
+  AssertTrue('undo', FDocument.Undo);
+  AssertEquals('none again', '', MaterialFieldText(FDocument, 0, mfFabric));
   AssertTrue(Reason, CommitMaterialField(FDocument, 0, mfWidth, '', Reason));
   AssertEquals('no width', '', MaterialFieldText(FDocument, 0, mfWidth));
   AssertEquals('no width clears the length', '', MaterialFieldText(FDocument, 0, mfLength));

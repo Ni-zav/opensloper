@@ -66,6 +66,18 @@
             "description": "The name of the material it is cut from; left out when it has none",
             "type": "string"
           },
+          "fabric": {
+            "description": "The fabric of its material, which sets how it drapes; left out, it drapes as cotton",
+            "enum": [
+              "cotton",
+              "silk",
+              "jersey",
+              "wool",
+              "denim",
+              "canvas",
+              "leather"
+            ]
+          },
           "color": {
             "description": "The colour to show it in, as #RRGGBB",
             "type": "string"

@@ -1058,6 +1058,7 @@ class OpenSloper:
         name: str | None = None,
         color: str | None = None,
         fill: Literal["tint", "hatch"] | None = None,
+        fabric: Literal["none", "cotton", "silk", "jersey", "wool", "denim", "canvas", "leather"] | None = None,
     ) -> Any:
         """Adds a material.
 
@@ -1065,6 +1066,7 @@ class OpenSloper:
             name: Its name; by default the next free one.
             color: Its colour, as #rrggbb.
             fill: How pieces of it are filled.
+            fabric: How it drapes in Blender, from the drape app; none drapes as cotton.
 
         Returns:
             The materials and the cut list, as `list_materials` gives them.
@@ -1073,6 +1075,7 @@ class OpenSloper:
             "name": name,
             "color": color,
             "fill": fill,
+            "fabric": fabric,
         })
 
     def rename_material(self, material: int | str, name: str) -> Any:
@@ -1101,9 +1104,10 @@ class OpenSloper:
         width: float | None = None,
         length: float | None = None,
         allowTurns: bool | None = None,
+        fabric: Literal["none", "cotton", "silk", "jersey", "wool", "denim", "canvas", "leather"] | None = None,
     ) -> Any:
-        """Changes a material's colour, fill, seam allowance or size. Pieces that cannot fit its
-        size are problems.
+        """Changes a material's colour, fill, seam allowance, size or fabric. Pieces that cannot fit
+        its size are problems.
 
         Args:
             material: The material, by ID or name.
@@ -1116,6 +1120,7 @@ class OpenSloper:
             length: The length of a sheet of it in the pattern's unit, with a width; 0 for a roll.
             allowTurns: Whether pieces may lie a quarter turn round on it, for material with no
                 grain.
+            fabric: How it drapes in Blender, from the drape app; none drapes as cotton.
 
         Returns:
             The materials and the cut list, as `list_materials` gives them.
@@ -1129,6 +1134,7 @@ class OpenSloper:
             "width": width,
             "length": length,
             "allowTurns": allowTurns,
+            "fabric": fabric,
         })
 
     def delete_material(self, material: int | str) -> Any:

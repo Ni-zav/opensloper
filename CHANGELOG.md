@@ -85,6 +85,11 @@ Changed, Fixed and Removed under each version.
   it is placed; the figure's arms can be left out, so a full skirt does not
   catch on them. Every example pattern has seams and a drape file to start
   from (#11).
+- Materials have a **Fabric**, cotton, silk, jersey, wool, denim, canvas or
+  leather, which sets how their pieces drape in Blender: their weight and
+  how stiff they are. It is in the Materials window and the API's
+  `add_material` and `set_material`; a material without one drapes as
+  cotton. The tote bag example is canvas, lined with cotton (#11).
 
 ### Changed
 

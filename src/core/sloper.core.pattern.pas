@@ -444,6 +444,7 @@ type
     // width alone is a roll, both a sheet. Pieces that cannot fit are problems.
     function SetMaterialSize(Material: TPatternMaterial; AWidth, ALength: double): boolean;
     procedure SetMaterialAllowTurns(Material: TPatternMaterial; Allow: boolean);
+    procedure SetMaterialFabric(Material: TPatternMaterial; AFabric: TFabric);
     procedure SetMaterialFill(Material: TPatternMaterial; AFill: TMaterialFill);
     // Refused for the last material and for one that pieces use
     function DeleteMaterial(Material: TPatternMaterial): boolean;
@@ -956,6 +957,11 @@ end;
 procedure TPattern.SetMaterialAllowTurns(Material: TPatternMaterial; Allow: boolean);
 begin
   FMaterialSet.SetAllowTurns(Material, Allow);
+end;
+
+procedure TPattern.SetMaterialFabric(Material: TPatternMaterial; AFabric: TFabric);
+begin
+  FMaterialSet.SetFabric(Material, AFabric);
 end;
 
 function TPattern.SetMaterialColor(Material: TPatternMaterial; const AColor: string): boolean;

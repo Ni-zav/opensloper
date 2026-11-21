@@ -18,7 +18,7 @@
 
 // A drape exported for Blender's cloth simulation: the scene file
 // (NAME.blender.json) lists each placed copy as an object with its placement,
-// material and colour and its vertices held to the body, and the pairs of
+// material, its fabric, colour and its vertices held to the body, and the pairs of
 // vertices each seam sews; the meshes
 // are OBJ files beside it, the pieces' (NAME.pieces.obj) and the body's
 // (NAME.body.obj). Each piece's mesh is in its own frame, its anchor at the
@@ -219,7 +219,11 @@ begin
   Result.Add('mirrored', CopyIsMirrored(Piece, Entry.Piece.Copy));
   Material := Source.Pattern.MaterialOf(Piece);
   if Assigned(Material) then
+  begin
     Result.Add('material', Material.Name);
+    if Material.Fabric <> fbNone then
+      Result.Add('fabric', FABRIC_NAMES[Ord(Material.Fabric)]);
+  end;
   Result.Add('color', MaterialColorText(GarmentBaseColor(Source.Pattern.PieceLook(Piece))));
   Result.Add('vertices', Length(Exported.Meshing.Meshes[Item].Points));
   Result.Add('position', Vec3ToJSON(Entry.Placement.Position));

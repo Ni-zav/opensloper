@@ -84,6 +84,7 @@ resourcestring
   rsFileMaterialWidth = 'How wide it is, in the pattern''s unit; a width alone is a roll. Pieces wider are problems';
   rsFileMaterialLength = 'How long a sheet of it is, in the pattern''s unit, with a width; left out for a roll';
   rsFileMaterialAllowTurns = 'Whether pieces may lie a quarter turn round on it, for material with no grain';
+  rsFileMaterialFabric = 'How it drapes in Blender, from the drape app; left out, it drapes as cotton';
   rsFilePatternView = 'How the design app last showed the pattern; not part of undo';
   rsFileViewZoom = 'The zoom';
   rsFileViewCentre = 'The point in the middle of the window, as x and y in mm';
@@ -197,6 +198,7 @@ resourcestring
   rsFileBlenderCopy = 'Which copy of the piece, from 1';
   rsFileBlenderMirrored = 'Whether the copy is cut mirrored, as the left of a pair; its mesh is mirrored already';
   rsFileBlenderMaterial = 'The name of the material it is cut from; left out when it has none';
+  rsFileBlenderFabric = 'The fabric of its material, which sets how it drapes; left out, it drapes as cotton';
   rsFileBlenderColor = 'The colour to show it in, as #RRGGBB';
   rsFileBlenderVertices = 'How many vertices its mesh has';
   rsFileBlenderAttached = 'Its vertices held to the body, or where they are placed when there is no body: those of its ' +
@@ -414,6 +416,7 @@ const
     '      "copy": 1,' + LineEnding +
     '      "mirrored": false,' + LineEnding +
     '      "material": "Main",' + LineEnding +
+    '      "fabric": "cotton",' + LineEnding +
     '      "color": "#5B8DB8",' + LineEnding +
     '      "vertices": 412,' + LineEnding +
     '      "position": [' + LineEnding +
@@ -542,6 +545,7 @@ begin
   M('materials[].width', mkSize, rsFileMaterialWidth);
   M('materials[].length', mkSize, rsFileMaterialLength);
   M('materials[].allowTurns', mkFlag, rsFileMaterialAllowTurns);
+  M('materials[].fabric', mkChoice, rsFileMaterialFabric, FabricNameList);
   M('view', mkGroup, rsFilePatternView);
   M('view.zoom', mkSize, rsFileViewZoom);
   M('view.centre[]', mkSize, rsFileViewCentre);
@@ -657,6 +661,7 @@ begin
   R('objects[].copy', mkWhole, rsFileBlenderCopy);
   R('objects[].mirrored', mkFlag, rsFileBlenderMirrored);
   M('objects[].material', mkText, rsFileBlenderMaterial);
+  M('objects[].fabric', mkChoice, rsFileBlenderFabric, FabricNameList);
   R('objects[].color', mkText, rsFileBlenderColor);
   R('objects[].vertices', mkWhole, rsFileBlenderVertices);
   R('objects[].position[]', mkSize, rsFileBlenderPosition);

@@ -70,6 +70,7 @@ type
     // In the pattern's unit, 0 for none; a length needs a width
     function SetSize(Material: TPatternMaterial; AWidth, ALength: double): boolean;
     procedure SetAllowTurns(Material: TPatternMaterial; Allow: boolean);
+    procedure SetFabric(Material: TPatternMaterial; AFabric: TFabric);
     procedure SetFill(Material: TPatternMaterial; AFill: TMaterialFill);
     // Refused for the last material and for one that pieces use
     function Delete(Material: TPatternMaterial): boolean;
@@ -302,6 +303,12 @@ procedure TPatternMaterials.SetAllowTurns(Material: TPatternMaterial; Allow: boo
 begin
   MakeExplicit;
   Material.AllowTurns := Allow;
+end;
+
+procedure TPatternMaterials.SetFabric(Material: TPatternMaterial; AFabric: TFabric);
+begin
+  MakeExplicit;
+  Material.Fabric := AFabric;
 end;
 
 function TPatternMaterials.SetColor(Material: TPatternMaterial; const AColor: string): boolean;

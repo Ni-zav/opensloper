@@ -582,6 +582,15 @@ begin
   Call('set_material', '{"material": "Silk", "width": 0}');
   List := TJSONArray(Answer.Find('materials'));
   AssertFalse('no width clears the length', Assigned(List.Objects[1].Find('length')));
+  Call('set_material', '{"material": "Silk", "fabric": "silk"}');
+  List := TJSONArray(Answer.Find('materials'));
+  AssertEquals('silk', List.Objects[1].Get('fabric', ''));
+  AssertFalse('Main has none', Assigned(List.Objects[0].Find('fabric')));
+  Call('set_material', '{"material": "Silk", "fabric": "none"}');
+  AssertFalse('taken away', Assigned(TJSONArray(Answer.Find('materials')).Objects[1].Find('fabric')));
+  Call('add_material', '{"name": "Shell", "fabric": "denim"}');
+  AssertEquals('added with one', 'denim', TJSONArray(Answer.Find('materials')).Objects[2].Get('fabric', ''));
+  Call('undo');
   Call('delete_material', '{"material": "Silk"}');
   AssertEquals(1, TJSONArray(Answer.Find('materials')).Count);
   Call('undo');

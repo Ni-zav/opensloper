@@ -43,7 +43,7 @@ implementation
 uses
   SysUtils, Classes, fpjson, Sloper.Core.JSON, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Measurements,
   Sloper.Core.OperationInfo, Sloper.Core.FileInfo, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Docs.Schema,
-  Sloper.Output.DrapeExport, Sloper.Core.Mesher;
+  Sloper.Output.DrapeExport, Sloper.Core.Mesher, Sloper.Core.Materials;
 
 const
   // Every member outside the objects, with values that make the writer write it
@@ -57,7 +57,8 @@ const
     ' {"id": 14, "type": "line", "start": 11, "end": 2, "role": "outline"},' +
     ' {"id": 15, "type": "piece", "name": "P", "path": [{"edge": 12, "reversed": false}, {"edge": 13, "reversed": false},' +
     ' {"edge": 14, "reversed": false}], "allowance": "1", "grainline": {"angle": "90"}, "cut": {"count": 1, "mirrored": false}}],' +
-    ' "materials": [{"id": 3, "name": "Main", "color": "#5B8DB8", "fill": "hatch", "allowance": 1.5, "width": 1400, "length": 900, "allowTurns": true}],' +
+    ' "materials": [{"id": 3, "name": "Main", "color": "#5B8DB8", "fill": "hatch", "allowance": 1.5, "width": 1400, "length": 900, "allowTurns": true, "fabric": "denim"}],'
+    +
     ' "view": {"zoom": 1.5, "centre": [120, -200], "hiddenRoles": ["construction"], "hideAnnotations": true,' +
     ' "hiddenPieces": [15], "isolate": 15, "pieceOrder": [15]}}';
   FULL_MEASUREMENTS =
@@ -84,8 +85,8 @@ const
     ' "placements": [{"source": 1, "piece": 42, "copy": 2, "position": [10, -170, 900], "rotation": [0, 90, 0],' +
     ' "attached": [7]}]}';
 
-// The Blender scene of the bodice block example, placed by guesses and an edge
-// attached, with every member the export writes
+// The Blender scene of the bodice block example, placed by guesses, an edge
+// attached and its material denim, with every member the export writes
 function FullBlenderScene: string;
 var
   Drape: TDrape;
@@ -99,6 +100,7 @@ begin
     Drape.LoadSources;
     Drape.GuessPlacements;
     Drape.SetAttached(0, Drape.AttachableEdges(Drape.Items[0].Piece)[0], True);
+    Drape.Sources[0].Pattern.SetMaterialFabric(Drape.Sources[0].Pattern.Materials[0], fbDenim);
     Result := DrapeSceneText(Drape, BuildDrapeExport(Drape), 'bodice.pieces.obj', 'bodice.body.obj', DEFAULT_MESH_SPACING);
   finally
     FreeAndNil(Drape);

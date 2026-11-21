@@ -52,8 +52,6 @@ DEFAULT_FRAMES = 120
 # The seams close with no gravity first, so the pieces do not fall before they
 # are sewn round the body
 SEWING_FRAMES = 40
-# Blender's mass is per vertex, in kg; its stiffnesses are tuned for its default
-DEFAULT_MASS = 0.3
 # How close cloth comes to the body and to itself, in metres
 COLLISION_DISTANCE = 0.003
 SELF_COLLISION_DISTANCE = 0.002
@@ -61,10 +59,20 @@ BODY_THICKNESS = 0.004
 BODY_FRICTION = 5
 CLOTH_QUALITY = 5
 COLLISION_QUALITY = 3
-# Stiffness of the fabric's stretch, shear and bending, as Blender's cotton
-TENSION_STIFFNESS = 15
-SHEAR_STIFFNESS = 5
-BENDING_STIFFNESS = 0.5
+# Each fabric a material can take (OpenSloper's FABRIC_NAMES): Blender's mass
+# per vertex in kg, and the stiffness of its stretch, shear and bending. From
+# Blender's cloth presets, with shear a third of theirs as for cotton, which
+# was tuned on the bodice block; jersey, wool and canvas lie between them.
+DEFAULT_FABRIC = "cotton"
+FABRICS = {
+    "cotton": (0.3, 15, 5, 0.5),
+    "silk": (0.15, 5, 1.7, 0.05),
+    "jersey": (0.2, 6, 2, 0.2),
+    "wool": (0.4, 20, 7, 2),
+    "denim": (1, 40, 13, 10),
+    "canvas": (0.8, 50, 17, 20),
+    "leather": (0.4, 80, 27, 150),
+}
 # The most force a sewing edge pulls with; 0 has no limit
 SEWING_FORCE = 5
 BODY_COLOR = (0.89, 0.84, 0.77, 1)
@@ -88,7 +96,7 @@ def arguments():
     parser = argparse.ArgumentParser(prog="blender --background --python " + os.path.basename(script) + " --")
     parser.add_argument("--scene", default=scene, help="the scene file (default: the one named like this script)")
     parser.add_argument("--frames", type=int, default=DEFAULT_FRAMES, help="frames to simulate")
-    parser.add_argument("--mass", type=float, default=DEFAULT_MASS, help="kg per vertex")
+    parser.add_argument("--mass", type=float, help="kg per vertex, in place of the fabrics'")
     parser.add_argument("--sewing-frames", type=int, default=SEWING_FRAMES, help="frames sewn before gravity comes on")
     parser.add_argument("--quality", type=int, default=CLOTH_QUALITY, help="cloth steps per frame")
     parser.add_argument("--sewing-force", type=float, default=SEWING_FORCE, help="the most a sewing edge pulls with; 0 for no limit")
@@ -153,6 +161,7 @@ def build_garment(name, indexes, scene, imported, materials):
     starts = {}
     groups = []
     attached = []
+    fabrics = []
     slots = []
     for index in indexes:
         entry = scene["objects"][index]
@@ -164,6 +173,8 @@ def build_garment(name, indexes, scene, imported, materials):
         starts[index] = len(vertices)
         groups.append((entry["name"], range(len(vertices), len(vertices) + len(piece.vertices))))
         attached.extend(len(vertices) + vertex for vertex in entry.get("attached", []))
+        fabric = entry.get("fabric", DEFAULT_FABRIC)
+        fabrics.extend([fabric if fabric in FABRICS else DEFAULT_FABRIC] * len(piece.vertices))
         vertices.extend((turn @ vertex.co + position) * METRES_PER_MM for vertex in piece.vertices)
         material = material_for(entry.get("material", ""), entry["color"], materials)
         if material not in slots:
@@ -197,10 +208,27 @@ def build_garment(name, indexes, scene, imported, materials):
         group.add(list(members), 1.0, "REPLACE")
     if attached:
         garment.vertex_groups.new(name=ATTACHED_GROUP).add(attached, 1.0, "REPLACE")
-    return garment, len(edges), len(attached)
+    return garment, len(edges), len(attached), fabrics
 
 
-def add_cloth(garment, options, others, body):
+def set_stiffness(garment, settings, name, values, group_setting, settings_pairs):
+    """A stiffness from each vertex's fabric: the least everywhere, and up to
+    the most through a vertex group where the fabrics differ."""
+    low, high = min(values), max(values)
+    for low_setting, high_setting in settings_pairs:
+        setattr(settings, low_setting, low)
+        setattr(settings, high_setting, high)
+    if high > low:
+        group = garment.vertex_groups.new(name=name)
+        by_weight = {}
+        for vertex, value in enumerate(values):
+            by_weight.setdefault((value - low) / (high - low), []).append(vertex)
+        for weight, members in by_weight.items():
+            group.add(members, weight, "REPLACE")
+        setattr(settings, group_setting, name)
+
+
+def add_cloth(garment, fabrics, options, others, body):
     attached = ATTACHED_GROUP in garment.vertex_groups
     # Attached vertices start on the body, where the shrinkwrap puts them, and
     # stay there: the cloth pins what the modifiers before it give
@@ -215,12 +243,16 @@ def add_cloth(garment, options, others, body):
     settings = cloth.settings
     if attached:
         settings.vertex_group_mass = ATTACHED_GROUP
-    settings.mass = options.mass
+    # Blender's mass is the cloth's, not each vertex's: the fabrics' average
+    cloths = [FABRICS[fabric] for fabric in fabrics]
+    settings.mass = options.mass if options.mass is not None else sum(cloth[0] for cloth in cloths) / len(cloths)
     settings.quality = options.quality
-    settings.tension_stiffness = TENSION_STIFFNESS
-    settings.compression_stiffness = TENSION_STIFFNESS
-    settings.shear_stiffness = SHEAR_STIFFNESS
-    settings.bending_stiffness = BENDING_STIFFNESS
+    set_stiffness(garment, settings, "Stretch", [cloth[1] for cloth in cloths], "vertex_group_structural_stiffness",
+                  [("tension_stiffness", "tension_stiffness_max"), ("compression_stiffness", "compression_stiffness_max")])
+    set_stiffness(garment, settings, "Shear", [cloth[2] for cloth in cloths], "vertex_group_shear_stiffness",
+                  [("shear_stiffness", "shear_stiffness_max")])
+    set_stiffness(garment, settings, "Bending", [cloth[3] for cloth in cloths], "vertex_group_bending",
+                  [("bending_stiffness", "bending_stiffness_max")])
     settings.use_sewing_springs = True
     settings.sewing_force_max = options.sewing_force
     collisions = cloth.collision_settings
@@ -289,13 +321,15 @@ def main():
     garments = []
     for indexes in by_source.values():
         name = scene["objects"][indexes[0]]["name"].rsplit(" ", 2)[0] if len(by_source) > 1 else scene.get("name") or "Garment"
-        garment, sewn, held = build_garment(name, indexes, scene, imported, materials)
-        report(f"{name}: {len(garment.data.vertices)} vertices, {sewn} sewing edges, {held} attached")
-        garments.append(garment)
+        garment, sewn, held, fabrics = build_garment(name, indexes, scene, imported, materials)
+        report(f"{name}: {len(garment.data.vertices)} vertices, {sewn} sewing edges, {held} attached, "
+               + ", ".join(sorted(set(fabrics))))
+        garments.append((garment, fabrics))
     for item in imported.values():
         bpy.data.objects.remove(item)
-    for garment in garments:
-        add_cloth(garment, options, len(garments) > 1, body)
+    for garment, fabrics in garments:
+        add_cloth(garment, fabrics, options, len(garments) > 1, body)
+    garments = [garment for garment, _ in garments]
     add_view()
     target = bpy.context.scene
     target.frame_start = 1

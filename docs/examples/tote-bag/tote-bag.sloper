@@ -1174,13 +1174,15 @@
       "id": 88,
       "name": "Main",
       "color": "#5B8DB8",
-      "fill": "tint"
+      "fill": "tint",
+      "fabric": "canvas"
     },
     {
       "id": 89,
       "name": "Lining",
       "color": "#C9A66B",
-      "fill": "hatch"
+      "fill": "hatch",
+      "fabric": "cotton"
     }
   ]
 }

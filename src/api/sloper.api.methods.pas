@@ -27,6 +27,9 @@ unit Sloper.API.Methods;
 
 interface
 
+uses
+  SysUtils;
+
 type
   // Features, sewing details applied in one step, are named feature_ and the
   // feature, as feature_zip
@@ -76,6 +79,9 @@ procedure AddApiMethod(var Methods: TApiMethodArray; const AName, ASummary, ARet
 procedure AddApiParam(var Methods: TApiMethodArray; const AName: string; AKind: TApiParamKind; ARequired: boolean;
   const ADescription: string; const AChoices: string = '');
 function FindApiMethod(const AName: string; out Method: TApiMethod): boolean;
+// The fabrics a material can take, as the API names them: FABRIC_NAMES, with
+// none for a material without one
+function ApiFabricNames: TStringArray;
 
 resourcestring
   rsApiTarget = 'The object, by its ID or its name';
@@ -270,12 +276,14 @@ resourcestring
   rsApiRenameMaterial = 'Renames a material.';
   rsApiMaterial = 'The material, by ID or name';
   rsApiMaterialNewName = 'The new name';
-  rsApiSetMaterial = 'Changes a material''s colour, fill, seam allowance or size. Pieces that cannot fit its size are problems.';
+  rsApiSetMaterial = 'Changes a material''s colour, fill, seam allowance, size or fabric. Pieces that cannot fit its size are ' +
+    'problems.';
   rsApiMaterialAllowance = 'A seam allowance for pieces of it, in the pattern''s unit';
   rsApiMaterialNoAllowance = 'Takes its seam allowance away';
   rsApiMaterialWidth = 'Its width in the pattern''s unit, 0 for none, which takes the length away too; a width alone is a roll';
   rsApiMaterialLength = 'The length of a sheet of it in the pattern''s unit, with a width; 0 for a roll';
   rsApiMaterialAllowTurns = 'Whether pieces may lie a quarter turn round on it, for material with no grain';
+  rsApiMaterialFabric = 'How it drapes in Blender, from the drape app; none drapes as cotton';
   rsApiDeleteMaterial = 'Deletes a material; its pieces are left with none.';
 
   rsApiAddSeam = 'Adds a seam: two runs of piece edges sewn together, whose lengths are checked.';
@@ -345,11 +353,22 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units, Sloper.Core.Features;
+  Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units, Sloper.Core.Features;
 
 var
   Table: TApiMethodArray;
   Building: integer;
+
+function ApiFabricNames: TStringArray;
+var
+  Index: integer;
+begin
+  Result := nil;
+  SetLength(Result, Length(FABRIC_NAMES));
+  for Index := 0 to High(FABRIC_NAMES) do
+    Result[Index] := FABRIC_NAMES[Index];
+  Result[0] := 'none';
+end;
 
 function Joined(const Names: array of string): string;
 begin
@@ -620,6 +639,7 @@ begin
   P('name', apText, False, rsApiMaterialName);
   P('color', apText, False, rsApiMaterialColor);
   P('fill', apChoice, False, rsApiMaterialFill, Joined(MATERIAL_FILL_NAMES));
+  P('fabric', apChoice, False, rsApiMaterialFabric, Joined(ApiFabricNames));
   Method('rename_material', agMaterials, rsApiRenameMaterial, rsApiReturnsMaterials);
   P('material', apMaterial, True, rsApiMaterial);
   P('name', apText, True, rsApiMaterialNewName);
@@ -632,6 +652,7 @@ begin
   P('width', apNumber, False, rsApiMaterialWidth);
   P('length', apNumber, False, rsApiMaterialLength);
   P('allowTurns', apFlag, False, rsApiMaterialAllowTurns);
+  P('fabric', apChoice, False, rsApiMaterialFabric, Joined(ApiFabricNames));
   Method('delete_material', agMaterials, rsApiDeleteMaterial, rsApiReturnsMaterials);
   P('material', apMaterial, True, rsApiMaterial);
   // Seams

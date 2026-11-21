@@ -62,6 +62,8 @@ type
     procedure TestRefusesUnknownMaterial;
     procedure TestRefusesRepeatedMaterialId;
     procedure TestRefusesBadFileColour;
+    procedure TestFabricRoundTrip;
+    procedure TestRefusesUnknownFabric;
     procedure TestRefusesEmptyMaterialList;
     procedure TestHatchAnglesDiffer;
     procedure TestColorTextRoundTrip;
@@ -417,6 +419,41 @@ begin
   FLoaded := TPattern.Create;
   AssertFalse(LoadPatternFromText(FLoaded, FILE_START + '"objects":[],"materials":[{"id":1,"name":"A","color":"red"}]}', Reason));
   AssertTrue(Reason, Pos('red', Reason) > 0);
+end;
+
+// A material's fabric is written only when it has one, and read back
+procedure TTestMaterials.TestFabricRoundTrip;
+var
+  Lining: TPatternMaterial;
+  Fabric, Each: TFabric;
+begin
+  AssertEquals('none by default', 0, Pos('"fabric"', SavePatternToText(FPattern)));
+  Lining := FPattern.AddMaterial('Lining');
+  FPattern.SetMaterialFabric(Lining, fbSilk);
+  Reloaded;
+  AssertTrue('silk', FLoaded.Materials[1].Fabric = fbSilk);
+  AssertTrue('the first has none', FLoaded.Materials[0].Fabric = fbNone);
+  AssertEquals('written once', 1, Length(SavePatternToText(FPattern).Split(['"fabric"'])) - 1);
+  for Each := Low(TFabric) to High(TFabric) do
+  begin
+    AssertTrue(FABRIC_NAMES[Ord(Each)], FabricFromName(FABRIC_NAMES[Ord(Each)], Fabric));
+    AssertTrue('the same', Fabric = Each);
+  end;
+  AssertFalse('tweed', FabricFromName('tweed', Fabric));
+end;
+
+procedure TTestMaterials.TestRefusesUnknownFabric;
+var
+  Reason: string;
+begin
+  FLoaded := TPattern.Create;
+  AssertFalse(LoadPatternFromText(FLoaded, FILE_START + '"objects":[],"materials":[{"id":1,"name":"A","color":"#112233",' +
+    '"fabric":"tweed"}]}', Reason));
+  AssertTrue(Reason, Pos('fabric', Reason) > 0);
+  FreeAndNil(FLoaded);
+  FLoaded := TPattern.Create;
+  AssertFalse('empty', LoadPatternFromText(FLoaded, FILE_START + '"objects":[],"materials":[{"id":1,"name":"A","color":"#112233",' +
+    '"fabric":""}]}', Reason));
 end;
 
 procedure TTestMaterials.TestRefusesEmptyMaterialList;

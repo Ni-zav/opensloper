@@ -43,7 +43,7 @@ CI runs the same checks on every pull request, and they must pass before a merge
 - **No leaks.** heaptrc must report 0 unfreed blocks.
 - **Layers.** `src/core/` has no LCL dependency. The API works through document commands. The UI stays thin. Every user change is an undoable `TCommand`.
 - **Text.** User-visible text goes in `resourcestring` sections.
-- **Design.** If the change alters a design decision, update `documents/opensloper-design-document.md` in the same pull request. Open an issue to discuss larger changes before writing the code.
+- **Design.** If the change alters a design decision, update the design (`documents/opensloper-design-document.md` or the file for that part in `documents/design/`) in the same pull request. Open an issue to discuss larger changes before writing the code.
 - **Third-party code.** Don't edit `src/packages/`. Send changes to Clipper2, BGRABitmap or ConsoleTools to their own projects.
 - **Changelog.** Add a line for anything a user would notice to `CHANGELOG.md`, under the version being worked on (the `APP_VERSION` in `src/core/sloper.core.version.pas`), with the issue number if there is one. A release with no notes there lists its commits instead, so a fix also says `Closes #N` in its commit message.
 - **Commits.** Write commit messages that say what the change does and why.

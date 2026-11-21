@@ -1,1264 +1,243 @@
 # OpenSloper — Design Document
 
-Oct 27, 2026, restructured Nov 14, 2026 (#2) · @Bill
+The design of OpenSloper and the reasons behind it. This file covers what every app shares; each app and the Automation API have a file of their own in `documents/design/`. The files describe what is built and the decisions behind it; what is not built yet is in [Open items](design/open-items.md). When a design decision changes, change the file it belongs to in the same commit.
 
-How this document is laid out: **General** covers what every app shares (concepts, architecture, files, platforms, standards); then a part for each app, **Measurements app**, **Design app** and **Publish app**, and one for the **Automation API and command line**, each holding the design of what is managed there. **Open items** at the end gathers everything not built yet, as a list to open GitHub issues from; the sections above it describe what is built and the decisions behind it.
+| File | What it covers |
+| --- | --- |
+| This file | Overview, architecture, files, preferences, platforms and releases, dependencies, testing, documentation, translation, privacy |
+| [Measurements app](design/measurements-app.md) | Measurement files and size tables, the catalogue, other programs' formats |
+| [Design app](design/design-app.md) | Evaluator, names and IDs, formulas, units, operations, the canvas, markings, seams, materials, notes, accessories, features, the Garment tab |
+| [Publish app](design/publish-app.md) | Layouts, printing, output profiles, exports, cutting machines, material needed |
+| [Drape app](design/drape-app.md) | Placing pieces round a body in 3D and draping them in Blender |
+| [Automation API and command line](design/automation-api.md) | The CLI, the JSON-RPC API, MCP, live editing, the Claude tabs, safety, PNG drawing |
+| [Web version](design/web-version.md) | The planned browser version: the engine in WebAssembly, a TypeScript editor, a Django server |
+| [Open items](design/open-items.md) | Roadmap, to do, open questions and future ideas |
 
-## General
+## Overview
 
-### Overview
-
-OpenSloper is a parametric sewing pattern drafting application written in Lazarus/Free Pascal, built first for personal use and released to the community if it proves easy to use. It owes much to Valentina and Seamly2D, the open source parametric pattern programs whose ideas it builds on.
-
-Patterns are drafted with relative distances and formulas, so changing a measurement redraws the whole pattern. Valentina and Seamly2D (C++/Qt, which split from a common codebase in 2017) do this already, but both are large and have a steep learning curve. This project aims for the same parametric power with a simpler, more direct drawing experience.
+OpenSloper is a parametric sewing pattern drafting application written in Lazarus/Free Pascal. It owes much to Valentina and Seamly2D, the open source parametric pattern programs whose ideas it builds on. Patterns are drafted with relative distances and formulas, so changing a measurement redraws the whole pattern. Valentina and Seamly2D do this already, but both are large and have a steep learning curve; OpenSloper aims for the same parametric power with a simpler, more direct drawing experience.
 
 Goals:
 
 - Parametric drafting driven by measurement sets and variables
 - An Inkscape-like canvas where snapping records relationships automatically
-- Automatic piece detection instead of manually tracing outlines in order
+- Automatic piece detection instead of tracing outlines in order
 - Seam allowance, notches, grainlines and true-scale tiled printing
 - Garments and accessories in fabric and leather, with output for cutting machines
-- A small, maintainable codebase with a pure-Pascal core, built from what comes with the compiler (see Dependencies)
+- A small, maintainable codebase with a pure-Pascal core, built from what comes with the compiler
 
-### Technology and licence
+## Technology and licence
 
-The project uses Lazarus/Free Pascal and is licensed GPLv3 or later.
+Lazarus/Free Pascal, licensed GPLv3 or later, matching Valentina and Seamly2D so code can be studied, borrowed and shared in both directions. `LICENSE` holds the full text and every unit starts with the GPL header; code translated from Valentina or Seamly2D keeps their copyright line. The About box shows the licence and no-warranty notice. The user documentation is CC BY-SA 4.0.
 
-| Component | Use | Licence |
-| --- | --- | --- |
-| Lazarus LCL / FCL | GUI, JSON (`fpjson`), XML (`DOM`, `XMLRead`), SQLite (SQLdb) | Modified LGPL with static-linking exception |
-| Clipper2 | Polygon offsetting and booleans for seam allowance | Boost |
-| BGRABitmap | Antialiased canvas drawing, SVG; PNG images in the CLI and API, without the LCL | Modified LGPL |
-| fpvectorial (optional) | DXF/SVG/PDF export helpers | Modified LGPL |
-| Tabler Icons | Toolbar and menu icons, SVG in `data/icons` | MIT |
+**Why Pascal.**
 
-Licence decisions:
+- **Everything comes with the compiler.** FCL and LCL cover the GUI, JSON, XML, file handling and testing (FPCUnit), so the project needs only three small packages (see Dependencies). TypeScript, Java or Rust would pull in hundreds of packages, each able to change, break the build or be withdrawn.
+- **It will still build in ten years.** Free Pascal changes slowly and keeps old code compiling. Patterns are kept for years, so the program that opens them has to outlast fashions in tooling.
+- **Native apps from one toolkit.** The LCL draws with each platform's own widgets (Qt on Linux, Cocoa on macOS, Win32 on Windows), giving one native executable per app with no runtime or browser engine to ship.
+- **Fast to build and run.** The whole project builds in seconds, and compiled code re-evaluates a pattern on every drag.
+- **Readable**, which suits code meant to be studied and borrowed, including by contributors who are not full-time programmers.
+- **Reaches the web too.** Free Pascal compiles to WebAssembly, so the same core can run in a browser (see [Web version](design/web-version.md)).
 
-- GPLv3 or later, matching Valentina and Seamly2D, so code can be studied, borrowed and shared in both directions.
-- `LICENSE` file at the repo root with the full GPLv3 text; a standard GPL header in every unit.
-- Code translated from Valentina or Seamly2D keeps their copyright line alongside the project's.
-- An About box shows the licence and no-warranty notice.
-- User documentation in `docs/` is licensed CC BY-SA 4.0 (see Documentation).
+The cost: fewer developers than C++, TypeScript or Rust; more code written by hand; and manual memory management, kept in order by the coding standards (`FreeAndNil`, `try`/`finally`) and heaptrc leak checks in the tests.
 
-#### Why Pascal
-
-Lazarus and Free Pascal were chosen over C++, the language of Valentina and Seamly2D, and over the usual modern choices (TypeScript, Java, Rust) for these reasons:
-
-- **Everything comes with the compiler.** The compiler's own libraries (FCL and LCL) cover the GUI, JSON, XML, SQLite, file handling and testing (FPCUnit), so beyond them the project needs only three small packages (see Dependencies), with no separate framework to install or upgrade. In TypeScript, Java or Rust the same app would pull in hundreds of packages through npm, Maven or Cargo, most of them indirect, each able to change, break the build or be withdrawn. Seamly2D and Valentina also have only a few dependencies (see Dependencies).
-- **It will still build in ten years.** Free Pascal changes slowly and keeps old code compiling; Pascal written decades ago still builds. Patterns are kept and reused for years, so the program that opens them has to outlast fashions in tooling.
-- **Native apps from one toolkit.** The LCL draws with each platform's own widgets (Qt on Linux, Cocoa on macOS, Win32 on Windows) from one source, with a form designer, menus, actions and dialogs built in. The result is a single native executable per app, with no runtime, virtual machine or browser engine to ship.
-- **Fast to build and to run.** The compiler builds the whole project in seconds, and compiled code is fast enough to re-evaluate a pattern on every drag.
-- **Readable.** Pascal reads close to plain English, which suits a project whose code is meant to be studied and borrowed by others, and keeps it approachable for contributors who are not full-time programmers.
-- **Reaches the web too.** Free Pascal compiles to WebAssembly, so the same core can run in a browser (see Web version) without a second engine in another language.
-
-What it costs: a smaller pool of developers than C++, TypeScript or Rust; more code written by hand where other languages have a ready-made library; and memory managed by hand, which the coding standards (`FreeAndNil`, `try`/`finally`) and leak checks in the tests (heaptrc) keep in order.
-
-Practices from day one: git repository, internal units in mm, UI text in `resourcestring` sections for translation, and occasional builds on a second OS.
-
-### Core concepts
+## Core concepts
 
 A pattern is a graph of draft objects whose positions come from measurements, variables and other objects.
 
 | Concept | What it is | Notes |
 | --- | --- | --- |
-| Measurement set | A person's or a product's measurements, e.g. `@waist` | Own file, edited in the measurements app; one set drives many patterns. One person's set or a size table with one column per size |
-| Variable | Pattern-level value, e.g. `#ease_waist = 20` | Holds design decisions; formulas may use measurements and other variables, not draft objects, which would tie variables to geometry |
+| Measurement set | A person's or product's measurements, e.g. `@waist` | Own file, edited in the measurements app; one set drives many patterns. One person's set or a size table |
+| Variable | Pattern-level value, e.g. `#ease_waist = 20` | Design decisions; formulas may use measurements and other variables, not draft objects |
 | Point | A position defined by an operation, its references and formulas | Never stored as fixed coordinates, except free points |
-| Operation | How an object is placed: offset, along an edge, intersection, projection, transform… | Inferred from snapping where possible; the full list is the generated Operations page |
+| Operation | How an object is placed: offset, along an edge, intersection, transform… | Inferred from snapping where possible; listed on the generated Operations page |
 | Edge | Line, curve, path, circle, arc or offset between points | Curve handles have angle and length formulas |
-| Role | Construction, outline, or a marking role (placement, stitch, fold, cut, skive, edge finish) | Only outline edges form piece boundaries; marking edges join the pieces they lie in (see Markings) |
-| Marker | A point's mark: plain, hole, button or match dot | A marked point inside a piece prints with it (see Markings) |
-| Piece | Closed path of edge references, each with a reversed flag | Seam allowance, grainline, notches, markings, material, cut count, fold line |
-| Material | A named material (Main, Lining, Interfacing, Leather) with a colour and fill | Drives piece fills, the cut list and material layouts |
-| Seam | The edges that are sewn together, with direction and expected ease | Drives seam-length checks |
+| Role | Construction, outline, or a marking role (placement, stitch, fold, cut, skive, edge finish) | Only outline edges form piece boundaries |
+| Marker | A point's mark: plain, hole, button or match dot | A marked point inside a piece prints with it |
+| Piece | Closed path of edge references, each with a reversed flag | Allowance, grainline, notches, markings, material, cut count, fold |
+| Material | A named material (Main, Lining, Leather) with a colour and fill | Piece fills, the cut list, fit checks, material layouts, drape fabric |
+| Seam | The edges sewn together, with direction and expected ease | Seam-length checks, the Garment tab's darts, sewing in Blender |
 | Layout | Pieces arranged on sheets for printing, plotting or cutting | Works on computed geometry only |
-| Annotation | Note, callout, title block or sheet note | Anchored to objects by ID, so it follows measurement changes; may contain live fields |
+| Drape | Pieces placed round a body in 3D | Exported to Blender's cloth simulation |
+| Annotation | Note, callout, information block or sheet note | Anchored to objects by ID; may contain live fields |
 
-### Architecture
+## Architecture
 
-Four layers, each depending only on the ones below; the core has no LCL dependency, so it can be unit-tested and reused by a command-line tool.
+Four layers, each depending only on the ones below. The core has no LCL dependency, so it is unit-tested without a UI and shared by the CLI and the planned web version.
 
-Layers (dependencies point down):
+- **UI (LCL):** canvas, interaction tools, snapping, panels
+- **Output:** PDF, SVG, DXF, the Blender export and PNG drawing; reads computed geometry only
+- **Document:** `TPatternDocument` and the other documents, undo/redo, change notifications
+- **Core (pure Pascal):** geometry, formulas, model, evaluator, pieces (Clipper2 seam allowance), storage
 
-- **UI (LCL):** canvas view (BGRABitmap, pan, zoom), interaction tools (select, add point, curve, piece), snapping engine (turns snaps into operations), panels (properties, objects, variables, measurements, materials)
-- **Output:** tiled PDF, SVG and DXF with line types for cutting machines, Blender export (later); reads computed geometry from the core
-- **Document:** TPatternDocument (owns the model), undo/redo commands, change notifications
-- **Core (pure Pascal, no LCL):** geometry, expressions, model, evaluator, piece builder (Clipper2 seam allowance), storage (JSON pattern and measurement files)
+Four GUI apps sit on these layers: measurements, design, publish and drape. Each owns one kind of file and only reads the ones before it (measurements → patterns → layouts and drapes), so nothing is synchronised back. They share the core and output layers, not each other's UI. The UI changes the model only through document commands, and exporters read computed geometry from the core, so a new output format never touches drafting code. The Automation API depends only on the document, core and output layers.
 
-Three GUI apps sit on these layers: the measurements app, the drafting app and the publish app (see Measurements app and Publish app); a fourth, the drape app (`opensloper-drape`), is planned (see Drape app and Blender export). Each owns one kind of file and only reads the ones before it (measurements → patterns → layouts). They share the core, and the publish app the output layer, but not each other's UI.
-
-The UI changes the model only through document commands, and exporters read computed geometry directly from the core, so a new output format never touches drafting code.
-
-A web version (see Web version) reuses the core, document and API layers unchanged, compiled to WebAssembly, under a TypeScript UI; it is the main reason the core stays free of the LCL.
-
-### Key design decisions
+## Key design decisions
 
 The central rule: only definitions are saved and undone; computed geometry is always derived.
 
 1. **Definition vs result.** Each object holds its definition (operation, references, formula strings) and a cached computed result. Saving, loading and undo touch definitions only.
-2. **Dependencies come from formulas.** Each formula is parsed once into an expression tree; what it references, plus the operation's direct inputs, forms the dependency graph. The user never manages it.
-3. **Ordered evaluation.** The graph is topologically sorted; a change re-evaluates what depends on it (see Evaluator). An edit that would make a cycle is refused with a clear message.
-4. **Failures are states, not crashes.** An object that cannot be evaluated (two lines no longer cross) and its dependents become invalid and show in red. The pattern stays editable.
-5. **IDs separate from names.** IDs are integers that never change and are never reused; names can be changed freely (see Names and IDs).
-6. **One class per operation.** Each operation type declares its inputs and formulas and evaluates itself. Adding one means writing the class, its `Add…` call on `TPattern`, its file type in `Sloper.Core.PatternFile` and its row in `Sloper.Core.OperationInfo`.
-7. **Commands for undo and redo.** Every user change is one step. One drag is one step: the model updates live during the drag and the step is committed on mouse-up; Escape cancels. Nudges of the same object within a second merge into one step, as do runs of changes to one field. Formula fields commit on Enter or leaving the field, not per keystroke.
+2. **Dependencies come from formulas.** Each formula is parsed once into an expression tree; its references plus the operation's direct inputs form the dependency graph, which the user never manages.
+3. **Ordered evaluation.** The graph is sorted topologically and evaluated in order. An edit that would make a cycle is refused.
+4. **Failures are states, not crashes.** An object that cannot be evaluated and its dependents become invalid and show in red; the pattern stays editable.
+5. **IDs separate from names.** IDs are integers that never change and are never reused; names can change freely.
+6. **One class per operation.** Each operation declares its inputs and formulas and evaluates itself. Adding one means the class, its `Add…` call on `TPattern`, its file type in `Sloper.Core.PatternFile` and its row in `Sloper.Core.OperationInfo`.
+7. **Commands for undo.** Every user change is one step; one drag is one step (live during the drag, committed on release, Escape cancels). Nudges of one object within a second merge, as do runs of changes to one field; formula fields commit on Enter or leaving. A document keeps each step as the file's text before and after (`BeginChange`, `EndChange`, `CancelChange`), so undo restores exactly the earlier definitions with the same IDs and needs no inverse per edit. Undo replaces objects with new instances, so the UI holds objects by ID, never by reference. A step the file was saved after is never merged into; at most 500 steps are kept; the ID counter only goes up, even on undo. The measurement set chosen belongs to the document, not the history.
+8. **Storage apart from the model.** `TPattern` knows nothing about JSON; `Sloper.Core.PatternFile` reads and writes it.
 
-   `Sloper.Document.PatternDocument` keeps each step as the pattern's saved text before and after (`BeginChange`, `EndChange`, `CancelChange`), so undo restores exactly the earlier definitions, with the same IDs, without an inverse for every editing call. Because undo replaces the objects with new instances, the UI holds objects by ID, never by reference. A step the file was saved after is never merged into, so the saved state stays reachable. At most 500 steps are kept. The ID counter only goes up, even on undo, so an ID is never handed out twice. The measurement set (file and size) belongs to the document, not the history: undo never swaps it back.
-8. **Storage kept apart from the model.** `TPattern` knows nothing about JSON; `Sloper.Core.PatternFile` reads and writes it through the pattern's loader calls. With one format there is no storage interface; one can be extracted if a second format is added.
+## Files
 
-### File format and storage
-
-Pattern, measurement and layout files are JSON; SQLite is reserved for a later library of clients and patterns.
-
-| Format | Role | Reason |
-| --- | --- | --- |
-| JSON | Pattern, measurement and layout files | Built into FCL, readable, diffs in git, easy to share |
-| SQLite | Later: a library of clients, measurements and patterns | Searchable, grows over time; not suited to small shared documents |
-| XML | Seamly2D and Valentina measurement files | Compatibility with existing users' data |
-| SVG, DXF, PDF | Exports | See Publish app |
-| YAML | Not used | No standard Pascal library; whitespace pitfalls |
+Patterns (`.sloper`), measurements (`.slm`), layouts (`.slayout`) and drapes (`.sdrape`) are JSON: built into FCL, readable, diffable in git, easy to share. Seamly2D and Valentina measurement files are XML; exports are SVG, DXF, PDF, OBJ and PNG.
 
 **Rules** (`Sloper.Core.JSON`):
 
-- `format` and `version` at the top of every file; a program refuses a version newer than it knows, or one below 1.
-- Stable IDs for every object, and references by ID. Formulas are stored as strings in ID form and parsed on load; a pattern's `units` is the unit of its formula numbers, while measurement and layout files store mm.
-- A fixed member order and layout on save: two-space indent, LF line ends, numbers in the shortest form that reads back exactly, `.` as the decimal point, so files diff well. Text is UTF-8.
+- `format` and `version` at the top of every file; a program refuses a version newer than it knows, or below 1.
+- Every object has a stable ID and is referenced by it. Formulas are stored in ID form and parsed on load. A pattern's `units` is the unit of its formula numbers; measurement, layout and drape files store mm.
+- Fixed member order and layout on save: two-space indent, LF, numbers in the shortest form that reads back exactly, `.` as decimal point, UTF-8.
 - A file that fails to load says why and leaves nothing half-loaded; a formula that does not parse is kept as text and shows as an error.
-- Files come from other people, so nothing in one may crash the program: text nested more than 256 levels deep is refused before parsing, which recurses once a level, and so is a number past a double's range (`1e400`), which would leave a floating point overflow pending for whatever came next; in a formula it is an error at the number (`TextToFiniteFloat`; 2026-11-14).
-- **Format versions** (issue #42, decided 2026-11-17). Releases 0.1 to 0.3 wrote version 1 of every format, so from now on a change to the pattern, measurement or layout format raises its version rather than being made in place. **Changed 2026-11-20:** no one uses the files yet, so for now formats are changed in place and every format stays at version 1; the upgrade machinery below waits for the first change made once files are in use. Each format keeps one reader, for its current version n. A file of an older version is brought up to n before that reader sees it, by upgrade steps on its parsed JSON (`Sloper.Core.FileVersions`): each format's `...FileVersions` function (`PatternFileVersions`, `MeasurementFileVersions`, `LayoutFileVersions`) gives n and one step for each version before it, 1 to 2, 2 to 3 and so on, and `UpgradeFile` runs the steps from the file's version to n, setting `version` as it goes. A step that cannot convert a file says why, and the file is refused with that reason. Files are always written at n, so opening and saving a file upgrades it; no separate conversion program is needed. Raising a version needs the step, a file of the old version in `tests/files/v<n>/`, which `Sloper.Tests.FileVersions` loads and saves, and a test that it loads to what was meant. The schemas describe version n only and allow `version` from 1 to n; `check-schemas.py` leaves out files of older versions. What older version 1 files had (piece markings for placement, fold and holes, `drafts`, a layout's scale factors) was written before versions were used, so the version 1 reader keeps reading it by its content. The settings, recent files, clipboard fragment and measurement catalogue only refuse a newer version, since they are not files people keep and share.
+- Files come from other people, so nothing in one may crash the program: nesting past 256 levels is refused before parsing, and a number past a double's range (`1e400`) is refused (`TextToFiniteFloat`).
+- Files are written atomically (a temporary file beside it, then a rename, `WriteTextFileAtomic`), so an interrupted save leaves the old file whole and another app never reads half of one.
 
-**The formats are specified in the user documentation**, decided 2026-11-08 so that Claude and other tools can rely on them. `opensloper-cli doc files` writes the File formats page and `opensloper-cli doc pattern.schema.json` (and `measurements`, `layout`, `drape`, and `blender` for the drape's export, which no app reads) a JSON Schema, draft 2020-12, for each, into `docs/reference/`. Both come from code tables: the members outside the objects from `Sloper.Core.FileInfo`, and the objects from `Sloper.Core.OperationInfo`. A schema lists exactly the members the apps write, marks those a file needs to load as required, and allows no others, so a misspelt member is caught; the loaders also accept a few members of older files that the schemas leave out. Tests hold the tables to the writers both ways (every member written is listed, every listed member is written) and check that each example on the page is a file exactly as the program writes it. `check-schemas.py`, run by `opensloper-make.sh docs` and the documentation workflow, checks the schemas with Python's `jsonschema` and every example and regression file against them.
+**Format versions.** While nobody uses the files yet, formats are changed in place and every format stays at version 1. Once files are in use, a change raises the version: each format keeps one reader for its current version, and `Sloper.Core.FileVersions` brings an older file up to it by upgrade steps on its parsed JSON (`UpgradeFile`), one step per version. Files are always written at the current version, so opening and saving upgrades them. Raising a version needs the step, an old file in `tests/files/v<n>/` and a test. The settings, recent files, clipboard fragment and catalogue only refuse a newer version.
+
+**The formats are specified in the user documentation**, so Claude and other tools can rely on them. `opensloper-cli doc files` writes the File formats page and `opensloper-cli doc pattern.schema.json` (also `measurements`, `layout`, `drape` and `blender`) a JSON Schema for each, from code tables (`Sloper.Core.FileInfo`, `Sloper.Core.OperationInfo`). A schema lists exactly the members the apps write, marks the required ones and allows no others. Tests hold the tables to the writers both ways, and `check-schemas.py` checks every example and regression file against the schemas.
 
 **Pattern file rules** the schema cannot say:
 
-- `variables` and `objects` are in creation order, and an object's direct inputs must come earlier in the file, which creation order guarantees, since inputs cannot be deleted while used. Formulas may refer to any ID; a missing one is an error when evaluated. A piece that takes on a newer point moves to the end.
-- An edge named after its ends has no `name`; it is worked out after loading, so it can never be stale.
-- `nextId` is above every ID in the file, and saving writes the counter as it stands, never recomputed, so deleted IDs stay retired. A hand-written file may leave it out.
-- Members written with their defaults (`mode`, `from`, `direction`, `extend`, `pick`, `role`) may be left out of hand-written files; the writer always writes them.
-- `materials` comes after `objects` but is read first, since pieces refer to it, and a pattern whose only material is the untouched Main writes neither `materials` nor a piece `material`.
-- `measurementFile` is relative to the pattern's folder unless absolute, with `/` separators; the core never loads it by itself. The size used from a size table is not saved.
-- Loading checks IDs (positive, unique across variables, materials and objects, below `nextId`), names, types and inputs, and fails naming the object by ID (`Object 6 uses object 9, which is not defined before it`), leaving the pattern empty.
-- `view.hiddenPieces`, `view.isolate` and `view.pieceOrder` (2026-11-13) hold the overlapping-piece view options by ID, each left out when empty. `pieceOrder` lists every piece once one has been moved; a piece not in it, new or from an older file, goes on top in pattern order. IDs that are not pieces are passed over, and saving writes only pieces that still exist.
+- `variables` and `objects` are in creation order, and an object's direct inputs come earlier in the file. Formulas may refer to any ID; a missing one is an error when evaluated. A piece that takes on a newer point moves to the end.
+- An edge named after its ends has no `name`; it is worked out on load.
+- `nextId` is above every ID and is written as it stands, so deleted IDs stay retired. A hand-written file may leave it out, and members at their defaults.
+- `materials` comes after `objects` but is read first; a pattern whose only material is the untouched Main writes neither `materials` nor a piece `material`.
+- `measurementFile` is relative to the pattern's folder unless absolute, with `/` separators. The size used from a size table is not saved.
+- Loading checks IDs (positive, unique, below `nextId`), names, types and inputs, failing with the object's ID (`Object 6 uses object 9, which is not defined before it`).
+- `view` holds view state (zoom, hidden roles, `hiddenPieces`, `isolate`, `pieceOrder`), kept out of undo.
 
-### Preferences
+## Preferences
 
-Built 2026-11-05. Edit → Preferences… opens the same dialog in all three apps (`Sloper.UI.Preferences`), on the app's own tab. OK saves straight to `settings.json` (`TPreferences` in `Sloper.Core.Settings`). The apps already open pick the change up at once (decided 2026-11-16, issue #29): every window of every app listens on the apps' link (see Finding an open window under Publish app), each app under its own kind of endpoint (`design-<pid>`, `measurements-<pid>`, `publish-<pid>`), and the app that saved tells all the others with a `preferences` notification, which carries nothing. Each reads `settings.json` again and applies what it shows: the design app its grid, garment light and the unit for new patterns, the publish app its calibration, the measurements app its unit, which it holds back while a cell is being typed in so nothing typed is lost. The file stays the one source; the message only says to look. It is a JSON-RPC notification, with no id, so the sender never waits for another window's main thread, and a window that misses it (one that could not listen) reads the file at its next start, as before.
+Edit → Preferences… opens the same dialog in every app (`Sloper.UI.Preferences`), on the app's own tab; OK saves `settings.json` (`TPreferences` in `Sloper.Core.Settings`). The apps already open pick the change up at once: the app that saved sends a `preferences` notification over the apps' link (see [Finding an open window](design/publish-app.md#finding-an-open-window)) and each reads the file again. The file stays the one source; a window that misses the message reads it at its next start.
 
 | Tab | Setting | Stored as |
 | --- | --- | --- |
-| General | Unit: mm, cm or in. The unit new patterns take, and the measurements app's display unit (its Show in box changes the same preference). It never changes an existing pattern | `measureUnit` |
-| Design | Grid spacing, one per unit, in that unit's own numbers (5 mm, 0.5 cm, ⅛ in), so switching units never turns ⅛ in into 3.175 mm. Zoomed out, the grid steps up through multiples of the spacing, so every line still lies on it | `gridSteps` |
-| Design | Garment view: whether the Garment tab shades its pieces, where the light comes from (degrees, 135 is upper left) and how strongly (0 to 100%) | `garmentShading`, `garmentLightAngle`, `garmentShadeStrength` |
-| Publish | Printer calibration across and down, 0.5 to 2. **Work Out Factors** sets each to `current × expected ÷ measured` from a test square measured on a print made with the current factors | `calibrationX`, `calibrationY` |
+| General | Unit (mm, cm, in) for new patterns and the measurements app's display; never changes an existing pattern | `measureUnit` |
+| General | Anthropic API key (kept in its own file) and whether assistants may read measurements | `assistantMeasurements` |
+| Design | Grid spacing per unit, in that unit's own numbers (5 mm, 0.5 cm, ⅛ in) | `gridSteps` |
+| Design | Garment tab shading, light direction and strength | `garmentShading`, `garmentLightAngle`, `garmentShadeStrength` |
+| Publish | Printer calibration across and down (0.5 to 2), with Work Out Factors from a measured test square | `calibrationX`, `calibrationY` |
+| Drape | Blender program, mesh spacing (2–100 mm), frames (1–10000) | `blenderProgram`, `drapeSpacing`, `drapeFrames` |
 
-**Calibration is the printer's, not the layout's.** Layout files no longer carry it (older files' values are ignored); the publish app, the CLI and the Automation API set it from the preferences when they load a layout.
+Calibration belongs to the printer, not the layout, so layouts do not carry it.
 
-### File locations
+## File locations
 
-OpenSloper follows each platform's conventions and never writes app files into the home folder root, unlike Seamly2D and Valentina (They may have changed this recently).
+OpenSloper follows each platform's conventions and never writes app files into the home folder root.
 
 | Kind | Examples | Linux (XDG) | Windows | macOS |
 | --- | --- | --- | --- | --- |
-| Config | `settings.json`: preferences, profiles, window layout | `~/.config/opensloper/` | `%APPDATA%\OpenSloper\` | `~/Library/Application Support/OpenSloper/` |
-| Data | Later: library, templates, user blocks | `~/.local/share/opensloper/` | `%APPDATA%\OpenSloper\` | `~/Library/Application Support/OpenSloper/` |
+| Config | `settings.json`, `anthropic-key` | `~/.config/opensloper/` | `%APPDATA%\OpenSloper\` | `~/Library/Application Support/OpenSloper/` |
+| Data | Not used yet | `~/.local/share/opensloper/` | `%APPDATA%\OpenSloper\` | `~/Library/Application Support/OpenSloper/` |
 | State | `recent-files.json`, logs | `~/.local/state/opensloper/` | `%LOCALAPPDATA%\OpenSloper\` | `~/Library/Application Support/OpenSloper/` |
 | Cache | Thumbnails, previews | `~/.cache/opensloper/` | `%LOCALAPPDATA%\OpenSloper\Cache\` | `~/Library/Caches/OpenSloper/` |
 
-`XDG_*_HOME` is respected on Linux. The catalogue, body figures, icons and fonts ship in `data/` beside the programs, and in the downloads the offline user guide in `data/help` (`TAppPaths.UserGuideFile`; Help → User Guide opens the website when it is missing, as in the source tree) (a folder up in the source tree, and in `Contents/Resources` of the macOS app bundle, since code signing takes only programs in `Contents/MacOS`). Folders are created on first use.
+`XDG_*_HOME` is respected. What the programs read ships in `data/` beside them (one folder up in the source tree, `Contents/Resources` in the macOS bundle): the catalogue, body figures, icons, fonts, the Blender script and, in downloads, the offline user guide in `data/help` (Help → User Guide opens the website without it). Folders are made on first use. User documents default to `Documents/OpenSloper/` on first save, then the last folder used.
 
-**Portable install** (built 2026-11-16, issue #30). An empty `portable.ini` beside the programs makes the install portable: everything the apps write goes beside it, so a copy on a USB stick leaves nothing on the computer. Config, data, state and cache go in `user/` (`user/config` and so on), apart from the `data/` the programs ship with, and the first save defaults to `documents/`. On macOS `portable.ini` lies beside `OpenSloper.app`, since code signing takes nothing new inside the bundle. Recent files inside the portable folder are kept relative to it, with `/` between folders, so they are found again when the drive comes back under another letter or mount point; files elsewhere keep their full path. The runtime folder (the automation socket and the apps' link) is never portable, since a USB stick's file system may not hold a socket. The Claude API key is in `user/config` with the settings, which the user guide warns of. `TAppPaths.PortableRoot` gives the folder, '' when not portable.
+**Portable install.** An empty `portable.ini` beside the programs (beside `OpenSloper.app` on macOS) puts everything the apps write in `user/` beside it, and first saves in `documents/`, so a USB stick leaves nothing on the computer. Recent files inside the portable folder are kept relative to it. The runtime folder (sockets) is never portable. `TAppPaths.PortableRoot` gives the folder.
 
-**User documents** (`.sloper`, `.slm`, `.slayout`, `.sdrape`) belong to the user, never in hidden folders: the first save defaults to `Documents/OpenSloper/`, then the last-used folder.
+**Implementation.** `TAppPaths` gives every folder; no other code builds these paths. The apps share `settings.json` and `recent-files.json`, so every save reads the file again first and changes only its own part. An unreadable settings file leaves the defaults and saving over it is refused. File → Open Recent lists each app's last 10 files (`Sloper.Core.RecentFiles`).
 
-**Implementation.** `TAppPaths` gives `ConfigDir`, `DataDir`, `StateDir`, `CacheDir` and `DefaultDocumentsDir`; no other code builds these paths. The three apps share `settings.json` and `recent-files.json` and run side by side, so every save reads the file again first and changes only its own part. A missing settings file is a first run; an unreadable one leaves the defaults, and saving preferences over it is refused with the reason, rather than lose a newer version's file. File → Open Recent lists each app's last 10 files (`Sloper.Core.RecentFiles`, `Sloper.UI.RecentMenu`); a missing file is taken off when chosen.
-
-### Platforms
-
-Development is on Linux with the Qt widgetset, testing on macOS, and Windows deferred until a general release.
+## Platforms
 
 | Platform | Role | Widgetset | Notes |
 | --- | --- | --- | --- |
-| Linux | Main development | Qt5 or Qt6 | HiDPI; needs the `libQt5Pas` or `libQt6Pas` bindings at run time |
-| macOS | Testing | Cocoa | Apple Silicon, Retina canvas, `.app` bundle; signing and notarisation for a public release |
-| Windows | Release builds | Win32 | Built by the release workflow; kept compiling through portable code |
+| Linux | Main development | Qt5 or Qt6 | Needs the `libQt5Pas` or `libQt6Pas` bindings |
+| macOS | Testing | Cocoa | Apple Silicon, `.app` bundle |
+| Windows | Release builds | Win32 | Built by the release workflow |
 
-**Keeping all platforms viable:** shortcuts use `ssModifier` (Cmd on macOS, Ctrl elsewhere), written `Mod` in `Sloper.Core.Shortcuts`; a key macOS keeps for itself with Cmd, such as Cmd+Tab, is written `Ctrl` there and is the Control key on every platform; paths go through `TAppPaths` with `ConcatPaths` and `PathDelim`; no Unix-only units in the core; widgetset-specific code (such as the Qt menu divider style) is kept behind `{$IFDEF}` with a do-nothing fallback.
+**Keeping all platforms viable:** shortcuts use `ssModifier` (Cmd on macOS, Ctrl elsewhere), written `Mod` in `Sloper.Core.Shortcuts`; a key macOS keeps for itself (Cmd+Tab) is written `Ctrl` and is the Control key everywhere. Paths go through `TAppPaths` with `ConcatPaths` and `PathDelim`; no Unix-only units in the core; widgetset-specific code is behind `{$IFDEF}` with a do-nothing fallback.
 
-**App icons.** The SVGs in `resources/` are the masters. `resources/make-icons.sh` turns each app's SVG into the `.ico` beside its `.lpi` (bitmaps up to 128 px and a 256 px PNG, since the LCL's loader rejects smaller PNG entries), which lazbuild puts in the program as `MAINICON`; the generated files are committed. `resources/linux/` has a `.desktop` entry per app.
+**App icons.** The SVGs in `resources/` are the masters; `resources/make-icons.sh` makes each app's committed `.ico`.
 
-**Release builds** (2026-11-12). Every push to the `release` branch runs `.github/workflows/release.yml`: Linux x86_64 (Qt6, Ubuntu 24.04), macOS arm64 (Cocoa, FPC 3.2.4rc1 as released with Lazarus 4.8 for macOS) and Windows x86_64 (Win32) are built with `opensloper-make.sh build`, packed by `opensloper-make.sh package` and started once from the unpacked download; the Linux job runs the tests first. The downloads become the GitHub release of `APP_VERSION` (tag `vVERSION`, a pre-release while 0.x), replaced on each push until the version changes. The release's notes are that version's section of `CHANGELOG.md`, written as the changes are made, or when it has none, the subjects of the commits since the previous release's tag with the issues they close (`opensloper-make.sh release`). Linux is a `.tar.gz` with menu entries, icons and file types, and the Qt6 Pascal bindings (`libQt6Pas.so.6`) in `lib/`, built from Lazarus's own sources since Ubuntu packages them only from 26.04, which the GUI programs find through an `$ORIGIN/lib` rpath; macOS one `OpenSloper.app` holding all four programs, opening on the design app, which opens the others from its menus, signed ad hoc; Windows a `.zip`. The programs are stripped of debug information.
+**Release builds.** Every push to `release` runs `.github/workflows/release.yml`: Linux x86_64 (Qt6), macOS arm64 (Cocoa, FPC 3.2.4rc1 as shipped with Lazarus 4.8 for macOS) and Windows x86_64 are built, packed by `opensloper-make.sh package` and started once from the download. The downloads become the GitHub release of `APP_VERSION` (tag `vVERSION`, a pre-release while 0.x), replaced on each push until the version changes; the notes are the version's `CHANGELOG.md` section, else the commits since the last release. Programs are stripped.
 
-**Installers** (Issue #17, 2026-11-16). Beside the archives, `package` makes an installer for each platform, which the release jobs install, start and remove again:
+- **Linux:** a `.tar.gz` and a `.deb` (programs in `/usr/lib/opensloper`, linked from `/usr/bin`; menu entries, icons and file types under `/usr/share`). Both ship the Qt6 Pascal bindings in `lib/`, built from Lazarus's sources since Ubuntu packages them only from 26.04, found through an `$ORIGIN/lib` rpath. Needs Qt 6.4 and the glibc of Ubuntu 24.04 or later.
+- **macOS:** a `.dmg` with one `OpenSloper.app` holding all the programs, opening on the design app, signed ad hoc. It declares the file types; Finder sends them to the design app, which starts the right app for each.
+- **Windows:** a `.zip` and an Inno Setup `setup.exe` (`resources/windows/opensloper.iss`), for all users or the current user, with Start menu entries, the file types and an uninstaller.
+- **OpenSSL for the assistant.** FPC 3.2.2 looks only for OpenSSL 1.1, so `Sloper.Assistant.Http` names OpenSSL 3 before its first connection (`LoadOpenSSL`). Linux uses the system's `libssl.so.3`; Windows and macOS ship OpenSSL 3 (`TAppPaths.LibraryDir`) and Mozilla's root certificates (`data/cacert.pem`, checked at packaging), since OpenSSL there cannot read the system's roots. `opensloper-cli check-connection` reports what loaded and is run from each download. Native HTTPS per platform was rejected: two more transports to test on machines CI cannot run.
+- **User guide:** the site is built once for reading from disk (`opensloper-make.sh docs --offline`) and copied into each download's `data/help`.
 
-- **Linux:** a `.deb` (`dpkg-deb`, needing the bundled Qt6 bindings) with the programs, `lib/` and `data/` in `/usr/lib/opensloper`, linked from `/usr/bin`; the programs find their data from their real path (`ParamStr(0)` reads `/proc/self/exe`). Menu entries, icons and the file types (`resources/linux/opensloper.xml`, `application/x-opensloper-pattern`, `-measurements` and `-layout`) go under `/usr/share`, where dpkg's triggers register them. It depends on the system's Qt 6 libraries under their `t64` names or the older ones.
-- **macOS:** a `.dmg` holding `OpenSloper.app` beside a link to Applications, in place of the `.zip`. The bundle declares the three file types (`io.github.opensloper.opensloper.pattern`, `.measurements`, `.layout`, conforming to `public.json`); Finder sends them all to the design app, whose `Application.OnDropFiles` handler opens patterns itself and starts the measurements or publish app for the others.
-- **Windows:** `setup.exe` from Inno Setup (`resources/windows/opensloper.iss`), for all users in Program Files or for the current user without administrator rights, with Start menu entries, an uninstaller and the file types under `HKA`. Its `AppId` never changes, so a new version replaces the old.
-- **OpenSSL for the assistant** (Issue #31, 2026-11-16). FPC 3.2.2 looks only for OpenSSL 1.1 and older (on Windows the 1.1 DLLs, on macOS a `libcrypto.1.1` no Mac has, on Linux `libssl.so` or `.so.1.1`), so `Sloper.Assistant.Http` names OpenSSL 3 before its first connection (`LoadOpenSSL`, through FPC's `DLLSSLName`, `DLLUtilName` and `DLLVersions`) and says which library is missing when it is. Linux uses the system's `libssl.so.3`, tried first since `libssl.so` comes only with the development files; the `.deb` depends on `libssl3t64 | libssl3`. Windows and macOS ship OpenSSL 3 (`TAppPaths.LibraryDir`): the DLLs beside the programs, from Git for Windows on the runner, and the dylibs in `OpenSloper.app/Contents/Frameworks`, from Homebrew, renamed to find each other there (`@loader_path`) before the bundle is signed. OpenSSL there cannot read the system's roots, so those downloads ship Mozilla's as curl publishes them (`data/cacert.pem`, checked against its published SHA-256 at packaging, `TAppPaths.TrustedCertificatesFile`), trusted unless `SSL_CERT_FILE` or `SSL_CERT_DIR` names others. `THIRD-PARTY.txt` and `OpenSSL-LICENSE.txt` (Apache 2.0) go with them. `opensloper-cli check-connection` posts an empty request without a key and reports the OpenSSL loaded, the certificates trusted and the HTTP status; any answer passes, since TLS and the certificate check came first. Each release job runs it from the download, the Windows one outside Git Bash, whose `PATH` holds Git's own OpenSSL. Native HTTPS per platform (WinHTTP, NSURLSession) was rejected: two more transports with their own streaming and Stop, written for machines nothing here can run, against one already tested. Homebrew builds for the runner's macOS, which `package` prints, and may be later than the bundle's minimum of macOS 11.
-- **User guide:** a job builds the site once for reading from disk (`opensloper-make.sh docs --offline`: `.../index.html` links, Zensical's offline search, no web fonts) into `release/site_offline`, and `package` copies it into each download's `data/help`.
+Signing and notarisation wait for the community release (see [Open items](design/open-items.md)).
 
-Signing and notarisation wait for the community release (see To do).
+## Repository layout
 
-Known gaps: Linux needs Qt 6.4 or later and the glibc of Ubuntu 24.04 or later. The bundled OpenSSL on macOS needs the macOS version Homebrew built it for (see OpenSSL for the assistant). OpenSSL is loaded only on the assistant's first request, so the apps start either way.
+All Pascal source is under `src/`, third-party code in submodules under `src/packages/`. `CLAUDE.md` lists every folder and script. The programs are built side by side into `release/` (not in git), so each app finds the others beside it and `data/` one folder up.
 
-### Repository layout
+## Dependencies
 
-The repository mirrors the layers, with all Pascal source under `src/` and third-party code in submodules under `src/packages/`. `CLAUDE.md` lists every folder and script.
-
-```text
-opensloper/
-├── src/
-│   ├── core/          geometry, formulas, model, evaluator, storage (no LCL)
-│   ├── document/      documents, undo, notifications
-│   ├── ui/            forms, canvas, tools, snapping, panels
-│   ├── output/        layouts, tiling, PDF, SVG, DXF
-│   ├── api/           Automation API (JSON-RPC 2.0), the apps' link
-│   ├── docs/          generated reference pages and schemas
-│   ├── design/  measurements/  publish/  cli/   the four programs
-│   └── packages/      submodules: Clipper2, BGRABitmap, ConsoleTools
-├── data/              catalogue, body figures, icons, read at run time
-├── resources/         app icons and logo (SVG masters)
-├── tests/             FPCUnit project and regression patterns
-├── documents/         internal notes and this document
-├── docs/              user documentation (Zensical)
-├── web/               TypeScript editor and the Wasm engine build (planned)
-│   ├── engine/        build script and entry unit exporting handle()
-│   └── app/           editor source
-├── server/            Django project: accounts, cloud library, marketplace (planned)
-└── release/           built programs, not in git
-```
-
-`web/` and `server/` are planned and not created until the spike succeeds. The programs are built side by side into `release/`, so each app finds the others beside it and `data/` one folder up.
-
-### Dependencies
-
-OpenSloper keeps its dependencies to a minimum, and this is a deliberate design choice, not an accident of size. Every dependency is code the project does not control: it can change, break, be withdrawn, change licence or carry a security problem in. Few dependencies keep the apps buildable for years, the licence position simple, and output under the project's own control.
-
-**Compared with Seamly2D and Valentina.** They too have only a few dependencies, so the difference is not the number of packages. It is that, apart from the few packages below, everything OpenSloper needs comes with the compiler: no separate framework such as Qt to install and upgrade, and no outside programs needed for output.
-
-**What the apps depend on:**
+Dependencies are kept to a minimum on purpose: each is code the project does not control, which can change, break, be withdrawn, change licence or carry a security problem. Seamly2D and Valentina also have few packages; the difference is that, apart from the packages below, everything OpenSloper needs comes with the compiler, with no separate framework such as Qt to install and no outside programs needed for output.
 
 | Kind | What | Notes |
 | --- | --- | --- |
-| Compiler and libraries | Free Pascal, Lazarus (FCL, LCL, LazUtils) | GUI, JSON, XML, SQLite, file handling, FPCUnit |
-| Third-party packages | Clipper2, BGRABitmap | Submodules, see the table below |
-| Our own packages | ConsoleTools | Submodule, MIT |
-| Data | Tabler Icons | SVG files in `data/icons`, MIT; nothing linked |
-| Platform | Qt bindings (`libQt5Pas` / `libQt6Pas`) on Linux | Runtime library for the Qt widgetset |
+| Compiler and libraries | Free Pascal, Lazarus (FCL, LCL, LazUtils) | GUI, JSON, XML, file handling, FPCUnit |
+| Third-party packages | Clipper2 (Boost), BGRABitmap (modified LGPL) | Seam allowance and polygon booleans; antialiased drawing, SVG and PNG without the LCL |
+| Our own package | ConsoleTools (MIT) | CLI argument parsing and help |
+| Data | Tabler Icons (MIT), Noto Sans and DejaVu Sans | Files in `data/`, nothing linked |
+| Platform | Qt bindings on Linux; OpenSSL 3 for the assistant | Loaded at run time |
+| Optional | Blender 5.2 | Only for draping; found at run time |
 
-**Build-time tools** are not shipped and do not touch the apps' code: Zensical builds the documentation, JEDI Code Format formats source, and the Wasm build uses the development compiler and a WASI shim. The apps build and run without any of them.
+Build-time tools (Zensical, JEDI Code Format, PasDoc) are not shipped and the apps build without them.
 
-**Written ourselves instead.** Where a library would have been larger than the job, or would have taken control of the output, the project has its own small unit:
+**Written ourselves instead**, where a library was larger than the job or would take control of the output: the formula parser (TFPExpressionParser's error positions and accepted syntax did not fit), the PDF writer (exact scale, the same layout gives the same bytes, so tests compare whole files), the DXF writer (R12 is simple and testable the same way), the JSON layout (fixed member order and number spelling) and the mesher (Clipper2's triangulation does not compile with FPC 3.2.2).
 
-| Unit | Instead of | Why |
-| --- | --- | --- |
-| Formula parser (`Sloper.Core.Formula`) | TFPExpressionParser | Its error positions and accepted syntax did not fit; our syntax is small (see Formula engine) |
-| PDF writer (`TPDFWriter`) | fcl-pdf | Exact scale, uncompressed, and the same layout gives the same bytes, so tests compare whole files |
-| DXF writer | A DXF library | R12 is simple, and deterministic output can be tested the same way |
-| JSON layout | fpjson's own formatting | Fixed key order and number spelling, so files diff cleanly in git (fpjson still parses) |
+**Rules for adding a dependency.** All must hold:
 
-**Rules for adding a dependency.** A new package is added only when all of these hold:
+1. **The problem is hard** (polygon clipping, font shaping, antialiased drawing); a small format or algorithm is written here instead.
+2. **Its licence is GPLv3-compatible**, stated in a licence file in its repository.
+3. **It is Pascal, or has no build step of its own**, so it compiles for every target, WebAssembly included. A C library is a last resort.
+4. **The core stays LCL-free.**
+5. **We could maintain it** if it is abandoned.
+6. **It is pinned**: a submodule at a known commit, added and moved in commits of its own, with `opensloper-make.sh test` passing before and after.
 
-1. **The problem is hard.** Polygon clipping, font shaping, antialiased drawing: things that take months to get right. A small, well-defined format or algorithm is written in the project instead.
-2. **Its licence is GPLv3-compatible** and stated in a licence file in its repository.
-3. **It is Pascal, or has no build step of its own.** Pure Pascal compiles for every target, including WebAssembly. A C or C++ library needs a binding and a native build on every platform, and is a last resort.
-4. **The core stays LCL-free.** Anything used by `src/core` must not depend on the LCL or a GUI.
-5. **It can be maintained by us if it is abandoned.** It is small enough to fork, as Clipper2 already is.
-6. **It is pinned.** It is a submodule at a known commit, added and updated in commits of its own, and `opensloper-make.sh test` passes before and after.
+A dependency used by one optional feature is kept out of the core and the other apps.
 
-A dependency used only by one optional feature is kept out of the core and the other apps, so leaving that feature out removes the dependency too.
+**Clipper2** comes from our fork ([github.com/billbsing/Clipper2](https://github.com/billbsing/Clipper2)) of AngusJohnson/Clipper2, with our fixes (see `documents/known-issues.md`). That repository was archived and development moved to PolyClipping/Clipper2, which is becoming C++ only, so the fork stays on the original; when we need to change it, it becomes our own Pascal-only Clipper2, keeping Angus Johnson's notices. Projects depend on `src/core/clipper2/osclipper2.lpk`. **ConsoleTools** ([github.com/billbsing/console-tools](https://github.com/billbsing/console-tools)) is ours; fixes go upstream.
 
-**Dependencies, the web version and the server.** The Wasm engine follows the same rules, since it is the same core. The TypeScript editor and the Django server (see Web version) live in ecosystems with many packages; there, dependencies are kept to what the job needs, versions are locked (`package-lock.json`, a pinned requirements file), and nothing they use reaches the engine.
+## Testing
 
-**Submodules.** Third-party and personal Pascal libraries are git submodules under `src/packages/`, pinned to known-good commits. A submodule bump is its own commit, the build scripts run `git submodule update --init --recursive`, and every package must be GPLv3-compatible with an explicit licence file.
+FPCUnit with the console runner, in `tests/`, run by `opensloper-make.sh test` with heaptrc, so leaks fail too. CI (`.github/workflows/ci.yml`) runs it with the formatter and the standards check. The LCL-free core means most logic is tested without a UI.
 
-| Package | Use | Licence |
-| --- | --- | --- |
-| Clipper2 | Seam allowance offsetting and polygon booleans | Boost |
-| BGRABitmap | Antialiased canvas drawing, SVG; PNG images in the CLI and API, without the LCL | Modified LGPL |
-| ConsoleTools | Argument parsing and help for the CLI | MIT |
+**What is covered:** geometry (with a tolerance helper, never exact float equality), formulas, evaluation order and states, IDs never reused, every operation against hand-checked cases and failures, piece detection and allowance, markings, transforms, seams, notes, materials, units and conversion, copy and paste, measurement files and merges, undo restoring the exact earlier state, save → load → save giving identical JSON, tiling, packing, PDF, SVG and DXF bytes, the mesher and the drape export, and the CLI commands through `RunCli`. Tables that document the program (operations, file members, API methods, CLI options, shortcuts, icons) are held to the code, and committed reference pages and schemas must match what the program writes.
 
-**Clipper2** comes from our fork of AngusJohnson/Clipper2 ([github.com/billbsing/Clipper2](https://github.com/billbsing/Clipper2)), which carries our fixes (see `documents/known-issues.md`). That repository was archived in October 2026, and development moved to PolyClipping/Clipper2, which is becoming C++ only, so the fork stays on the original. When we need to change Clipper2's behaviour it becomes our own Pascal-only Clipper2, keeping Angus Johnson's notices. Projects depend on `src/core/clipper2/osclipper2.lpk` rather than adding it to their search path.
+**Regression patterns** in `tests/patterns/`: patterns with two measurement sets each and the expected `opensloper-cli check --json` report (each value, state and position to 1e-6 mm), so a change that silently alters a draft fails. `tests/patterns/README.md` says how to make one.
 
-**ConsoleTools** ([github.com/billbsing/console-tools](https://github.com/billbsing/console-tools)) is our own, with fixes made for this project upstream: long-only option order, `NO_COLOR`, parsing argument lists for tests, FPC 3.2 support.
+**Habits:** core tests alongside or before geometry and formula code; a failing test before every bug fix; the UI kept thin; end-to-end checks through `opensloper-cli serve` and its renders, and the GUI checked by hand on a private Xvfb display; `test` and `check` before every commit; `opensloper-make.sh pr-check` before a pull request.
 
-### Testing
+## Documentation
 
-Testing runs throughout development; the LCL-free core means most logic is tested without any UI.
+**User documentation** is Markdown in `docs/`, built with Zensical (the successor to Material for MkDocs) from `zensical.toml` by `opensloper-make.sh docs` into `release/site_docs`, in strict mode so broken links fail, and published by `.github/workflows/docs.yml` on pushes to `development` that touch it. Pages use only common extensions, so another generator would mean rewriting the navigation, not the pages. One site covers every app, since they share concepts, with pages written by task ("Add a size"), not by menu. CC BY-SA 4.0.
 
-**Tools.** FPCUnit with the console runner, in a separate project in `tests/`, built and run by `opensloper-make.sh test` with heaptrc (`-gh`), so leaks fail too. CI (`.github/workflows/ci.yml`) runs it with the formatter and the standards check.
+**Generated where it can be**, so the code is the single source of truth: `opensloper-cli doc TOPIC` (`src/docs/`) writes the reference pages from the tables the code uses (`functions`, `operations`, `files` and the schemas, `shortcuts`, `icons`, `cli`, `api`) and the Python client. They are committed, so the site builds without a Pascal toolchain, and a test fails while one differs from what the program writes. Tutorial and example patterns live in `docs/examples/` with their measurements; tutorial pictures are drawn by `export-draft --labels --upto=NAME` from `docs/tutorials/images.list`, and tests check every example opens without problems.
 
-**What is covered.** Geometry (with a tolerance helper, never exact float equality), the formula engine, the evaluator's order and states, names and IDs (never reused after delete, undo, save and reload), every operation against hand-checked cases and their failures, piece detection and seam allowance, marking assignment, transforms, seams, annotations, materials, pattern units and conversion, copy and paste, measurement files and merges, undo (execute then undo restores the exact earlier state), save → load → save giving identical JSON, tiling, packing, and the PDF, SVG and DXF bytes against stored files. Tables that document the program are held to it: the operations, file members, API methods, CLI options and shortcuts, and the committed reference pages and schemas must match what the program writes.
+**Developer documentation** is made by PasDoc from the comments before each unit and declaration (`opensloper-make.sh devdocs` into `release/dev_docs`), with `documents/pasdoc-introduction.txt` as its first page. The comments stay in the plain `//` style of the coding standards, with no PasDoc tags. It is not published yet (see Open items).
 
-**Regression patterns** in `tests/patterns/`: patterns with two measurement sets each and their expected results, the report from `opensloper-cli check --json` (each variable's value and each object's state and position, to 1e-6 mm). Every expected file found is checked, so a change that silently alters a draft fails. `tests/patterns/README.md` has the commands to make one, after checking its values by hand.
+`docs/` is the user documentation; `documents/` holds internal notes, including these design files.
 
-**Habits:**
+## Translation
 
-- Core tests written alongside, or before, geometry and formula code
-- Every bug gets a failing test before the fix
-- UI kept thin, so what matters can be tested without it
-- End-to-end checks drive `opensloper-cli serve` through the Automation API and its renders; the GUI is checked by hand on a private Xvfb display
-- `opensloper-make.sh test` and `opensloper-make.sh check` before every commit
-- A dependency bump (a submodule moved to a new commit) is its own commit, and `opensloper-make.sh test` passes before it is made
-- `opensloper-make.sh pr-check` before a pull request: format, check, test and build in turn, stopping at the first that fails (issue #40)
-- Once the web build exists, `opensloper-make.sh test` also compiles the core for `wasm32-wasip1` and runs the regression patterns through the Wasm module, so the browser engine gives the same results as the desktop
+Not started; planned for the community release. Already in place: user text is in `resourcestring` sections (`opensloper-make.sh check` reports message text that is not), strings are UTF-8, and names in formulas and files are stable keys apart from what is shown.
 
-### Documentation
-
-User documentation is Markdown in `docs/`, built into a static site with Zensical, published with GitHub Pages and to be shipped offline with the apps.
-
-**Tool.** Zensical, the successor to Material for MkDocs from the same team (MIT), configured in `zensical.toml` and built by `opensloper-make.sh docs` into `release/site_docs` in strict mode, so broken links fail; it is installed in a local `venv` from `requirements.txt`. Pages use only common extensions (admonitions, tables, code, keys), so moving to another generator means rewriting the navigation, not the pages. It runs at build time only and is not shipped with the apps. The manuals are CC BY-SA 4.0 (`docs/LICENSE`); code stays GPLv3 or later.
-
-**Structure.** One site for all the tools, since they share concepts: Getting started, Tutorials, Measure, Design, Publish and Reference. Pages are written by task ("Add a size"), not by menu.
-
-**Generated where it can be,** so the code is the single source of truth:
-
-- `opensloper-cli doc TOPIC` (`Sloper.Docs.Reference`, `Sloper.Docs.Schema` in `src/docs/`) writes the reference pages from the tables the code itself uses: `functions` (formula functions, operators and unit suffixes), `operations` (`Sloper.Core.OperationInfo`), `files` and the three JSON Schemas (`Sloper.Core.FileInfo`, see File format and storage), `shortcuts` (`Sloper.Core.Shortcuts`, which the apps take their keys from), `icons` (`IconCommands` in `Sloper.Core.IconSet`), `cli` (`Sloper.CLI.Arguments`, which also builds the parser) and `api` (`Sloper.API.Methods`, which also gives the MCP tool list). A topic ending in `.schema.json` is written to `docs/reference/schemas/`; `doc` with no topic lists them.
-- Tests hold each table to the code: every member a saved object or file has is listed and every listed one written, formula kinds match `FieldUnitKind`, every API method listed is answered and every parameter read, every CLI option is in the parser, and no app gives one key press to two commands.
-- Generated pages and schemas are committed, so the site builds without a Pascal toolchain, and a test fails while one differs from what the program writes. They carry a note saying so and are never edited by hand.
-- Tutorial patterns live in `docs/examples/` with their measurements, so readers can download them; their pictures are drawn by `export-draft --labels --upto=NAME` from the list in `docs/tutorials/images.list`, so one finished pattern gives a picture for every step. Finished example patterns that are not tutorials live there too, with their shared measurements in `docs/examples/measurements/`, and the Example patterns page links to them. Tests check that every pattern there opens with no problems and every object the list stops at exists.
-- `.github/workflows/docs.yml` checks the files against the schemas and publishes the site on pushes to `development` that touch the docs.
-
-**Folders:** `docs/` is the user documentation; `documents/` is internal development notes, including this document.
-
-**Developer documentation** (issue #47, built 2026-11-19) of the code is made by PasDoc from the comments before each unit and declaration: `opensloper-make.sh devdocs` writes HTML into `release/dev_docs`, from our own units under `src/` (not the submodules), with the platform's `{$IFDEF}` branches, each unit's uses list, and `documents/pasdoc-introduction.txt` (the layers and conventions) as its first page. The comments are written for readers of the source, in the plain `//` style the coding standards ask for, and PasDoc takes them as they are; no PasDoc tags are added to the code. A formula such as `@waist` in a comment reads to PasDoc as an unknown tag, a warning that leaves the text as written. PasDoc is built from source (github.com/pasdoc/pasdoc, `make build-fpc-release`) and found on PATH or through `PASDOC` in `build.local.sh`. The pages are neither published nor shipped in the packages: the plan is to move the user guide to docs.opensloper.com on the project's own server, and then put the developer documentation where GitHub Pages has the user guide now.
-
-### Translation
-
-Planned for the community release; nothing is translated yet. Already in place: user-visible text is in `resourcestring` sections (`opensloper-make.sh check` reports message text that is not), strings are UTF-8 throughout, and names in formulas and files are stable keys and IDs, kept apart from what is shown.
-
-Decision: the standard Free Pascal and Lazarus route, gettext `.po` files, so translators can use common tools (Poedit, Weblate, Crowdin).
-
-- **Program text.** Each project writes its template to a shared `data/languages/` (`opensloper-design.pot` and so on), with translations beside it. The GUI apps use `LCLTranslator` and `SetDefaultLang`, which also translates `.lfm` captions; the language comes from a `language` preference, then `--lang`, then the system locale. The core and CLI use LazUtils' `TranslateResourceStrings`, which needs no LCL, so the layering rule holds.
-- **The measurement catalogue's** names, descriptions and how-tos are extracted into their own `.pot`, with the key as context, so translators have one workflow; a translated copy of the JSON per language would fall behind unnoticed.
-- **Never translated:** formulas (keys, names, functions and the `.` decimal point, since a decimal comma would clash with argument commas and a pattern must mean the same everywhere; Valentina translates its formula vocabulary, which ties its files to translation tables); saved files; Automation API method and field names and error codes (messages may be translated, so scripts check codes); CLI output meant for scripts.
-- **Exported text** such as title block and piece labels follows a language chosen in the output profile, falling back to the app's, since a pattern is often printed for someone who reads another language.
-
-**Rules for code now**, so translation later needs no rewriting: build messages with `Format` and placeholders, never by joining pieces; one resourcestring per sentence, plurals included; leave room for longer text (German runs about 30% longer) with anchored or autosized controls; keep units, numbers and dates out of the resourcestring.
-
-## Measurements app
-
-Measurement files are edited in their own application, `opensloper-measurements`, as SeamlyMe does for Seamly2D. Information flows one way through the three apps, each owning one kind of file and only reading the ones before it: measurements → patterns → layouts.
-
-**Why a separate app.** One measurement file drives many patterns, and recording someone's measurements is a different job from drafting, sometimes by a different person: it needs a form, not a canvas. It is also the home for importing Valentina and Seamly2D files, size tables, and later the client library.
-
-**One format, one or several sizes.** A file is one person's set, with a `value` per measurement, or a size table, with `sizes` and a `values` list per measurement (`null` for a size with no value). Patterns do not change: they read `@waist` either way, and everything reads the value of the selected size, the first until another is chosen. Wherever a file is chosen a size is chosen with it; a size with no value for a key the pattern uses is one error ("@waist has no value for size 42"). A table always keeps at least one size; the first size added to a personal set takes over its values. Pattern-specific ease stays in the pattern's `#` variables, never in the measurement file.
-
-**One unit is the central control.** All reading, writing and editing of measurement files goes through `Sloper.Core.Measurements`, used by all three apps and the CLI, so key rules, units and formatting are the same everywhere. A long-running service the apps connect to was considered and rejected: it would add process management, sockets and crash handling for a problem that a careful write and a merge by key already solve.
-
-**No measurement set needed to draft.** A pattern can be drafted with plain numbers and `#` variables; only formulas that use an `@` key show the missing-key error, and adding a key from that error first offers to make a measurement file.
-
-**Small edits from the drafting app.** The Measurements tab allows adding a missing or new key and changing a value or description. The edits are held until Save, which writes them in one write. Everything else (sizes, order, imports) is done in the measurements app, which File → Measurements → Edit in Measurements App… opens at the file. These edits are not part of the pattern's undo, since the file belongs to every pattern that uses it, so the status bar names what was saved.
-
-**Writing safely.**
-
-- Patterns, layouts, measurement files and the settings are always written atomically (a temporary file beside the file, then a rename, `WriteTextFileAtomic`), so a failed or interrupted save leaves the old file whole, and an app reading a file another app is saving sees the old file or the new one, never half of it.
-- Every save of small edits re-reads the file just before writing, applies its changes and writes atomically (a temporary file, then rename), so a change made elsewhere is never overwritten; `ChangeMeasurementsInFile` makes every change or none.
-- Every app with a measurement file open watches it. A file seen changing must read the same on two checks before it is taken in, and one that does not parse is left alone. With no unsaved edits the app reloads. The measurements app, with unsaved edits, merges by key against the file as last read: a key changed on one side takes that side, and one changed on both asks which to keep. Saving over a file that changed since it was read is refused until the change has been taken in.
-- `TMeasurementDocument` keeps its own undo history of the file's text (`TTextHistory`, shared with the publish app); a change read from disk clears it, since an older step would bring back what the file has just replaced.
-
-**From the CLI and the Automation API:** `measurements set`, `list` and `missing`, and the `get_measurements`, `set_measurement` and `missing_measurements` methods, so a script or Claude can add a missing measurement. `set` keeps a key's description unless given one, and a size table needs a size; `missing` exits with 1 when something is missing, as `check` does.
-
-### Measurement editor
-
-Measurements are entered against a built-in catalogue of standard body measurements, with a body figure that shows where each is taken. This is the editing side of the measurements app; the user pages (Measure) describe it as used.
-
-#### Measurement catalogue
-
-`data/measurement-catalogue.json`, read by `Sloper.Core.Catalogue`; without it the table still works. It lists 72 measurements so far, the ones most drafting needs, from Seamly2D's 246; more are added as entries, with no code change. It also holds the figure outlines, so one file describes everything the panel draws.
-
-- Keys are whole words with no abbreviations: `waist_circumference`, not `waist_circ`. Custom keys remain allowed for anything not listed, and nothing renames keys already in use (`waist` and `back_length` stay custom).
-- Definitions follow ISO 8559-1:2017 in meaning; the descriptions are our own wording, since the standard's text cannot be copied.
-- Each entry has `key`, `name`, `group`, `description`, `howTo`, `view` (front, back or side), `overlay` (its line on the figure) and a typical `range` in mm. A value outside the range is a warning, never a refusal, so unusual bodies are not blocked.
-- `translations` lists the entry's names in other programs' files by format (`{ "seamly2d": ["waist_circ"] }`), the first being the one exported, so the catalogue is also the translation table for import and export. `knownNames` lists a format's names with no entry yet, so they go back out unchanged rather than as custom measurements.
-
-#### Importing and exporting other formats
-
-`Sloper.Core.SeamlyFormat` reads and writes Seamly2D's `.smis` and `.smms` and Valentina's `.vit` and `.vst` (the same files with the root renamed; Valentina's names match Seamly2D's for everything in the catalogue). Older versions than individual 0.3.0 and multi-size 0.4.0 are refused with the reason, and exports are checked against their schemas. Other programs' files would use the same translation, each as one more format in `translations`.
-
-- **Nothing is altered silently.** A name is translated to our key, or kept as a custom key (dropping Seamly2D's leading `@`, our own prefix), or corrected or numbered when it breaks our rules or is taken; the app then lists what was renamed, kept and changed.
-- Values written as formulas are worked out and stored, with a note, since our files hold values; anything else, such as a function, is left at 0 and listed. So is a value that is, or works out, past a double's range (in the file's unit or in mm): the import runs with floating point exceptions masked and keeps only finite values, so NaN or infinity never reaches a measurement file. Formulas nested deeper than our own may be (`MAX_FORMULA_DEPTH`) are left at 0 too.
-- A multi-size file gives a base value with an increase per 2 cm of size and 6 cm of height, while a size table has one dimension: importing makes a column for each size within three steps of the base, at the base height, and reports the heights left out. A base size with no size from 22 to 72 within three steps, or a base height outside 0 to 10 m, is refused. Exporting needs even sizes from 22 to 72, takes the middle as the base, fits a straight line through the first and last values and reports any value more than 0.5 mm off it.
-
-#### Body figure
-
-Front, back and side outlines drawn by us (no third-party images, so no licence questions), with BGRABitmap. The file's measurements are drawn faintly and the current one highlighted; clicking a line selects its row. One base figure per view, with each measurement's line from the catalogue `overlay`, so a new measurement is a catalogue entry, not a new picture.
-
-#### Editing
-
-Measurements are added from the catalogue by group, with search, leaving out those already in the file, so a file holds only what its person needs; an added one takes the catalogue's description and starts at 0 (which the range warning points out) or, in a size table, empty. Values are entered in the display unit and stored in mm. Given a pattern, the app lists what the pattern uses that the file cannot give it (missing keys, and sizes with no value), with one button to add or go to each; the list follows edits and the saved pattern.
-
-## Design app
-
-### Evaluator
-
-The evaluator (`Sloper.Core.Evaluator`) turns definitions into coordinates in dependency order, and records why anything fails instead of crashing.
-
-**Graph.** Measurements, variables and every draft object are nodes, keyed by ID as text (`12`) and measurements by `@key`. A node depends on its direct inputs (an offset's base point) and on every reference in its formulas. The nodes are sorted topologically (Kahn's algorithm) and evaluated in order, so inputs are always current when reached. Patterns are small, so `Evaluate` rebuilds the graph and recomputes everything on every change; dirty tracking waits until dragging needs it.
-
-**Cycles.** `TPattern.SetFormula` refuses an edit that would make a node depend on itself, naming both nodes, so the graph stays acyclic. A loaded file can still hold a cycle: the nodes on it become errors and their readers are blocked.
-
-| State | Meaning | Example | Display |
-| --- | --- | --- | --- |
-| Valid | Computed fine |  | Normal |
-| Error | Formula problem | Unknown name, divide by zero, a measurement the set lacks | Red, message on hover |
-| Invalid | Geometry impossible | Parallel lines, distance past the end of a curve, a number too large to work with | Red, message on hover |
-| Blocked | An input failed | Depends on an invalid point | Faded orange, "blocked by point C" |
-
-Each node keeps its last good value, drawn ghosted while it fails, so the drawing has no sudden holes. A key missing from the measurement set is one error on its `@` node, and everything reading it is blocked. A reference to an ID that no longer exists is an error on the reader. A math error raised while a node computes, such as a coordinate of `1e308` cm overflowing as it becomes mm, makes that node invalid; the evaluator catches it around each node, so it never ends the evaluation.
-
-**Editing API.** `TPattern` (`Add…`, `SetFormula`, `Rename`, `Delete`) reports refusals in `LastError`, `LastErrorField` and `LastErrorPos`; `Delete` is refused while other nodes use the object. Undo wraps these calls (see Key design decisions). `TPattern` stays the one entry point, but operations that only rework objects already there live in their own units behind its methods: changing type in `Sloper.Core.TypeChange` and merging and breaking points in `Sloper.Core.PointMerge`, which work through a small public editing kernel at the end of the class (`SetError`, `ForgetGraph`, `DeleteNode`, `OrderObjectsByInputs`, `ReplacePoint`, `ReplaceEdge`, `CheckPoint`, `CheckEdgeTarget`); the materials are a `TPatternMaterials` the pattern owns (`Sloper.Core.PatternMaterials`). Operations that make new objects (transforms, offset runs, round corners, notes) stay in `TPattern`, since moving them would open its object-creation internals. Callers go through `TPattern`'s methods, not the units, so they need only `Sloper.Core.Pattern` (decided 2026-11-09).
-
-**Edges as segments.** Every edge keeps its computed geometry as straight or cubic segments, so length, positions along it, splitting and crossings work the same for every kind of edge. For crossings an extended edge adds a ray off each end along its tangent, so an extended line is its infinite line. A curve meets a line by solving the cubic; a circle by splitting the curve where its distance from the centre turns, so each stretch crosses at most once and a turn on the circle is a touch; another curve by halving both while they are near enough to meet, down to 0.0001 mm, so crossings closer than any flattening and touches are found. Two curves that share a stretch have no crossing point.
-
-**Dragging.** A field that is a plain number changes when dragged; a formula field is locked (see Drafting experience).
-
-### Names and IDs
-
-References are stored as IDs and shown as names, so renaming an object changes one field and never breaks a formula.
-
-**Formulas.** The user types names (`Line_A_B.length + @waist/4 + #ease`) with completion. On commit each name is resolved and the ID form is stored (`{12}.length + @waist/4 + {3}`): objects as `{id}.property`, variables as `{id}`, measurements by their key. Unknown names are refused as typed. Fields, tooltips and messages show the current names.
-
-**IDs.** Positive integers from one counter per pattern file, shared by every kind of object: variables, points, edges, pieces, materials and annotations. The kind is in the object's `type`, so the ID has no prefix.
-
-- The counter is saved as `nextId` and only goes up, so an ID that has been saved is never reused: not after deleting, undoing, saving or reopening. This matters beyond the file: layouts refer to pieces by ID, and a reused ID would quietly put a different piece in an old one's place. IDs in files are whole numbers from 1 to `JSON_MAX_ID` (MaxInt − 1), read only as 32-bit integers so a larger one is refused rather than cut down to another object's; the one exception to the rule is a file made to sit at that limit, where a new object takes the lowest free ID so the saved file still opens (2026-11-14).
-- IDs are unique within one file. Pasted and imported objects get fresh IDs, with references inside the pasted group remapped.
-- UUIDs were rejected: they are only needed across files, and would make every stored formula long and hard to read.
-
-Measurements are the exception: patterns refer to them by key, so any measurement file with the same keys works.
-
-**Name rules:**
-
-- Letters, digits and underscore, not starting with a digit; dashes and dots clash with formula syntax (`A-2`, `A.x`)
-- Function names and keywords are reserved
-- Case is kept for display but compared case-insensitively
-- Unique within each namespace: draft objects (points, edges, pieces and notes share one), `#` variables, `@` measurements, materials
-- Automatic names count like spreadsheet columns: `A` to `Z`, `AA` … `ZZ`, `AAA`, taking the next free name and skipping reserved words (`ABS`, `COS`). They never contain digits, so a trailing number always means a copy
-- An edge is named after its ends (`Line_A_B`) unless the user names it
-
-**Renaming** is checked as typed, cannot be confirmed with a taken or invalid name, and is one undo step. Undo and redo never fail or prompt, since they restore states that were already valid.
-
-**Clashes from paste or import** are resolved automatically and reported: the next free number is appended with no separator (`A` → `A2`), and a trailing number is taken as the copy number, so a copy of `A2` becomes `A3`, not `A22`.
-
-### Formula engine
-
-Decision: a small recursive-descent parser of our own (`Sloper.Core.Formula`, on the tokenizer `Sloper.Core.FormulaLexer`). TFPExpressionParser was tried first, but on FPC 3.2.2 its error positions refer to translated text, it lets comparisons, `if()`, `mod` and strings through, and it reports errors as exceptions; our syntax is small enough that our own parser is less code than wrapping it.
-
-**Syntax.** Numbers with `.` as the decimal point and an optional unit (`2in`), `+ - * /`, `^` (right-associative and tighter than unary minus, so `-2^2 = -4`), brackets, the functions listed on the generated Formula functions page, and references: `@measurement`, `#variable`, `Object.property` and `Repeat[index].property`. Angles are in degrees.
-
-**Pipeline.** The tokenizer reads either the display form the user types or the stored ID form, and reports errors with their position. `TFormula` resolves names, collects references for the dependency graph and refuses unknown names and properties. The expression tree is built once and walked on each evaluation. The stored form keeps the user's spacing and number spelling; only references change.
-
-**Failures are states.** A parse error gives a message and a position in the text as typed. Evaluation errors (division by zero, square root of a negative, `asin` out of range, a missing value) set `ErrorMessage` and `ErrorPos`. FPU exceptions are masked during evaluation, and infinite or NaN results become errors. A formula that fails to parse keeps its text, so a file round-trips unchanged.
-
-**Depth is limited.** A formula nests at most 256 levels (`MAX_FORMULA_DEPTH`): brackets, signs, function calls and each operator in a chain such as `1+1+…` count. The parser, evaluation and freeing all recurse, so without the limit a crafted file or API call overflowed the stack and crashed the program (found in the security review of 2026-11-08). For the same reason, graph walks over dependencies (`TEvaluator.Reaches`) use a list of pending nodes rather than recursion, since a file can make a chain as long as it likes. Nodes left over after sorting are told apart in one pass (`TEvaluator.MarkCycles`, Tarjan's algorithm with its own stacks): those in a cycle are errors, those that only read one are blocked. Walking the cycle once per node took minutes for a crafted file with a cycle of 20,000 objects.
-
-### Pattern units
-
-Decided 2026-11-04, built 2026-11-07.
-
-**A pattern has one unit, mm, cm or inches, and every number in its formulas is in that unit.** In an inch pattern `@waist/4 + 1` adds one inch. The unit is the file's `units`, chosen when the pattern is made from the unit in Preferences; changing the preference never changes an existing pattern.
-
-**Formulas are worked out in the pattern unit.** Every length a formula reads arrives in it: measurements (files store mm and are converted as read), variables, and properties such as `.x` and `.length`. A plain number therefore needs no label: in `(@waist * 2) + 400` the whole sum is in one unit, whether a number was meant as a count or a length. Angles are degrees everywhere and never converted. Where a result becomes geometry (a free point's `x`, an allowance, a radius) it is scaled to mm, so **geometry, computed state, the canvas and every export stay in mm**. In code, the context's `LengthScale` divides lengths as they are read, and length fields are read with `EvalLength`, which multiplies by it.
-
-**What the user sees.** The properties, status bar, rulers, grid, snapping read-outs and drag rounding (0.1 mm, 0.1 cm or 0.01 in) use the pattern unit, and new objects start at round values per unit (`STARTING_LENGTHS`). Everything that writes a computed length into a formula writes it in the pattern unit. In the Automation API, formulas and variable values are in the pattern unit, while reported positions and lengths stay mm. The Measurements tab stays in mm, since it edits the measurement file, not the pattern.
-
-**Unit suffixes.** A number may carry a unit, `400mm`, `1.5cm` or `2in`, and is converted to the pattern unit when evaluated. Names cannot start with a digit, so `2in` cannot be read as a name. A suffixed number keeps its meaning in any pattern and is never rewritten by a conversion; a drag of a suffixed length keeps its unit. **A unit where none belongs is refused** (issue #33, built 2026-11-17, `Sloper.Core.UnitCheck`): a suffixed number is a length, so an angle or plain-number field (a ratio, a count) whose formula works out to a length because of one, such as `45mm` or `@waist/4 + 1in`, is refused as typed, at the number, and so are a suffixed length inside `sin`, `cos`, `tan`, `asin`, `acos` or beside a plain number in `atan2`, and one added to a plain number (`Line.angle + 1cm`), in any field. Lengths that cancel, `Line.length / 10cm`, are taken. A formula's power of length is worked out from what is certain: suffixed numbers, measurements and length properties are 1, other properties and those functions' results 0, and a plain number beside `*` or `/` is a factor; a plain number added to something, and a variable, could be either, so they settle nothing. Only formulas with a suffix are judged, so a pattern that never wrote one is not refused for what it already does, and length fields are left to the user. `TPattern.SetFormula` and `ParseFields` (new objects, from the tools and the API) check; loading a file does not, so a pattern written before still opens.
-
-**Converting a pattern** (Tools → Convert Pattern Units…, `Sloper.Core.UnitConvert`). Only lengths are rewritten (`400` mm → `15.75` in); counts, ratios and angles are not, so each plain number's role must be known. A role is a power of length (0 a number or angle, 1 a length, 2 an area). The field fixes the result's power (`FieldUnitKind`), and the expression tree gives linear equations between the unknown powers of numbers and variables, solved by Gauss–Jordan elimination: operands of `+` and `-` share a power, `*` and `/` add and subtract them, `sqrt` halves one. A variable used both as a length and a count leaves its numbers open. Numbers still open (`400 * 2` in a length field) are listed, marked in their formula, for the user to choose before Convert is enabled; each choice is worked through again. The conversion is one undo step, rounds lengths to the new unit's drag precision, converts material allowances, and leaves formulas with errors alone. Geometry does not move, apart from that rounding.
-
-### Operation set
-
-Nine point operations and the edge types cover bodice, skirt and trouser blocks; circles, arcs, rounded corners and offset edges were added for accessories (see Accessories). Many of Valentina's ~30 tools become special cases once formulas can read properties such as `{4}.angle`. Every operation with its members and readable properties is on the generated Operations and objects page, from `Sloper.Core.OperationInfo`, which tests hold to the code.
-
-**Conventions:**
-
-- Geometry in mm, formula numbers in the pattern's unit (see Pattern units).
-- x right and y down, as on screen and in Valentina and Seamly2D, so 10 cm down is `dy = 100`. Angles in degrees, 0° pointing right, positive anticlockwise as seen on screen, so 90° points up. Everything that turns or tells left from right means it as seen on screen. The canvas and SVG take model coordinates as they are; PDF and DXF, which are y up, flip on export. Changed from y up on 2026-11-05, before any file was released.
-- Points read `.x`, `.y`; every edge `.length`, `.angle1` (start handle) and `.angle2` (end handle, pointing back along the edge); straight edges also `.angle`.
-- Curve handles are formulas, so curves stay parametric (`length1 = @neck/6`). A curve path shares one tangent per node, which keeps its joins smooth.
-- **Drawing a curve path.** The Curve tool chains separate curves, as the tutorials use; Shift+click instead carries the curve it just drew on through the point (`TPattern.ExtendCurve`, in `Sloper.Core.TypeChange`), one undo step per click. The edge keeps its ID, name and role and becomes a curve path; its handles stay, the old end's angle turns to point from the node before it towards the new point (a Catmull-Rom tangent), and the new stretch's handles are a third of its chord. Refused while anything uses the edge, as its end moves. Chosen 2026-11-09 over a separate tool or a Join command, so the Curve tool's plain clicks stay as they were.
-
-**Crossings.** `extend` lets an edge run on past its ends along its end tangent, so long construction lines are not needed just to find a crossing. `pick` is a stored crossing number, counted from 1 along the first edge, so the result stays the same crossing when measurements change. Project onto edge takes the result nearest the point, and a perpendicular onto a curve counts only where it meets the curve square.
-
-**Split edge** makes two parametric parts that follow the source edge and the point, for dart rotation and slash-and-spread. The source stays as construction, and pieces and seams that used it take the parts.
-
-**Repeat.** N evenly spaced points between two points or along an edge (equal arc length), for buttons, pleats, tucks, notch rows and belt loops. `count` is a formula (`round({12}.length / 80)`), so the number of points can change with measurements, and evaluating must never hand out IDs. So the points are virtual: only the repeat is stored, and its points are named `Btn[1]` … `Btn[6]` (brackets cannot appear in other names, so these never clash). A point gets an ID the first time something uses it, recorded against its index in the repeat's `points[]` in the same undo step; references are then ordinary IDs, and the ID stays with the index when the count changes. When the count drops, references to missing indices become errors rather than moving to another point; when it rises again, the same point comes back. Until used, a point's key is the repeat's ID and index (`12[3]`); `TPattern.UsePoint` turns it into an ID, and `CheckPoint` keeps such keys out of files. The repeat is edited through its first point; deleting it deletes the repeat, refused while anything uses one of its points. Tools → Points → Repeat Points (`AddRepeatAtSelection`) makes one between two selected points or along one selected edge, with a count of 3 and ends included, and selects its first point.
-
-### Transforms
-
-A transform is one operation that makes parametric copies of a set of points and edges, so rotated, mirrored or moved copies follow measurement changes. Uses: dart rotation, slash and spread, mirroring a half, and moving a section aside to develop it (facings, yokes, pockets). Rotate turns about a pivot by a formula angle (a dart angle is `{5}.angle - {6}.angle`); Mirror reflects in a straight edge, two points, or a point and an angle; Move shifts, and can turn about a pivot in the same step.
-
-**Copies are real objects.** Each has its own ID and a name made once from its source's and the suffix (`A_r1`), and records its source and transform. Its geometry is always computed, so it cannot be dragged, but it can be an input to any operation. A copied edge starts with its source's role, which can be changed. Selecting an edge pulls in its ends, and copied edges join copied points. Since every edge is segments, a copy transforms the segments, exactly, with no case per kind of edge. Pieces are not copied: clicking inside a copied outline makes a new piece.
-
-**In the graph** the transform works out one movement (a `TAffine2`) from its pivot or axis and formulas, and each copy depends on the transform and its own source, so a failing source blocks only its copy.
-
-**Behaviour.** Making a transform and its copies is one undo step. Deleting a source is refused while a copy uses it; deleting a transform takes its copies, unless something else uses them (a piece that only marks a copy lets it go), and a copy cannot be deleted alone. A mirror by two points refuses a second axis that is not a point, or the same point twice. In the app, Tools → Transform has Rotate Copy, Mirror Copy and Move Copy, named so each says it leaves the sources where they are; the transform is selected, ready for its formula, and the canvas brings the sources and copies into view, zooming out only when they do not fit (`TViewTransform.Show`). Rotate starts with no turn. Move starts with `dx` the sources' width and a 20 mm gap, rounded up to 10 mm, 1 cm or 1 in (`MoveAsideText` in `Sloper.Core.Bounds`), so the copies sit just right of the sources and show at once rather than over them (2026-11-18, issue #49); the API's `add_transform` still takes the movement it is given. Rotate and move keep lengths, a free check that seams are unchanged. Cut on fold is a piece property applied at output; Mirror is for geometry the draft itself needs.
-
-**Example: shoulder dart to side seam.** Draw a slash from the bust point to the side seam and split the side seam there; rotate the outline between the dart and the slash about the bust point by the dart angle, so the shoulder dart closes and a side dart opens; make the rotated originals construction; click inside the new outline.
-
-**Example: separating front and back**, as Seamly2D users work but staying parametric. Draft front and back overlapping; Move Copy the back's outline aside; make the back-only originals construction, keeping shared edges such as the side seam as outlines; click inside each outline. The front comes from the originals and the back from the copies, so a measurement change moves both, the side seams match exactly, and the back is reshaped by editing the overlapped draft, which stays the master. This is interim; a better front/back method can replace it without changing the file format.
-
-**Code.** `Sloper.Core.Transform` (`TTransformObject`, `TPointCopy`, `TEdgeCopy`); `TPattern.AddTransform` expands the sources and makes the copies. A file lists a transform before its copies.
-
-### One canvas
-
-A pattern is one drafting area: every object is on the same canvas, drawn in pattern order with pieces under edges and edges under points.
-
-**Drafts and layers were taken out** (2026-11-03), with the draft tabs, the Layers panel and the Garment view, to reduce clutter; the Garment view came back on 2026-11-13 as a side panel tab (see Garment view). They added rules (inputs on the same draft, moving between layers, what shows versus what prints) for little use. Locking came back per object (see Locked objects under Drafting experience).
-
-**One garment or product per file.** Garments that share no geometry (a skirt and a top) are separate files, brought together in the publish app. Pieces whose geometry depends on each other (a sleeve cap from the armhole, a collar from the neckline, a gusset from the panel edge it is sewn to) stay in one file. References between files would need a dependency graph across files and IDs unique beyond one file, so they are not planned.
-
-**Overlapping pieces.** Front and back are drafted overlapping, as on paper, and separated with Move Copy (see Transforms). Layers or a tab per piece were rejected (2026-11-05): front and back share points and lines, which would have to belong to one layer, and a tab per piece means deciding the pieces before drawing, against making a piece by clicking inside an outline. Isolating, hiding and stacking pieces cover what layers were wanted for, as view state (see View options for overlapping pieces under Drafting experience).
-
-**View state is kept out of undo.** Zoom, centre, hidden roles and hidden annotations are saved in the pattern's `view`, so it reopens as it was left, but are left out of the undo snapshots and the modified flag. The ID counter is also kept out of the snapshots, though it is not view state.
-
-**Older files** with drafts and layers still load: `drafts` and each object's `layer` are passed over, the old `view` is ignored, and the drafts' IDs stay retired.
-
-### Drafting experience
-
-The canvas feels like Inkscape, but every point records how it was placed relative to others. Inkscape itself was rejected as the drawing tool: it stores absolute coordinates, while patterns are designed with distances and formulas. The user pages (The design window, Drawing, Pieces) and the generated Keyboard shortcuts page describe the window as used; this section keeps the decisions.
-
-**Snap-inferred operations.** The user draws freely and the snap target decides the recorded operation: a point level with A at 250 mm becomes an offset from A with `250` ready to change to `@waist/4`; a crossing becomes an intersection; empty space gives a free point. This is construction-based (an explicit dependency graph), not constraint-based like FreeCAD's Sketcher, so no solver is needed. Snapping (`Sloper.UI.Snap`) looks within 8 pixels, in order: an existing point; a crossing of two edges (an edge and its own split parts do not count); a place on an edge, measured from the nearer end; a spot level with or square to a point, the start of the line being drawn first; else a free point. Values round to 0.1 mm, and the status bar says what a click will make.
-
-**Canvas** (`Sloper.UI.Canvas`, with the LCL-free `Sloper.UI.View`, `Sloper.UI.Scene`, `Sloper.UI.CanvasInput` and `Sloper.Core.Drag`):
-- **Edits to the selection** (`Sloper.UI.SelectionEdits`): nudge, delete, copy, cut and paste, and the Tools menu's split, offset, change type, merge, break, round corner, markings and transforms. Each checks that the selection fits, makes one undo step through the document and returns what to select and show (`TSelectionEdit`); the canvas only applies the result, so the rules are tested without the LCL.
-- **Drawing** (`Sloper.UI.PatternPainter`, which draws what the canvas hands it and decides nothing about tools or input). BGRABitmap, on a grid in the pattern's unit at the spacing in Preferences. Outlines are solid ink and construction thin, grey and dashed; errors red, blocked orange, failing objects faded at their last good result.
-- **Selection.** Click selects (points win over edges, and both over pieces), Shift adds. A drag from empty canvas or a piece draws a box and selects everything wholly inside it (`ObjectsInBox`).
-- **Dragging** changes only fields that are plain numbers, rounded to 0.1 mm, 0.1° or 0.0001; a point placed by a formula refuses, with the reason shown until release. Curve handles work the same way: a handle with a formula is drawn hollow and refuses, and the two handles at a path's inner node share one angle, so the join stays smooth. Arrow keys nudge 1 mm (10 with Shift), merged into one step per run.
-- **Deleting** removes the selection, refused with a message while something else uses an object. Only a plain Delete or Backspace deletes: Shift+Delete means Cut elsewhere, so it does nothing here rather than lose what was meant to be kept.
-- **One gesture at a time** (`Sloper.UI.CanvasInput`). A drag holds an open document change until its button is released, so while a press, drag, box or pan is under way the canvas ignores other buttons and the keys that change the tool or the pattern (tool letters, arrows, Delete, the seam keys); Escape still cancels. Only the button that began a gesture ends it, and a second press of that button means its release was lost, so the gesture is cancelled first. Space for panning is let go when focus leaves the canvas, since its key-up goes elsewhere.
-- **Changing an edge's type** (Tools → Edge → Change to Line / Change to Curve) replaces it in place (`ConvertToLine`, `ConvertToCurve`), keeping its ID, role and users. A new curve starts straight with handles a third of the way along. An arc becomes a line between two new points offset from its centre by its own formulas. Refused: a circle, transform copies, split parts and other derived edges, a line whose `.angle` a formula reads, and a line that is a piece's fold or a mirror's axis, or whose part, copy or offset is (`CheckStaysStraight`), since a fold and an axis have to be straight. Split parts and edge copies take their straightness from their source each time they are evaluated, so they follow a change of type.
-- **Merging points** (Tools → Points → Merge Points, `TPattern.MergePoints`) joins two or more points, as Inkscape joins nodes. Points are parametric, so nothing is averaged: one definition is kept and everything that used the others uses it. The name is the first one the user gave, else the lowest made name (`MergedName`). The definition is the named point's unless it reads one of the others. Refused: a line between two of the points that something else uses, a path that would pass through one point twice in a row, two transform copies.
-- **Breaking a point** (`TPattern.BreakPoint`) is the opposite: each edge meeting there gets its own point, placed from the original by an offset of 0, 0, so it follows the point until dragged apart. Pieces join edges by position, so a piece around the point stays closed. Names are numbered as copies (`M` → `M1`, `M2`). Merging again gives the one point back.
-- **Labels** (`LabelKeys`) are hidden by default so the drawing stays clean, and appear when they help. View → Labels chooses Contextual (the default: the hovered object, the selection with its inputs and dependents, and what a tool snaps to or asks for), All (everything named) or None, which also draws smaller points; holding N shows all. Labels never print unless turned on.
-- **Zoom tool** (Z), as Inkscape's: dragging a box zooms to it, a click zooms in a step about the pointer and Shift+click out. The box is the canvas's own gesture, the select tool's box without selecting, so the tool object holds only its hint. The publish preview has the same as View → Zoom Area (Z while the preview has the keyboard, a toggle on the toolbar), since it has no tools; while it is on, presses zoom rather than drag pieces, and Escape turns it off. Added 2026-11-12 (issue #3). The publish preview also has the design canvas's scroll bars, over the pages and the Fit Pages margin (`PagesBounds`), moved by hand only (issue #6).
-- **Rulers** line up pixel for pixel with the canvas, with ticks as close as stays readable (`Sloper.UI.RulerTicks`, tested without the LCL).
-- **Tools** (`Sloper.UI.CanvasTools`). Each drawing tool is an object (`TCanvasToolHandler`) with its own press, move, Escape and key handlers, what it snaps to and labels, what it draws over the pattern through `TPatternPainter` and the state it keeps between clicks (a line's first click, a seam's two sides). It reaches the canvas only through `TCanvasToolHost` (document, view, draw role, select, message, repaint). The canvas keeps pan, zoom, `TCanvasInput`, transform picking and the select tool's gestures (dragging points, handles and callout tips, the selection box, the pick menu), and hands the rest to the tool in use, so a new tool is a new class and a row in `CanvasToolInfo`, the one table of each tool's key, icon and caption that the canvas and the Tools menu share. The canvas works out the tool keys once. Moved from the canvas on 2026-11-09 and checked as the painter was (commit `c2256df`): both builds driven through every tool on a private Xvfb display, 42 screenshots matching pixel for pixel.
-- **Locked objects** (issue #16, done 2026-11-13). Edit → Lock and Unlock, or the Locked box in the properties panel, lock the selected objects as one undo step; the flag is a definition, saved as `locked` on the object and left out when false. A locked object is drawn greyed (its ink without colour, half way to the paper; its piece fill likewise), can still be selected, copied and used as an input, and its formulas still run, so it follows what it reads. It cannot be moved, edited or deleted: drags and nudges refuse (`CanDrag`, `CanDragNote`, `CanDragHandle`); the properties panel makes its rows read-only apart from the Locked box; `TPattern.SetFormula`, `Rename` and `Delete` refuse it with "E is locked; unlock it to change it". Every other path (a piece's cut, notches, markings, splitting one of its edges, merging points it reads, the API) is caught by the document: `BeginChange` records each locked object's definition (`LockedObjectText`: as saved, without `locked` and a repeat's used `points`, which change when others use them) and `EndChange` undoes a change that alters or removes one, setting `ChangeRefused` and the reason. A locked object must therefore be unlocked in its own step before it is changed. Converting the pattern's unit rewrites every formula, so it begins its change with `CheckLocks` off. A repeat's points follow the repeat. A locked piece takes no new markings. A pasted copy starts unlocked. The API has `set_locked`, and `get_object` gives `locked`. The Objects tab shows "OK, locked" in the state column.
-- **Copies.** A copied point is drawn as a small neutral diamond, not a hollow marker (which means locked by a formula) nor red or orange (problems); its edges are known by their diamond ends. Hovering or selecting a copy draws a faint dashed line to its source, from point to point or middle to middle, and lights the source as if hovered; selecting the transform does so for each copied point (`CopyLinks` in `Sloper.UI.Scene`). A refused drag or nudge names the source and transform ("A_r1 follows A (Move Copy 'Back'). Edit A to change it.", `CanDrag`). Tools → Transform → Go to Source, or double-clicking a copy, selects the sources of the selected copies, or what a selected transform copies, and brings them into view (`GoToSource` in `Sloper.UI.SelectionEdits`). Done 2026-11-11.
-
-**Toolbars and icons.** Every command is a `TAction` shared by its menu item and toolbar button, so captions, shortcuts and states stay in step; the measurements and publish apps do the same through `TCommandSet` (`Sloper.UI.Commands`). Menu keys and tool letters come from `Sloper.Core.Shortcuts`, which also writes the shortcuts page. Zoom In is Ctrl++: Qt names the main keyboard's `=`/`+` key `=` in a menu, so Plus is set as the keypad's key, which it shows as `+`, and `SetActionShortCut` adds Ctrl+= and Ctrl+Shift+= (Minus adds the keypad's) as secondary keys, so Ctrl+= still works. A form looks for secondary keys only in action lists it owns, so `TCommandSet`'s list belongs to the form (2026-11-12, issue #3). A command bar runs along the top and the drafting tools down the left, wrapping into a second column when the window is short. The Tools menu lists the drawing tools, then groups the rest in short submenus (Edge, Offset, Points, Markings, Draw As, Transform); a submenu item may have a shorter caption than its action, which keeps the full name for the tooltip. Tooltips appear above the pointer so they do not cover the buttons it moves to (`Sloper.UI.HintPlacement`). Icons are Tabler Icons outline SVGs (MIT) in `data/icons`, drawn by `Sloper.UI.Icons` at the screen's scale in the theme's text colour; without the folder the toolbars show captions. Which file each command shows is `APP_ICON_NAMES` in `Sloper.Core.IconSet`, in the core so the docs can read it (moved from `src/ui` 2026-11-18, issue #46). The same unit's `IconCommands` lists every command with an icon, app by app and by where it shows (toolbar, tools, menus only, properties), for the generated Icons page; it is kept by hand beside the main forms, as they build their menus in LCL code, and a test fails when an icon is in no row. The page puts each icon in as inline SVG drawn in `currentColor`, so it follows the site's light or dark theme. Qt styles draw toolbar and menu dividers too faint on a dark theme, so the toolbar dividers are drawn by the app and menu dividers set by a style sheet rule (`AddToolDivider`, `ShowMenuDividers`).
-
-**Properties panel** (`Sloper.UI.Properties`): the selection's type, name, formulas (shown with names, with readable captions such as "Point 2 handle in"), role and computed values. Enter or leaving a field commits one undo step and Escape puts the text back. A refused formula keeps its text, shows the reason under the field and puts the cursor at the problem. The panel keeps the row layout, the column divider and formula editing; the rows for each kind of object come from **section objects** (common, edge, marker, repeat, piece in `Sloper.UI.PieceProperties`, seam and note), made for the selected object and freed on each rebuild, so no control field can outlive its rows. Each section adds its rows at fixed places (type, name, fields, its own rows, result, end), can claim fields to show in its own rows, and queues a change that adds or removes rows (type, marker, edge allowance, grainline) to run once the control's handler has returned. Text the panel works out from the pattern is in `Sloper.UI.PropertyText`, free of the LCL and tested.
-
-**Formula completion** (`Sloper.UI.FormulaCompleter`, with the LCL-free `Sloper.UI.Completion`): `@` lists measurements, `#` variables, a dot an object's properties, and a bare word everything, matches first; choosing an object goes straight on to its properties. The object being edited, and objects in a variable's formula, are left out, since neither would be accepted.
-
-**Formula suggestions** (issue #26, `Sloper.UI.FormulaSuggest`, with the LCL-free `Sloper.UI.Suggestion`): a field holding a plain number or a formula has a wand button at the right of its value column. Clicking it opens a list of formulas whose value is close to the field's value, such as `@waist/4` for a `dx` of 175. A formula field is matched on what its formula works out to (`TPattern.EvaluateText`), so a formula can be swapped for another that gives the same value, such as `@waist_to_hip` for `@waist/4 + #hip_ease`; its own formula is left out of the list, whatever its spacing, and the grade check shows how each one grows across the sizes beside how it does (since 2026-11-17). It is not formula completion: completion finishes the names the user is typing in the formula box, while suggestions start from the field's current value and offer whole formulas that give it. Built 2026-11-17.
-
-- **Where it shows:** the list is a row under the field that spans both columns, like a refused formula's reason, not a popup. It stays open when the canvas has focus, so the selected point can be dragged while the list keeps updating. The rows below move down to make room.
-- **Which formulas:** a brute-force search over a few shapes, built once when the list opens (`TSuggestionSource`) and matched again as the value changes. Lengths: `@m/k` for every measurement and k of 1, 2, 3, 4, 6, 8, 10, 12 or 16; `@m/k ± c`, where c is a round amount in the pattern's unit (5 to 50 mm, 0.5 to 5 cm, 1/8 to 2 in) or a variable; differences `(@a - @b)/k`, the larger first; `#v/k`; and other edges' lengths, `Edge.length/k`; and, for a free point's x or y, another point's (`B.x`) or halfway between two points (`(B.x + C.x)/2`), the ends of an edge first (since 2026-11-18). Angles: multiples of 45°, and each straight edge's angle, ±90 and +180 (square to it and back along it). Ratios (a point's share along an edge or between points, and where a note hangs along its edge, issue #41): fractions in their lowest terms up to sixteenths. A length below 0 is matched by the same formulas with a minus in front, except a point's position, which keeps its own sign. Objects that read the field's object are left out, as the formula would go round in a circle, so no candidate's value changes while its point is dragged.
-- **Ranking:** closeness first, in steps of a tenth of the tolerance (0.5 mm), then a cost that favours the simple and the likely: each measurement, divisor, amount and difference adds to it; a measurement that runs the way the field does (girths, arcs and widths for `x` and `dx`, heights and lengths for `y` and `dy`, read from the key's words) takes some off and one running the other way adds some; a girth divided by 4 across takes a little more off, and a measurement the pattern already uses takes some off. Then the shorter formula. At most 30 are kept.
-- **Rows:** the formula (display form), its value and how far off it is (`exact`, `+0.4`, `-1.2`), in the order above. A formula too long for its column ends in an ellipsis, and its tooltip gives it in full. At most 6 rows show, with a scroll bar if there are more. Only formulas within the tolerance are listed: 5 mm for lengths, 1° for angles, 0.01 for ratios.
-- **Drag is locked to the field:** while the list is open, dragging the selected point changes only the field whose list is open; every other field keeps its value, so a point whose other field is a formula can still be dragged along this one (`CanDragField`, `DragPointField` in `Sloper.Core.Drag`). The field itself may hold a formula: the drag puts a plain number in its place, in the same undo step, so a point placed by a formula can be moved to find a better one (since 2026-11-18). Once the drag ends the list is worked out again, and the old formula, no longer the field's, can be among the suggestions. The drag is constrained to match: `x` or `dx` moves only across, `y` or `dy` only up and down; an offset's `length` slides along the current angle and its `angle` turns around the base point at the current length; an along-edge value slides along the edge, as now. The canvas draws a faint guide line along the allowed path while dragging. With the list closed, dragging works as before and changes every plain-number field. Nudging with the arrow keys follows the same lock (`NudgeField`): the point is moved by the arrow and put back on the field's path, so only the keys along the field's direction do anything. The lock is for points: a curve's handles still drag both their fields.
-- **While dragging:** the list refreshes from the dragged value when the app is idle, not on every mouse move, and keeps its height. When nothing is close it shows "No formulas within 5 mm" and the nearest one, so the grid does not jump.
-- **Preview:** hovering a row, or reaching it with the keys, draws a dashed ghost of the point where that formula would put it (`FieldPosition`); fields of objects other than points have no ghost.
-- **Grade check** (`Sloper.UI.SuggestionGrade`, built 2026-11-17): with a size table, a row also shows its values at the first and last sizes, taken to be the smallest and largest, on a second line in grey (`S–L: 165–195`), so they take no room from the formula, and its tooltip the value at every size; hovering it ghosts, in dashed magenta, the pieces that use the object (else the edges that do, and the point) as they would be at those two sizes with that formula. A formula that only matches by coincidence at the size shown stands out. It works on copies of the pattern and its measurements, one for each size, made when the list opens and again when the pattern changes outside a drag, so the pattern itself is never touched; a candidate never reads the field's object, so its values at each size are worked out once (`TPattern.EvaluateText`). A size with no value for a measurement shows `-`.
-- **Choosing:** clicking a row, or Enter on it, writes the formula into the field as one undo step and closes the list. The field is now a formula, so with the list closed dragging is refused, as for any formula field; its wand stays, to swap the formula for another, and with the list open again the point can be dragged.
-- **One list at a time:** clicking another field's wand closes the open list and opens that one. Clicking the open list's wand again, Escape, or selecting a different object also closes it. Opening it closes the completion list.
-- **Keyboard:** Alt+Down on a field opens its list; Up and Down move; Enter takes the row; Escape closes.
-- **No wand** on read-only rows, fields whose formula cannot be worked out, and fields where nothing can be suggested (such as `count`).
-
-**Spacing** (decided 2026-11-10, `Sloper.UI.Spacing`). The three apps lay controls out on one gap, 8 pixels at 96 per inch and scaled to the screen: between neighbouring controls, including a caption and the field under it, and between a control and the edge of its panel or dialog. A container sets it on its children through `ChildSizing` (`SpaceChildren`, or `SpaceBetween` for one already inside another's gap), so two neighbours are never twice the gap apart, and dialogs' OK and Cancel rows take it through `SpaceButtons`. The Lines tab keeps its own, tighter list of checkboxes; toolbars, the canvas, the status bar and the side panel's headers are not laid out on it.
-
-**Side panel tabs** (built 2026-11-10 as an accordion, `Sloper.UI.Accordion`; a column of icons since 2026-11-19, issue #62, `Sloper.UI.SideTabs`). The side panel has a column of tab icons down its left, between the canvas or preview and the open tab, as Blender's side panel has; the open tab fills the rest of the panel's height under a title with its icon and name. With nine tabs, the accordion's headers took a third of the panel's height. Exactly one tab is open, its icon tinted and marked down its edge; pointing at an icon names its tab in a hint. Clicking an icon, or Enter or Space on it, opens its tab; Up and Down move between icons. A click does not take the keyboard from the canvas. Clicking the open tab's icon folds the panel down to the column, giving the canvas the room, and hides the splitter, so a folded panel is not dragged wider; clicking any icon, or anything that opens a tab (the status bar's problems count, a double-clicked note), opens it out again at its old width. Whether it is folded is not saved. Where the icons go is in the LCL-free `Sloper.UI.SideTabsLayout`, where tests check it. The icons are Tabler's, in `Sloper.Core.IconSet`, and the Icons page lists them under Side panel tabs. The publish app's tabs (Patterns, Pieces, Materials, Info, Notes, Output, in the order they are used, so Output sits just above Problems; moved 2026-11-19) use the same control. In both apps a splitter between the panel and the canvas or preview resizes it (the publish app's added 2026-11-19). Both apps end with a Problems tab (issue #61, built 2026-11-19), its icon at the foot of the column, so it is always in the same place; its title carries the count (`SetSectionCaption`) and its icon draws it in a badge (`SetSectionCount`). The tab is `Sloper.UI.ProblemsPanel`, which knows no document: each app gives it the problems' texts, whether each blocks printing (drawn red), and a key for what each is about, in the app's own terms, and is told when one is pointed at, chosen or double-clicked. The rows are a one-column grid wrapped to the panel's width, as grids draw alike on every widgetset. The measurements app has no accordion; its list of what a pattern is missing already plays this part. Each app keeps its open tab in the settings file by key (`sideTab`, `publishTab`, such as `objects`), not by place, so reordering or adding tabs does not open the wrong one; a key the app does not know opens the first tab. The publish app writes only its own key, reading the file again first, as preferences are saved.
-
-**Side panel and editable panels.** Tabs for properties, objects, variables, measurements, lines and materials share `Sloper.UI.ListPanel`: a search box over a list, with the selection held by key. Decided 2026-11-07, built 2026-11-08: a list is read in the grid and, where a value fits a cell, edited there (F2, Enter or typing opens it; Enter or leaving commits; Escape reverts); a refused value keeps its text, the cell red and the reason in the status bar; buttons sit in one row at the bottom with Add first; file commands go in the main menu, not in panels. Materials is the exception, read-only with editing in a dialog, since colour and fill do not fit a cell. An editable list selects cells, not rows, and Delete reaches the tab only when no cell is open. A commit is made by the row's key, after the grid has closed the cell, so a row that moves cannot take the edit; the commits are in the LCL-free `Sloper.UI.PanelEdits`, where tests make them.
-
-- **Variables** are edited in the grid, one undo step per cell; a selected variable is not shown in the properties.
-- **Measurements** edits are held as pending changes, shown bold with `*`, and do not change the pattern until Save, which re-reads the file and writes every change at once (see Measurements app). Choosing another size, opening another set or pattern, closing, or the file changing on disk asks Save or Discard.
-- **Test size** scales every measurement the pattern reads by 1% a step, up to 20% either way (`TPattern.MeasurementScale`). It is session state: not an undo step, never saved, and the set cannot be edited until it is back at 0%, so a scaled value can never reach the file.
-
-**Pieces.** The Piece tool makes a piece with one click inside a closed outline, with the starting allowance, and stays on until Escape; a region that already has a piece selects it. A notch click adds a notch to every piece using that edge, so both sides of a seam match.
-
-**Automatic piece detection** (`Sloper.Core.PieceDetect`). Instead of clicking round an outline in order, the user clicks inside a region:
-
-1. Build a planar graph from outline edges only, split where they cross.
-2. Sort edges round each node by tangent, prune dangling nodes, and walk faces taking the next edge clockwise.
-3. Pick the face containing the click, and set each edge's reversed flag so the path runs clockwise. Nothing is ever drawn or clicked in a particular direction.
-
-Construction lines are left out by their role, and an edge with outline split parts is left out in favour of them. A piece refers to whole edges, so a region bounded by part of an edge is refused, naming the edge to split. Panels often overlap (a skirt's side seams cross above the hip), cutting each panel into faces no whole edge bounds; then a second pass treats edges as whole and finds the smallest simple closed path round the click. A path where one edge ends part way along another is refused, since it is two regions joined at a point.
-
-**Piece details** (`Sloper.Core.Piece`, `Sloper.Core.SeamAllowance`):
-
-- **Grainline**: an angle, drawn through the middle of the extent over 60% of the span, or two points; new pieces start at 90°.
-- **Notches** sit on a point on the seam line or at a position along an edge from its own start, drawn as a 6 mm mark in from the cutting line, square to the edge. A point off the seam line makes the piece invalid.
-- **Cut and fold.** A cut count and a mirrored flag. Being on the fold is one setting, `foldEdge`, so it cannot disagree with another flag; the fold edge is straight, has no allowance and shows a bracket. The draft stays half a piece; opening it out is for output.
-- **Seam allowance.** The piece's width, and an edge's own in a field such as `edge2.allowance` that exists only while it does. Clipper2's offset takes one width per path, so `OffsetOutline` builds the raw offset with a width per segment (mitred convex corners, bevelled past four times the allowance) and Clipper2's union removes the loops.
-- A piece is a node whose inputs are its edges, so they cannot be deleted while it uses them; a gap over 0.01 mm makes it invalid. A piece that takes on a newer point moves to the end of the object list, since files list inputs first.
-
-**View options for overlapping pieces** (planned 2026-11-05, hiding added and built 2026-11-13, #10). View state like zoom, kept out of undo, in the View menu, working on the selected pieces:
-
-- **Hide Piece** takes the piece off the canvas with everything only hidden pieces use (decided 2026-11-13): what the piece is made from, through inputs and formulas (`DependencyKeys`), less what a shown piece, or an object in no piece (a construction line, a note), still uses. A line shared by front and back stays; a construction line drawn from a hidden piece's point keeps that point. Seams keep nothing showing, as they are not drawn, and a note goes with its pieces when all of them are hidden. **Show All Pieces** brings them back, and the status bar says how many are hidden. Hidden pieces still print (decided 2026-11-13): layouts, the publish app, the CLI and the API's `render` include every piece; File → Export Draft follows the screen, as it does for hidden roles.
-- **Isolate Piece** works on one piece alone: everything it does not use, but its notes, is drawn faintly under a wash of paper and cannot be clicked, snapped to, box-selected or labelled (decided 2026-11-13). Choosing it again, or Escape on the Select tool with nothing selected, shows everything. Isolating a hidden piece shows it; hiding the isolated piece ends isolation. Export ignores isolation.
-- **Bring to Front** and **Send to Back** change only the order pieces are drawn in. Clicking inside overlapping pieces still picks the smallest, as before.
-
-The core works these out (`TPattern.IsHidden`, `IsDimmed`, `IsActive`, `PiecesInDrawOrder`) and keeps them until the view, an evaluation or the object count changes; the canvas, snapping and the painter only ask. The Garment tab follows all three (see Garment view).
-
-**Align and distribute** (`Sloper.Core.Arrange`), through the Automation API's `arrange` only. Modelled on Inkscape's Align and Distribute, but each action rewrites the selected points' definitions so the arrangement holds when measurements change: align sets `x` to `{A}.x`; distribute makes inner points Between points at `i/(n+1)` or Along edge points at equal arc length. A point placed by a formula is only replaced on a yes, and nothing formula-driven is overwritten silently. A point's operation changes in place (`ConvertToFree`, `ConvertToBetween`, `ConvertToAlongEdge`), keeping its ID, name, users and marker with its size. The design app has no Align tab (removed 2026-11-16, issue #36, after being hidden since 2026-11-05): in the app, points are lined up and spaced out by their formulas (`{A}.x`, a Between point at a ratio) and by Repeat Points, which say what they mean and follow the measurements, so a separate panel only offered a second way to write the same formulas. Through the API the action is still useful, since Claude can line up many points in one step.
-
-#### Copy and paste
-
-Decided and built 2026-11-07. Edit → Copy, Cut and Paste copy definitions, not positions, so a pasted object stays parametric. Seamly2D has no object copy and paste, so this follows our own rules.
-
-**The main use is a second line on the same points.** A pasted edge joins the same points and is selected, ready to become a stitch or fold line (see Several lines in the same place). It is then independent; a line that must stay on its source is an offset edge instead.
-
-- **In the same pattern** only the selected objects are added; references outside the selection stay on the originals. **In another pattern** the selection comes with the whole chain it depends on, so the fragment stands alone: this is how a collar is taken from one pattern into another. The pattern's `identity`, a random value made with the pattern and kept by Save As, tells the two cases apart; since IDs are never reused, an outside reference whose ID still exists in the same pattern is the same object. In another pattern the same ID means an unrelated object, so a fragment from elsewhere that uses an ID it does not hold, which only an edited clipboard has, is refused.
-- Variables come with formulas that use them; in another pattern a variable with the same name and formula is reused, and a different one is kept as a copy (`ease2`). Measurements are matched by key.
-- Pasted objects take fresh IDs and free names by the clash rules, and the status bar lists renames. The paste is one undo step, and the copies are selected.
-- Only points, repeats and edges are copied; the status bar says what was left out. A transform copy is copied as the plain object it gives. What the chain needs but cannot copy is listed under `needs`, and pasting it into another pattern is refused, naming it.
-- Formulas are in the pattern's unit, so pasting between patterns in different units is refused.
-- When a text field has focus, Cut, Copy and Paste act on its text. Cut is Copy then Delete as one step, refused when Delete would be or when something selected cannot be copied.
-
-The fragment (`opensloperFragment`, version 1) holds `identity`, `units`, `selection`, `variables` (each with its display formula, for matching), `objects` and `needs`; the clipboard also gets the names as plain text, for formula fields. It is read with the pattern file loader through an ID map (`AddPatternItems`). `Sloper.Core.Fragment` builds and pastes without the LCL; `copy_objects` and `paste_objects` do the same in the Automation API.
-
-### Links and problem display
-
-Direction and dependency marks appear only on hover, selection or piece creation, never permanently, to keep the draft free of noise.
-
-| Link | Shown when | Form |
-| --- | --- | --- |
-| Piece direction | Hovering or selecting a piece | Small chevrons at each edge's middle, not arrowheads at the ends |
-| Copy source | Hovering or selecting a transform copy, or selecting its transform | Faint dashed line to the source, which is highlighted |
-| Inputs | Hovering or selecting a point or edge (issue #52, built 2026-11-19) | Faint blue arrow to each point and edge it reads, through its operation or its formulas |
-| Dependents | As inputs, with View → Dependents on (`showDependents` in the settings, off by default) | Faint purple arrow to each point and edge that reads it |
-
-**Dependency arrows** (`DependencyLinks` in `Sloper.UI.Scene`, drawn by `TPatternPainter.DrawDependencyLinks`). They use the evaluator's graph (`Deps`, `Dependents`), so formula references count as operation inputs do. Only points and edges are linked, at a point's place and an edge's middle: pieces have their chevrons and seams and notes their own marks, and variables and measurements have no place. An edge's own end points are left out both ways, as the line already shows them, and so are transform copies, which have their copy link, and objects not active on the canvas. The selection gets arrows only while it holds at most `MAX_LINKED_SELECTION` (10) objects, so a box round everything is not a web of arrows; the hovered object always does. Arrows stop a few pixels short of both ends, with the head at the object read or reading.
-
-**Problems** (`Sloper.Core.PatternCheck`) are listed in plain words and counted in the status bar: failing objects, gaps where a piece no longer closes, seams out of tolerance, markings outside their piece or in none, marked points in no piece, and outline edges in no piece once the pattern has one (issue #51, built 2026-11-19; an edge split into outline parts is left out, as piece detection leaves it out). Each problem carries the key of the object it is about (`PatternProblemList`; `PatternProblems` gives the texts alone). **Problem overlay** (issue #51, built 2026-11-19): the canvas draws a faint red halo under each object with a problem (an edge, a piece's cutting line, a seam's two sides, a point or a repeat's points, a note's box), skipping hidden and dimmed ones, and pointing at one puts its problems in the status bar. The canvas works the list out again after each document change, only when it paints. View → Problems turns it off, saved as `showProblems` in the settings, on by default. The same list is the Problems tab, the Objects tab's Problems filter, `check` in the CLI and the Automation API. In the Problems tab, choosing a problem about an object selects it and brings it into view, keeping the tab open; one about a variable or measurement opens that tab at its row; pointing at one lights its object as hovering would, and double-clicking zooms to it. Clicking the status bar's count opens the tab.
-
-**Objects tab.** Every point, edge, piece and note with its name, operation, formulas, computed value and state, with search (names, operations, formulas and note text, so searching a name finds what reads it) and a filter (points, edges, pieces, notes, problems). Clicking a row selects the object and brings it into view at the current zoom; double-clicking zooms to it. **Stepping through objects** (issue #39, built 2026-11-17): Edit → Select Next and Select Previous, Ctrl+Tab and Ctrl+Shift+Tab (Control on macOS too), select the object after or before the last one selected, in the order and with the filter and search of the Objects tab, going round at the ends (`StepKey` in `Sloper.UI.ObjectList`). They bring it into view, open the Properties tab, and, when a field had the cursor, commit what was typed in it, as leaving it would, and put the cursor in the same field of the next object, or in its first formula, so a run of formulas can be looked through without touching the mouse; a refused entry keeps the object, with the reason under the field. Ctrl+Tab while the completion list is open commits the text as typed rather than taking the completion. Since names and data are read there and formulas complete names, hidden labels never make formulas harder to write.
-
-**Property grid.** The properties lay out each field on one row, name left and value right, like the Castle Game Engine inspector, so the whole selection fits a narrow panel. The splitter between the columns is kept as a share of the width in `settings.json`; a long name is cut with an ellipsis and shown in full as a tooltip; a refused formula's reason shows on a row under its field. A field holding a plain number or a formula has a wand button at the right of its value column, which opens formula suggestions under the field (see Formula suggestions).
-
-### Markings
-
-Decided 2026-11-05, built 2026-11-06. Internal markings (placement, stitch and fold lines, holes, buttons) are drawn like any other line or point and given a role or a marker, and the app attaches them to the right piece itself. Seamly2D and Valentina draw the line in the draft, then add it to a piece's details as an internal path. Markings must belong to a piece so they move with it in layouts and printing, and overlapping pieces (front drafted over back) make that ambiguous; OpenSloper keeps the requirement but resolves it automatically. Stitch holes stay a piece marking along an edge (see Accessories).
-
-#### Edge roles
-
-| Role | What | On paper |
-| --- | --- | --- |
-| Construction | Thin dashed guide | Never |
-| Outline | Piece boundary | The cutting line |
-| Placement | Pockets, trims, button bands | Thin, solid |
-| Stitch | Topstitching or an internal seam | 1 mm dashes (shorter than the seam line's 2 mm) |
-| Fold | Fold or pleat line | Dash-dot |
-| Cut | Slit or internal cut | Solid, at the cutting line's width |
-| Skive | How far a leather edge is thinned | 4 mm dashes |
-| Edge finish | How far edge paint, burnishing or binding runs | Dotted |
-
-Roles are a fixed list in the app, like KiCad's technical layers, never defined per pattern, so output settings can rely on them. On the canvas and in draft SVG each marking role has its own colour (placement blue, stitch green, fold purple, cut teal, skive brown, edge finish grey, keeping clear of red and orange, which mean problems) and dash; on paper they are black (`ROLE_DASHES`). For machines fold is a score line, cut is cut with the outline, and the rest are marks; DXF-AAMA writes them on layer 8. Where lines coincide, a draw priority puts the higher role on top (`ROLE_PRIORITIES`: construction, edge finish, skive, placement, fold, stitch, cut, outline).
-
-Tools → Draw As, and a box on the command bar that always shows it, choose the role of lines drawn next; it starts at Outline each session. Roles and markers are ordinary undoable property changes.
-
-#### Point markers
-
-| Marker | Use | Drawn as | Starting size |
-| --- | --- | --- | --- |
-| Plain | Ordinary point; not printed | | |
-| Hole | Dart points, pocket corners, rivets, snaps, eyelets | A circle, cut as a hole | 4 mm |
-| Button | Button and buttonhole positions | A circle with a cross | 15 mm |
-| Match dot | Matching points between pieces | A small dot | 3 mm |
-
-The marker and its size (`markerSize`, a formula, across in mm) belong to the point, not to its pieces, which replaced the hole marking each piece kept with its own diameter. A repeat takes a marker for all its points, so a row of buttons follows the count. A transform copy keeps its source's marker, as a copied edge keeps its role. A marker outside a piece it is on, or a hole on the fold line, makes the piece invalid. Holes are cut as true circles; buttons and match dots are marks. Older files' `hole` markings are read as Hole markers.
-
-#### Automatic piece assignment
-
-When an edge takes a marking role or a point a marker, it joins every piece it lies inside (an edge counts as inside when more than half of nine points sampled along it are, `LiesInside`; a repeat when more than half its points are). Inside several overlapping pieces it joins them all and the user takes it off the extra ones (changed from asking, 2026-11-05). Inside none, it stays draft-only and is reported ("does not print").
-
-The assignment is stored in the piece's `markings[]`, not recalculated, so markings never jump between pieces silently; one that a measurement change moves outside its piece is reported. Where a line lies is only known once computed, so `TPattern` queues it and `Evaluate` assigns it. A new piece takes every queued line and marked point inside it. Another marking role keeps the assignment; construction, outline or Plain takes it off every piece, and deleting the line or point takes it off in the same step. Tools → Markings → Attach Marking to Piece and Remove Marking change it by hand. Older files' `placement` and `fold` markings are read as lines with that role.
-
-#### Several lines in the same place
-
-Edges are separate objects, so any number can join the same two points, each with its own role (a fold line and a stitch line on one segment); the second is named `Line_A_B2`. They coincide when they run along the same path either way round within 0.01 mm, and each group is drawn 3 px apart on screen only, so it shows there is more than one; geometry and printing are untouched. A click picks points first, then edges nearest first, the highest role on top, then pieces, smallest first. Clicking again at the same spot, or Alt-click, cycles through them, the status bar saying which ("Fold1 (2 of 2 here; click again for the next)"), and a right-click in the Select tool lists everything under the pointer (`ObjectsAt`, `CoincidentEdges`, `NextKey` in `Sloper.UI.Scene`).
-
-**Offset edge.** Topstitching usually runs a fixed distance from an edge, and drawing it point to point would need new points at every corner, so an offset edge makes it directly, following its sources when measurements change. It takes one edge or a run joined end to end within 0.01 mm. Outer corners are mitred, bevelled past four distances as seam allowance is; inner corners are trimmed where the offsets cross; a closed run joins up at its start. Curves are followed within about 0.01 mm. The edge is invalid when a curve bends tighter than the distance or an inner corner would trim away a segment.
-
-- **Inside and outside a piece** are worked out when the edge is made and stored as left or right (inside is on the right going clockwise). The offset reads only its edges, never the piece: a stitch line inside a piece is one of the piece's markings, and reading the piece would be circular.
-- Selected edges are put in order along the run, following the first selected edge's direction (`ChainRun`); a branch or gap is refused. A piece's edges must be one unbroken stretch of its path (`PieceRun`).
-- Tools → Offset → Inside Piece makes a stitch line that joins the piece; Outside Piece, Edge Left and Edge Right make construction edges. All start 10 mm away.
-
-**Fold on the outline.** A fold on the piece's own edge (centre front on the fold) is not a second line but the piece's `foldEdge`.
-
-#### Role visibility
-
-The Lines tab (`Sloper.UI.RolesPanel`) lists Construction and each marking role with a checkbox, a sample and Solo, then Show All, Hide All and presets ("Seams only", "Leather"). Outline is not listed, since pieces are made from it. It changes the view only: hidden lines are still stored, evaluated and printed, and their problems still reported, but they are not drawn, clicked, snapped to or labelled, unless selected (in the Objects tab). The status bar says how many kinds are hidden, so nothing seems to vanish without reason. Which roles are hidden is view state, saved as `hiddenRoles` in the pattern's `view` and kept out of undo; presets are the user's, in `settings.json` as `rolePresets`. Draft export follows the screen. Which markings reach paper is the publish app's choice (see Output profiles).
-
-### Seams
-
-A seam records that edges are sewn together. It is its own object, not a property of an edge: nearly every outline edge is sewn, and a role could not name the partner. The app cannot work seams out for itself (equal lengths do not show that two edges belong together, a sleeve cap is meant to be longer than its armhole, and an edge shared by two pieces need not be sewn), so the user makes seams and the app suggests them.
-
-**The object.** `sideA[]` and `sideB[]` each list `piece` and `edge`, in order along the seam. A side can span pieces (a sleeve cap to a front and a back armhole) and have gaps (a waist either side of a dart). Both sides may use the same piece (dart legs) or the same edge (a centre back on a mirrored piece). Several seams may use one edge: a neckline sews to a collar and a facing.
-
-- **Whole edges only**, as for pieces. Splitting an edge that pieces and seams already use moves them onto the parts in the same undo step (`TPattern.FollowSplit`, 2026-11-07): paths take both parts in order, an edge's own allowance goes to both, a notch past the split moves to the second part without moving on the piece, and a seam takes both parts, so its lengths are unchanged. A piece folded on the edge keeps it.
-- **Direction.** Each edge runs the way its piece's clockwise path runs, so sewn edges normally run opposite ways, and side B is paired from its far end by default; the user never chooses a direction. `reversed` flips this for the cases the default gets wrong, mirrored pieces most likely.
-- **Length check.** Each side's length is the sum of its edges on the seam line. `ease` (default 0) is the length side B should have over side A and `tolerance` (default 1 mm) the allowed error, both formulas, so gathers can follow the pattern (`ease = @waist * 0.5`). A mismatch is a problem, not a state: the seam stays valid, and `check`, the CLI's exit code and the Problems filter report both lengths and the difference.
-- **Unsewn edges are not reported**, since the check cannot tell a hem or opening from a forgotten seam without marking every edge.
-
-A seam is a node whose inputs are its pieces, so it is blocked while one fails, and a piece a seam uses cannot be deleted. Seams are named `Seam`, `Seam2`; they have no place on the canvas, so they are selected from the Objects tab.
-
-**In the app.** The Seam tool (E): a click on a piece's edge adds it to the current side (on a shared edge, the side of the edge clicked picks the piece), Tab moves to side B, Enter makes the seam as one undo step. Each side shows its colour and running length, with the difference in the status bar. A selected seam shows both sides with chevrons for direction, and Flip in the properties. **Suggest Seams** lists likely pairs, none ticked: edges shared by two pieces first, then edges on different pieces within 1 mm of each other's length. Accepting is one undo step.
-
-### Materials
-
-Pieces are coloured by the material they are cut from, so colour carries meaning (main, lining, contrast, interfacing, leather) as well as telling pieces apart. They are called materials, not fabrics, because leather, foam and stiffener go in the same list.
-
-**The list.** Each pattern has materials with an ID, a name (its own namespace), a colour, a fill style (tint or hatching) and an optional default allowance. They are ordinary objects: adding, renaming, recolouring and deleting are undo steps. New ones are named `Material`, `Material2` and take the first unused palette colour. The last material cannot be deleted, nor one that pieces use.
-
-**Size** (decided 2026-11-14, issue #19). A material can have a width and a length, in the pattern's unit like its allowance and converted with it: a width alone is a roll (fabric off the bolt), both a sheet (a board, a remnant), neither (the default) no size and no check. A length without a width is refused, and taking the width away takes the length too. `allowTurns` is for material with no grain (felt, foam, most leather boards), as on a publish material sheet.
-
-- **Fit check.** Each valid piece on a sized material is measured as it lies on the material: the cutting line turned so its grainline runs along the length (as drawn when it has none), and opened out when it is on a fold, as cutting on fabric folded double needs the same width (changed 2026-11-14 from the draft's own axes: a paper pattern is laid on the fabric by its grainline, however it was printed). A piece wider than a roll, or past either side of a sheet, is a problem ("Front is 152 cm across, wider than Main at 140 cm"); with `allowTurns` only if it fits neither way. As for seam lengths, the piece's state does not change: the problem is listed, counted, and reported by `check`, the CLI and the API (`AddMaterialFitProblems` in `Sloper.Core.PatternCheck`, `TPieceObject.GrainShape` and `GrainExtent`, `FitsMaterial`).
-- **One piece at a time.** Whether all the pieces fit together is the publish app's Material needed; the design app checks only what can never be cut.
-- **File and API.** `width`, `length` (left out when 0) and `allowTurns` (left out when false) on each material; `set_material` takes them (a width of 0 takes the length away too) and `list_materials` reports them.
-- **Editing.** The Materials dialog has Width and Length fields under the allowance, with the pattern's unit and empty for none, and an Allow quarter turns box, each one undo step; the list shows the size ("150 × 200 cm", "150 cm roll"). Under them a Fabric list (2026-11-21) sets how the material drapes in Blender (see Fabric hints under the Blender script). The window fits its height to the fields when shown, with room for a two-line refusal under them, and keeps it, as Preferences does; only its width changes, for the list.
-
-**Assignment.** Each piece is on a material and takes its fill from it, with an optional per-piece colour or fill override. A piece with no material is drawn unfilled and reported. A piece takes the material's allowance when it goes on that material, and does not follow later changes, so it can still be set by hand.
-
-**Starting out.** A new pattern has one material, Main, which has no ID and is not written to the file until the list is first changed, so simple files stay simple and existing IDs do not move. The first change gives Main an ID and puts every piece on it; until then a piece's empty material means Main, and afterwards it means none. Captions and DXF text name the material only once the materials are explicit.
-
-**Display.** Fills are semi-transparent and under every line, so seams, notches, labels and overlapping pieces stay readable; only pieces are filled. The palette stays distinguishable for colour-blind users, and the material name is in the piece label, so colour is never the only cue. View → Piece Fills turns fills off on the canvas (a setting, not part of the pattern); the publish window always shows them. Hatching angles go by place in the list (45°, 135°, 0°, 90°…), so hatched materials differ on a black-and-white print, and are computed in screen points, so the spacing holds at any zoom. Printing fills is off by default, to save ink; the publish app offers a tint or hatching per print.
-
-**Cut list.** Grouped by material from each piece's cut settings ("Main: Front ×1 on fold, Back ×2 · Lining: …"), as the `{cutlist}` field for title blocks and notes. A layout with several patterns joins their lists.
-
-**Code.** `Sloper.Core.Materials`, and the pattern's list in `Sloper.Core.PatternMaterials`, with `TPattern` answering `MaterialOf`, `PieceLook`, `PieceCaption` and `CutList`, so the canvas and every export ask the same place. The Materials tab is a read-only list with the cut list (`Sloper.UI.MaterialPanel`); editing is in `Sloper.UI.MaterialDialog`, each field commit one undo step applied at once so the canvas follows, with only Close. The dialog is modal, so it handles undo and redo keys itself, except while a field holds uncommitted typing. The list and swatches are `Sloper.UI.MaterialGrid`, shared by panel and dialog.
-
-### Annotations
-
-Notes, callouts and a title block print with the pattern, fixing a gap found with Seamly2D, where adding text over the final design was difficult.
-
-| Kind | Lives in | Anchored to | Typical use |
-| --- | --- | --- | --- |
-| Note | Pattern | A point, edge position or piece, plus an offset; or free | "Stay-stitch neckline" |
-| Callout | Pattern | Text anywhere, leader tip on a point, edge position or piece | Pointing at a notch, dart or seam |
-| Piece label | Pattern | Its piece | Name, cut count, on fold (part of the piece) |
-| Information block | Layout | A page corner | Pattern, measurements, size, date |
-| Sheet note | Layout | A place on the printed layout | Instructions, notions, assembly order |
-
-**Anchored, so annotations stay parametric.** A note stores its anchor's ID and an offset (`dx`, `dy`, formulas in the pattern unit), not coordinates, so it moves with the geometry; a free note has `x`, `y`. It is a node whose input is its anchor: blocked, and drawn faded at its last good place, while the anchor fails, and deleting an anchor is refused while a note uses it (changed from making the note free automatically: the refusal was already built and loses nothing). Make free turns a note free where it is. Pattern notes can be added at any stage of drafting and are saved in the pattern; information blocks and sheet notes belong to a layout and are edited in the publish app (see Publish app).
-
-**Fields.** Text can hold document fields (`{pattern.name}`, `{measurements.name}`, `{size}`, `{date}`, `{page}`, `{pages}`, `{cutlist}`, `{materials}`), filled in by the substitution code sheet and pattern notes share (`Sloper.Core.TextFields`), and draft values such as `{=Line_A_B.length}`. Each draft value is a formula field of the note (`value1`, `value2`), so a failing value blocks the note, deleting what it reads is refused, and renames show; the file keeps them inline in stored ID form (`"Hem {={12}.length} mm"`). **Piece fields** (issue #50, built 2026-11-19): a pattern note that prints with exactly one piece (`NotePieces`) also fills in `{piece.name}`, `{piece.cut}` ("cut 2 on fold", the cut caption without the name) and `{piece.material}`, so a note makes a custom piece label, with the automatic label left out by the output profile; on no piece or several they stay as typed. In a layout each placed copy fills its own piece and its source's `{size}` before the note is placed (`PlaceShape`), and an opened fold drops "on fold" as the caption does; the layout-wide `{size}` lists each source's size once. This replaced a separate custom label object, as anchored notes already gave placement, fonts and formulas.
-
-**Typing a note's text** (issue #53, built 2026-11-19, rescoped from typing on the canvas). The text is typed in the properties: the Text tool, and a double-click on a note, open the Properties tab with the cursor in it, showing the side panel when it is hidden. As it is typed the canvas draws the note with that text (`TPropertiesPanel.OnNotePreview` → `TPatternCanvas.PreviewNoteText`), its `{=…}` values worked out with the pattern as last evaluated and one that does not work out yet kept as typed (`NotePreviewText`); nothing is committed, so there is no undo step until the box is left, and Escape ends the preview with the text. A text box laid over the canvas was set aside: it would have to follow zoom and scroll, show formulas while editing and values otherwise, and keep completion, for little gain over the side panel.
-
-**Stages** (decided 2026-11-06). Stages 1 to 3 are built; stage 4, SVG stamps, is under Open items.
-
-- **Stage 1, anchored notes.** Plain multi-line text with a size in points at true print size, `print` (false for screen-only drafting notes), the Text tool (X) with the anchor chosen by snapping as for points, dragging the offset when it is a plain number, View → Annotations to show or hide them all (`hideAnnotations` in `view`, out of undo), and one sans-serif font (Helvetica in PDF). Notes draw above everything and are picked first. Text is typed in the properties.
-- **Stage 2, callouts and draft values.** A callout is a note with `leader` (`arrow`, `dot` or `line`), so there is one object and one file type; a free note cannot have one, since the tip is the anchor. The Callout tool (A) takes the tip, then the text's place; dragging the tip re-anchors the callout to whatever it is dropped on (`SetNoteAnchor`). `align` and a white `box` (black on projector output) work the same for pattern notes and sheet notes.
-- **Stage 3, fonts** (built 2026-11-12). A family name (`font`, left out for the default sans-serif), `bold` and `italic`, on pattern notes and sheet notes alike (`TTextStyle`). A name is trimmed, at most 64 characters, and refused when it holds a comma, quote, bracket, `;`, `<`, `>`, `&`, `\` or a control character, which would split a font list or break a file or an SVG attribute. The properties and the publish app's Notes tab pick from the system's fonts or take a typed name. The canvas draws the font; SVG names it before the default families, with `font-weight` and `font-style`.
-  - **Finding a font** (`Sloper.Output.Fonts`): the bundled fonts (`data/fonts`) first, then the system's font folders (`TAppPaths.SystemFontDirs`), listed with FCL's `fpttf` cache and read with its TrueType parser, each folder in name order so the same machine always picks the same file. Files named like the family are read first; the rest only when those lack the exact style, so a missing font reads every file once (about 0.3 s for 2,600 fonts on a Linux desktop). The nearest face wins, bold counting before italic; answers are cached for the process, behind a lock, since the API runs on its own thread.
-  - **Measuring.** The unit installs a measurer in `Sloper.Core.TextFields`, so a named font's box, alignment and print tests use its real advance widths everywhere (canvas, SVG, PDF, layout). The default font is still estimated from Helvetica's average width (bold a little wider), so existing layouts do not move.
-  - **PDF.** A named font, or the bundled Noto Sans for default-font text Helvetica cannot print, is embedded as a CIDFontType2 with Identity-H, a ToUnicode map (so text copies and searches) and a FlateDecode file. The file is cut down to the glyphs used by our own subsetter (`Sloper.Output.FontSubset`), which keeps every glyph's number and empties the rest, so pages name glyphs by their numbers in the full font while being written (`/CIDToGIDMap /Identity`) and the subset is made at the end; its six-letter tag comes from a checksum of the glyphs, so the same text gives the same bytes. A style the family lacks is drawn: bold by stroking as well as filling (`2 Tr`), italic by a 12° slant. A font not installed, one with PostScript (CFF) outlines, or one whose licence forbids embedding prints in the default font instead, measured as it, and the layout lists one warning per font (`FontProblem`). Glyphs past U+FFFF, and letters the font lacks, print as its missing glyph.
-  - **PNG** images still draw with the bundled fonts only (see Drawing images without the LCL), so a note in a named font shows in a bundled font there.
-
-### Accessories
-
-OpenSloper drafts accessories in fabric and leather (bags, pouches, wallets, hats, belts) as well as garments, with the same parametric core; the additions are useful for garments too.
-
-**What the core already gave.** A bag is driven by product dimensions (`#width`, `#height`) or, for a range of sizes, a size table of them read as `@width`: nothing in a measurement file assumes a body. A gusset's length reads the panel edge it is sewn to (`Curve_A_B.length`), and seams check that they match. A panel of a six-panel cap is drafted once and rotated into copies.
-
-**Circles and arcs**, brought forward from phase two for round bases, crowns, brims and rounded corners, which need exact lengths for the gussets sewn to them. They are stored as cubic segments of at most 45° like every other edge, so lengths, positions, splitting and crossings work unchanged, while `.length` and `.radius` come from the exact formulas. A circle starts at 0° and runs anticlockwise; an arc runs from `angle1` to `angle2`, the shorter way by sign, so 350° to 370° crosses 0°. Their ends are not points: to join a line to an arc, put an along-edge point at its end. A circle nothing crosses can be a one-edge piece.
-
-**Rectangle tool** (R): two clicks make three offset points and four lines from `width` and `height` formulas, in one undo step, since most bag pieces start as rectangles.
-
-**Rounded corners** (Tools → Edge → Round Corner) replace the corner between two straight edges that share a point with an arc of a formula radius (`cornerArc`), trimming both edges at its tangent points (`cornerPoint`) with ordinary split parts. The part at the corner and the original edge become construction, so the sharp corner stays as a guide. A piece on the edges is rounded too (changed 2026-11-09 from refusing until the piece was deleted, which predated `FollowSplit`): it takes the parts as for any split, then the arc in place of the two parts at the corner (`TPattern.FollowCorner`), reversed when its path runs from the second edge to the first; notches on those parts go to the arc's end beside them, and seams take the arc. A piece folded on either edge is refused, since a fold stays one straight edge.
-
-**Offset edges** (see Markings): stitch lines, facings, linings and turn-backs as ordinary parametric edges, unlike seam allowance, which only applies to a finished outline.
-
-**Markings inside a piece**, printed with it and following measurement changes: holes from point markers, marking lines from edge roles (see Markings), and stitch holes along an edge. Stitch holes take a spacing formula and a size, and are spaced evenly between the ends with the spacing adjusted to fit, so they stay even when the size changes; `.holes` counts them, which helps work out thread. A hole must lie inside the cutting line, and sizes and spacing must be above 0.
-
-**Material per piece.** Leather, foam, stiffener and interfacing are materials beside main and lining (see Materials). Leather is often cut with no seam allowance: an edge's own allowance can be 0, a material can carry a default allowance, and an output profile can cut on the seam line.
-
-**Output for machines** (line types, machine profiles, cutting a piece as it lies, material sheets) is in the publish app (see Cutting machines and material sheets).
-
-**Not included.** Fashion drawing is left to Inkscape and Krita. Hardware sizes (rings, buckles) are entered as variables; the Notions library under Open items would change that. Zips are a feature (below).
-
-### Features
-
-Built 2026-11-19 (issue #63). The **Features** tab of the side panel (`Sloper.UI.FeaturesPanel`, key `features`, between Materials and Claude) applies a sewing detail to the pattern in one step: a list of features, the chosen one's settings, and Apply. The name covers more than notions: zips, buttons and buttonholes, pockets, facings, waistbands, hems. **A feature is not an object.** Apply adds ordinary objects through the pattern's own methods, in one document change (one undo step, refused whole when it touches a locked object), and nothing is saved as a feature; the objects are then the user's to edit as if drawn by hand. This keeps the file format, the evaluator, the reference pages and the API as they are, and lets the Claude tab or the API do the same with the tools they have. Changing a feature's settings later means undoing it, or deleting its objects, and applying it again; a feature kept as one editable object may follow once the first ones show which settings people change. The features are LCL-free in `Sloper.Core.Features`, which the tests drive.
-
-**Zip** (`InsertZip`, `TZipSpec`): along one selected edge of one or more pieces, centred (topstitched) or invisible. It adds `ZipStop` (an along-edge point at the zip's length from the chosen end), splits the edge there (pieces and seams take the parts, `TPattern.FollowSplit`), gives the opening part its own allowance on every piece that uses it, adds a point notch at the stop to each, and for a centred zip a stitch-role offset of the opening inside each piece (`PieceRun` then `AddOffsetRun`, so the side is the piece's whichever way the edge was drawn). Its length starts as `#zip_length`, a variable the first zip adds (200 mm, 20 cm or 8 in, `STARTING_LENGTHS`), so both sides of a seam share one length; the allowance (20 mm) and topstitching distance (7 mm) also start in the pattern's unit. A zip as long as its edge or longer is refused, naming both lengths. When the edge is in a seam with an edge it is not, the status bar says the other side needs a zip too; a mirrored pair cut from one piece needs only one. **Lapped and fly-front zips** (built 2026-11-20). Each style starts with its own widths (`DefaultZip(…, Style)`; the tab resets the fields when the style changes): centred 7 mm topstitching and a 20 mm allowance, lapped 10 mm, fly front 30 mm stitching with a 40 mm extension (the opening's allowance) and a 40 mm shield. A lapped zip's stitching is the offset of the opening plus a line across from its end (an along-edge point at 0 on the offset) to the stop. A fly front's J: a construction offset at the fly's width, split at an along-edge point the same distance from the stop end; the part away from the stop becomes the stitch line, and a curve runs from the split point to the stop, leaving along the opening (its direction as `atan2` of the opening's end points, so it follows them) and arriving square to it from inside, both handles 0.55 of the width, close to a quarter circle; which side is inside is decided once, when it is made. A fly front adds a **FlyShield** piece: a rectangle the shield's width by `(zip length) + 20 mm`, so it follows `#zip_length`, its corner a free point 50 mm right of every piece's cutting line at the top of the highest, cut on the fold along its right side so it opens away from the pattern. Only the side that laps over is stitched, so the other side takes the Invisible style; a mirrored pair cut from one piece needs one fly, as commercial patterns do. Considered and not done: applying both sides of a seam at once, which the one-edge-at-a-time tab does not do for the other styles either. **In the Automation API** (decided 2026-11-20) features are methods named `feature_` and the feature, in a Features group: `feature_zip` takes the edge and the tab's settings (`style`: centred, invisible, lapped, flyFront; `from`; `length`, `allowance`, `stitch`, `shieldWidth`, each defaulting to the style's) and answers with the stop, the edge's parts, the stitching, the pieces, the shield and whether the other side needs a zip; MCP and the Claude tab offer it as they do every method. The rest of the Notions library idea (buttons by Repeat, pockets, facings) fits the same pattern.
-
-### Garment view
-
-Built 2026-11-13 (#4) as the **Garment** tab of the side panel, after Properties and Objects. It shows each piece as sewn, darts closed and folds opened, shaded so it looks slightly rounded, to glance at while drafting. It shows proportions and shaping, not how pieces go together, fit or drape, which stay with the Blender export (see Blender export under Publish app). It is read-only and nothing in it is saved.
-
-**History.** A Garment window (step 13) showed the finished garment flat, front and back, with pieces joined along their seams. It was taken out on 2026-11-03 with drafts and layers (see One canvas; commit `b920e6c`). It looked unfinished: darts stayed open, curved seams that differ left gaps, a sleeve sewn to a front and a back armhole did not join, and the flat outlines gave no sense of a body inside.
-
-**Pieces side by side, not front and back** (decided 2026-11-09). The first design joined pieces along their seams into a front and a back view, which needed a front, back or both setting on every piece, since the app cannot tell a front from a back, plus seam welding and registering the two views. Each piece is now shown on its own, arranged as on the canvas, so nothing has to be set or stored and the tab works on any pattern with pieces. It gives up the assembled look, which the old window never got right and Blender does properly. A file from before 2026-11-03 that gives a piece `view` loads with it ignored.
-
-#### The tab
-
-- **Arranged as on the canvas.** Each piece keeps its drafted place. A piece with a grainline is turned about the middle of its outline so the grainline as drafted is upright, as it hangs on the body; one without keeps its canvas direction. Pieces that overlap, on the canvas (front drafted over back) or once darts close and folds open, are drawn overlapping in the canvas's drawing order and not pushed apart (decided 2026-11-09): the tab mirrors the canvas, and separating pieces is the drafter's job there (see Overlapping pieces). A piece cut more than once is shown once. It follows the canvas view (built 2026-11-13, #10): hidden pieces are left out, an isolated piece is shown alone, and pieces are drawn in the view's drawing order (`TGarmentBuilder.Build` with `FollowView`); the API's `render` with `garment` shows every piece, in pattern order, as output does.
-- **Material filter.** A list at the top shows one material's pieces, or all; it starts on the pattern's first material, so lining and interfacing do not cover the main pieces, and goes back to it when another pattern opens. View state, not saved.
-- **Navigation.** The drawing fits the panel; the wheel zooms about the pointer, a drag pans and a double-click fits again. **Follow canvas**, off by default, uses the canvas's zoom and puts the middle of what the canvas shows in the middle of the tab instead. View state, not saved.
-- **Live.** The scene is rebuilt after each change while the tab is showing, and not at all while it is hidden (it builds when it next paints). `TGarmentBuilder` keeps each piece with a fingerprint of everything its finished shape follows from (edges, outline, grainline, fold, markings, look, material and the seams that use it) and rebuilds only pieces whose fingerprint changed. If a build takes longer than a frame (16 ms), a drag updates the tab on release only.
-- **Linked to the canvas.** Hovering a piece names it beside the pointer, lightens it, and shows it hovered on the canvas (`TPatternCanvas.OutsideHoverKey`); a click selects it there. A piece selected on the canvas is outlined in the tab, and a selected seam is marked on both its sides on whichever pieces they lie, as the warp leaves them, and on a closed dart's stitch line. Marks are drawn over every piece, so an overlapping piece cannot hide them. Nothing in the tab edits the pattern.
-- **Notes** under the drawing say what was left out: a dart left open and why, a failing piece, or that there are no pieces (of the chosen material).
-- **Export…** saves the pieces shown as SVG, or as PNG at a width asked for (16 to 4096 pixels, 1200 by default), drawn as on screen. The Automation API's `render` takes `garment` (and `material`, by name) for the same SVG or PNG, lit as by default; the CLI and API draw PNG with BGRABitmap's no-LCL build, as for the draft (see Drawing images without the LCL).
-
-#### Building a piece
-
-Everything is computed in the core from the evaluated pattern (`Sloper.Core.Garment`, no LCL), reading computed geometry.
-
-1. **Close the darts.** A dart is a seam whose two sides are one edge each of the same piece, next to each other in its path, so they meet at a point, the apex (see Seams); other seams within a piece are ordinary seams. Each dart is closed by turning the piece about its apex (`Sloper.Core.Warp`): with θ the opening and α a point's angle round the apex from the opening's bisector, the point moves to 180° + (α − 180°) × 360° / (360° − θ), so each leg turns half the opening onto the bisector and the side opposite the dart does not move, while the rest of the piece opens slightly to take it up. Where the legs differ in length their ends meet halfway, by a stretch along the radius that fades to nothing opposite. The closed dart is drawn as one stitch line from the apex to where the legs met. Several darts are closed one after another, each as the ones before left it. A dart is left open, with a note, when a leg is curved, when its opening is over 90°, or when the space between its legs is inside the piece. A stitch-role marking line inside a piece is drawn as a stitch line, as it is.
-2. **Place.** A piece with darts is moved back so the outline point furthest from every apex stays where it is on the canvas, so closing a dart moves only the outline near it. A piece cut on a fold is instead moved and turned so its fold stays where it was, along its drafted line, so both halves stay square to it. A piece with no darts does not move.
-3. **Open the fold.** A piece cut on a fold is mirrored across its fold as placed, so it shows whole, as cut; the fold has no line.
-4. **Turn upright** by its grainline (see The tab).
-
-The warp is a map from piece coordinates to finished ones that the outline, stitch lines, markings and grainline all go through, so everything on a piece follows its darts.
-
-#### Drawing
-
-The painter decides nothing: the core hands it a scene (`TGarmentScene`: outlines, edge lines with whether each is sewn, stitch lines, markers, bounds), and one renderer, `Sloper.Output.GarmentPNG` in `src/output/thirdparty`, draws it for the tab, the PNG export and the API, so they match. `Sloper.Output.GarmentSVG` draws the same scene as SVG.
-
-- **Outlines** are the seam lines, not the cutting lines. An edge in a seam other than a dart is drawn as sewn: a fine dashed line just inside its solid line (`GarmentInset`); other edges are plain. Notches, labels, the seam allowance, grainlines and construction are left out (the name shows on hover); buttons, holes, match dots, stitch holes, stitch lines and topstitching are drawn. Fold-role lines, such as pleats, are drawn as plain solid lines (`TGarmentPiece.Folds`, issue #55, built 2026-11-19), so they do not read as stitching; the pleat is not folded up, as the garment view only gives an idea of the look. Placement, cut, skive and edge-finish lines are left out.
-- **Fill** is the material's colour at full strength rather than the canvas's light tint; a hatched material is its light tint with the hatching over it; a piece with no material is grey.
-- **Shading (semi-3D).** Each piece is lit as if wrapped round a body: across each row, the shade follows a half cylinder between the piece's left and right sides at that height (`GarmentShade`, a pure function of where the point is across the row, tested without the LCL), brighter in the middle and darker towards the sides, lit a little from the upper left. A row's sides are the widest found within 5% of the piece's height either side, then averaged over 4% (`GarmentSpans`), so rows cut short by a sloping hem or shoulder take the width just past it and the shading does not jump at an underarm. A long narrow piece lying across, at least three times as wide as it is tall once upright (a waistband), is shaded down each column instead, as a tube along its length; a sleeve or strap, upright by its grainline, is already shaded across its width. A soft shadow lies just inside each sewn edge on the side away from the light and a faint highlight on the side towards it, so seams look slightly raised. The light comes from 65° above the panel with 45% ambient light, so the sides never go black. Its direction (135°, upper left, by default), its strength (50%) and an off switch are in Preferences (Design), not the pattern.
-- **Shadow.** A soft drop shadow under each piece separates it from the panel's background, stronger on a dark background so it shows in both themes.
-
-The SVG draws the shading as one horizontal gradient per band of rows (about 4 mm each, 8 to 150 of them), clipped to the piece, and the shadows with blur filters: close to the screen, not exact.
-
-#### Limits
-
-Pieces never bend beyond the dart warp, so a flared skirt shows flat, gathers do not show, pleats show only as their fold lines, darts drawn only as marking lines stay as lines, and how pieces join, fit and drape are not shown. Accessories (bags, hats) are drawn the same way.
-
-## Publish app
-
-Publishing is a separate application, `opensloper-publish`, as KiCad splits schematic and PCB editing: the drafting app designs patterns, and the publish app brings finished pieces from one or more patterns together and prints them. The user pages (Publish) describe it as used.
-
-**Why a separate app.** Information flows one way: the pattern defines the pieces, and publishing only arranges and prints them, so nothing is synchronised back. The drafting app needs no paper, printer or nesting code, and the publish app no snapping or formula editing. Both link the same core and evaluate patterns themselves. No pattern data passes between the processes; the only message is the apps' link below, which finds a window that is already open.
-
-| Drafting app (pattern file) | Publish app (layout file) |
-| --- | --- |
-| Geometry, formulas, variables | Which patterns and measurement sets to use |
-| Pieces: outline, allowance, grainline, notches, labels, cut count | Placement of each copy: position, quarter turns, flip |
-| Pattern-space notes and callouts | Sheet-space title block and notes |
-|  | Paper, margins, overlap, marks, output kind, profiles |
-
-Printer calibration is neither: it belongs to the user's printer, so it is a preference.
-
-**Layouts.** A layout lists its sources, each a pattern with a measurement set and size, with IDs from the layout's own never-reused counter; the same pattern may appear twice in two sizes. Placements refer to a piece by source and piece ID, so they survive measurement changes and edits, and are plain numbers, not formulas: a layout arranges finished pieces and is not parametric. A placement gives the top left of the piece's cutting line after any flip and turn, so it stays put when the piece grows. One file holds one arrangement; A4 tiles and one A0 sheet are two layouts.
-
-**Keeping in step.** The publish app reads saved files, never the drafting app's unsaved edits. Once a second it compares a checksum of each source's files (file times only go to the second), and a changed file must read the same on two checks before it is loaded. New pieces wait in the tray; a deleted piece is a problem, never dropped silently. Publish… in the drafting app opens the pattern's layout (same name, `.slayout`) or starts one, in the publish window already showing it when there is one.
-
-**Finding an open window** (decided 2026-11-14, issue #18). Each publish window listens on the apps' link (`Sloper.API.AppLink`), and Publish… asks every one listening, newest first, to show the pattern's layout, by its full path. The one whose layout is that file comes to the front and says so; when none does, Publish… starts another publish app as before. A window showing a different layout is never reused, since that would replace the user's work, perhaps unsaved: one window per layout. A new layout counts, since it is named after its pattern before it is saved.
-- **The link is the automation socket's plumbing** under another kind of endpoint: `publish-<pid>.json` and `.sock` in the same private run folder, the same token, the same listener thread running each message on the main thread. A message is one JSON-RPC request (`show`, with `layout`), answered with `{"done": true}` or `false`, or the `preferences` notification every app's window listens for (see Preferences). A window that cannot listen still works, and Publish… then opens another window.
-- **A file left by a crash** (or a killed process, which never runs its destructor) is removed when nothing answers behind it; a window writes its file only once it listens, so it is never one still starting. Each window allows 3 s to answer, since it answers between its own events.
-- **Coming to the front** is the platforms' part. On Windows only the process the user works in may raise another, so the drafting app calls `AllowSetForegroundWindow` with the publish window's process before it asks. On X11 most window managers raise the window, though some only mark it as wanting attention. On Wayland a window may not take focus by itself: that needs an `xdg-activation` token passed from the asking app, which Qt 5 cannot use, so for now the window may only be marked. On macOS the same socket works; `open -a` would also hand a running bundle the file, but the apps are not yet bundled.
-- **Not the service rejected under Measurements app.** That was a long-running process every app connects to, with its own lifetime and crash handling; this is a listener inside each window that ends with it, using code that already exists.
-- **Rejected:** scanning for windows by title or class (different on each platform, impossible on Wayland), keeping the started process (a process number says nothing of the layout shown, and misses windows the user opened), and FPC's `SimpleIPC` or the UniqueInstance package (one named server per app, for a single instance, while there may be several publish windows; on Unix it also needs polling).
-
-**Rotation in 90° steps**, so the grainline stays square to the sheet; there is no per-piece list of allowed turns. On paper the printed grainline shows how to cut, so a turn does not matter; where the piece is cut as it lies, a quarter turn is a warning (see Cutting machines and material sheets). A piece cut twice gets two placements, the second flipped when `cut.mirrored` is set.
-
-**Problems.** A missing file, a deleted or failing piece, and a layout with nothing placed block export, so a blank PDF is never written. Unplaced copies, overlaps, pieces off the sheet, notes over pieces and odd rotations are warnings. They are counted at the left of the status bar, as in the design app, with how many stop printing (decided 2026-11-13, issue #21), and listed in full in the Problems tab (issue #61), blocking ones in red; clicking the count opens the tab. Each `TLayoutProblem` names the placement or sheet note it is about by index (`Placement`, `Note`, -1 for none), so choosing it selects that piece or note on the pages. Unplaced copies are left to the tray.
-
-**Output kinds** (`kind` in `output`):
-
-- **Tiled.** Pages with row and column captions (A1, B2), overlaps with diamond or half-circle marks that make a whole shape across two sheets, empty pages left out, and a cover with the test square, the print-at-100% reminder and the page map. Right-clicking a page leaves it out (`excludedPages`), shown grey and crossed, and struck through on the map; a change of paper, margin, overlap or kind clears the list, since the captions then mean other sheets. Paper is A4, A3, Letter or custom. A layout that needs more than 10,000 pages (`MAX_TILE_PAGES`), from something placed far out or a sliver of paper left between the margins, is a problem that stops printing, and only the first 10,000 are laid out, so a stray number never asks for billions of pages. Sheet note sizes in the file must be above 0 and at most `MAX_NOTE_SIZE`.
-- **Large format.** One sheet `rollWidth` wide (914 mm by default), as long as needed, with the title, reminder and test square across the top.
-- **Projector.** One dark sheet, thick light lines and large labels, for projecting onto fabric, with the test square to set the projector by.
-- **Material sheet.** A fabric width or a board, `materialWidth` by `materialLength` (0 for a roll), one material at a time (see Cutting machines and material sheets).
-
-Calibration scales everything printed at true size, including the test square. A piece on a fold prints as the half drawn with its bracket, except where it is cut as it lies, where it is opened out. `fill` tints or hatches pieces for that print, whatever their material's own fill.
-
-**Information block and sheet notes.** The information block, `title` in the file (`corner`, `fields`, `everyPage`), prints on the cover or beside the test square, and optionally on every tile: plain lines chosen from a list, with nothing to type or place. Sheet notes are text in layout space, dragged like pieces, with fields (`{pattern.name}`, `{size}`, `{date}`, `{page}`, `{pages}`, `{cutlist}`, `{materials}`, `{materialneeded}`) filled in when printed; a note makes the page it is on print. Pattern notes print with their pieces and cannot be moved here.
-
-The side panel has a section for each (#14, changed from one Notes tab holding both). The preview shows the block where it prints: in each printed tile's corner, above a single sheet beside the test square, and on the cover, which tiled output shows as a sheet left of the first column; `Sloper.Output.TitleBlock` places it for the PDF and the preview alike. Sheet notes are framed on screen, dotted or, when selected, solid, so they can be found and picked; picking one opens the Notes section on its details. The preview draws note text at its size in points, its lines a line height apart, as the PDF and the design canvas do, and as a tint when too small to read.
-
-**The PDF writer** (`TPDFWriter`) is our own plain PDF rather than fcl-pdf: the scale is exact, the pages uncompressed, and the same layout gives the same bytes, which tests compare. Default-font text is the built-in Helvetica (or its bold and oblique forms); named fonts, and default-font text outside Latin-1, are embedded TrueType (see Annotations, stage 3). A file with only Helvetica text is byte for byte what it was before fonts.
-
-**Code.** `src/publish` holds the window; layout loading, tiling, previews and exports are in `src/output` (`Sloper.Output.Layout`, `.Tiling`, `.LayoutPDF`, `.Preview`, `.TitleBlock`), so `opensloper-cli export LAYOUT` writes the same files without a window. `TLayoutDocument` keeps undo as the layout's text before each change and reads the patterns again on undo; a run of paper setting changes is one step.
-
-### Printing
-
-The publish app prints patterns directly at true scale, with notes alongside, so no third-party tiling or editing software is needed, a gap found in practice with Seamly2D, which also lacked a friendly screen for multi-page printing. So the publish window is one interactive screen rather than a dialog of settings: a large live preview of pieces on the page grid with captions, pieces dragged and turned with the page count following, settings beside it with the preview updating at once, pages clicked out of the print, and everything saved in the layout so reprinting after a measurement change is one click (see Publish app).
-
-**Scale accuracy.** A test square on the first page (10 cm, or 4 in on Letter), a clear "print at 100%" reminder, and x and y calibration factors for printers that are consistently a little off, set once in Preferences.
-
-**Print… prints the PDF** (decided 2026-11-13, issue #13). File → Print… (Mod+P), the toolbar and the Print and Export group send the same PDF as Export PDF to the system's print service with scaling off, so what prints is exactly what exports, already tested for scale. On Linux and macOS that is CUPS: `lpstat` lists the printers, and `lp` takes the file with `print-scaling=none` and `fit-to-page=false`, the paper as its media (A4, A3, Letter, else `Custom.WxHmm`, the one sheet's size for the other kinds) and, for tiled pages, `page-ranges`, so the dialog can print the cover alone to measure the test square, then the rest. The dialog offers the printer (the system default first, then the last one chosen while the app runs), copies and those pages. On Windows the PDF goes to the default PDF viewer's print command on the default printer, with no choices and no scaling guarantee, and the dialog says to choose 100% if the viewer asks. The file is written to the user's runtime folder (`lp` copies it into the queue, then it is deleted). The problems that block Export PDF block Print, and a projector layout, dark all over, is not printed. The code is `Sloper.Output.Printing` (no LCL) and `Sloper.Publish.PrintDialog`.
-
-Drawing to a printer canvas (LCL `Printers`, with the native print dialog) was the alternative: the same on all three systems, but a second renderer beside the PDF writer (fonts, hatching, clipping) whose scale depends on each driver's resolution and printable-area offset. **If printing through the PDF gives trouble** (print services that scale or crop it, page ranges or media ignored, Windows viewers without a print command), the fallback is to turn `TPDFWriter`'s drawing calls into an abstract surface that both the PDF writer and a printer canvas implement, so the layout is drawn by one `TLayoutPrinter` either way.
-
-### Output profiles
-
-**Output profiles** (`Sloper.Core.OutputProfiles`). The drafting app stores every marking; the publish app decides which reach the output. A profile describes a kind of print, not a pattern, so profiles live in `settings.json` beside the machine profiles, and a layout stores only the name, as `outputProfile`. A profile lists the `roles` and `pieceMarks` (seam line, notches, grainline, fold bracket, labels, holes, stitch holes) to include, `allowance` (`keep`, or `none` to cut on the seam line, as leather usually is) and optional paper `styles` per role. The cutting line always prints. A name not in the settings blocks that layout's exports, never a quiet fallback, since a print missing its stitch lines would be sewn wrongly. The output profile applies first; a machine profile then decides what its machine takes.
-
-`allowance` `none` changes the outline, not just what is drawn, so the preview, overlap checks, packing and every export use the seam line as the cutting line (`PlaceShape` applies the profile for all of them). Four profiles are built in and cannot be changed, so a layout naming one always prints the same; their names stay English, since layouts store them, and a user profile with a built-in name is ignored.
-
-| Profile | Roles | Piece marks | Allowance |
-| --- | --- | --- | --- |
-| Home printing | All | All | Keep |
-| Plotter or laser cutter | Cut | Holes, stitch holes | Keep |
-| Leather | Stitch, cut, skive, edge finish | Notches, grainline, labels, holes, stitch holes | None |
-| Instructions sheet | Placement, stitch, fold | Seam line, notches, labels | Keep |
-
-Profiles are edited in the settings file until there is a window for them.
-
-### Notes on paper
-
-A note prints with a piece when it is anchored to the piece or one of its points or edges, or its top left (a callout's tip) lies inside the cutting line, and follows that piece's placement, upright even when the piece is flipped; other notes are left out of layouts, and a print note in no piece is a warning. Text in the default font is measured from Helvetica's average letter width, so these tests are approximate for it; a named font is measured from its own widths. A note does not add pages. Screen-only notes never print or export. DXF carries no notes.
-
-### Draft export
-
-File → Export Draft SVG… and `opensloper-cli export-draft` write the draft itself as a true-scale SVG in mm (points, construction, curves, pieces), for teaching, documentation and review in Inkscape. It needs only a draft, even an unfinished one, and is not for cutting, which the publish app does from finished pieces. In the app it matches the screen (fills, labels as shown, hidden roles left out, the pattern as it stands); the CLI names everything only with `--labels`. Problems are warnings: failing objects draw in their state colours. `--upto` draws the pattern as it was when an object was added, for tutorial pictures.
-
-### Other exports and packing
-
-SVG shows pieces where they were placed, for plotters, laser cutters and Inkscape; DXF-AAMA carries pieces into a CAD or cutting system, which arranges them itself; machine DXF follows the arrangement like SVG (see Cutting machines and material sheets). The problems that block a PDF block these too.
-
-**SVG** (`Sloper.Output.LayoutSVG`): one true-scale file at the layout's positions, one group per copy with cut, seam, marks and label groups inside, so a cutter can leave out the seam line. Pages, marks, calibration, title block and sheet notes belong to paper and are left out. Without a machine profile it is all black.
-
-**DXF-AAMA** (`Sloper.Output.LayoutDXF`): ASCII DXF R12 from our own small writer, so the same layout gives the same bytes. One block per piece, not per copy, in the piece's own coordinates with y up, with its cut count as the quantity; placed pieces only, so the layout still chooses what goes out; sizes as separate blocks, since grading rules are out of scope. Curves are polylines, and a fold piece is the half with a mirror line.
-
-| Layer | Content |
-| --- | --- |
-| 1 | Cut line and piece text: name, size, quantity, material |
-| 14 | Seam line |
-| 4 | Notches |
-| 7 | Grainline |
-| 6 | Fold (mirror line) |
-| 8 | Marking lines and point markers |
-| 13 | Holes and stitch holes, as points |
-
-ASTM D6673 is paywalled and listed as withdrawn, so the layers follow Valentina's GPL exporter, with 6 from its ASTM export; 8 and 13 come from CAD systems' published layer lists. The output reads cleanly in `ezdxf` but has not been tried on a real cutting system; that test should check the layers and file-level text.
-
-**Pack Pieces** (and `opensloper-cli pack`) packs every copy, tray included, as one undo step of ordinary placements. It nests the pieces' cutting lines (issue #58, built 2026-11-19, `Sloper.Output.Nesting`), longest side first, each as near the top and then as far left as it fits, as it stands or a quarter turn from it (on a material sheet only with `allowTurns`), flips kept, at least 10 mm apart; the same input gives the same result. Where a piece cannot go is the union of no-fit polygons: the Minkowski sum of each placed outline and the new one turned through a half turn, both grown by half the gap with mitred corners, which lie outside the round ones the gap asks for and are exact along straight edges, so rectangles still pack exactly 10 mm apart. The free space is the sheet's room for the piece's top left less those polygons; its topmost, then leftmost, corner is the spot, moved to a free point of the 0.5 mm drag grid beside it. A pair of shapes' no-fit polygon depends only on the shapes, so it is worked out once per pair and way round (copies share a shape) and kept through every column count tried. Clipper's own `MinkowskiDiff` unions every parallelogram of the two outlines in one sweep, which took 17 s for two circle skirt panels of 169 points; the nester unions each edge's parallelograms, then those rows pairwise, in 0.15 s. Nesting beats bounding boxes where pieces have curves and notches to fill (the circle skirt example tiles on 20 A4 pages rather than 23) and matches it on rectangles. Tiled tries each column count for the fewest pages; large format and material sheets pack to the width for the shortest length. Pieces that do not fit on the sheet (too wide either way round, or past a material's length) are set below the packed ones, so none lies on another, and the count is reported. It keeps the existing arrangement when that is already better, and says so.
-
-### Cutting machines and material sheets
-
-Laser cutters, plotters and cutters such as Cricut treat line types differently, so exports keep them apart:
-
-| Line type | What | Usual SVG colour |
-| --- | --- | --- |
-| Cut | Cutting line and cut-role lines | Red |
-| Score | Fold-role lines | Blue |
-| Mark | Placement and stitch lines, seam line, notches, grainline, fold bracket, buttons, match dots | Black |
-| Engrave | Labels and text | Green |
-| Hole | Holes and stitch holes, as true circles (`<circle>`, `CIRCLE`) | Red |
-
-- **Machine profiles** give each line type a colour, layer, width and an on/off switch, so a job can cut outlines only or use a laser's hairline. They describe a machine, not a pattern, so they live in the settings, with a built-in `Standard`. A layout stores only the profile's name; one not in the settings blocks that export, since the wrong colours would cut the wrong lines.
-- **Cut order.** Files go score, mark, engrave, holes, then cut, since software that follows file order would otherwise free a piece before its holes are cut.
-- **Machine DXF** writes pieces where they were placed, y up, on the profile's layer names, sharing a writer with DXF-AAMA. Labels are text, so they depend on the machine's fonts; a single-stroke font waits for a test on a real machine.
-
-**Cut as it lies.** On a material sheet, a projector or with a machine profile, nobody reads the printed grainline before cutting, so a quarter turn is a warning, and packing a material sheet only tries quarter turns with `allowTurns`, for material with no grain. A piece on a fold is opened out to the whole piece, mirrored with its marks, and the fold shows as a Mark; a hole on the fold line makes the piece invalid, as it has no other half. The preview, checks, packing and every export of that layout use the whole piece, so they agree; DXF-AAMA still writes the half with its mirror line.
-
-**Material sheets** (`kind` `material`): a fabric width or a foam or card board, `materialWidth` by `materialLength` (0 or left out for a roll), printed as one sheet. Use is reported as the length used on a roll, else as the pieces' area against the sheet's. `material` limits a layout to one material by name (material IDs belong to each pattern, and a layout can have several), so each material gets its own cutting layout; other pieces leave the tray, packing, checks and exports, but keep their placements. Choosing a material, or the material kind with one chosen, takes that material's size from the first pattern that gives it one, in the same undo step (`TLayout.TakeMaterialSize`); it is copied once, not linked, so the layout's fields can still be changed.
-
-### Material needed
-
-Decided and built 2026-11-14 (issue #19, phase 2). How much of each material the layout's patterns take, for buying fabric: the Materials tab of the publish app, the `{materialneeded}` field (and the information block's Material needed line), and `opensloper-cli materials LAYOUT|PATTERN [--json]`. The code is `Sloper.Output.MaterialNeeded`, without the LCL.
-
-- **The whole design, not the sheet.** Every valid piece of every source counts, with its cut count, whether placed or not and whatever the layout's material filter. Paper layouts may turn pieces any way, since a paper piece is laid on the fabric by its grainline, so the estimate makes its own cutting plan rather than reading placements.
-- **By the grainline.** Each piece lies with its grainline along the material (`TPieceObject.GrainShape`), as the design app's fit check measures it; `allowTurns` lets packing try a quarter turn.
-- **A roll is cut folded** in half lengthwise, as home sewers cut: packing is half the width over two layers. Pieces on a fold go down the fold, one under another, as the half drafted; a fold that runs across the grain (more than 1°) cannot, so that piece is cut opened out, with a note. A mirrored pair is cut from both layers at once and takes one place; other copies take one each, to be safe. A piece wider than half the roll but not the whole is cut unfolded, every copy, after the folded part, with a note; one wider than the roll is left out, with a note. The length is the folded part plus the unfolded part.
-- **A sheet is cut single layer**, every copy opened out, as many sheets as it takes. **No size**: the pieces' area, and the narrowest roll every piece fits.
-- **Packing** is bounding-box packing (`PackBoxes` in `Sloper.Output.Packing`, which can start around boxes already placed), 10 mm apart, so the answer errs on the generous side. Pack Pieces nests true shapes since issue #58; the estimate keeps boxes for now, as its fold columns and two-layer pairs need halves and mirrored pairs as shapes. Nesting them would tighten it.
-- **Across patterns** a material is matched by name, in each pattern's own order, leaving out materials no piece uses. Its size comes from the first pattern that gives it one, and lengths show in that pattern's unit; another size for it is noted.
-- **The tab** lists Material, Size, Pieces and Needed, with the notes and how the estimate is made under them, worked out again on each change. Title blocks ask for the field on every page, so `TLayout.MaterialNeeded` keeps the summary until the files loaded change.
-
-### Drape app and Blender export (3D preview)
-
-Being built (issue #11, started 2026-11-20): the placement maths, the drape file, the body and the app are built, with File → Drape… in the design app, packaging and a user guide page, the mesher, seam pairing, the export's files and the Blender script, run from the app (File → Drape in Blender…) or with `opensloper-cli drape --run`, attachments to the body and a figure without arms (2026-11-21); checked on every example pattern, each with a drape file beside it in `docs/examples` that a test opens and checks sews every seam. 3D draping will use Blender's cloth simulation rather than a built-in simulator. The working plan and estimate (issue #11) are in `documents/design-3d-preview-in-blender.md`.
-
-**A separate drape app** (decided 2026-11-18). The design app stays a 2D drafting app, and a garment is often made from several patterns, so placing pieces in 3D belongs to a fourth app, the drape app (`opensloper-drape`), not to a tab of the design app. Like the publish app it imports one or more patterns, each with a measurement set and size, keeps in step with their saved files and owns its own file, which holds the sources, the body and each piece copy's placement; nothing is written back to a pattern. The user places the pieces on a generic body built from a measurement set (or no body, for accessories), and the app writes the files Blender needs and runs it. This replaces the 2026-11-17 plan of an Assembly tab in the design app with assembly steps and printed flat-pack style instructions, which is set aside for later; the 2026-11-09 decision against a per-piece front or back setting stands, since no 3D data is stored in a pattern.
-
-Writing a cloth simulator (triangulation, sewing constraints, body and self-collision, a parametric avatar) is a multi-year effort in commercial tools, so the app only exports what Blender needs:
-
-- Triangulated piece meshes and the body (OBJ)
-- A JSON scene file with seam pairs, piece placements, materials, their fabrics and colours
-- A Blender Python script that places pieces, creates sewing springs and runs the simulation in one step
-
-The Garment tab is the quick, flat look at one pattern's finished pieces; the drape app is for fit and drape. The placement maths, body, mesher, seam pairing and writer are core and output code, so the CLI can write and run the same files.
-
-**Placement** (decided 2026-11-20, started in `Sloper.Core.Geometry3` and `Sloper.Core.DrapePlacement`). The 3D frame has Blender's axes, so the export needs only a scale from mm to m: X to the body's left (the viewer's right seen from the front), Y towards the back, Z up, in mm, right-handed; the body faces −Y, stands on Z = 0 and its centre line is the Z axis. Turns are anticlockwise looking from the positive end of an axis, as in Blender, which differs from the 2D convention (anticlockwise on screen, y down) on purpose: this is not screen space.
-
-- **A piece's frame**: its drafted x along X, its drafted y (down) along −Z, the right side of the fabric facing −Y, so an unturned piece stands facing the viewer as it does on the canvas. Its origin is the **anchor**, the middle of the grainline, else the middle of the seam line's extent; it is computed, so a placement survives measurement changes. A piece on a fold is placed opened out (the half as drafted, then its mirror image across the fold).
-- **A placement** is `position` (the anchor's x, y, z) and `rotation` (three angles in degrees about X, then Y, then Z, each about the fixed axes): Blender's XYZ Euler order, so the numbers set `rotation_euler` as they are. A quaternion was rejected as unreadable in the file.
-- **A mirrored copy** (the second of a pair cut mirrored) has its frame's x turned round, giving the left of the pair. Its default placement is the mirror image of its partner's across the YZ plane: position (−x, y, z), rotation (x, −y, −z).
-- **The camera** orbits a target: yaw turns it about Z (turntable, so up stays up, 0 in front of the body), pitch raises it (90 looks straight down). Orthographic by default, perspective as an option. Front, Back, Left (the body's left, +X), Right, Top and Three-quarter (front and to the body's right, raised a little) set yaw and pitch. A drag moves a piece in the plane facing the camera.
-
-**The drape file** (`.sdrape`, format `drape`, `Sloper.Core.DrapeFile`, built 2026-11-20). Its sources are a layout's: the list, its ID counter, loading and the checksums that tell when a saved file changes are shared in `Sloper.Core.PatternSources`, which the layout uses too. Besides them it holds the body (`measurements`, with a measurement set and size that default to the first source's, or `none`), the gap (20 mm by default) and the placements, each a source, piece ID and copy with `position` and `rotation` as three numbers each, and the IDs of its `attached` edges when it has any. The body's `arms: false` leaves the figure's arms out (left out of the file when true). A copy with no placement is left out of the export, with a problem saying so; a placement whose piece has gone, or whose copy is past the piece's count, is a problem and never dropped silently. As in the publish app, the even copies of a piece cut mirrored and not on a fold are the mirrored ones.
-
-**Align to Seam and guesses.** Align to Seam places a copy so its side of a seam, from end to end, lies along the placed partner's side: flat, beside it across the seam, the gap apart, as the two would lie sewn and opened out; folded, turned over about the seam onto the partner, the gap off it. Which way the piece faces follows from the seam's directions, so a pattern drafted the usual way (paths clockwise, side B against its path) gives pieces facing the same way. A copy on the same side of the body (left with left) is preferred as the partner. The guess places, in turn: the largest piece of each source upright by its grainline, in front of the body; each copy sewn to a placed one, along its longest such seam, longest first; the other of each mirrored pair as its partner's mirror image (repeating those two until nothing changes); and the rest in a row to the body's right. The first piece's middle goes at the body's waist height, the gap in front of its front; with no body, at a fixed height and depth.
-
-**The body is a whole figure** (decided 2026-11-20, `Sloper.Core.BodyForm`; it was first a dress form on a pole and base, changed the same day so sleeves and trousers have arms and legs to go round and the front is plain). It stands on Z = 0 facing −Y: a torso from the crotch to the neck, lofted through horizontal ellipses at the measured heights (crotch, hip, high hip, waist, bust, armpit, shoulders, neck), each with a fixed depth to width, sized so the ring as drawn has the measured circumference exactly; legs lofted the same way through the ankle, calf, knee and thigh; arms hanging 20° out from straight down (`ARM_ANGLE`), so sleeves can go round them clear of the body, through the upper arm, elbow and wrist over the arm length, ending in flat hands, palms in; feet pointing forwards, which is what shows the front from any side; and a head, an ellipsoid of the head's circumference and length. It had a nose, removed 2026-11-20 (issue #70) since it did not look good and the feet already show which way the figure faces. Each part is a closed mesh with its triangles facing out, and the parts overlap where they join, which is enough for drawing and for Blender's collision. A measurement the set lacks is a fixed share of the height (an average adult's when that is missing too), so there is always a whole figure, and which ones were estimated is known. **The back length** (`neck_back_to_waist`, added 2026-11-20) sets the waist's height from the neck's when the set measures only the neck, the neck's from the waist's when it measures only the waist, and the waist below the neck's share of the height when it measures neither, as a bodice block's set often does; it is measured down the back's curve, a little longer than the drop, which is left out. On the bodice block example it moves the waist from 1042 to 1010 mm, just below the draped bodice's hem, which hangs about 3 cm higher from the estimated shoulders. **Without arms** (decided 2026-11-21): the body's Arms setting, on by default, builds the figure without arms and hands (`BuildBodyForm(Measures, False)`, through `TDrape.BodyMesh` for the view, the scene and the export), as a dress form with legs. A full circle skirt laid round the waist cannot close its side seams without crossing arms that hang 20° out, and ended up tented over the hands; raising the arms to an A-pose was considered and not done, as a full skirt reaches them there too. The user's own body is for later.
-
-**The window** (first pass built 2026-11-20, `src/drape/`). A 3D view beside side tabs, as the publish app: Patterns (the sources, the body: figure or none, its measurement set and size, Arms, and the gap), Pieces (every copy, placed or not; double-clicking one not placed places it by a guess), Properties (the selected piece's position and turns as numbers) and Problems. The view draws `Sloper.Core.DrapeScene`'s faces with the LCL canvas: no OpenGL and no BGRABitmap are needed for flat polygons. **Drawing order** (decided 2026-11-20): pieces go by the depth of their middles, and each of the form's triangles goes after every piece whose plane it lies on the viewer's side of. Sorting everything by the depth of its middle drew the form over a skirt front seen from low down, as a large tilted piece's middle can be further than a small triangle's behind it. The new order is exact for a piece clear of the form. Dragging the background turns the view about Z (turntable) and raises or lowers it, the middle button pans, the wheel zooms. Dragging a piece moves it across the view, with Shift towards or away; with the modifier (Ctrl, Cmd on macOS) a sideways drag takes it round the body, keeping its distance and turning with it so it keeps facing out (the plan's ring handle in the top view); a right-button drag turns it about its anchor, across about the vertical and up and down about the view's horizontal, with Shift in 15° steps. Right-drag replaced the plan's Alt+drag (decided 2026-11-20), as Linux window managers take Alt+drag to move windows. Each drag is one undo step, and a click only selects. Each seam between placed copies (darts left out) is drawn as three thin lines across it, at its start, middle and end. The Properties tab lists the seams that join the selected piece to placed pieces, with Align to Seam (or a double-click) and Fold Over Seam; the plan's second click to fold is this second button. Under them, **Attached to the body** lists the piece's edges, the fold left out, each ticked when attached; a tick is one undo step, and attached edges are drawn thick and green in the view and in the Claude tab's picture. The View menu has the six fixed views and Perspective; Pieces has Guess Placements (Mod+G), Flip (half a turn about the piece's own up) and Unplace (Delete). Undo keeps the file's text before each change, as the publish app's layout document does. The app keeps its open tab under `drapeTab` in the settings, its recent files under `drape`, and listens on the apps' link as kind `drape`. **File → Drape…** in the design app (Ctrl+D, built 2026-11-20) works as Publish… does: it saves first when it must, sends `show` with the drape file's path (`params.drape`) to a drape window already open, and otherwise starts the drape app with the pattern's `.sdrape`, or the pattern to start one (`DrapeTargetFor`). On macOS the bundle declares the drape file type and the design app hands `.sdrape` files to the drape app. The downloads carry the fourth program, its desktop entry and MIME type on Linux, and its Start menu entry and file type on Windows.
-
-**The mesher** (built 2026-11-20, `Sloper.Core.Mesher`, no Clipper2: its triangulation does not compile with FPC 3.2.2). Cloth simulation needs evenly sized, well shaped triangles, so a piece's seam line (opened out on a fold) is resampled at an even spacing, 10 mm by default, each run between kept points divided evenly; a point is kept where the outline turns by more than 20° and wherever the caller asks, which is how seam pairing will put seam ends on vertices. The inside is filled with a hexagonal grid at the same spacing, leaving out points within half a spacing of the outline. The points are triangulated by Delaunay's rule (Bowyer-Watson, its cavities found through a grid of cells), and an outline edge the triangulation misses (at a narrow dart, say) is split at its middle until it appears, so the outline is kept exactly and every triangle is wholly inside or outside; then three rounds of smoothing move each inner point towards the middle of its neighbours, unless that would fold or squash a triangle. The mesh lists the outline given first, in order, then the points added on it, then the inner points, so an exporter can find the outline's vertices by index. Triangles run anticlockwise on screen, which faces the right side out once placed; a mirrored copy turns x round, so its triangles must be reversed. Tests check the area, that every triangle is inside and turns the same way, that every outline edge is in the mesh, and that a rectangle's smallest angle is at least 25°.
-
-**Seam pairing** (built 2026-11-20, `Sloper.Core.DrapeMesh`). `MeshDrape` meshes every placed copy with its seams' points pinned in its outline, and lists the pairs of vertices to sew, which the export will write. Both sides of a seam get points at the same fractions of their lengths, so ease is spread evenly. Every edge end on either side is a break, and a corner on either side is one unless within a quarter of the spacing of another; between breaks the points are no further apart than the spacing on the longer side. Where a side goes on to another piece, or has a gap, it has two points at the break, both sewn to the other side's one. A dart pairs from the apex out, the apex sewn to nothing. An edge in several seams takes every seam's points, merging those within a tenth of the spacing. A piece on a fold is meshed opened out and each half sewn on its own. Which copies are sewn together goes by placement (decided 2026-11-20): each copy (or fold half) of the piece with the most on the seam takes the nearest unused copy of each other piece, so left goes with left however the user placed them; they choose in order of how near each comes to a copy of the other pieces, so when there are too few, the one left open is the one placed furthest away (taking them in copy order left open the copy right beside the partner, found 2026-11-20). One left without a partner is a problem ("seam … is left open on a copy of …"), listed once for a copy however many of its fold halves are open. `DrapeSeamProblems` finds these by pairing alone, without meshing, so the drape app's Problems tab lists them after every change, after the drape file's own problems; clicking one selects the copy. The piece keeps where each path edge starts in its outline (`EdgeStarts`), so seam edges map to outline points exactly. **A piece on both sides of a seam** (found 2026-11-21 on the examples) has a copy chosen for each side, nearest first, which may be the same copy: a dart's legs meet at the apex, so its own copy is nearest, and a one-piece sleeve placed as a tube sews its own underarm; a bag's front and back cut from one piece sew each copy's left side to the copy beside it. When the sides share an edge (a centre back on a mirrored pair, a circle skirt's side seams) a copy is never sewn to itself. Such a seam runs the same way on both copies, so it is Flipped; pairing used to choose one copy for both sides, which sewed a centre back to itself.
-
-**The export's files** (built 2026-11-20, `Sloper.Output.DrapeExport`, `opensloper-cli drape DRAPE [-o FILE] [--spacing=MM]`). Three files side by side, named from the scene file: `NAME.blender.json`, `NAME.pieces.obj` and `NAME.body.obj`, by default the drape file's name. The scene file (format `blender`, with a generated schema and a section on the File formats page, though no app reads it back) names the two OBJ files and the spacing, lists each placed copy that meshed as an object (its name, source, piece, copy, whether mirrored, material, colour, vertex count, its placement's `position` and `rotation` as they are, and its `attached` vertices), and each seam with its pairs, each an object's place in the list and a vertex of it, both from 0. **Each piece is in its own frame** (decided 2026-11-20): its mesh has the anchor at the origin, so the placement sets the Blender object's `location` and `rotation_euler` unchanged and the user can move a piece in Blender as in the app; writing placed coordinates was the other choice, and would have lost the object's origin. A mirrored copy's mesh is mirrored and its triangles reversed, so every triangle faces the fabric's right side (−Y in the piece's frame). The OBJ files are in mm with Blender's axes, to be imported with forward Y and up Z and scaled to metres; vertices are written in the mesher's order, which Blender 5.2's importer keeps per object (checked 2026-11-20), so the pairs' indices hold. The pieces' texture coordinates are their frame's x and z in metres, so a fabric image can be scaled to its real size and is never seen mirrored. The body is in the drape's frame, its triangles facing out, and is left out with no body. Unplaced copies and seams left open are problems the CLI prints as warnings; it still writes the files. A test checks the file tables both ways on an export of the bodice block example, and `check-schemas.py` checks any `.blender.json` under the folders it is given.
-
-**The Blender script** (built 2026-11-20, `data/blender/drape.py`, checked by hand with Blender 5.2.2). One fixed script, not text generated per export: the export copies it beside its files as `NAME.blender.py`, and it finds `NAME.blender.json` from its own name (or `--scene`), so a script keeps working with the files it came with. It imports the pieces' OBJ (forward Y, up Z) and the body's, and builds **one cloth object per source** from the pieces as placed, scaled to metres, with a loose edge for every pair the scene lists, since Blender's sewing springs act only within one mesh; each piece keeps a vertex group named after it, its UVs and a material of its colour. Several sources (a top and a skirt) each get a Collision modifier as well, to push each other away. Cloth settings are Blender's cotton (mass 0.3 kg a vertex, tension 15, shear 5, bending 0.5, quality 5) with sewing on and the sewing force at most 5, self-collision at 2 mm and the body's collision 4 mm thick. **Sewing goes first, without gravity** (decided 2026-11-20): the gravity weight is keyed 0 for the first 40 frames and 1 after, up to 120. Tried on the bodice block: with gravity from the start the pieces slid off before the shoulders were sewn, and a mass from the fabric's real weight (about 0.015 g a vertex at 10 mm) with no sewing limit closed the seams in two frames and crumpled the bodice into a ring at the neck. With the settings above it sews and settles fitted, darts closed, in about 1.5 minutes at 10 mm (5 s at 20 mm). The frames run by stepping the scene, then `ptcache.bake_from_cache` keeps them, so the saved `NAME.blend` opens at its last frame with no simulating. It adds a sun and a camera in front. Its progress lines start `OpenSloper:`, and it refuses a scene of another format or a newer version. Options after `--`: `--frames`, `--sewing-frames`, `--mass`, `--quality`, `--sewing-force`, `--output`, `--no-simulate`. `Sloper.Output.BlenderRun` finds Blender (`--blender`, else `blender` on the path, else the Windows or macOS install folder), runs it with `--background --factory-startup --python-exit-code 1` on the program's own script with `--scene`, passes on its lines as they come and keeps the last 20 others to show when it fails; `opensloper-cli drape --run` prints the progress. **Attachments** (decided 2026-11-21, asked for by the user after a circle skirt slid off the hips): an edge of a placed copy can be attached to the body. The mesher pins both ends of each attached edge's stretch (on a fold, of both halves) and lists the outline vertices between them; the script puts them in an `Attached` vertex group, the cloth's pin group, and on a body adds a Shrinkwrap modifier on that group before the cloth (nearest surface point, outside, 7 mm off: the collision distance and the body's thickness), so the attached vertices start on the body and stay there while the rest is sewn and falls. With no body they are pinned where they are placed, so a bag hangs from its top. Points (a strap's end, a button) were considered and left for later. **Mass** (checked 2026-11-21): lowering the vertex mass to 0.03 kg kept a circle skirt from stretching off the hips without an attachment, but crumpled and tore the straight skirt and the bodice, so the cotton defaults stay and a garment that would slide is attached instead. **Fabric hints** (decided and built 2026-11-21): a pattern material has an optional `fabric`, one of cotton, silk, jersey, wool, denim, canvas and leather (`TFabric`, `FABRIC_NAMES`), set in the Materials window and by `add_material` and `set_material` (`none` clears it); none drapes as cotton. Named fabrics rather than numbers, as a pattern maker knows the fabric, not Blender's units. The scene file gives each object its material's `fabric`, and the script holds each fabric's cloth settings (mass, tension, shear, bending: Blender's presets, shear a third of theirs as for the tuned cotton, jersey, wool and canvas between them), so the numbers live with the simulator they are for; a test checks the script has every fabric. A pattern's pieces are one cloth object, and Blender's stiffnesses vary per vertex but its mass does not, so each stiffness is the least of the cloth's fabrics with a vertex group (Stretch, Shear, Bending) taking it up to the most, and the mass is the average over the vertices; `--mass` overrides it. On the tote bag, canvas hangs smoother than cotton. Its sag was the placement, not the fabric (found 2026-11-21): with the bag's and the lining's tops attached where placed, 120 mm and 90 mm apart, the side seams could not close at the top and the sides folded in between the pinned corners. The example now places the bag's front and back tops together and attaches only them, and every seam closes. Stiffening canvas further was tried (bending up to 300) and dropped: a hung bag still rounds at its base, and getting a bag to stand is not what draping is for. Tests check the script's constants against the program's (format, version, file names, frames, Blender version), the runner on a stand-in shell script, and, where Blender is installed, a two-frame run; CI has no Blender.
-
-**Running Blender from the app** (built 2026-11-20). File → **Drape in Blender…** (toolbar, `aiDrape`; enabled with a placed piece) saves a new drape first, writes the export beside the drape file with the Preferences' spacing, finds Blender from Preferences, and runs it in `Sloper.Drape.BlenderDialog`: a modal window whose thread runs `RunBlender`, passing each line through `Synchronize`; the window shows the step or "Simulating frame N of M" with a bar. **Cancel**, Escape or closing sets the run's stop flag, which ends Blender (`TProcess.Terminate`) and waits for the thread; the window then ignores the thread's last calls. Done, it says how long it took and offers **Open in Blender**, which starts Blender on the `.blend` and leaves it running; failed, it shows Blender's last lines. With no Blender found the files are still written and a message says where and how to set it; with no script in the data folder nothing is written. **Preferences** gain a Drape tab (`ptDrape`, the one the drape app opens on): the Blender program (empty finds it; the tab shows which it found as it is typed), the mesh spacing (2–100 mm, 10) and the frames (1–10000, 120), kept in settings as `blenderProgram`, `drapeSpacing` and `drapeFrames`. They are preferences rather than drape file settings for now; the CLI keeps its own options and uses the Preferences' Blender only when `--blender` is not given. Checked on Xvfb: a run to the end, progress and Cancel midway (Blender ended), a Blender that fails, and none found.
-
-**Security of running Blender** (reviewed 2026-11-21, issue #65). Running Blender runs Python, so what it runs and which Blender is run must not come from a drape's folder, which may be downloaded or shared. Blender is started from an argument list, never through a shell, and nothing from a drape or pattern goes into its arguments but the scene's path and the frame count. **It runs the program's own script** (`TAppPaths.BlenderScriptFile`, in the install's data folder) with `--scene`, not the `NAME.blender.py` the export writes beside the scene: that copy is for running by hand, and anyone who can write to the folder could change it between writing and running. Blender 5.2 puts neither the script's folder, the current folder nor `PYTHONPATH` on `sys.path` (checked 2026-11-21), so a `json.py` beside a drape is not imported, and `--factory-startup` leaves the user's add-ons and startup file out. **Finding Blender never looks in the current folder** nor in a relative folder on the path: FPC's `ExeSearch` looks in the current folder first on Windows, so a `blender.exe` beside a drape opened from Explorer would have run; a configured name is looked for on the path, and a configured path is taken as given. **The script reads only the scene's folder**: the meshes the scene names are taken by their file names alone, so a scene file from elsewhere cannot point it at other files; it uses no `eval`, `exec` or `pickle`, and the scene is JSON. **Object names are on one line**: a Linux file name can hold a line break, which would otherwise add lines to the OBJ file (an `mtllib` would make Blender read another file), so `DrapeObjectName` makes control characters spaces. **Open in Blender** passes `--disable-autoexec`, so Python in the `.blend` (drivers, text blocks set to run) does not run even when the user's preferences allow it; the saved file needs none. The Claude tabs and the Automation API cannot run Blender, set the Blender program or write the script. Left as they are: the Blender program and the frames are the user's own preferences and options, trusted as the user is, and the files are written where the user saves the drape.
-
-## Automation API and command line
-
-### Command line
-
-`opensloper-cli` is built on the LCL-free core and ConsoleTools; its commands are on the generated Command line page. `check` exits with 0 for no problems, 1 for problems and 2 for a usage or file error, so it works in tests and CI. The commands are in `Sloper.CLI.Commands`, whose `RunCli` takes the arguments as a list and writes to the text files it is given; the program only passes its parameters, `Output` and `StdErr`. Tests run commands through it with both caught in streams (`Sloper.Tests.CLI`), on copies of the example patterns, checking exit codes, what is printed and the files written, with no built program needed (decided 2026-11-14). `serve` keeps to standard input and output, and `--help` prints through ConsoleTools to standard output, so neither is tested that way.
-
-### Automation API
-
-OpenSloper exposes its document operations as an API, first so Claude Code can test the app without GUI automation, later so Claude can help design and change patterns. The methods are on the generated Automation API page, from `Sloper.API.Methods`.
-
-**One rule: the API only issues document commands.** Every call goes through the same document changes as the UI, so name rules, formula checks, cycle checks and undo apply exactly as for a user, and the API cannot put a pattern into a state the UI could not. Measurement edits go through `Sloper.Core.Measurements` with the same safe write as the drafting app.
-
-#### Phase 1: scripting and testing
-
-Built (`Sloper.API.Server`, `opensloper-cli serve`): JSON-RPC 2.0 over stdin and stdout, one message a line, with no window. Objects are named by `id` or `name`; `add_point` and `add_edge` take a `type` and fields as in a pattern file, so a whole pattern can be built through the API, and formulas are in the pattern's unit while reported positions stay mm. `render` returns the draft as SVG (`Sloper.Output.DraftSVG`), so Claude can look at the result, not only check numbers, and a wrong curve or misplaced dart is caught. `export` reads the saved files, as the publish app does. `render` with `format` png returns the draft as a PNG image, base64 (see Drawing images without the LCL); batches are not supported. A notification (a request without an `id`) gets no reply, not even when it fails, as JSON-RPC requires, nor when it has no `method` or its `params` is not an object: `serve --connect` reads no reply to a line without an `id`, and would take one as the answer to its next request. Only a line that is not JSON at all is answered, with a null `id`.
-
-**A generated Python client, not an embedded language** (decided 2026-11-10). `opensloper-cli doc opensloper.py` (`Sloper.Docs.Python`) writes `docs/reference/opensloper.py` from the methods table: one Python method per API method, with typed parameters (choices as `Literal`) and the table's descriptions as docstrings, the target as `id` or `name` by its type, `add_point` and `add_edge` members as keyword arguments, and a refused call raised as `OpenSloperError` with its code, field and position. Besides the API methods it has one helper that needs no server, `OpenSloper.create_pattern_file` (issue #44), which writes an empty pattern file to open, at `PATTERN_VERSION`, the pattern format version generated into the client, in one of `PATTERN_UNITS`, and replaces an existing file only when it is a pattern, as `save` does. It is committed with the other generated pages, so a test fails when it falls behind the table, and readers download it from the site; it is MIT licensed so it does not bind the licence of the scripts that import it, and it is not published to PyPI until users ask for that. Pascal scripting inside the apps was rejected: it would duplicate the API with a second binding layer, few pattern makers know Pascal, and scripts carried in shared patterns would run code from untrusted files. Driving the running app is left to the GUI's `--automation` socket, which the same client can then use.
-
-**Errors are data.** A refused call returns a JSON-RPC error with the message, the field and the position in the formula (`TPattern.LastError`, `LastErrorField`, `LastErrorPos`); scripts check the code, not the message. Evaluation failures are object states, never crashes.
-
-**The design window's automation mode** (built 2026-11-11): see Phase 2. A test can drive the running app through `serve --connect` and read its state with `ui_state` (file, selection, label mode, the region in view) instead of xdotool, and look at the canvas with `render` and that region.
-
-#### Phase 2: Claude as a design assistant
-
-- **MCP server** (built 2026-11-11, `Sloper.API.MCP`). MCP is JSON-RPC 2.0 over stdio, so `opensloper-cli serve` answers the MCP handshake (`initialize`, `ping`, `tools/list`, `tools/call`, notifications) and passes every other method to the API server: one command serves scripts and MCP clients, and Claude Code and Claude Desktop connect directly. The tool list is made from the methods table, one tool per method with the same name: a JSON Schema from each parameter's kind (a target becomes `id` or `name`, neither required), the summary and reply as the description, and `readOnlyHint` from the table's `ReadOnly`. `add_point` and `add_edge` take their members by type, so their descriptions list each type's members from `Sloper.Core.OperationInfo` rather than a schema per type. A refused call is a tool result with `isError` and the API's error (code, message, field, position) as its text, so the model reads why and retries; an unknown tool is a protocol error. `render` answers with the SVG as text, and with `format` png as an image, so the model sees the draft: MCP clients take PNG but not SVG images. Resources and prompts wait until there is a use for them.
-- **Live editing in the design window** (built 2026-11-11). The user turns automation on with Assistance → Allow Assistants to Connect, or starts the app with `--automation`; `opensloper-cli serve --connect` is then an MCP server on the pattern open in that window, so the user sees the assistant's changes as they happen. Any MCP client can connect, not only Claude, so the window names it "the assistant" (2026-11-16, issue #37). Each change is one undo step labelled `Assistant: <description>` (Edit → Undo Assistant: Add variable), so it can be reviewed and undone at once. Built from four parts:
-  - `Sloper.API.Endpoint` (no LCL): the run folder (`TAppPaths.RuntimeDir`, made `0700` and checked to be the user's), the token, and an endpoint file per window, `automation-<pid>.json` beside `automation-<pid>.sock` (Windows: a loopback port in the file). The file name starts with the endpoint's kind, so the apps' link (`publish-<pid>`) shares the folder and is never found by an automation client. The JSON-RPC codes and replies they all use are in `Sloper.API.Rpc`. A client reads the newest; several windows can listen, and a stale file left by a crash is skipped when nothing answers. A socket path over 103 characters is refused with a message, since ssockets crashes on a longer one.
-  - `Sloper.API.Listener` (no LCL): a thread that accepts one client at a time. The first line must be `authenticate` with the token, within 5 s and 4 KB, or the connection is refused and closed. Each request line then runs on the main thread (`Synchronize`), between the user's own edits; writes never raise SIGPIPE (`MSG_NOSIGNAL`, `SO_NOSIGPIPE`).
-  - `Sloper.API.Connection` (no LCL), behind `serve --connect`: `TMcpServer` calls it as it calls the local server (`TApiBackend`), and answers the MCP handshake itself, so the window is not involved until Claude acts. It connects on the first tool call, so the order of starting things does not matter, and again on the call after the window drops it; the call that finds the connection gone fails and says so.
-  - `Sloper.UI.Automation`: the controller in the window. `TApiServer.CreateFor` works on the window's document without owning it; `ChangePrefix` labels the undo steps; `OpensFiles` false refuses `open`, since the user opens patterns and replacing theirs would lose work; `OnConfirmWrite` asks before `save`, `export` or `set_measurement` writes outside the pattern's folder; `OnWindowState` answers `ui_state`. While the user has a change open (a drag), every method that is not read-only is refused with "try again", so Claude never lands in the middle of the user's edit. After New or Open in the window (`TPatternDocument.Generation` counts the patterns a document has held), the next call is refused once with "another pattern is open; look again", since the IDs and names Claude knows belong to the pattern before (2026-11-14).
-- **In-app assistant** (built 2026-11-11, `src/assistant/`, `Sloper.UI.AssistantPanel`). A Claude section in the side panel: the user asks in their own words and Claude works on the open pattern with the Automation API's methods as tools, through the same `TApiServer.CreateFor` as live editing (undo steps labelled `Claude: …`, `open` refused, writes outside the pattern's folder asked, edits wait during a drag). No consent prompt: the user typed the request. New or Open in the window ends the conversation: a tool call still pending is refused and the question stopped, and the next question starts a new conversation (2026-11-14). Decided 2026-11-11:
-  - **The Assistance menu** (2026-11-16, issue #37), between Tools and Help, holds both ways in: Ask Claude (opens the Claude tab with the cursor in the question), Anthropic API Key… (Preferences on its General tab, since the key serves every app's Claude tab; 2026-11-20, issue #64), then Allow Assistants to Connect and Disconnect Assistant for MCP clients, which used to end the Tools menu. The Claude tab keeps Claude's name, since it calls Anthropic's API with the user's key; what any MCP client may use says "assistant". Without a key, the tab's question box and buttons are off and Ask Claude with them, and the tab says where to set the key; it reads the key again after Preferences, and when another design window says the preferences changed (see Preferences), so a key set there turns it on.
-  - **The key** is the user's Anthropic API key, entered in Preferences (General, with **Let AI assistants read the measurements**; both moved from Design on 2026-11-20, issue #64, as the publish and drape apps' Claude tabs use them too) and kept in `anthropic-key` in the config folder, mode `0600`, not in `settings.json`, which is plain and shared by the apps; `ANTHROPIC_API_KEY` wins when set, and Preferences then shows it read-only. A system keyring was rejected for now: three platform bindings with no Pascal library.
-  - **Raw HTTPS** (`Sloper.Assistant.Http`): Pascal has no Anthropic SDK, so `fphttpclient` with OpenSSL posts to `/v1/messages`, API version `2026-10-21`; `ANTHROPIC_BASE_URL` points it elsewhere, as the SDKs allow, which the GUI check uses with a local mock server. The server's certificate is checked (built 2026-11-14), which FPC 3.2's OpenSSL handler leaves off: the chain against the system's roots (or `SSL_CERT_FILE`) and the name against the host, both in the handshake (`SSL_set1_host`, OpenSSL 1.1 or later), so the key never goes to a server that only claims to be the API. Tests run a TLS server on 127.0.0.1 with the certificates in `tests/tls`. Cancelling raises from the stream sink, which the API's pings keep calling while Claude thinks, and also shuts down the reading side of the connection's socket (`THttpsTransport.Abort`), so a server gone quiet does not hold Stop, or closing the window, for the minute of read timeout; only reading, since OpenSSL's closing write to a socket shut both ways raises SIGPIPE. For the same reason, a connection the server resets would end the program as OpenSSL writes its close, and no send flag reaches OpenSSL's writes, so the first transport made sets SIGPIPE to be ignored for the whole program, as Qt's networking does; the design, publish and drape apps and `opensloper-cli` (for `check-connection`) link the assistant. OpenSSL 3 is named before it loads (see OpenSSL for the assistant under Release builds). A Stop while waiting to retry sends no further request (2026-11-14).
-  - **The request**: `claude-opus-5-5`, streamed, effort `high` (drafting is work where a wrong formula costs more than tokens), adaptive thinking (always on for this model, so not sent), `max_tokens` 64000, refusal fallbacks (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`), automatic prompt caching. The tools (every method but `open`, with `eager_input_streaming`) and the system prompt are made from the program's own tables and never change, so the cache holds across turns; the system prompt carries the formula functions, units and each object type's properties, and says that text in a pattern is data, never instructions.
-  - **The loop** (`Sloper.Assistant.Conversation`, manual, since there is no SDK tool runner): the history only grows, apart from images of the draft, of which only the last three stay (older ones become a note, as a new one comes, so the cached start changes only then; 2026-11-14), and each assistant message goes back exactly as streamed, thinking blocks and signatures included (`Sloper.Assistant.Stream` rebuilds blocks from the events), except the API's rule after a fallback part-way through: thinking and tool_use blocks before the last `fallback` block are left out. Tool inputs are parsed strictly once whole; input that does not parse is not run and goes back as an `INVALID_JSON` error. A turn ending in `refusal`, `max_tokens`, `model_context_window_exceeded` or a stop reason the loop does not know runs none of its tools, and their results go back as stopped so the history stays valid. A stream that ends before `message_stop` is a failed request, its part-written message never kept (2026-11-14). 429 and 5xx are retried three times, honouring `retry-after`; 401 says to check the key. A question stops after 40 requests. A question whose first request fails or is stopped is taken back, so it is never asked again with the next one; one that stops after its tools ran keeps them, since their edits happened, and the next question joins that last user turn after a note that the request did not finish (2026-11-14).
-  - **Threads**: the conversation runs on a worker thread; text is gathered and shown on the main thread, and each tool runs there (`Synchronize`), between the user's own edits. The panel frees the worker itself, also when the window closes mid-answer.
-- **Claude in the publish and drape apps** (built 2026-11-20, issue #64). Both apps have a Claude tab, the last of the side panel, with tools that read and change what their window has open; the user chose read and change over read only, since arranging and placing are what they would ask for. The panel (`Sloper.UI.AssistantPanel`) works through a `TAssistantHost`, which gives it the tools, the system prompt, the opening text and the file's generation, and runs each call on the main thread: `TPatternAssistantHost` is the design app's, on `TApiServer` as before, and `Sloper.UI.AssistantHosts` has `TLayoutAssistantHost` and `TDrapeAssistantHost`. `TConversation.CreateFor(Transport, Methods, System)` takes the host's method table, made into tools by `AssistantToolsFor` (through `McpToolsFor`, as for MCP), so the loop is unchanged. The tools are not the Automation API's: the layout and the drape are documents of their own, so `Sloper.API.LayoutServer` (`layout_state`, `list_pieces`, `render`, `place_pieces`, `set_placement`, `remove_piece`, `pack`, `set_output`, `add_note`, `remove_note`, `set_title_block`, `undo`, `redo`) and `Sloper.API.DrapeServer` (`drape_state`, `list_pieces`, `list_seams`, `render`, `place_piece`, `set_placement`, `turn_piece`, `round_body`, `flip_piece`, `unplace_piece`, `guess_placements`, `align_to_seam`, `set_gap`, `undo`, `redo`) each have a method table and a `CallMethod` on their document, sharing the parameter helpers `Sloper.API.Server` exports. They write no files: saving, exporting, printing and running Blender stay the user's, so nothing asks before a write. Each change is one undo step labelled `Claude: …`; edits are refused while the user has a change open (a drag), and after New or Open (`Generation` on `TLayoutDocument` and `TDrapeDocument`) the conversation ends as in the design app. `render` answers with a PNG: the layout's sheet with each piece numbered by its index, and the drape's view from one of its fixed views (`Sloper.Output.DrapeSVG`, the body and pieces as `Sloper.Core.DrapeScene` draws them, seams' links over them, each piece numbered), drawn through `SVGToPNG` in `Sloper.Output.DraftPNG`. Neither app's tools read measurements, so the measurements preference does not change them; their opening text says what goes to Anthropic: names, placements and sizes, pictures, and file names without folders, never the measurement files' names or values. The tools are not offered over MCP for now: `serve --connect` reaches the design window only.
-- **Consent** is asked on the assistant's first request on a connection, reading included, since a pattern's contents are the user's too: Allow Once (this connection), Allow Until I Close OpenSloper, or Don't Allow, the default, which refuses the request and drops the connection. The status bar shows "An assistant can connect" or "Assistant connected · click to disconnect"; clicking it, or Assistance → Disconnect Assistant, drops the client, which is asked again when it reconnects unless allowed for the session.
-- Example requests: "move the shoulder dart to the side seam", "add 2 cm ease at the hip", "why is point C invalid?".
-
-#### Safety and scope
-
-Reviewed 2026-11-08.
-
-**`serve` over stdio needs no token.** Only the process that started it holds its pipes, and that process can already do anything the user can, so a token would protect nothing. The MCP server over stdio is the same.
-
-**The GUI's `--automation` socket needs protection**, since any local process could connect:
-
-- Off by default; turned on per session from the GUI or the command line.
-- Listens only locally: on Linux and macOS a Unix domain socket in `$XDG_RUNTIME_DIR` (or a private folder made for it) with mode `0600`, so file permissions already keep other users out; on Windows 127.0.0.1, never 0.0.0.0. If it ever speaks HTTP, it also checks `Host` and `Origin`, against DNS rebinding from web pages.
-- **A token the app generates, never one the user picks**: 32 random bytes from the OS, new at each start, written to a file only the user can read (beside the socket), and compared in constant time. The connecting program (the MCP bridge in `opensloper-cli`) reads the file and sends it; the user never pastes it into a chat, so it never reaches the model, the transcript or anything prompt injection could repeat. Printing it at start-up was dropped: a GUI started from the desktop has no terminal, and printed text ends up in logs.
-- **Consent is the user's, in the app**, asked on Claude's first request on a connection, with the status bar showing while a client is connected (see Consent under Phase 2).
-
-**Prompt injection is the larger risk.** Claude reads names, notes and descriptions from patterns other people share, and that text can carry instructions. A token does not help, since the attack comes through the client the user trusts, so the API limits what a steered client can do:
-
-- `save` writes only `.sloper` files and replaces only a file that already holds a pattern (its `format` is `pattern`); `export` writes only a file with its format's extension, and replaces a file already there only when the call gives `overwrite` (built 2026-11-14), so it cannot write over a PDF that is not an export. Built 2026-11-08.
-- `set_measurement` writes only the pattern's measurement file, and only after it loads as one; in the design window it asks, as `save` does, when that file is outside the pattern's folder (2026-11-14).
-- In the design window, writes outside the open pattern's folder ask the user first, `open` is refused, and every change is one undo step labelled `Assistant: <description>` (`Claude: ` from the Claude tab). Built 2026-11-11.
-
-**Other rules:**
-
-- The API works on the open document; file access is limited to `open`, `save` and `export` with paths the caller gives.
-- The API layer depends only on the document and core layers, keeping both usable without it.
-- Nothing runs a shell: the apps start each other with `TProcess` and an argument list, so file names cannot inject commands. Text written into SVG is escaped (`EscapeXML`).
-
-### Drawing images without the LCL
-
-Built 2026-11-11 (`Sloper.Output.DraftPNG`). The CLI and the API draw the draft as PNG by drawing the draft's SVG with BGRABitmap's no-LCL build (`bgrabitmappack4nolcl_freetype`), so the image always matches the SVG and there is no second drawing routine. Text goes through Lazarus's own FreeType (`freetypelaz`, Pascal, no system library) with fonts bundled in `data/fonts`: Noto Sans, then DejaVu Sans if Noto is missing (BGRABitmap uses the first family it has; it does not fall back glyph by glyph). Bundling rather than reading system fonts gives the same image on every platform and in tests, and LazFreeType cannot read every system font. The SVG names the bundled families first in each `font-family`, since BGRABitmap cannot draw the generic `sans-serif` alone. Widths are 16 to 4096 pixels, 1600 by default, and the height follows the drawing.
-
-Our units that use a third-party drawing library live in `src/output/thirdparty`: every standard applies there, and `opensloper-make.sh check` allows only BGRABitmap's no-LCL units besides, so the rest of `src/output` stays vector-only and nothing below `src/ui` uses the LCL. The CLI and tests require the no-LCL package; the GUI apps keep the LCL build, which compiles the same units.
+- **Route:** gettext `.po` files, so translators use common tools (Poedit, Weblate). Templates go in `data/languages/`; the GUI apps use `LCLTranslator` (which also translates `.lfm` captions), the core and CLI LazUtils' `TranslateResourceStrings`. The language comes from a preference, then `--lang`, then the system.
+- **The catalogue's** names, descriptions and how-tos get their own `.pot`, keyed by measurement.
+- **Never translated:** formulas (keys, functions and the `.` decimal point, so a pattern means the same everywhere), saved files, API method and field names and error codes, and CLI output meant for scripts.
+- **Exported text** (labels, information blocks) follows a language chosen in the output profile.
+- **Rules for code now:** messages built with `Format` and placeholders, never by joining pieces; one resourcestring per sentence, plurals included; room for longer text (German runs about 30% longer); units, numbers and dates kept out of resourcestrings.
 
 ## Privacy
 
-Decided 2026-11-19 (issue #60). Measurement files hold body measurements, and a pattern's file and folder names often name the client, so they are personal data. Everything stays on the user's machine except what an assistant reads: the in-app Claude assistant sends its questions and tool results to Anthropic's API, and an assistant connected to the window (Claude Code, Claude Desktop) sends what it reads to its own service. The apps send nothing else: no telemetry, no update checks, and `check-connection` sends no key and no pattern.
+Measurement files hold body measurements, and file and folder names often name the client, so they are personal data. Everything stays on the user's machine except what an assistant reads: the Claude tabs send their questions and tool results to Anthropic's API, and an assistant connected to the design window sends what it reads to its own service. Nothing else is sent: no telemetry, no update checks.
 
-The rule the apps follow is that **no name is sent beside the measurements**. Measurements without a name are not personal data under Singapore's PDPA, which is what this was checked against; a name could come from the folder (`/home/user/clients/jane-smith/`), the measurement file (`jane-smith.slm`) or the pattern file, so:
+The rule is that **no name is sent beside the measurements** (measurements without a name are not personal data under Singapore's PDPA, which this was checked against):
 
-- **Files withheld.** The API servers the design window runs, for the Claude tab and for a connected assistant, have `WithholdsFiles` on (`TApiServer`): a pattern is named by its file name alone (`path` in replies, `file` in `ui_state`), and the measurement file not at all: `measurements` in replies, `path` in `get_measurements` and the report's `measurements` are `(withheld)`, and the measurement file's path is taken out of a measurement error and of a refused write's reason. The window is still told the full path, to ask the user before a write. `opensloper-cli serve` on its own gives full paths, since it opens and saves only files its client names.
-- **Measurements kept back, if the user chooses.** Edit → Preferences → General → **Let AI assistants read the measurements** (`assistantMeasurements` in the settings, on by default, since without a name the values are not personal) turned off refuses `get_measurements` and `set_measurement` in the window's servers (`SharesMeasurements`, "The user keeps their measurements from assistants") and leaves them out of the Claude tab's tools (`AssistantTools`); `missing_measurements`, which lists keys only, stays. It cannot hide the measurements completely: every point and length the pattern computes, and a render of the draft, is worked out from them, which the Claude tab and the Preferences note say.
-- **Said before it is sent.** The Claude tab's opening text, shown before the first question of every conversation, says what goes to Anthropic, that folders and the measurement file's name never do, and whether the measurement values do, with where to change it; the Preferences note says the same. The user guide's Asking Claude page has a Privacy section, and Scripting one for any AI assistant over MCP, which sends what it reads to its own provider; it also says that `serve` on its own gives full paths and the measurements, since the preference is the design window's.
+- **Files withheld.** The window's API servers (`WithholdsFiles` on `TApiServer`) name a pattern by its file name alone and the measurement file not at all, also inside error messages. `opensloper-cli serve` on its own gives full paths, since it opens only what its client names.
+- **Measurements kept back, if the user chooses.** Preferences → General → **Let AI assistants read the measurements** (on by default) turned off refuses `get_measurements` and `set_measurement` and leaves them out of the Claude tab's tools. Computed points and renders still derive from the measurements, which the note in Preferences says.
+- **Said before it is sent.** Each Claude tab's opening text says what goes to Anthropic, and the user guide has a Privacy section.
 
-A pattern's own text is not filtered: a note that reads "Jane Smith's bodice", a piece or variable named after the client, or a measurement set's description is sent as written. The user guide says to keep names out of a pattern that Claude will read.
-
-## Web version
-
-Planned 2026-11-18, not designed in detail and not built yet. A web version of OpenSloper runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript UI. A Django server around it handles accounts, cloud storage, subscriptions and the marketplace.
-
-**Why it is possible.** The core has no LCL dependency, and the Automation API already exposes every document operation as JSON-RPC 2.0. So the web version needs a new UI, not a new engine. The engine behaves the same everywhere: name rules, formula checks, cycle checks and undo are the same code on the desktop, in the browser and on the server.
-
-**Layers:**
-
-| Part | Runs in | Language | Does |
-| --- | --- | --- | --- |
-| Engine | Browser (Web Worker) and server | Pascal, compiled to Wasm | Core, document and API layers: evaluation, undo, pieces, seams, exports |
-| Editor | Browser | TypeScript | Canvas, tools, panels, properties; talks to the engine through the API |
-| Server | Server | Python, Django | Accounts, cloud files, subscriptions, marketplace, server-side checks and exports |
-
-The editor must run in the browser. Sending every drag to the server would make dragging, snapping and live updates lag, so the server never takes part in interactive drafting.
-
-### Engine
-
-**Compiler.** FPC's WebAssembly target, `wasm32-wasip1`. It is mature enough that the compiler compiles itself for Wasm, but as of November 2026 it is only in the development compiler (trunk 3.3.1), not a stable release, so the web build uses a self-built cross-compiler. The desktop apps stay on the stable compiler. The core must keep compiling with both, which `opensloper-make.sh test` checks once the web build exists.
-
-**pas2js was considered and rejected** for the engine: it compiles a subset of Object Pascal without pointers, and Clipper2's Pascal code uses them. It may still be used for small glue code.
-
-**One entry point.** The module exports one function, `handle(request) → response`, taking and returning a JSON-RPC 2.0 message as text, the same messages `opensloper-cli serve` reads and writes. The editor, Claude, the CLI and the server therefore all use the same methods (`open`, `add_point`, `set_formula`, `undo`, `render`…). New methods the editor needs are added to the Automation API, so the desktop's `--automation` mode and the MCP server gain them too.
-
-**What goes in the module:** `src/core`, `src/document`, `src/api` and the parts of `src/output` that write PDF, SVG and DXF to memory. No LCL and no BGRABitmap, so the module's `render` gives SVG only: the PNG drawing (`src/output/thirdparty`, see Drawing images without the LCL) stays out.
-
-**Shared UI logic moves behind the API.** These LCL-free units in `src/ui` hold logic both front ends need, so they are reached through API methods and not rewritten in TypeScript:
-
-| Unit | API use |
-| --- | --- |
-| `Sloper.UI.Snap` | What a click at a position would make, for the snap marker, guide and status text |
-| `Sloper.UI.Scene` | Hit testing, box selection, drawing order, which labels to show |
-| `Sloper.UI.RulerTicks` | Ruler ticks and grid spacing, with `Sloper.UI.View`, the view transform it reads |
-| `Sloper.UI.Completion` | Formula autocomplete suggestions |
-| `Sloper.UI.ObjectList` | Rows, search and filters for the Objects panel |
-
-Whether they move into `src/core` or are compiled into the module where they are is decided when building. `Sloper.Core.Drag` is already in the core.
-
-**Runs in a Web Worker,** so a slow evaluation never freezes the page. Calls are asynchronous; the editor keeps its own copy of what it is drawing and updates it from responses.
-
-### Files and storage
-
-The browser has no ordinary filesystem, so the engine must stop opening files by path.
-
-- **Storage takes text.** `Sloper.Core.PatternFile`, `Sloper.Core.Measurements` and layout loading gain functions that read from and write to strings, with the path-based functions as thin wrappers for the desktop. The API gains `open` and `save` variants that pass file contents in the message.
-- **References between files** (a pattern's `measurementFile`, a layout's `sources`) stay paths, now resolved by whoever supplies the file: the filesystem on the desktop, the cloud library or the browser's local store on the web. Paths keep `/` separators and stay relative, so a set of files moves between desktop and web unchanged.
-- **Where files live on the web:** in the user's cloud library on the Django server, or, without an account, in the browser's own storage (IndexedDB or the Origin Private File System), with import and export of ordinary files so nothing is locked in.
-- **File watching** is replaced by the server telling open editors that a file changed. The rule stays the same: a file has to read the same twice before it is taken in, and saving over a changed file is refused until the change is taken in.
-- **File formats do not change.** A `.sloper`, `.slm` or `.slayout` saved on the web opens on the desktop, and the other way round.
-
-### Editor
-
-A TypeScript single-page app, one per job as on the desktop (design, measurements, publish), sharing one toolkit and one engine module. To begin with it covers drafting and the measurements tab; publish follows.
-
-- **Canvas:** Canvas2D at first, with WebGL if large patterns need it. It draws from the computed geometry the engine reports (segments, pieces, states), not from `render`'s SVG, so dragging stays smooth. `render` is used for the first prototype and for thumbnails.
-- **Behaviour matches the desktop:** the same tools, shortcuts (Cmd on macOS, Ctrl elsewhere), snapping order, undo steps, label modes and colours, following this document. Where the two differ, this document is updated so it stays the one description of the app.
-- **Panels:** objects, variables, measurements, materials and the property grid, built in plain TypeScript or a small UI library, decided when building. User text is translated with the same `.po` files (see Translation), loaded in the browser.
-- **Output:** PDF, SVG and DXF are written by the engine and downloaded; printing goes through the browser's PDF viewer, so the print-at-100% reminder and test square matter as much as on the desktop.
-
-### Django server
-
-Django serves the editor and everything around it.
-
-| Area | Notes |
-| --- | --- |
-| Serving | The editor pages, the TypeScript bundle and the `.wasm` engine file, with long-lived caching by version |
-| Accounts | Sign-up, sign-in, the Django admin as the back office |
-| Cloud library | Patterns, measurement sets and layouts per user, with folders, version history and sharing; files stored as they are, never converted |
-| Subscriptions | Payment for the cloud connection, used by the web editor and, later, the desktop apps' cloud open and save |
-| Marketplace | Listing, selling and downloading patterns; uploads checked by the engine before they are listed |
-| Simple pages | The pattern library, client list and account pages as Django templates (with htmx where it helps), not part of the single-page app |
-
-**The engine on the server.** Django runs the same engine for jobs that need no browser: checking marketplace uploads (`check`), making previews and thumbnails (`render`), and exporting PDFs. In order of preference:
-
-1. **`opensloper-cli serve` as a subprocess,** JSON-RPC over stdin and stdout. Works with the stable compiler today and suits occasional jobs.
-2. **The Wasm module through `wasmtime` for Python,** so browser and server run exactly the same build.
-3. **The core as a shared library (`.so`) through `ctypes`,** only if the first two are too slow, since it needs a C interface to maintain.
-
-Server jobs run in a task queue, not in the request, so a large export never holds up a page.
-
-**Claude.** The server can offer the Automation API as an MCP endpoint over a user's cloud files, so Claude can work on patterns stored there (see Automation API, Phase 2).
-
-### Licence
-
-The engine and editor sent to the browser are distributed, so GPLv3 applies to them as to the desktop apps: the source is offered, which it already is. The Django server code is not distributed to users, so GPLv3 does not require it to be published; AGPL would, and the project does not use AGPL. Any code in the server that is linked with the engine, as in option 3 above, is treated as GPL. This bears on the cloud service and is to be checked with a lawyer before it is sold.
-
-### First step: a spike
-
-Before anything else, prove the engine runs in a browser:
-
-1. Build the trunk cross-compiler for `wasm32-wasip1`.
-2. Compile the core, document and API layers with an exported `handle`.
-3. Load it in a minimal TypeScript page with a WASI shim, call `open` with a regression pattern passed as text, then `evaluate` and `render`, and show the SVG.
-4. Note the module's size, load time and evaluation time against the desktop.
-
-If it works, the rest is front-end and server work. If not, the blocker (compiler, a package, Clipper2) is known early.
-
-**Spike results** (2026-11-18, all four steps). The engine is in `web/engine/` on the `web-spike` branch, with how to build the toolchain in its README.
-
-- **Compiler.** FPC trunk (3.3.1 of 2026-11-18), cross-built from the stable 3.2.2 for `wasm32-wasip1`, compiles `src/core`, `src/document`, `src/api`, `src/output` and Clipper2 unchanged, with its own Wasm assembler and linker, so no LLVM tools are needed. It is built twice from the same units: a WASI program that answers JSON-RPC on stdin and stdout, as `opensloper-cli serve`, run under Node's `node:wasi`; and a WASI library exporting `engine_handle(request, size)`, with `engine_alloc` and `engine_free` for the memory between, for the browser.
-- **Same results.** Every regression case (both skirts and the bodice, two sizes each) gives the same objects, values, states, problems and rendered SVG as the desktop, and PDF, SVG and DXF exports of a packed layout, seam allowances and all, are byte for byte the same (`web/engine/compare.py`).
-- **Speed and size.** A formula edit with the bodice block's full evaluation takes 3.7 ms in Wasm under Node against 1.7 ms on the desktop. Stripped and smart-linked (`-Xs -XX -CX`), the module is 4.3 MB, 570 KB with Brotli.
-- **In a browser.** A TypeScript page (`web/engine/browser`) loads the library in a Web Worker through `@bjorn3/browser_wasi_shim`, with the pattern and its measurements put as text in an in-memory `/data`, and draws the SVG the engine renders; it is byte for byte the desktop's for the skirt and the bodice. In headless Chromium on a busy desktop, from a local server: the engine is ready in about 45 ms (fetch, compile, start), the bodice block is drawn 110 to 490 ms after the page's script starts, and an edit takes 3 to 18 ms at the median, 7 to 42 ms at worst. Evaluating on every drag in a worker is therefore affordable, though at the slow end the editor may need to drop intermediate evaluations during a drag. Over a network the download dominates start-up. The tools come from npm, through `nodeenv` in the repository's Python `venv`: TypeScript, esbuild, the shim and `puppeteer-core` driving the system's Chromium.
-- **PNG.** `Sloper.API.Server` uses the BGRABitmap renderers directly, so the module is built with two stand-in units of the same interface (`web/engine/stubs`) that refuse PNG ("use SVG"). Before the web build is real, PNG should be reached through something the module can leave out, rather than replaced by stubs.
-- **Two fixes.** `Sloper.Core.AppPaths` took every system that is not Windows or macOS to be Unix; WASI is neither, so the XDG folders now cover it and only the user ID stays Unix-only. FPC trunk's WASI `sysutils` defines `FPC_FEXPAND_DRIVES` and `FPC_FEXPAND_UNC`, so `ExpandFileName('/data/x')` gives `//data/x` and no absolute path opens; its `dos` unit does not, and gets it right. The two lines are taken out in the local compiler (`web/engine/fpc-wasi-fexpand.patch`), to be reported to FPC.
-
-### Open questions
-
-- Does Clipper2's Pascal code, and everything else the core uses, compile and run correctly on the Wasm target? Yes, with the same results as the desktop (see Spike results).
-- How large is the module, and is it fast enough to evaluate on every drag in a worker? 570 KB with Brotli; in a browser the engine is ready in about 45 ms locally and an edit to the bodice block takes 3 to 18 ms (see Spike results).
-- Should the shared UI units move into `src/core`, or stay in `src/ui` and be compiled into the module?
-- Plain TypeScript or a UI library for the panels?
-- Does the web version start with drafting only, or with measurements as Django forms and drafting after?
-- Can the desktop apps open and save cloud files with the same accounts, and when?
-- Offline use: should the web editor work without a connection, as an installable web app?
-
-## Open items
-
-Everything not built yet, gathered from the sections above so each can become a GitHub issue; the sections keep only what is built and the decisions behind it. When an item becomes an issue, put its number here; when it is built, take it out and describe it in its section.
-
-### Roadmap
-
-Save, load and undo came before the canvas, so the canvas was built on document commands from the start and saved patterns served as regression tests. The app becomes personally useful at step 9; a community release follows if it proves easy to use.
-
-1. Drape app and Blender export for 3D preview, see `documents/design-3d-preview-in-blender.md`: built end to end (2026-11-20); left are trying it on the other examples (garments and accessories) and tuning the cloth
-2. Web version: the Pascal engine compiled to WebAssembly under a TypeScript editor in the browser, with a Django server for accounts, the cloud library, subscriptions and the marketplace (see Web version). Starts with a spike that runs the engine in a browser.
-
-### To do
-
-Agreed, but not built. Each line is meant to become one issue.
-
-**General**
-
-- **Translation**, for the community release (see Translation).
-- **Release signing** (Issue #17), for the community release: macOS notarisation, Intel macOS builds and signed Windows programs. The installers and the offline guide are done (see Release builds).
-- **More tutorials**: (Issue #46) moving a dart, a tote bag, a leather card wallet. (The Icons reference page, the issue's last part, was done 2026-11-18.)
-- **Help in the apps.** (Issue #32) F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Help → User Guide already opens the offline copy's front page, with the website as fallback. Translated and versioned documentation wait for the community release.
-- **Publishing the developer documentation** (Issue #47 built it locally, see Documentation) once the user guide has moved to docs.opensloper.com.
-
-**Design app**
-
-- **Transforms**: (Issue #49) a live ghost while dragging, and snapping to existing angles.
-- **SVG stamps** (Issue #9) (annotations stage 4). A drawing from another app (a logo, a fold or assembly diagram) placed and anchored like a note, so it moves with the geometry. Paths only: `<text>` is refused with a message asking for it to be converted to paths, which keeps fonts out. Drawn at true size from the SVG's own units (px taken at 96 per inch, with a warning), and stored in the pattern as path data, so the pattern does not depend on the outside file.
-- **Rounding curved corners**, (Issue #54) which needs a tangent found numerically (see Accessories). Still refused (checked 2026-11-19): `AddRoundCorner` takes only straight edges, since `TCornerArc.Compute` places the arc in closed form from the angle between two lines. Only `Compute` needs a numerical branch: the centre `radius` from both edges on the inside of the corner, found by Newton's method on the two positions along the edges, starting from the straight answer along each edge's tangent at the corner; the tangent points are the centre's projections onto the edges. No solution, a radius too big for the curve's bend, or a tangent point past an edge's end are invalid states. Splitting, trimming and moving pieces, notches and seams onto the arc already work for curves. Wanted for curved bag flaps and rounded shirt-tail hems; today the rounding is drawn by hand as a curve, without exact tangency or a radius formula.
-- **Role styles in Preferences**: (Issue #56) overriding a role's colour, dash and weight.
-
-**Publish app**
-
-- **A window for output and machine profiles**, (Issue #57) which are edited in the settings file for now.
-- **True-shape material needed**: the Materials tab's estimate still packs bounding boxes (see Material needed); Pack Pieces nests true shapes since issue #58.
-- **Raising the publish window on Wayland** (Issue #59), which needs an `xdg-activation` token Qt 5 cannot use (see Finding an open window).
-
-**To try on real hardware**
-
-- A print with the Leather output profile.
-- Alt-click to cycle coincident lines on a real desktop, as some window managers take it.
-- DXF-AAMA on a real cutting system, checking the layers and file-level text.
-- Machine SVG and DXF on a real cutter, and whether labels need a single-stroke font.
-
-### Open questions
-
-- Should buttonholes become a marking role?
-- Should an output profile send roles to separate files or passes, one per laser operation?
-- What values does each leather marking need (skive width and depth)?
-- Leather hides (under Future ideas): is there evidence the community needs them?
-
-### Future ideas
-
-Ideas worth keeping that are deliberately outside the roadmap. Each is added only when the core is solid, or when the community asks for it.
-
-| Idea | Notes |
-| --- | --- |
-| Notions library | More features for the Features tab (zips are the first, see Features): a catalogue of haberdashery (buttons, hooks and eyes, snaps, eyelets, elastic), placed on a pattern like KiCad footprints: markings on the seam (zip stops, button and buttonhole positions via Repeat), rules (buttonhole = button diameter + thickness; warn if a zip is longer than its opening), and an automatic notions list for the title block via live fields |
-| Multi-size output | Nested sizes on one sheet, for published patterns. Paper patterns needed it to serve every size from one print; parametric drafting makes the exact size instead. It would mean evaluating the pattern once per size and drawing the results together, with a screen-only size overlay for checking grading |
-| Scaled body figure | The measurements app's figure scaled to the entered values, so unusual proportions and likely typos stand out |
-| ISO 8559-1 check | Check catalogue definitions against the standard and add clause references, if the project gains traction |
-| Spread tool | Generates the chain of rotations for slash and spread in one step; see Transforms |
-| Fabric textures and properties | Image textures (e.g. a photo of the actual fabric) for fills and the Blender export; nap direction for automatic layout (width is a material's size) |
-| Leather hides | A hide's outline drawn or traced from a photo, with flaws marked as areas to avoid. Pack Pieces nests true shapes since issue #58, so a hide would be a sheet whose free space is its outline less its flaws rather than a rectangle; until then pieces are placed by hand and checked against the outline. See Open questions |
-| Client library | A searchable SQLite library of clients, measurements and patterns (see File format and storage) |
-| Materials app | An app like the measurements app that keeps a list of materials and their specifications, for the design and publish apps to use |
+A pattern's own text (a note reading "Jane Smith's bodice") is sent as written; the user guide says to keep names out of patterns Claude will read.

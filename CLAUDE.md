@@ -2,7 +2,7 @@
 
 Parametric sewing pattern drafting application in Lazarus / Free Pascal. GPLv3 or later.
 
-The full design is in `documents/opensloper-design-document.md`. Read it before making architectural changes, and keep it up to date when a design decision changes.
+The design is in `documents/opensloper-design-document.md`, the overview and index, with a file per app and the Automation API in `documents/design/`. Read the parts you touch before making architectural changes, and keep them up to date when a design decision changes; what is not built yet goes in `documents/design/open-items.md`.
 
 ## Layout
 
@@ -15,7 +15,7 @@ The full design is in `documents/opensloper-design-document.md`. Read it before 
 - `src/design/` — `opensloper-design`, the main design app, with its main form (`Sloper.Design.MainForm`), as the measurements and publish apps keep theirs.
 - `src/measurements/` — `opensloper-measurements`, which edits measurement files and size tables. Keep it thin, as `src/ui`.
 - `src/publish/` — `opensloper-publish`, layouts and printing.
-- `src/drape/` — `opensloper-drape`, which places pattern pieces on a dress form in 3D for draping in Blender (issue #11). Keep it thin, as `src/ui`: the placement maths, body, scene, mesher and drape file are core units (`Sloper.Core.Drape*`, `Sloper.Core.BodyForm`, `Sloper.Core.Mesher`), and its undo document is `Sloper.Document.DrapeDocument`.
+- `src/drape/` — `opensloper-drape`, which places pattern pieces round a body in 3D for draping in Blender (issue #11). Keep it thin, as `src/ui`: the placement maths, body, scene, mesher and drape file are core units (`Sloper.Core.Drape*`, `Sloper.Core.BodyForm`, `Sloper.Core.Mesher`), and its undo document is `Sloper.Document.DrapeDocument`.
 - `src/cli/` — `opensloper-cli` (export, export-draft, layout, pack, drape, materials, check, measurements, serve, check-connection, doc), built on the core and ConsoleTools; check-connection uses the assistant's HTTPS transport. Its commands and options are tables in `Sloper.CLI.Arguments`, which build the parser and the CLI reference page. The commands run in `Sloper.CLI.Commands` (`RunCli`), writing to the text files given, so `Sloper.Tests.CLI` runs them in the test program; a new command gets a test there.
 - `src/docs/` — code that writes the generated reference pages, the file format schemas and the Python API client (`opensloper.py`) of the user documentation (`opensloper-cli doc TOPIC`). Doc generation code goes here.
 - `src/packages/` — git submodules (Clipper2, BGRABitmap, ConsoleTools). Do not edit code in here; changes go upstream.
@@ -23,7 +23,7 @@ The full design is in `documents/opensloper-design-document.md`. Read it before 
 - `data/` — files the apps read at run time: the Blender script a drape export copies (`data/blender/drape.py`), the measurement catalogue and its body figures, the Tabler toolbar icons (`data/icons`, MIT), and the fonts images are drawn with (`data/fonts`: Noto Sans, OFL, and DejaVu Sans, Bitstream Vera licence).
 - `tests/` — FPCUnit test project and regression patterns.
 - `src/core/clipper2/osclipper2.lpk` — Lazarus package that builds Clipper2 from the submodule; projects depend on it rather than adding Clipper2 to their search path.
-- `documents/` — internal development notes, the design document, `coding-standards.md`, `known-issues.md` and the GPL unit header (`gpl-header.txt`).
+- `documents/` — internal development notes, the design (`opensloper-design-document.md` and `design/`), `coding-standards.md`, `known-issues.md` and the GPL unit header (`gpl-header.txt`).
 - `docs/` — user documentation (Markdown, built with Zensical from `zensical.toml`, licensed CC BY-SA 4.0). `docs/examples/` holds the tutorial and example patterns with their measurements, which readers download from the site and a test opens. `docs/reference/` holds generated pages and the generated Python client `opensloper.py`, and `docs/reference/schemas/` the generated JSON Schemas of the user files: never edit them by hand; run `./opensloper-make.sh build` then `./opensloper-make.sh docs`, and a test fails while a committed page is out of date.
 
 ## Build and test

@@ -1,7 +1,7 @@
 @title(OpenSloper developer documentation)
 @shorttitle(Introduction)
 
-OpenSloper is a parametric sewing pattern drafting application in Lazarus and Free Pascal, under the GPL version 3 or later. These pages are made by PasDoc from the comments before each unit and declaration (@code(./opensloper-make.sh devdocs)). The design and the reasons behind it are in @code(documents/opensloper-design-document.md), and the code style in @code(documents/coding-standards.md).
+OpenSloper is a parametric sewing pattern drafting application in Lazarus and Free Pascal, under the GPL version 3 or later. These pages are made by PasDoc from the comments before each unit and declaration (@code(./opensloper-make.sh devdocs)). The design and the reasons behind it are in @code(documents/opensloper-design-document.md) and @code(documents/design/), and the code style in @code(documents/coding-standards.md).
 
 @section(1 Layers Layers)
 

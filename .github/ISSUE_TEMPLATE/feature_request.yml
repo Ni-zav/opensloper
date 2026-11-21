@@ -15,6 +15,7 @@ body:
         - opensloper-design
         - opensloper-measurements
         - opensloper-publish
+        - opensloper-drape
         - opensloper-cli
         - Automation API
         - File formats

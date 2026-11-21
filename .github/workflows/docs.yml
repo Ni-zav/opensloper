@@ -23,10 +23,7 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/configure-pages@v6
@@ -37,8 +34,22 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python3 check-schemas.py docs tests
       - run: zensical build --clean --strict
+      # Named for the attempt: a re-run keeps the earlier attempt's artifact,
+      # and deploy-pages fails when two have its name
       - uses: actions/upload-pages-artifact@v5
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: release/site_docs
+  # A job of its own, as GitHub's Pages workflow has it: deploying in the
+  # uploading job sometimes found no artifact yet
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/deploy-pages@v5
         id: deployment
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}

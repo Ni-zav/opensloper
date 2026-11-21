@@ -353,6 +353,7 @@ Formulas can read: `.holes`.
 | `path[].edge` | edge ID | An edge of the outline |
 | `path[].reversed` | true or false | Whether the path follows it from its end to its start |
 | `path[].allowance` | length formula | The edge's own seam allowance, when it has one |
+| `path[].allowanceEnd` | one of: `plain`, `mirror` | How the edge's allowance ends where it meets its neighbours: plain, where their cutting lines meet, or mirror, their allowance reflected in the edge, as a hem's ends are so it lies flat turned up. Plain when absent |
 | `allowance` | length formula | The seam allowance |
 | `grainline` | group | Left out for none |
 | `grainline.angle` | angle formula | At an angle through the middle of the piece |

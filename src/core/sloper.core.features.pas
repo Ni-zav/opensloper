@@ -17,7 +17,7 @@
 }
 
 // Features: sewing details applied to a pattern in one step, such as a zip
-// in a seam or a dart in a piece's edge. Each is made of ordinary objects, points, split edges,
+// in a seam, a dart in a piece's edge or a hem. Each is made of ordinary objects, points, split edges,
 // allowances, notches and lines, which the user can then change as if they
 // had drawn them. Nothing here is saved as a feature.
 unit Sloper.Core.Features;
@@ -30,7 +30,7 @@ uses
   Sloper.Core.Pattern;
 
 type
-  TFeatureKind = (fkZip, fkDart);
+  TFeatureKind = (fkZip, fkDart, fkHem);
 
   // Centred: topstitched either side of the seam. Invisible: sewn from the
   // inside, so nothing shows. Lapped: one side laps over the zip, stitched
@@ -92,8 +92,38 @@ type
     SeamKey, HoleKey, CentreKey, PieceKey: string;
   end;
 
+  // Single: turned once, its raw edge overlocked. Double: turned twice, the
+  // raw edge turned under. Narrow: a small double hem, as on a shirt. Blind:
+  // turned once and sewn by hand or blind stitch, so no topstitching shows.
+  THemStyle = (hsSingle, hsDouble, hsNarrow, hsBlind);
+
+  THemSpec = record
+    // Edges of one or more pieces; each piece's must run end to end
+    EdgeKeys: array of string;
+    Style: THemStyle;
+    // Formulas in the pattern's unit, with names: how deep the hem is once
+    // turned up, how much a double hem turns under besides, and how far the
+    // topstitching is from the hem's fold
+    Depth, TurnUnder, StitchDistance: string;
+    // A notch at each end of the hem, in the neighbouring edge
+    Notches: boolean;
+  end;
+
+  THemNotch = record
+    PieceKey, EdgeKey: string;
+  end;
+
+  THemMade = record
+    // The pieces hemmed, and the topstitching on each
+    PieceKeys, StitchKeys: array of string;
+    Notches: array of THemNotch;
+    // What is worth checking, though it was done: a hem deeper than its piece
+    Problems: array of string;
+  end;
+
 const
   ZIP_LENGTH_VARIABLE = 'zip_length';
+  HEM_DEPTH_VARIABLE = 'hem_depth';
   ZIP_STOP_NAME = 'ZipStop';
   FLY_SHIELD_NAME = 'FlyShield';
   DART_MID_NAME = 'DartMid';
@@ -102,6 +132,7 @@ const
   DART_SEAM_NAME = 'Dart';
   // As the Automation API names the styles
   ZIP_STYLE_NAMES: array[TZipStyle] of string = ('centred', 'invisible', 'lapped', 'flyFront');
+  HEM_STYLE_NAMES: array[THemStyle] of string = ('single', 'double', 'narrow', 'blind');
 
 // A zip on the edge with the style's starting widths in the pattern's unit,
 // its length the zip_length variable, which InsertZip adds when it is missing
@@ -118,6 +149,18 @@ function DefaultDart(Pattern: TPattern; const EdgeKey: string): TDartSpec;
 // outline, the seam that closes it, a notch at each leg, a hole near the
 // point, the centre line as a fold, and the cap the allowance has across it
 function InsertDart(Pattern: TPattern; const Spec: TDartSpec; out Made: TDartMade): boolean;
+// A hem along the edges in the style's starting widths: its depth the
+// hem_depth variable, which InsertHem adds when it is missing, except for a
+// narrow hem, and the topstitching 3 mm short of the depth
+function DefaultHem(Pattern: TPattern; const EdgeKeys: array of string; Style: THemStyle = hsSingle): THemSpec;
+// The topstitching's starting distance for a hem of this depth: 3 mm short of
+// it, worked out for a number and as a formula on a formula
+function HemStitchDistance(Pattern: TPattern; const Depth: string): string;
+// Adds the hem and evaluates, as InsertZip does: on each piece its edges'
+// allowance at the depth (and the turn-under), their ends mirroring the
+// neighbouring edges', the topstitching inside the piece, and a notch at
+// each end in the neighbouring edge
+function InsertHem(Pattern: TPattern; const Spec: THemSpec; out Made: THemMade): boolean;
 
 resourcestring
   rsFeatureZip = 'Zip';
@@ -136,6 +179,14 @@ resourcestring
   rsFeatureDartNoDepth = 'A dart needs a depth above 0';
   rsFeatureDartApexOutside = 'The dart''s point, %s, is not inside %s';
   rsFeatureDartCrosses = 'The dart''s legs would cross %s';
+  rsFeatureHem = 'Hem';
+  rsFeatureHemDepth = 'The depth of the hem, turned up';
+  rsFeatureNoHemEdge = 'Choose one or more edges of pieces for the hem';
+  rsFeatureHemNotInPiece = '%s is in no piece; a hem goes along a piece''s edge';
+  rsFeatureHemFold = '%s is the fold of %s, which cannot be hemmed';
+  rsFeatureHemPieceProblem = '%s has a problem to put right first: %s';
+  rsFeatureHemNoDepth = 'A hem needs a depth above 0';
+  rsFeatureHemTooDeep = 'The hem, %s deep, is deeper than %s is tall above it (%s)';
 
 implementation
 
@@ -766,6 +817,255 @@ begin
   Pattern.Evaluate;
   if Result and (Piece.State <> esValid) then
     Result := Pattern.Refuse(Piece.Message);
+end;
+
+function DefaultHem(Pattern: TPattern; const EdgeKeys: array of string; Style: THemStyle): THemSpec;
+var
+  Index: integer;
+begin
+  Result := Default(THemSpec);
+  SetLength(Result.EdgeKeys, Length(EdgeKeys));
+  for Index := 0 to High(EdgeKeys) do
+    Result.EdgeKeys[Index] := EdgeKeys[Index];
+  Result.Style := Style;
+  Result.TurnUnder := STARTING_LENGTHS[slHemTurnUnder, Pattern.Units];
+  Result.Notches := True;
+  // A narrow hem is too small to share a depth with deeper ones
+  if Style = hsNarrow then
+    Result.Depth := STARTING_LENGTHS[slNarrowHemDepth, Pattern.Units]
+  else
+    Result.Depth := '#' + HEM_DEPTH_VARIABLE;
+  Result.StitchDistance := HemStitchDistance(Pattern, Result.Depth);
+end;
+
+type
+  TRunEdgeArrays = array of TRunEdgeArray;
+  TOffsetSides = array of TOffsetSide;
+
+// A formula as a term of a sum: a name or number as it is, else in brackets
+function Term(const Text: string): string;
+var
+  Letter: char;
+begin
+  Result := Trim(Text);
+  for Letter in Result do
+    if not (Letter in ['A'..'Z', 'a'..'z', '0'..'9', '_', '#', '@', '.']) then
+      Exit('(' + Result + ')');
+end;
+
+function HasKey(const Keys: TStringArray; const Key: string): boolean;
+var
+  Item: string;
+begin
+  for Item in Keys do
+    if Item = Key then
+      Exit(True);
+  Result := False;
+end;
+
+function HemStitchDistance(Pattern: TPattern; const Depth: string): string;
+var
+  Value: double;
+  Back: string;
+begin
+  Back := STARTING_LENGTHS[slHemStitchBack, Pattern.Units];
+  if TryStrToFloat(Trim(Depth), Value, FormatNumbers) then
+    Result := FloatToStr(Value - StrToFloat(Back, FormatNumbers), FormatNumbers)
+  else
+    Result := Format('%s - %s', [Term(Depth), Back]);
+end;
+
+// The hem_depth variable the starting formula names, when it is missing
+function AddDepthVariable(Pattern: TPattern; const Spec: THemSpec): boolean;
+begin
+  Result := True;
+  if (Pos(LowerCase('#' + HEM_DEPTH_VARIABLE), LowerCase(Spec.Depth + ' ' + Spec.StitchDistance)) > 0) and not
+    Assigned(Pattern.FindVariable(HEM_DEPTH_VARIABLE)) then
+    Result := Assigned(Pattern.AddVariable(HEM_DEPTH_VARIABLE, STARTING_LENGTHS[slHemDepth, Pattern.Units], rsFeatureHemDepth));
+end;
+
+// The pieces the edges are on, in pattern order, each with the run its
+// edges make and the side of it that is inside, checked before anything is
+// added
+function HemPieces(Pattern: TPattern; const Spec: THemSpec; out Pieces: TPieceObjectArray; out Runs: TRunEdgeArrays;
+  out Sides: TOffsetSides): boolean;
+var
+  Key: string;
+  Node: TObject;
+  Piece, Other: TPieceObject;
+  Keys: TStringArray;
+  Index: integer;
+begin
+  Pieces := nil;
+  Runs := nil;
+  Sides := nil;
+  if Length(Spec.EdgeKeys) = 0 then
+    Exit(Pattern.Refuse(rsFeatureNoHemEdge));
+  for Key in Spec.EdgeKeys do
+  begin
+    Node := Pattern.FindNode(Key);
+    if not (Node is TEdgeObject) then
+      Exit(Pattern.Refuse(rsFeatureNoHemEdge));
+    if Length(PiecesOn(Pattern, Key)) = 0 then
+      Exit(Pattern.Refuse(Format(rsFeatureHemNotInPiece, [TEdgeObject(Node).DisplayName])));
+    for Other in PiecesOn(Pattern, Key) do
+      if Other.FoldEdgeKey = Key then
+        Exit(Pattern.Refuse(Format(rsFeatureHemFold, [TEdgeObject(Node).DisplayName, Other.DisplayName])));
+  end;
+  Pattern.Evaluate;
+  for Piece in Pattern.PieceList do
+  begin
+    Keys := nil;
+    // Each edge once, in the order given
+    for Key in Spec.EdgeKeys do
+      if (Piece.PathIndexOf(Key) >= 0) and not HasKey(Keys, Key) then
+        Insert(Key, Keys, Length(Keys));
+    if Length(Keys) = 0 then
+      Continue;
+    if Piece.State <> esValid then
+      Exit(Pattern.Refuse(Format(rsFeatureHemPieceProblem, [Piece.DisplayName, Piece.Message])));
+    Index := Length(Pieces);
+    Insert(Piece, Pieces, Index);
+    SetLength(Runs, Index + 1);
+    SetLength(Sides, Index + 1);
+    if not Pattern.PieceRun(Piece, Keys, True, Runs[Index], Sides[Index]) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+// A notch where the hem meets the edge beside it in the path, at that
+// edge's end, so the hem turns up there
+function AddHemNotch(Pattern: TPattern; Piece: TPieceObject; PathIndex: integer; AtPathEnd: boolean; var Made: THemMade): boolean;
+var
+  Entry: TPieceEdge;
+  Edge: TEdgeObject;
+  Position: string;
+begin
+  Entry := Piece.Path[PathIndex];
+  if Entry.EdgeKey = Piece.FoldEdgeKey then
+    Exit(True);
+  Edge := TEdgeObject(Pattern.FindNode(Entry.EdgeKey));
+  // The edge's end the path reaches it at, or leaves it from
+  if AtPathEnd <> Entry.Reversed then
+    Position := Format('%s.length', [Edge.DisplayName])
+  else
+    Position := '0';
+  if not Pattern.AddEdgeNotch(Piece, Edge.Key, Position) then
+    Exit(False);
+  SetLength(Made.Notches, Length(Made.Notches) + 1);
+  Made.Notches[High(Made.Notches)].PieceKey := Piece.Key;
+  Made.Notches[High(Made.Notches)].EdgeKey := Edge.Key;
+  Result := True;
+end;
+
+// Where the run starts and ends, as the path goes
+procedure RunEnds(Pattern: TPattern; const Run: TRunEdgeArray; out First, Last: TVec2);
+var
+  Edge: TEdgeObject;
+begin
+  Edge := TEdgeObject(Pattern.FindNode(Run[0].EdgeKey));
+  if Run[0].Reversed then
+    First := Edge.PointAtLength(Edge.Length)
+  else
+    First := Edge.PointAtLength(0);
+  Edge := TEdgeObject(Pattern.FindNode(Run[High(Run)].EdgeKey));
+  if Run[High(Run)].Reversed then
+    Last := Edge.PointAtLength(0)
+  else
+    Last := Edge.PointAtLength(Edge.Length);
+end;
+
+// A hem deeper than the piece is tall above the line between its ends
+procedure CheckHemDepth(Pattern: TPattern; Piece: TPieceObject; const Run: TRunEdgeArray; Depth: double; var Made: THemMade);
+var
+  First, Last, Point: TVec2;
+  Hem: TLine2;
+  Height: double;
+begin
+  if Length(Run) = Length(Piece.Path) then
+    Exit;
+  RunEnds(Pattern, Run, First, Last);
+  if PointsNear(First, Last) then
+    Exit;
+  Hem := Line2(First, Last);
+  Height := 0;
+  for Point in Piece.Outline do
+    Height := Max(Height, Distance(Point, Hem.ClosestPoint(Point, True)));
+  if Depth >= Height then
+    Insert(Format(rsFeatureHemTooDeep, [LengthWithUnit(Depth, Pattern.Units), Piece.DisplayName, LengthWithUnit(Height,
+      Pattern.Units)]), Made.Problems, Length(Made.Problems));
+end;
+
+// On one piece: the allowance and mirrored ends of each edge, the
+// topstitching and the notches
+function HemPiece(Pattern: TPattern; Piece: TPieceObject; const Run: TRunEdgeArray; Side: TOffsetSide; const Spec: THemSpec;
+  const Allowance: string; var Made: THemMade): boolean;
+var
+  Item: TRunEdge;
+  PathIndex, Count: integer;
+  Stitch: TOffsetEdge;
+begin
+  Insert(Piece.Key, Made.PieceKeys, Length(Made.PieceKeys));
+  for Item in Run do
+  begin
+    PathIndex := Piece.PathIndexOf(Item.EdgeKey);
+    if not Pattern.SetEdgeAllowance(Piece, PathIndex, Allowance) or not Pattern.SetAllowanceEnd(Piece, PathIndex, aeMirror) then
+      Exit(False);
+  end;
+  if (Spec.Style <> hsBlind) and (Trim(Spec.StitchDistance) <> '') then
+  begin
+    Stitch := Pattern.AddOffsetRun(Run, Spec.StitchDistance, Side, erStitch);
+    if not Assigned(Stitch) then
+      Exit(False);
+    Insert(Stitch.Key, Made.StitchKeys, Length(Made.StitchKeys));
+  end;
+  Count := Length(Piece.Path);
+  if not Spec.Notches or (Length(Run) = Count) then
+    Exit(True);
+  Result := AddHemNotch(Pattern, Piece, (Piece.PathIndexOf(Run[0].EdgeKey) + Count - 1) mod Count, True, Made) and
+    AddHemNotch(Pattern, Piece, (Piece.PathIndexOf(Run[High(Run)].EdgeKey) + 1) mod Count, False, Made);
+end;
+
+function InsertHem(Pattern: TPattern; const Spec: THemSpec; out Made: THemMade): boolean;
+var
+  Pieces: TPieceObjectArray;
+  Runs: TRunEdgeArrays;
+  Sides: TOffsetSides;
+  Allowance: string;
+  Depth: double;
+  Index: integer;
+  Stitch: TDraftObject;
+begin
+  Made := Default(THemMade);
+  if not HemPieces(Pattern, Spec, Pieces, Runs, Sides) or not AddDepthVariable(Pattern, Spec) then
+    Exit(False);
+  Pattern.Evaluate;
+  if not Pattern.EvaluateText(Spec.Depth, Depth) then
+    Exit(False);
+  Depth := Depth * MILLIMETRES_PER_UNIT[Pattern.Units];
+  if Depth <= DEFAULT_TOLERANCE then
+    Exit(Pattern.Refuse(rsFeatureHemNoDepth));
+  Allowance := Trim(Spec.Depth);
+  if Spec.Style in [hsDouble, hsNarrow] then
+    Allowance := Format('%s + %s', [Term(Spec.Depth), Term(Spec.TurnUnder)]);
+  for Index := 0 to High(Pieces) do
+    if not HemPiece(Pattern, Pieces[Index], Runs[Index], Sides[Index], Spec, Allowance, Made) then
+      Exit(False);
+  Pattern.Evaluate;
+  for Index := 0 to High(Pieces) do
+  begin
+    if Pieces[Index].State <> esValid then
+      Exit(Pattern.Refuse(Pieces[Index].Message));
+    CheckHemDepth(Pattern, Pieces[Index], Runs[Index], Depth, Made);
+  end;
+  for Index := 0 to High(Made.StitchKeys) do
+  begin
+    Stitch := TDraftObject(Pattern.FindNode(Made.StitchKeys[Index]));
+    if Stitch.State <> esValid then
+      Exit(Pattern.Refuse(Stitch.Message));
+  end;
+  Result := True;
 end;
 
 initialization

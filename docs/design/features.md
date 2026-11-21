@@ -7,8 +7,8 @@ edges, notches and allowances you could draw yourself, so afterwards you can
 change any of them as you like. One **Undo** takes the whole feature off
 again.
 
-The tab has two features, the zip and the dart. More are planned, such as
-buttons and buttonholes, pockets and facings.
+The tab has three features, the zip, the dart and the hem. More are planned,
+such as buttons and buttonholes, pockets and facings.
 
 ## Zip
 
@@ -129,11 +129,65 @@ A dart you drew yourself can have a cap too, as long as a seam joins its two
 legs: select the piece, and under **Cap on** and the seam's name choose
 which leg's side it is pressed towards, or None.
 
+## Hem
+
+A hem finishes the bottom of a skirt, a sleeve or a trouser leg. It goes
+along one or more edges, on one piece or on several at once, such as the
+front's and the back's hems. The tutorial [Adding a hem](../tutorials/hem.md)
+hems a skirt step by step.
+
+1. Open the **Features** tab and choose **Hem**.
+2. Click the edge on the canvas, and ++shift++ and click any more: the
+   front's and back's hems, or the parts of a hem split by a notch. The tab
+   says **Along** and the edges' names. On each piece the edges must run end
+   to end.
+3. Check the settings, then click **Apply**.
+
+| Setting | What it does |
+| --- | --- |
+| Style | **Single**: turned up once, the raw edge overlocked. **Double**: turned up, then turned under again, so no raw edge shows. **Narrow**: a small double hem, as on a shirt or a curved hem. **Blind**: turned up once and sewn by hand or with a blind stitch, so no topstitching is added |
+| Depth, turned up | How deep the hem is once turned up. It starts as `#hem_depth`, a [variable](formulas.md) that the first hem adds at 4 cm, so every hem in the pattern shares it. A narrow hem starts at 6 mm of its own |
+| Turned under besides | For a double or narrow hem, how much more turns under: 1 cm to start with |
+| Topstitching from the fold | How far up from the hem's fold the topstitching runs: 3 mm short of the depth to start with, following the depth as you change it |
+| Notch where it turns up | Whether to notch the edges beside the hem where it turns up |
+
+**Apply** then, on each piece:
+
+- gives the edges their own allowance (see
+  [Seam allowance](pieces.md#seam-allowance)): the depth, or for a double
+  or narrow hem the depth and the turn-under, such as `#hem_depth + 1`;
+- mirrors the allowance's ends (below);
+- adds the topstitching as a stitch line inside the piece, unless the hem
+  is blind;
+- notches the edges beside the hem at its ends, so you know where to turn
+  it up.
+
+Change `#hem_depth` under Variables and every hem made with it follows.
+
+### Mirrored ends
+
+Where a hem meets a side seam at an angle, as on a flared or tapered skirt,
+cutting the allowance straight on would leave it the wrong shape: turned up,
+its ends would stick out past the side seam or fall short of it, and the hem
+would pull. Instead the hem's allowance ends are the side seam's allowance
+reflected in the hem line, so turned up they lie along it. Where the hem
+meets the side square, the end is the same as before.
+
+Any edge can have mirrored ends: select the piece and choose the edge under
+**Mirrored ends**. It gets a row of its own, **Ends of** and the edge's name;
+choose Plain there to go back.
+
+A hem on an edge in no piece, on a piece's fold, or on edges of one piece
+that do not run end to end is refused, and the status bar says why. A hem
+deeper than its piece is tall above it is made, as it can work as a facing,
+and the status bar says so.
+
 ## In scripts and with Claude
 
 Each feature is a method of the [Automation API](../scripting/index.md),
-named `feature_` and the feature: `feature_zip` puts a zip along an edge
-and `feature_dart` a dart in one, with the same settings as the tab, so the
-Claude tab and other assistants can add them too, and `set_dart_cap` gives
-a dart drawn by hand its cap. See the
+named `feature_` and the feature: `feature_zip` puts a zip along an edge,
+`feature_dart` a dart in one and `feature_hem` a hem along some, with the
+same settings as the tab, so the Claude tab and other assistants can add
+them too. `set_dart_cap` gives a dart drawn by hand its cap, and
+`set_allowance_end` mirrors any edge's allowance ends. See the
 [Automation API reference](../reference/api.md).

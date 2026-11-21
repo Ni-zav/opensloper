@@ -505,6 +505,18 @@ Gives a dart a cap: its seam allowance across the edge shaped as the dart lies f
 
 Returns: The piece, as `get_object` gives it.
 
+### `set_allowance_end`
+
+Sets how an edge's seam allowance ends where it meets its neighbours: plain, where their cutting lines meet, or mirror, their allowance reflected in the edge, as a hem's ends are so it lies flat turned up.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `id` or `name` | number or text | yes | The piece, by its ID or its name |
+| `edge` | ID or name | yes | An edge of the piece |
+| `end` | one of: `plain`, `mirror` | yes | plain or mirror |
+
+Returns: The piece, as `get_object` gives it.
+
 ### `set_piece_material`
 
 Sets the material a piece is cut from.
@@ -663,6 +675,21 @@ Puts a dart in a piece's edge, as the Features tab does, in one undo step: a Dar
 | `fold` | one of: `start`, `end` |  | The end of the edge the dart is pressed towards, which shapes the cap. Default start |
 
 Returns: `mid`, `apex`, `legs` (the two legs, the start's side first), `seam`, `hole` and `centre` as `get_object` gives them, and `piece`, the ID of the piece.
+
+### `feature_hem`
+
+Hems pieces along their edges, as the Features tab does, in one undo step: on each piece the edges' allowance at the hem's depth (plus the turn-under for a double or narrow hem), their allowance ends mirroring the neighbouring edges' so the hem lies flat turned up, topstitching inside the piece, and a notch at each end of the hem in the neighbouring edge. They are ordinary objects. The depth starts as #hem_depth, a variable the first hem adds, so every hem shares it; a narrow hem starts at 6 mm of its own.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `edges` | list of IDs or names | yes | The edges to hem, on one or more pieces; each piece's must run end to end |
+| `style` | one of: `single`, `double`, `narrow`, `blind` |  | single: turned once, the raw edge overlocked; double: turned twice; narrow: a small double hem; blind: turned once with no topstitching. Default single |
+| `depth` | formula |  | How deep the hem is, turned up. Default #hem_depth, or 6 mm for a narrow hem |
+| `turnUnder` | formula |  | How much a double or narrow hem turns under besides its depth. Default 10 mm |
+| `stitchDistance` | formula |  | How far the topstitching is from the hem's fold. Default 3 mm short of the depth |
+| `notches` | true or false |  | Whether to notch the neighbouring edges where the hem turns up. Default true |
+
+Returns: `edges` and `stitching` (the topstitching) as `get_object` gives them, `notches` (each with its `piece` and `edge` IDs), `pieces` the IDs of the pieces hemmed, and `problems`, what is worth checking though it was done, such as a hem deeper than its piece.
 
 ## Notes
 

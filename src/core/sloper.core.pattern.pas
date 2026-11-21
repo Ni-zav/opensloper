@@ -280,6 +280,9 @@ type
     // Gives one edge of the path its own allowance; empty text goes back to
     // the piece's own
     function SetEdgeAllowance(Piece: TPieceObject; PathIndex: integer; const Text: string): boolean;
+    // How one edge's allowance ends where it meets its neighbours: aeMirror
+    // mirrors theirs, as a hem's ends do
+    function SetAllowanceEnd(Piece: TPieceObject; PathIndex: integer; Value: TAllowanceEnd): boolean;
 
     // A grainline at an angle formula, through the piece's middle
     function SetGrainAngle(Piece: TPieceObject; const Text: string): boolean;
@@ -599,6 +602,7 @@ resourcestring
   rsPatternMarkerOnRepeat = '%s is one of the points of %s; give the repeat its marker';
   rsPatternNoMarker = '%s has no marker; give it one such as Hole or Button first';
   rsPatternBadCutCount = 'A piece must be cut at least once';
+  rsPatternNoPathEdge = 'Edge %d is not in the outline of %s';
   rsPatternFoldNotStraight = 'A fold has to be straight, and %s is not';
   rsPatternReplaceFold = '%s is the fold of %s, which has to stay one edge';
   rsPatternDartApart = '%s and %s are not neighbours in %s, meeting at a dart''s point';
@@ -3023,6 +3027,14 @@ begin
   Result := SetFormula(Piece, Piece.OverrideField(PathIndex), Text);
   if Added and not Result then
     Piece.RemoveOverride(PathIndex);
+end;
+
+function TPattern.SetAllowanceEnd(Piece: TPieceObject; PathIndex: integer; Value: TAllowanceEnd): boolean;
+begin
+  if (PathIndex < 0) or (PathIndex > High(Piece.Path)) then
+    Exit(SetError(Format(rsPatternNoPathEdge, [PathIndex + 1, Piece.DisplayName])));
+  Piece.SetAllowanceEnd(PathIndex, Value);
+  Result := True;
 end;
 
 function TPattern.SetCut(Piece: TPieceObject; Count: integer; Mirrored: boolean): boolean;

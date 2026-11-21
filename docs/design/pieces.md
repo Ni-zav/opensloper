@@ -28,6 +28,10 @@ change it. To give one edge its own allowance, choose the edge under
 **Own allowance**: it gets a row of its own, named after the edge. Empty that
 row to go back to the piece's allowance.
 
+A hem's allowance can end as a mirror image of the edges beside it, so it
+lies flat when turned up: choose the edge under **Mirrored ends**. The
+[Features tab's hem](features.md#hem) does this for you.
+
 ## Grainline
 
 New pieces have a grainline at 90°, straight up and down the piece. Under

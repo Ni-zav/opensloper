@@ -22,7 +22,10 @@
 // builds its own, one width per segment, and Clipper2's union then removes
 // the loops it leaves in tight concave places. A dart can have a cap: the
 // allowance across its opening shaped as the dart folds, so it can be sewn
-// into the seam. No LCL dependency.
+// into the seam. An edge can have mirrored ends, as a hem's: where it meets
+// its neighbour the cutting line is the neighbour's reflected in it, so the
+// allowance lies along the neighbour's when it is turned up. No LCL
+// dependency.
 unit Sloper.Core.SeamAllowance;
 
 {$mode ObjFPC}{$H+}
@@ -44,6 +47,10 @@ type
 
   TDartCapArray = array of TDartCap;
 
+  // One flag per segment of an outline: the segment is part of an edge whose
+  // allowance ends mirror its neighbours' (see OffsetOutline)
+  TMirrorFlags = array of boolean;
+
 // Outline is a closed polygon without a repeated last point, either way
 // round; Allowances[Index] is the width of the segment leaving
 // Outline[Index]. CutLine runs clockwise. False when no line results.
@@ -53,6 +60,14 @@ function OffsetOutline(const Outline: TVec2Array; const Allowances: TDoubleArray
 // one side, opened out again (see FoldDart).
 function OffsetOutline(const Outline: TVec2Array; const Allowances: TDoubleArray; const Caps: TDartCapArray;
   out CutLine: TVec2Array): boolean;
+// The same, where a segment flagged in Mirrors meets one that is not at a
+// convex corner: the neighbour's cutting line runs on to the flagged
+// segment's line, and from there back as its reflection in that line to the
+// flagged segment's own cutting line. Turned up along that line, as a hem is,
+// the allowance then lies along the neighbour's. At a right angle it is the
+// ordinary corner. Mirrors may be empty.
+function OffsetOutline(const Outline: TVec2Array; const Allowances: TDoubleArray; const Caps: TDartCapArray;
+  const Mirrors: TMirrorFlags; out CutLine: TVec2Array): boolean;
 // The cap's points in the order the outline runs, from over the first leg to
 // over the second (see OffsetOutline); empty when it cannot be worked out
 function DartCapPoints(const Outline: TVec2Array; const Allowances: TDoubleArray; const Cap: TDartCap): TVec2Array;
@@ -125,6 +140,63 @@ begin
     Add(After);
   end;
   SetLength(Raw, Count);
+end;
+
+// Where the line through Point along Direction meets the line through
+// Origin along Along; False when they are near parallel
+function MeetLine(const Point, Direction, Origin, Along: TVec2; out Meeting: TVec2): boolean;
+var
+  Denominator: double;
+begin
+  Denominator := Cross(Direction, Along);
+  Result := Abs(Denominator) > STRAIGHT_TURN;
+  if Result then
+    Meeting := Point + Direction * (Cross(Origin - Point, Along) / Denominator);
+end;
+
+// The corner where the hem, a segment with mirrored ends, meets its
+// neighbour: OnHemLine where the neighbour's cutting line meets the hem's
+// line, and OnHemCut where its reflection in the hem's line meets the hem's
+// cutting line. False, to use the ordinary corner, when the corner is not convex or the
+// lines meet too far out.
+function MirrorCorner(const Vertex, Hem, Neighbour: TVec2; HemWidth, NeighbourWidth: double; HemOutgoing: boolean;
+  var Raw: TPathD): boolean;
+var
+  NeighbourStart, HemStart, Reflected, OnHemLine, OnHemCut: TVec2;
+  Turn, Limit: double;
+  Count: integer;
+begin
+  if HemOutgoing then
+    Turn := -Cross(Neighbour, Hem)
+  else
+    Turn := -Cross(Hem, Neighbour);
+  if Turn <= STRAIGHT_TURN then
+    Exit(False);
+  NeighbourStart := Vertex + Outwards(Neighbour) * NeighbourWidth;
+  HemStart := Vertex + Outwards(Hem) * HemWidth;
+  Reflected := Hem * (2 * Dot(Neighbour, Hem)) - Neighbour;
+  if not MeetLine(NeighbourStart, Neighbour, Vertex, Hem, OnHemLine) or not MeetLine(OnHemLine, Reflected, HemStart, Hem, OnHemCut) then
+    Exit(False);
+  Limit := MITRE_LIMIT * Max(HemWidth, NeighbourWidth);
+  if (Distance(OnHemLine, Vertex) > Limit) or (Distance(OnHemCut, Vertex) > Limit) then
+    Exit(False);
+  Count := Length(Raw);
+  SetLength(Raw, Count + 2);
+  if HemOutgoing then
+  begin
+    Raw[Count].X := OnHemLine.X;
+    Raw[Count].Y := OnHemLine.Y;
+    Raw[Count + 1].X := OnHemCut.X;
+    Raw[Count + 1].Y := OnHemCut.Y;
+  end
+  else
+  begin
+    Raw[Count].X := OnHemCut.X;
+    Raw[Count].Y := OnHemCut.Y;
+    Raw[Count + 1].X := OnHemLine.X;
+    Raw[Count + 1].Y := OnHemLine.Y;
+  end;
+  Result := True;
 end;
 
 function LargestPath(const Paths: TPathsD): TPathD;
@@ -386,10 +458,17 @@ end;
 
 function OffsetOutline(const Outline: TVec2Array; const Allowances: TDoubleArray; const Caps: TDartCapArray;
   out CutLine: TVec2Array): boolean;
+begin
+  Result := OffsetOutline(Outline, Allowances, Caps, nil, CutLine);
+end;
+
+function OffsetOutline(const Outline: TVec2Array; const Allowances: TDoubleArray; const Caps: TDartCapArray;
+  const Mirrors: TMirrorFlags; out CutLine: TVec2Array): boolean;
 var
-  Count, Index, Before, After: integer;
-  Points: TVec2Array;
+  Count, Index, Before, Source: integer;
+  Points, Directions: TVec2Array;
   Widths, Given: TDoubleArray;
+  Mirrored: TMirrorFlags;
   Raw: TPathsD;
   Cleaned, Area: TPathD;
   Swap: TVec2;
@@ -412,31 +491,44 @@ begin
   end;
   Points := nil;
   Widths := nil;
+  Mirrored := nil;
   SetLength(Points, Count);
   SetLength(Widths, Count);
+  SetLength(Mirrored, Count);
   // Anticlockwise, so the segment from a point to the next keeps its width
   // when it runs the other way: reversed, it leaves the point before it
-  if SignedArea(Outline) > 0 then
-    for Index := 0 to Count - 1 do
+  for Index := 0 to Count - 1 do
+  begin
+    if SignedArea(Outline) > 0 then
     begin
       Points[Index] := Outline[Index];
-      Widths[Index] := Given[Index];
+      Source := Index;
     end
-  else
-    for Index := 0 to Count - 1 do
+    else
     begin
       Points[Index] := Outline[Count - 1 - Index];
-      Widths[Index] := Given[(2 * Count - 2 - Index) mod Count];
+      Source := (2 * Count - 2 - Index) mod Count;
     end;
+    Widths[Index] := Given[Source];
+    Mirrored[Index] := (Source < Length(Mirrors)) and Mirrors[Source];
+  end;
 
+  Directions := nil;
+  SetLength(Directions, Count);
+  for Index := 0 to Count - 1 do
+    Directions[Index] := (Points[(Index + 1) mod Count] - Points[Index]).Normalized;
   Raw := nil;
   SetLength(Raw, 1);
   for Index := 0 to Count - 1 do
   begin
     Before := (Index + Count - 1) mod Count;
-    After := (Index + 1) mod Count;
-    OffsetVertex(Points[Index], (Points[Index] - Points[Before]).Normalized, (Points[After] - Points[Index]).Normalized,
-      Widths[Before], Widths[Index], Raw[0]);
+    if Mirrored[Index] and not Mirrored[Before] and MirrorCorner(Points[Index], Directions[Index], Directions[Before],
+      Widths[Index], Widths[Before], True, Raw[0]) then
+      Continue;
+    if Mirrored[Before] and not Mirrored[Index] and MirrorCorner(Points[Index], Directions[Before], Directions[Index],
+      Widths[Before], Widths[Index], False, Raw[0]) then
+      Continue;
+    OffsetVertex(Points[Index], Directions[Before], Directions[Index], Widths[Before], Widths[Index], Raw[0]);
   end;
   for Cap in Caps do
   begin

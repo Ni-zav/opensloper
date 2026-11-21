@@ -124,6 +124,8 @@ type
     function DoRoundCorner(Params: TJSONObject): TJSONData;
     function DoFeatureZip(Params: TJSONObject): TJSONData;
     function DoFeatureDart(Params: TJSONObject): TJSONData;
+    function DoFeatureHem(Params: TJSONObject): TJSONData;
+    function DoSetAllowanceEnd(Params: TJSONObject): TJSONData;
     function DoSetDartCap(Params: TJSONObject): TJSONData;
     function DoCreatePiece(Params: TJSONObject): TJSONData;
     function DoSetEdgeAllowance(Params: TJSONObject): TJSONData;
@@ -228,6 +230,8 @@ resourcestring
   rsApiInsertZipChange = 'Insert Zip';
   rsApiInsertDartChange = 'Insert Dart';
   rsApiDartCapChange = 'Change dart cap';
+  rsApiInsertHemChange = 'Insert Hem';
+  rsApiAllowanceEndChange = 'Change allowance ends';
   rsApiUnknownType = 'There is no type "%s"; use one of: %s';
   rsApiBadChoice = 'Parameter "%s" must be one of: %s';
   rsApiBadNodes = 'A curve path needs a "nodes" list, each with a point and angle';
@@ -467,6 +471,8 @@ begin
       Result.Add(Item);
       Item.Add('edge', StrToInt(Entry.EdgeKey));
       Item.Add('reversed', Entry.Reversed);
+      if Entry.AllowanceEnd <> aePlain then
+        Item.Add('allowanceEnd', ALLOWANCE_END_NAMES[Entry.AllowanceEnd]);
     end;
   except
     FreeAndNil(Result);
@@ -1773,6 +1779,90 @@ begin
   end;
 end;
 
+// The Features tab's hem, as one undo step
+function TApiServer.DoFeatureHem(Params: TJSONObject): TJSONData;
+var
+  Spec: THemSpec;
+  Made: THemMade;
+  Text, Key: string;
+  Notch: THemNotch;
+  Answer, Item: TJSONObject;
+  List: TJSONArray;
+begin
+  Spec := DefaultHem(FDocument.Pattern, ReferenceList(Params, 'edges', False), THemStyle(ChoiceParam(Params, 'style',
+    HEM_STYLE_NAMES)));
+  Text := OptionalFormula(Params, 'depth');
+  if Text <> '' then
+  begin
+    // The topstitching's starting distance follows the depth given
+    Spec.Depth := Text;
+    Spec.StitchDistance := HemStitchDistance(FDocument.Pattern, Text);
+  end;
+  Text := OptionalFormula(Params, 'turnUnder');
+  if Text <> '' then
+    Spec.TurnUnder := Text;
+  Text := OptionalFormula(Params, 'stitchDistance');
+  if Text <> '' then
+    Spec.StitchDistance := Text;
+  if Assigned(Params.Find('notches')) then
+    Spec.Notches := BooleanParam(Params, 'notches');
+  BeginChange(rsApiInsertHemChange);
+  if not InsertHem(FDocument.Pattern, Spec, Made) then
+    RefuseChange;
+  EndChange;
+  Answer := TJSONObject.Create;
+  try
+    List := TJSONArray.Create;
+    Answer.Add('edges', List);
+    for Key in Spec.EdgeKeys do
+      List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+    List := TJSONArray.Create;
+    Answer.Add('stitching', List);
+    for Key in Made.StitchKeys do
+      List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+    List := TJSONArray.Create;
+    Answer.Add('notches', List);
+    for Notch in Made.Notches do
+    begin
+      Item := TJSONObject.Create;
+      List.Add(Item);
+      Item.Add('piece', StrToInt(Notch.PieceKey));
+      Item.Add('edge', StrToInt(Notch.EdgeKey));
+    end;
+    List := TJSONArray.Create;
+    Answer.Add('pieces', List);
+    for Key in Made.PieceKeys do
+      List.Add(StrToInt(Key));
+    List := TJSONArray.Create;
+    Answer.Add('problems', List);
+    for Text in Made.Problems do
+      List.Add(Text);
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
+function TApiServer.DoSetAllowanceEnd(Params: TJSONObject): TJSONData;
+var
+  Piece: TPieceObject;
+  Edge: string;
+  PathIndex: integer;
+  Value: TAllowanceEnd;
+begin
+  Piece := TargetPiece(Params);
+  Edge := Reference(Params, 'edge');
+  PathIndex := Piece.PathIndexOf(Edge);
+  if PathIndex < 0 then
+    raise EApiError.Create(RPC_REFUSED, Format(rsApiNotInPiece, [FDocument.Pattern.FindNode(Edge).DisplayName, Piece.DisplayName]));
+  Value := TAllowanceEnd(ChoiceParam(Params, 'end', ALLOWANCE_END_NAMES));
+  BeginChange(rsApiAllowanceEndChange);
+  if not FDocument.Pattern.SetAllowanceEnd(Piece, PathIndex, Value) then
+    RefuseChange;
+  Result := AddedNode(Piece);
+end;
+
 function TApiServer.DoSetDartCap(Params: TJSONObject): TJSONData;
 var
   Piece: TPieceObject;
@@ -2763,6 +2853,8 @@ begin
     'round_corner': Result := DoRoundCorner(Params);
     'feature_zip': Result := DoFeatureZip(Params);
     'feature_dart': Result := DoFeatureDart(Params);
+    'feature_hem': Result := DoFeatureHem(Params);
+    'set_allowance_end': Result := DoSetAllowanceEnd(Params);
     'set_dart_cap': Result := DoSetDartCap(Params);
     'create_piece': Result := DoCreatePiece(Params);
     'set_edge_allowance': Result := DoSetEdgeAllowance(Params);

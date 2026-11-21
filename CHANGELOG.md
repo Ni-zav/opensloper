@@ -23,6 +23,16 @@ Changed, Fixed and Removed under each version.
   a dart drawn by hand can have one too, under Cap on in the piece's
   properties. `feature_dart` and `set_dart_cap` do the same in the
   Automation API (#72).
+- A hem in the Features tab: select the edges to hem, on one piece or
+  several, choose single, double, narrow or blind, and Apply gives them the
+  hem's allowance, topstitching inside the piece and a notch where it turns
+  up, in one undo step. The depth is `#hem_depth`, which every hem shares.
+  The hem's allowance ends mirror the edges beside it, so a flared hem lies
+  flat turned up; any edge can have mirrored ends under Mirrored ends in the
+  piece's properties. `feature_hem` and `set_allowance_end` do the same in
+  the Automation API (#73).
+- A tutorial, Adding a hem, hems the skirt block's front and back from the
+  Features tab in one step (#73).
 - A tutorial, Adding a dart, puts a second dart in the skirt block's back
   from the Features tab and caps every dart (#72).
 

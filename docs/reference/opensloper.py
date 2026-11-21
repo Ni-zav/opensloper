@@ -658,6 +658,47 @@ class OpenSloper:
             "fold": fold,
         })
 
+    def feature_hem(
+        self,
+        edges: list[int | str],
+        *,
+        style: Literal["single", "double", "narrow", "blind"] | None = None,
+        depth: str | float | None = None,
+        turnUnder: str | float | None = None,
+        stitchDistance: str | float | None = None,
+        notches: bool | None = None,
+    ) -> Any:
+        """Hems pieces along their edges, as the Features tab does, in one undo step: on each piece
+        the edges' allowance at the hem's depth (plus the turn-under for a double or narrow hem),
+        their allowance ends mirroring the neighbouring edges' so the hem lies flat turned up,
+        topstitching inside the piece, and a notch at each end of the hem in the neighbouring edge.
+        They are ordinary objects. The depth starts as #hem_depth, a variable the first hem adds, so
+        every hem shares it; a narrow hem starts at 6 mm of its own.
+
+        Args:
+            edges: The edges to hem, on one or more pieces; each piece's must run end to end.
+            style: single: turned once, the raw edge overlocked; double: turned twice; narrow: a
+                small double hem; blind: turned once with no topstitching. Default single.
+            depth: How deep the hem is, turned up. Default #hem_depth, or 6 mm for a narrow hem.
+            turnUnder: How much a double or narrow hem turns under besides its depth. Default 10 mm.
+            stitchDistance: How far the topstitching is from the hem's fold. Default 3 mm short of
+                the depth.
+            notches: Whether to notch the neighbouring edges where the hem turns up. Default true.
+
+        Returns:
+            `edges` and `stitching` (the topstitching) as `get_object` gives them, `notches` (each
+            with its `piece` and `edge` IDs), `pieces` the IDs of the pieces hemmed, and `problems`,
+            what is worth checking though it was done, such as a hem deeper than its piece.
+        """
+        return self._send("feature_hem", {
+            "edges": edges,
+            "style": style,
+            "depth": depth,
+            "turnUnder": turnUnder,
+            "stitchDistance": stitchDistance,
+            "notches": notches,
+        })
+
     def convert_edge(self, target: int | str, to: Literal["line", "curve"]) -> Any:
         """Changes an edge to a line or a curve in place, keeping its ID.
 
@@ -1069,6 +1110,29 @@ class OpenSloper:
             "first": first,
             "second": second,
             "towards": towards,
+        })
+
+    def set_allowance_end(
+        self,
+        target: int | str,
+        edge: int | str,
+        end: Literal["plain", "mirror"],
+    ) -> Any:
+        """Sets how an edge's seam allowance ends where it meets its neighbours: plain, where their
+        cutting lines meet, or mirror, their allowance reflected in the edge, as a hem's ends are so
+        it lies flat turned up.
+
+        Args:
+            target: The piece, by its ID or its name.
+            edge: An edge of the piece.
+            end: plain or mirror.
+
+        Returns:
+            The piece, as `get_object` gives it.
+        """
+        return self._send("set_allowance_end", _target(target), {
+            "edge": edge,
+            "end": end,
         })
 
     def set_piece_material(

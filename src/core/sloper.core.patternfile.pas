@@ -337,6 +337,8 @@ begin
       Result.Add(Item);
       Item.Add('edge', JSONId(Piece.Path[Index].EdgeKey));
       Item.Add('reversed', Piece.Path[Index].Reversed);
+      if Piece.Path[Index].AllowanceEnd <> aePlain then
+        Item.Add('allowanceEnd', ALLOWANCE_END_NAMES[Piece.Path[Index].AllowanceEnd]);
       if Piece.HasOverride(Index) then
         Item.Add(PIECE_ALLOWANCE_FIELD, Piece.Field(Piece.OverrideField(Index)).StoredText);
     end;
@@ -1568,7 +1570,7 @@ var
   Entries: TJSONData;
   Entry: TJSONObject;
   Path: TPiecePath;
-  Index, Other: integer;
+  Index, Other, Choice: integer;
   Piece: TPieceObject;
 begin
   Result := nil;
@@ -1593,8 +1595,10 @@ begin
       Exit;
     end;
     Entry := TJSONObject(Entries.Items[Index]);
-    if not ReadInput(Entry, 'edge', True, Path[Index].EdgeKey) or not ReadBoolean(Entry, 'reversed', Path[Index].Reversed) then
+    if not ReadInput(Entry, 'edge', True, Path[Index].EdgeKey) or not ReadBoolean(Entry, 'reversed', Path[Index].Reversed) or
+      not ReadChoice(Entry, 'allowanceEnd', ALLOWANCE_END_NAMES, Choice) then
       Exit;
+    Path[Index].AllowanceEnd := TAllowanceEnd(Choice);
     for Other := 0 to Index - 1 do
       if Path[Other].EdgeKey = Path[Index].EdgeKey then
       begin

@@ -16,7 +16,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 }
 
-// Features applied in one step: a zip in a piece's edge, and a dart
+// Features applied in one step: a zip in a piece's edge, a dart and a hem
 unit Sloper.Tests.Features;
 
 {$mode ObjFPC}{$H+}
@@ -46,6 +46,10 @@ type
     // A dart in the middle of the top, with a 20 mm allowance right of it
     function CappedDart(TowardsEnd: boolean): TPieceObject;
     procedure AssertOnCutLine(Piece: TPieceObject; const Points: array of TVec2);
+    // A panel 100 tall, its hem from (Left, 100) to (Left + 100, 100) and
+    // its top Inset in from either side, with a 10 mm allowance
+    function Skirt(Left, Inset: double; const AName: string; out Hem: string): TPieceObject;
+    function HemStyle(const EdgeKeys: array of string; Style: THemStyle; out Made: THemMade): boolean;
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -86,6 +90,21 @@ type
     procedure TestDartPointOutsideIsRefused;
     procedure TestDartLegsCrossingIsRefused;
     procedure TestDartInAFoldIsRefused;
+    procedure TestSingleHemOnARectangle;
+    procedure TestHemIsTopstitchedInside;
+    procedure TestHemNotchesItsEnds;
+    procedure TestDoubleHemAddsTheTurnUnder;
+    procedure TestNarrowHem;
+    procedure TestBlindHemHasNoStitching;
+    procedure TestHemWithoutNotches;
+    procedure TestHemEndsMirrorAFlare;
+    procedure TestHemsShareTheirDepth;
+    procedure TestHemIsOneUndoStep;
+    procedure TestHemEndsAreSaved;
+    procedure TestHemDeeperThanThePiece;
+    procedure TestHemNeedsAPiece;
+    procedure TestHemEdgesMustJoin;
+    procedure TestHemOnAFoldIsRefused;
   end;
 
 implementation
@@ -902,6 +921,304 @@ begin
   AssertTrue(FPattern.LastError, FPattern.SetFoldEdge(Piece, Top));
   FPattern.Evaluate;
   AssertFalse('a fold', Dart(Top, Made));
+  AssertTrue(FPattern.LastError, Pos('fold', FPattern.LastError) > 0);
+end;
+
+function TTestFeatures.Skirt(Left, Inset: double; const AName: string; out Hem: string): TPieceObject;
+var
+  A, B, C, D, Reason: string;
+  Path: TPiecePath;
+
+  function Pt(X, Y: double): string;
+  begin
+    Result := FPattern.AddFreePoint('', FloatToStr(X), FloatToStr(Y)).Key;
+  end;
+
+begin
+  A := Pt(Left + Inset, 0);
+  B := Pt(Left + 100 - Inset, 0);
+  C := Pt(Left + 100, 100);
+  D := Pt(Left, 100);
+  FPattern.AddLine(A, B, erOutline);
+  FPattern.AddLine(B, C, erOutline);
+  Hem := FPattern.AddLine(C, D, erOutline).Key;
+  FPattern.AddLine(D, A, erOutline);
+  FPattern.Evaluate;
+  AssertTrue(Reason, DetectPiecePath(FPattern, Vec2(Left + 50, 50), Path, Reason));
+  Result := FPattern.AddPiece(AName, Path, '10');
+  AssertNotNull(FPattern.LastError, Result);
+  FPattern.Evaluate;
+end;
+
+function TTestFeatures.HemStyle(const EdgeKeys: array of string; Style: THemStyle; out Made: THemMade): boolean;
+begin
+  Result := InsertHem(FPattern, DefaultHem(FPattern, EdgeKeys, Style), Made);
+end;
+
+procedure TTestFeatures.TestSingleHemOnARectangle;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Made: THemMade;
+  Index, Mirrored: integer;
+  Entry: TPieceEdge;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsSingle, Made));
+  AssertNotNull('its depth is a variable', FPattern.FindVariable(HEM_DEPTH_VARIABLE));
+  AssertNear('40 mm to start with', 40, FPattern.FindVariable(HEM_DEPTH_VARIABLE).Value);
+  Index := Piece.PathIndexOf(Hem);
+  AssertEquals('the depth is the allowance', '#' + HEM_DEPTH_VARIABLE, FPattern.FormulaText(Piece, Piece.OverrideField(Index)));
+  AssertTrue('mirrored ends', Piece.Path[Index].AllowanceEnd = aeMirror);
+  Mirrored := 0;
+  for Entry in Piece.Path do
+    if Entry.AllowanceEnd = aeMirror then
+      Inc(Mirrored);
+  AssertEquals('only the hem''s', 1, Mirrored);
+  AssertTrue(Piece.Message, Piece.State = esValid);
+  AssertOnCutLine(Piece, [Vec2(-10, 140), Vec2(50, 140), Vec2(110, 140), Vec2(110, 50)]);
+  AssertEquals('the piece', Piece.Key, Made.PieceKeys[0]);
+  AssertEquals('no problems', 0, Length(Made.Problems));
+end;
+
+procedure TTestFeatures.TestHemIsTopstitchedInside;
+var
+  Hem: string;
+  Made: THemMade;
+  Stitch: TEdgeObject;
+begin
+  Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsSingle, Made));
+  AssertEquals('one line', 1, Length(Made.StitchKeys));
+  Stitch := TEdgeObject(FPattern.FindNode(Made.StitchKeys[0]));
+  AssertTrue('a stitch line', Stitch.Role = erStitch);
+  AssertEquals('3 mm short of the depth', '#' + HEM_DEPTH_VARIABLE + ' - 3', FPattern.FormulaText(Stitch, 'distance'));
+  AssertNear('inside the piece', 63, Stitch.PointAtLength(0).Y, CUT_TOLERANCE);
+  AssertNear('all along', 63, Stitch.PointAtLength(Stitch.Length / 2).Y, CUT_TOLERANCE);
+end;
+
+procedure TTestFeatures.TestHemNotchesItsEnds;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Made: THemMade;
+  Mark: TNotchMark;
+  Index: integer;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsSingle, Made));
+  AssertEquals('two notches', 2, Length(Made.Notches));
+  AssertEquals('on the piece', 2, Length(Piece.NotchMarks));
+  for Index := 0 to 1 do
+  begin
+    AssertTrue('in the edge beside the hem', Made.Notches[Index].EdgeKey <> Hem);
+    Mark := Piece.NotchMarks[Index];
+    AssertNear('at the hem line', 100, Mark.Seam.Y, CUT_TOLERANCE);
+    AssertTrue('at a corner', SameValue(Mark.Seam.X, 0, CUT_TOLERANCE) or SameValue(Mark.Seam.X, 100, CUT_TOLERANCE));
+    AssertNear('cut in the side''s allowance', 10, Distance(Mark.Seam, Mark.Cut), CUT_TOLERANCE);
+  end;
+  AssertTrue('one at each end', not PointsNear(Piece.NotchMarks[0].Seam, Piece.NotchMarks[1].Seam));
+end;
+
+procedure TTestFeatures.TestDoubleHemAddsTheTurnUnder;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Made: THemMade;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsDouble, Made));
+  AssertEquals('depth and turn-under', '#' + HEM_DEPTH_VARIABLE + ' + 10',
+    FPattern.FormulaText(Piece, Piece.OverrideField(Piece.PathIndexOf(Hem))));
+  AssertOnCutLine(Piece, [Vec2(-10, 150), Vec2(50, 150), Vec2(110, 150)]);
+  AssertEquals('topstitched', 1, Length(Made.StitchKeys));
+end;
+
+procedure TTestFeatures.TestNarrowHem;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Made: THemMade;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsNarrow, Made));
+  AssertEquals('its own small depth', '6 + 10', FPattern.FormulaText(Piece, Piece.OverrideField(Piece.PathIndexOf(Hem))));
+  AssertNull('no variable', FPattern.FindVariable(HEM_DEPTH_VARIABLE));
+  AssertEquals('3 mm short of it', '3', FPattern.FormulaText(TDraftObject(FPattern.FindNode(Made.StitchKeys[0])), 'distance'));
+  AssertOnCutLine(Piece, [Vec2(50, 116)]);
+end;
+
+procedure TTestFeatures.TestBlindHemHasNoStitching;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Made: THemMade;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsBlind, Made));
+  AssertEquals('no stitching', 0, Length(Made.StitchKeys));
+  AssertEquals('turned once', '#' + HEM_DEPTH_VARIABLE, FPattern.FormulaText(Piece, Piece.OverrideField(Piece.PathIndexOf(Hem))));
+  AssertEquals('still notched', 2, Length(Made.Notches));
+end;
+
+procedure TTestFeatures.TestHemWithoutNotches;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Spec: THemSpec;
+  Made: THemMade;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  Spec := DefaultHem(FPattern, [Hem]);
+  Spec.Notches := False;
+  AssertTrue(FPattern.LastError, InsertHem(FPattern, Spec, Made));
+  AssertEquals(0, Length(Made.Notches));
+  AssertEquals(0, Length(Piece.Notches));
+end;
+
+// As worked out by hand in Sloper.Tests.Piece: the panel's sides slope out
+// to the hem, and turned up, the hem's ends lie along them
+procedure TTestFeatures.TestHemEndsMirrorAFlare;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Spec: THemSpec;
+  Made: THemMade;
+  Side: double;
+begin
+  Piece := Skirt(0, 20, 'Skirt', Hem);
+  Spec := DefaultHem(FPattern, [Hem]);
+  Spec.Depth := '30';
+  AssertTrue(FPattern.LastError, InsertHem(FPattern, Spec, Made));
+  Side := 10 * Sqrt(1.04);
+  AssertOnCutLine(Piece, [Vec2(100 + Side, 100), Vec2(94 + Side, 130), Vec2(-Side, 100), Vec2(6 - Side, 130)]);
+  AssertTrue('not the ordinary corner', OffCutLine(Piece, Vec2(106 + Side, 130)) > 1);
+end;
+
+procedure TTestFeatures.TestHemsShareTheirDepth;
+var
+  Front, Back: TPieceObject;
+  FrontHem, BackHem: string;
+  Made: THemMade;
+begin
+  Front := Skirt(0, 0, 'Front', FrontHem);
+  Back := Skirt(200, 0, 'Back', BackHem);
+  AssertTrue(FPattern.LastError, HemStyle([FrontHem, BackHem], hsSingle, Made));
+  AssertEquals('both pieces', 2, Length(Made.PieceKeys));
+  AssertEquals('one variable', 1, FPattern.VariableCount);
+  AssertEquals('stitched both', 2, Length(Made.StitchKeys));
+  AssertTrue(FPattern.LastError, FPattern.SetFormula(FPattern.FindVariable(HEM_DEPTH_VARIABLE), 'formula', '50'));
+  FPattern.Evaluate;
+  AssertOnCutLine(Front, [Vec2(50, 150)]);
+  AssertOnCutLine(Back, [Vec2(250, 150)]);
+end;
+
+procedure TTestFeatures.TestHemIsOneUndoStep;
+var
+  Document: TPatternDocument;
+  Pattern: TPattern;
+  Hem, Before: string;
+  Made: THemMade;
+begin
+  Document := TPatternDocument.Create;
+  try
+    Pattern := FPattern;
+    FPattern := Document.Pattern;
+    try
+      Document.BeginChange('Skirt');
+      Skirt(0, 0, 'Skirt', Hem);
+      Document.EndChange;
+      Before := SavePatternToText(Document.Pattern, False);
+      Document.BeginChange(rsFeatureHem);
+      AssertTrue(Document.Pattern.LastError, HemStyle([Hem], hsDouble, Made));
+      Document.EndChange;
+      AssertFalse('refused', Document.ChangeRefused);
+      AssertTrue('changed', Before <> SavePatternToText(Document.Pattern, False));
+      Document.Undo;
+      AssertEquals('all of it gone', Before, SavePatternToText(Document.Pattern, False));
+    finally
+      FPattern := Pattern;
+    end;
+  finally
+    FreeAndNil(Document);
+  end;
+end;
+
+procedure TTestFeatures.TestHemEndsAreSaved;
+var
+  Hem, Text, Error: string;
+  Made: THemMade;
+  Loaded: TPattern;
+  Piece: TPieceObject;
+begin
+  Skirt(0, 20, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, HemStyle([Hem], hsSingle, Made));
+  Text := SavePatternToText(FPattern);
+  AssertTrue('in the file', Pos('"allowanceEnd": "mirror"', Text) > 0);
+  Loaded := TPattern.Create;
+  try
+    AssertTrue(Error, LoadPatternFromText(Loaded, Text, Error));
+    Loaded.Evaluate;
+    Piece := TPieceObject(Loaded.FindObject('Skirt'));
+    AssertTrue('mirrored', Piece.Path[Piece.PathIndexOf(Hem)].AllowanceEnd = aeMirror);
+    AssertEquals('saved as it was', Text, SavePatternToText(Loaded));
+  finally
+    FreeAndNil(Loaded);
+  end;
+end;
+
+// Allowed, as a deep hem can work as a facing, but worth a look
+procedure TTestFeatures.TestHemDeeperThanThePiece;
+var
+  Hem: string;
+  Spec: THemSpec;
+  Made: THemMade;
+begin
+  Skirt(0, 0, 'Skirt', Hem);
+  Spec := DefaultHem(FPattern, [Hem]);
+  Spec.Depth := '120';
+  AssertTrue(FPattern.LastError, InsertHem(FPattern, Spec, Made));
+  AssertEquals('one problem', 1, Length(Made.Problems));
+  AssertTrue(Made.Problems[0], Pos('Skirt', Made.Problems[0]) > 0);
+end;
+
+procedure TTestFeatures.TestHemNeedsAPiece;
+var
+  Loose: string;
+  Made: THemMade;
+begin
+  Loose := FPattern.AddLine(FPattern.AddFreePoint('', '0', '0').Key, FPattern.AddFreePoint('', '50', '0').Key, erOutline).Key;
+  AssertFalse('a loose line', HemStyle([Loose], hsSingle, Made));
+  AssertTrue(FPattern.LastError, Pos('no piece', FPattern.LastError) > 0);
+  AssertFalse('no edge', HemStyle([], hsSingle, Made));
+end;
+
+procedure TTestFeatures.TestHemEdgesMustJoin;
+var
+  Piece: TPieceObject;
+  Hem, Top: string;
+  Made: THemMade;
+  Entry: TPieceEdge;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  Top := '';
+  for Entry in Piece.Path do
+    if TEdgeObject(FPattern.FindNode(Entry.EdgeKey)).PointAtLength(0).Y < 1 then
+      Top := Entry.EdgeKey;
+  AssertFalse('top and bottom', HemStyle([Hem, Top], hsSingle, Made));
+  AssertEquals('nothing added', 0, FPattern.VariableCount);
+end;
+
+procedure TTestFeatures.TestHemOnAFoldIsRefused;
+var
+  Piece: TPieceObject;
+  Hem: string;
+  Made: THemMade;
+begin
+  Piece := Skirt(0, 0, 'Skirt', Hem);
+  AssertTrue(FPattern.LastError, FPattern.SetFoldEdge(Piece, Hem));
+  FPattern.Evaluate;
+  AssertFalse('a fold', HemStyle([Hem], hsSingle, Made));
   AssertTrue(FPattern.LastError, Pos('fold', FPattern.LastError) > 0);
 end;
 

@@ -44,6 +44,13 @@ type
     // after the prompt, with the path index of each
     FAllowanceBox: TComboBox;
     FAllowanceIndexes: array of integer;
+    // Mirrors an edge's allowance ends: one choice per edge without, after
+    // the prompt, and a row for each edge with them, plain or mirrored, with
+    // the path index of each
+    FMirrorEndsBox: TComboBox;
+    FMirrorIndexes: array of integer;
+    FEndBoxes: array of TComboBox;
+    FEndIndexes: array of integer;
     // The grainline's kind, in the order of TGrainKind, and its two points
     // when it runs between them: Choose..., then every point by name
     FGrainBox, FGrainStartBox, FGrainEndBox: TComboBox;
@@ -66,6 +73,10 @@ type
     // Added with the piece's allowance, or removed
     procedure AddEdgeAllowance(PathIndex: integer);
     procedure RemoveEdgeAllowance(PathIndex: integer);
+    procedure AddEndRows(Piece: TPieceObject);
+    procedure MirrorChange(Sender: TObject);
+    procedure EndChange(Sender: TObject);
+    procedure ChangeAllowanceEnd(PathIndex: integer; Value: TAllowanceEnd);
     procedure GrainChange(Sender: TObject);
     procedure ChangeGrain(Kind: TGrainKind);
     procedure MaterialChange(Sender: TObject);
@@ -109,6 +120,14 @@ resourcestring
   rsPropOwnAllowanceHint = 'Give one edge its own seam allowance; empty its row to go back to the piece''s';
   rsPropAddEdgeAllowance = 'Add edge allowance';
   rsPropRemoveEdgeAllowance = 'Remove edge allowance';
+  rsPropMirrorEnds = 'Mirrored ends';
+  rsPropMirrorEndsPrompt = 'Add for an edge...';
+  rsPropMirrorEndsHint = 'Shape an edge''s allowance ends as the edges beside it, mirrored, so it lies flat turned up, ' +
+    'as a hem does';
+  rsPropEndsOf = 'Ends of %s';
+  rsPropEndsPlain = 'Plain';
+  rsPropEndsMirrored = 'Mirrored';
+  rsPropChangeAllowanceEnd = 'Change allowance ends';
   rsPropChangeCut = 'Change cut';
   rsPropChangeFold = 'Change fold';
   rsPropDartCap = 'Cap on %s';
@@ -129,6 +148,8 @@ const
   QUEUED_ADD_ALLOWANCE = 0;
   QUEUED_REMOVE_ALLOWANCE = 1;
   QUEUED_GRAIN = 2;
+  QUEUED_MIRROR_ENDS = 3;
+  QUEUED_PLAIN_ENDS = 4;
 
 procedure TPieceSection.Build(Node: TEvalNode; Place: TSectionPlace);
 begin
@@ -181,6 +202,7 @@ begin
   FAllowanceBox.ShowHint := True;
   FAllowanceBox.ItemIndex := 0;
   FAllowanceBox.Enabled := Length(FAllowanceIndexes) > 0;
+  AddEndRows(Piece);
   AddGrainRows(Piece);
   FMaterialBox := Panel.AddChoiceRow(rsPropMaterial, [], @MaterialChange);
   // In the order of TPieceFillStyle
@@ -218,7 +240,81 @@ begin
     QUEUED_ADD_ALLOWANCE: AddEdgeAllowance(Data);
     QUEUED_REMOVE_ALLOWANCE: RemoveEdgeAllowance(Data);
     QUEUED_GRAIN: ChangeGrain(TGrainKind(Data));
+    QUEUED_MIRROR_ENDS: ChangeAllowanceEnd(Data, aeMirror);
+    QUEUED_PLAIN_ENDS: ChangeAllowanceEnd(Data, aePlain);
   end;
+end;
+
+// The prompt for an edge to mirror, then a row for each edge that is
+procedure TPieceSection.AddEndRows(Piece: TPieceObject);
+var
+  Pattern: TPattern;
+  Index: integer;
+  Names: TStringArray;
+  Box: TComboBox;
+begin
+  Pattern := Panel.Document.Pattern;
+  FMirrorIndexes := nil;
+  FEndBoxes := nil;
+  FEndIndexes := nil;
+  Names := nil;
+  Insert(rsPropMirrorEndsPrompt, Names, 0);
+  for Index := 0 to High(Piece.Path) do
+    if Piece.Path[Index].AllowanceEnd = aePlain then
+    begin
+      Insert(Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName, Names, Length(Names));
+      Insert(Index, FMirrorIndexes, Length(FMirrorIndexes));
+    end;
+  FMirrorEndsBox := Panel.AddChoiceRow(rsPropMirrorEnds, Names, @MirrorChange);
+  FMirrorEndsBox.Hint := rsPropMirrorEndsHint;
+  FMirrorEndsBox.ShowHint := True;
+  FMirrorEndsBox.ItemIndex := 0;
+  FMirrorEndsBox.Enabled := Length(FMirrorIndexes) > 0;
+  for Index := 0 to High(Piece.Path) do
+    if Piece.Path[Index].AllowanceEnd = aeMirror then
+    begin
+      // In the order of TAllowanceEnd
+      Box := Panel.AddChoiceRow(Format(rsPropEndsOf, [Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName]),
+        [rsPropEndsPlain, rsPropEndsMirrored], @EndChange);
+      Box.ItemIndex := Ord(aeMirror);
+      Box.Tag := Length(FEndBoxes);
+      Box.Hint := rsPropMirrorEndsHint;
+      Box.ShowHint := True;
+      Insert(Box, FEndBoxes, Length(FEndBoxes));
+      Insert(Index, FEndIndexes, Length(FEndIndexes));
+    end;
+end;
+
+// Mirroring adds a row, so the panel is built again after it
+procedure TPieceSection.MirrorChange(Sender: TObject);
+begin
+  if FFilling or (FMirrorEndsBox.ItemIndex <= 0) then
+    Exit;
+  Panel.QueueChange(Self, QUEUED_MIRROR_ENDS, FMirrorIndexes[FMirrorEndsBox.ItemIndex - 1]);
+end;
+
+// Going back to plain takes the row away
+procedure TPieceSection.EndChange(Sender: TObject);
+begin
+  if FFilling or (TComboBox(Sender).ItemIndex <> Ord(aePlain)) then
+    Exit;
+  Panel.QueueChange(Self, QUEUED_PLAIN_ENDS, FEndIndexes[TComboBox(Sender).Tag]);
+end;
+
+// The commit and the rebuild free this section, so only the panel is used
+// after them
+procedure TPieceSection.ChangeAllowanceEnd(PathIndex: integer; Value: TAllowanceEnd);
+var
+  APanel: TPropertiesPanel;
+  Node: TEvalNode;
+begin
+  APanel := Panel;
+  Node := APanel.SelectedNode;
+  if not (Node is TPieceObject) or (PathIndex > High(TPieceObject(Node).Path)) then
+    Exit;
+  APanel.Document.BeginChange(rsPropChangeAllowanceEnd);
+  APanel.Document.Commit(APanel.Document.Pattern.SetAllowanceEnd(TPieceObject(Node), PathIndex, Value));
+  APanel.Rebuild;
 end;
 
 procedure TPieceSection.Refresh(Node: TEvalNode);

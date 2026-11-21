@@ -51,10 +51,16 @@ const
 
 type
 
+  // How an edge's allowance ends where it meets its neighbours: as their
+  // cutting lines meet, or mirroring theirs, as a hem's does so it lies
+  // along them when turned up (see Sloper.Core.SeamAllowance)
+  TAllowanceEnd = (aePlain, aeMirror);
+
   TPieceEdge = record
     EdgeKey: string;
     // True when the path runs along the edge from its end to its start
     Reversed: boolean;
+    AllowanceEnd: TAllowanceEnd;
   end;
 
   TPiecePath = array of TPieceEdge;
@@ -160,7 +166,7 @@ type
     FFillColor: string;
     FFillStyle: TPieceFillStyle;
     function BuildOutline(Context: TEvalContext; DefaultWidth: double; out Outline: TVec2Array; out Widths, EdgeWidths: TDoubleArray;
-      out EdgeStarts: TPieceEdgeStarts): TEvalState;
+      out Mirrors: TMirrorFlags; out EdgeStarts: TPieceEdgeStarts): TEvalState;
     function ComputeGrainline(Context: TEvalContext; const Points: TVec2Array; out Line: TLine2): TEvalState;
     function ComputeNotch(Context: TEvalContext; Index: integer; const EdgeWidths: TDoubleArray; const Capped: TPathFlags;
       Anticlockwise: boolean; out Mark: TNotchMark): TEvalState;
@@ -196,6 +202,7 @@ type
     // The edge at PathIndex becomes the run of edges, in order: an override
     // it had goes to each of them, and later overrides move up
     procedure ReplacePathEdge(PathIndex: integer; const Run: TPiecePath);
+    procedure SetAllowanceEnd(PathIndex: integer; Value: TAllowanceEnd);
     procedure SetNotchEdge(Index: integer; const AEdgeKey: string);
     // Clears the old grainline's field, if any. gkAngle adds its field;
     // gkPoints takes the two point keys.
@@ -289,6 +296,7 @@ type
 const
   // As written in pattern files and the Automation API
   DART_PRESS_NAMES: array[TDartPress] of string = ('none', 'first', 'second');
+  ALLOWANCE_END_NAMES: array[TAllowanceEnd] of string = ('plain', 'mirror');
 
 resourcestring
   rsPieceGap = 'There is a gap between %s and %s';
@@ -713,7 +721,7 @@ begin
 end;
 
 function TPieceObject.BuildOutline(Context: TEvalContext; DefaultWidth: double; out Outline: TVec2Array;
-  out Widths, EdgeWidths: TDoubleArray; out EdgeStarts: TPieceEdgeStarts): TEvalState;
+  out Widths, EdgeWidths: TDoubleArray; out Mirrors: TMirrorFlags; out EdgeStarts: TPieceEdgeStarts): TEvalState;
 var
   Index, Added, PointIndex: integer;
   Node: TEvalNode;
@@ -724,6 +732,7 @@ var
 begin
   Outline := nil;
   Widths := nil;
+  Mirrors := nil;
   EdgeWidths := nil;
   SetLength(EdgeWidths, Length(FPath));
   EdgeStarts := nil;
@@ -754,10 +763,12 @@ begin
     EdgeStarts[Index] := Added;
     SetLength(Outline, Added + High(Points));
     SetLength(Widths, Added + High(Points));
+    SetLength(Mirrors, Added + High(Points));
     for PointIndex := 0 to High(Points) - 1 do
     begin
       Outline[Added + PointIndex] := Points[PointIndex];
       Widths[Added + PointIndex] := Width;
+      Mirrors[Added + PointIndex] := FPath[Index].AllowanceEnd = aeMirror;
     end;
     LastEnd := Points[High(Points)];
     Previous := TEdgeObject(Node);
@@ -937,12 +948,13 @@ var
   FoldInwards: double;
   Caps: TDartCapArray;
   Capped: TPathFlags;
+  Mirrors: TMirrorFlags;
 begin
   if not EvalLength(Context, PIECE_ALLOWANCE_FIELD, Width) then
     Exit(esError);
   if Width < 0 then
     Exit(Fail(esInvalid, rsPieceNegativeAllowance));
-  Result := BuildOutline(Context, Width, Points, Widths, EdgeWidths, Starts);
+  Result := BuildOutline(Context, Width, Points, Widths, EdgeWidths, Mirrors, Starts);
   if Result <> esValid then
     Exit;
   if Abs(SignedArea(Points)) < PIECE_JOIN_TOLERANCE then
@@ -950,7 +962,7 @@ begin
   Result := BuildCaps(Context, Starts, Caps, Capped);
   if Result <> esValid then
     Exit;
-  if not OffsetOutline(Points, Widths, Caps, Cut) then
+  if not OffsetOutline(Points, Widths, Caps, Mirrors, Cut) then
     Exit(Fail(esInvalid, rsPieceNoCutLine));
   Result := ComputeGrainline(Context, Points, Line);
   if Result <> esValid then
@@ -1155,6 +1167,9 @@ begin
     RemoveOverride(Next);
   FPath[PathIndex].EdgeKey := EdgeKey;
   FPath[PathIndex].Reversed := Reversed;
+  // Mirrored ends stay with the joined edge when either part had them
+  if FPath[Next].AllowanceEnd = aeMirror then
+    FPath[PathIndex].AllowanceEnd := aeMirror;
   Delete(FPath, Next, 1);
   // Later overrides move down one, from the start so none is renamed onto one still to move
   for Index := Next to High(FPath) do
@@ -1192,6 +1207,11 @@ begin
       AddOverride(Index);
       Field(OverrideField(Index)).ParseStored(OverrideText);
     end;
+end;
+
+procedure TPieceObject.SetAllowanceEnd(PathIndex: integer; Value: TAllowanceEnd);
+begin
+  FPath[PathIndex].AllowanceEnd := Value;
 end;
 
 procedure TPieceObject.SetNotchEdge(Index: integer; const AEdgeKey: string);

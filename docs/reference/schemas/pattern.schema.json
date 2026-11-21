@@ -2068,6 +2068,13 @@
               "allowance": {
                 "description": "The edge's own seam allowance, when it has one",
                 "type": "string"
+              },
+              "allowanceEnd": {
+                "description": "How the edge's allowance ends where it meets its neighbours: plain, where their cutting lines meet, or mirror, their allowance reflected in the edge, as a hem's ends are so it lies flat turned up. Plain when absent",
+                "enum": [
+                  "plain",
+                  "mirror"
+                ]
               }
             },
             "additionalProperties": false

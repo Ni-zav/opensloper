@@ -57,6 +57,7 @@ type
     procedure TestRectangleCornerAndOffset;
     procedure TestInsertZip;
     procedure TestInsertDart;
+    procedure TestInsertHem;
     procedure TestMarkings;
     procedure TestSetRole;
     procedure TestSetMarker;
@@ -570,6 +571,53 @@ begin
   Call('undo', '{}');
   Call('get_object', Format('{"name": "%s"}', [DART_MID_NAME]));
   AssertTrue('one undo takes it all off', ErrorCode <> 0);
+end;
+
+procedure TTestAPI.TestInsertHem;
+var
+  Edges, List: TJSONArray;
+  Bottom, Stitch: string;
+
+// The bottom's entry in the piece's path, as get_object gives it
+  function BottomEntry: TJSONObject;
+  var
+    Index: integer;
+  begin
+    Call('get_object', '{"name": "Front"}');
+    List := TJSONArray(Answer.Find('path'));
+    for Index := 0 to List.Count - 1 do
+      if List.Objects[Index].Get('edge', 0) = Edges.Objects[2].Get('id', 0) then
+        Exit(List.Objects[Index]);
+    Result := nil;
+  end;
+
+begin
+  Call('add_point', '{"type": "freePoint", "name": "O", "x": 0, "y": 0}');
+  Call('add_rectangle', '{"corner": "O", "width": 100, "height": 300, "role": "outline"}');
+  Edges := TJSONArray(FReply.Find('result').Clone);
+  try
+    Bottom := Edges.Objects[2].Get('name', '');
+    Call('create_piece', '{"x": 50, "y": 150, "name": "Front"}');
+    Call('feature_hem', '{"edges": ["Nowhere"]}');
+    AssertTrue('no such edge', ErrorCode <> 0);
+    Call('feature_hem', Format('{"edges": ["%s"], "style": "double", "depth": 30}', [Bottom]));
+    AssertEquals('one piece', 1, TJSONArray(Answer.Find('pieces')).Count);
+    AssertEquals('two notches', 2, TJSONArray(Answer.Find('notches')).Count);
+    AssertEquals('no problems', 0, TJSONArray(Answer.Find('problems')).Count);
+    List := TJSONArray(Answer.Find('stitching'));
+    AssertEquals('topstitched', 1, List.Count);
+    Stitch := List.Objects[0].Get('name', '');
+    AssertEquals('mirrored ends', 'mirror', BottomEntry.Get('allowanceEnd', ''));
+    Call('set_allowance_end', Format('{"name": "Front", "edge": "%s", "end": "plain"}', [Bottom]));
+    AssertEquals('valid', Answer.Get('state', ''));
+    AssertEquals('plain again', '', BottomEntry.Get('allowanceEnd', ''));
+    Call('undo', '{}');
+    Call('undo', '{}');
+    Call('get_object', Format('{"name": "%s"}', [Stitch]));
+    AssertTrue('one undo takes it all off', ErrorCode <> 0);
+  finally
+    FreeAndNil(Edges);
+  end;
 end;
 
 procedure TTestAPI.TestCircleArcAndCircleCircle;

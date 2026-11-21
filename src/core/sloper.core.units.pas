@@ -32,7 +32,7 @@ type
   TStartingLength = (slPieceAllowance, slSeamTolerance, slArcRadius, slOffsetDistance, slCornerRadius, slStitchSpacing,
     slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch,
     slLapStitch, slFlyExtension, slFlyStitch, slFlyShieldWidth, slFlyShieldExtra, slFeatureGap, slDartWidth, slDartDepth,
-    slDartHoleInset);
+    slDartHoleInset, slHemDepth, slNarrowHemDepth, slHemTurnUnder, slHemStitchBack);
 
 const
   MEASURE_UNIT_NAMES: array[TMeasureUnit] of string = ('mm', 'cm', 'in');
@@ -63,7 +63,11 @@ const
     ('50', '5', '2'),         // the room between the pattern and a piece a feature adds
     ('20', '2', '0.75'),      // a dart's width at the edge
     ('90', '9', '3.5'),       // a dart's depth into the piece
-    ('10', '1', '0.375'));    // how far back from a dart's point its hole goes
+    ('10', '1', '0.375'),     // how far back from a dart's point its hole goes
+    ('40', '4', '1.5'),       // a hem's depth
+    ('6', '0.6', '0.25'),     // a narrow hem's depth
+    ('10', '1', '0.375'),     // a double hem's turn-under
+    ('3', '0.3', '0.125'));   // how far a hem's topstitching is back from its depth
 
 // The unit with this name (mm, cm or in, any case)
 function MeasureUnitFromName(const AName: string; out AUnit: TMeasureUnit): boolean;

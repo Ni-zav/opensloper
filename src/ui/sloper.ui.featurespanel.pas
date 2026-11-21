@@ -17,7 +17,8 @@
 }
 
 // The Features tab: sewing details to apply to the pattern in one step: a
-// zip along the selected edge of a piece, or a dart in it. Apply adds
+// zip along the selected edge of a piece, a dart in it, or a hem along the
+// selected edges. Apply adds
 // ordinary objects, as one undo step (Sloper.Core.Features).
 unit Sloper.UI.FeaturesPanel;
 
@@ -38,6 +39,8 @@ type
     FGeneration: integer;
     // The one edge and the one point selected, if any
     FEdgeKey, FPointKey: string;
+    // Every edge selected, when nothing else is
+    FEdgeKeys: TStringArray;
     FKinds: TListBox;
     // The group the next control goes in, and how far down it
     FGroup: TGroupBox;
@@ -52,6 +55,14 @@ type
     FDartFromBox, FDartFoldBox: TComboBox;
     FDartPositionEdit, FDartWidthEdit, FDartDepthEdit, FDartHoleEdit: TEdit;
     FDartApply: TButton;
+    FHemGroup: TGroupBox;
+    FHemEdgeLabel, FHemDepthLabel, FHemTurnLabel, FHemStitchLabel: TLabel;
+    FHemStyleBox: TComboBox;
+    FHemDepthEdit, FHemTurnEdit, FHemStitchEdit: TEdit;
+    FHemNotchBox: TCheckBox;
+    FHemApply: TButton;
+    // The depth the topstitching's distance was last worked out from
+    FHemDepth: string;
     FOnMessage: TFeaturesMessageEvent;
     procedure SetDocument(ADocument: TPatternDocument);
     procedure DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
@@ -64,6 +75,13 @@ type
     procedure Place(Control: TControl);
     procedure BuildZip;
     procedure BuildDart;
+    procedure BuildHem;
+    procedure HemStartingValues;
+    procedure RefreshHem;
+    function EdgeNames: string;
+    procedure HemStyleChange(Sender: TObject);
+    procedure HemDepthChange(Sender: TObject);
+    procedure HemApplyClick(Sender: TObject);
     procedure StartingValues;
     procedure Refresh;
     procedure RefreshZip(Edge: TObject);
@@ -78,8 +96,8 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    // The canvas's selection: a zip goes along one selected edge, and a dart
-    // into one, to a selected point if there is one
+    // The canvas's selection: a zip goes along one selected edge, a dart
+    // into one, to a selected point if there is one, and a hem along all
     procedure ShowSelection(const Keys: TStringArray);
     property Document: TPatternDocument read FDocument write SetDocument;
     property OnMessage: TFeaturesMessageEvent read FOnMessage write FOnMessage;
@@ -124,6 +142,21 @@ resourcestring
     'one Undo takes them all off.';
   rsFeaturesUndoDart = 'Insert Dart';
   rsFeaturesDartDone = 'Dart added in %s';
+  rsFeaturesHemChoose = 'Select the edges to hem on the canvas: one or more on each piece, running end to end.';
+  rsFeaturesHemSingle = 'Single, turned once';
+  rsFeaturesHemDouble = 'Double, turned twice';
+  rsFeaturesHemNarrow = 'Narrow, a small double hem';
+  rsFeaturesHemBlind = 'Blind, no topstitching';
+  rsFeaturesHemDepth = 'Depth, turned up (%s)';
+  rsFeaturesHemTurnUnder = 'Turned under besides (%s)';
+  rsFeaturesHemStitch = 'Topstitching from the fold (%s)';
+  rsFeaturesHemNotches = 'Notch where it turns up';
+  rsFeaturesHemNote = 'Apply gives the edges the hem''s allowance, shapes its ends to lie along the edges beside it ' +
+    'when turned up, adds the topstitching and notches the edges beside it. They are ordinary objects, to change as you ' +
+    'like; one Undo takes them all off.';
+  rsFeaturesUndoHem = 'Insert Hem';
+  rsFeaturesHemDone = 'Hem added along %s';
+  rsFeaturesHemProblem = '%s; %s';
 
 implementation
 
@@ -135,6 +168,7 @@ const
   KIND_LIST_HEIGHT96 = 90;
   KIND_ZIP = 0;
   KIND_DART = 1;
+  KIND_HEM = 2;
 
 constructor TFeaturesPanel.Create(AOwner: TComponent);
 begin
@@ -148,11 +182,13 @@ begin
   FKinds.Align := alTop;
   FKinds.Items.Add(rsFeatureZip);
   FKinds.Items.Add(rsFeatureDart);
+  FKinds.Items.Add(rsFeatureHem);
   FKinds.ItemIndex := KIND_ZIP;
   FKinds.Height := Scale96ToScreen(KIND_LIST_HEIGHT96);
   FKinds.OnClick := @KindClick;
   BuildZip;
   BuildDart;
+  BuildHem;
   KindClick(nil);
 end;
 
@@ -284,10 +320,41 @@ begin
   AddNote(FDartApply, rsFeaturesDartNote);
 end;
 
+procedure TFeaturesPanel.BuildHem;
+begin
+  FHemGroup := AddGroup(rsFeatureHem);
+  FHemEdgeLabel := AddLabel('');
+  FHemEdgeLabel.Font.Style := [fsBold];
+  FHemEdgeLabel.WordWrap := True;
+  AddLabel(rsFeaturesStyle);
+  FHemStyleBox := AddChoices;
+  // In the order of THemStyle
+  FHemStyleBox.Items.Add(rsFeaturesHemSingle);
+  FHemStyleBox.Items.Add(rsFeaturesHemDouble);
+  FHemStyleBox.Items.Add(rsFeaturesHemNarrow);
+  FHemStyleBox.Items.Add(rsFeaturesHemBlind);
+  FHemStyleBox.ItemIndex := 0;
+  FHemStyleBox.OnChange := @HemStyleChange;
+  FHemDepthLabel := AddLabel('');
+  FHemDepthEdit := AddEdit;
+  FHemDepthEdit.OnChange := @HemDepthChange;
+  FHemTurnLabel := AddLabel('');
+  FHemTurnEdit := AddEdit;
+  FHemStitchLabel := AddLabel('');
+  FHemStitchEdit := AddEdit;
+  FHemNotchBox := TCheckBox.Create(Self);
+  FHemNotchBox.Caption := rsFeaturesHemNotches;
+  FHemNotchBox.Checked := True;
+  Place(FHemNotchBox);
+  FHemApply := AddApply(FHemNotchBox, @HemApplyClick);
+  AddNote(FHemApply, rsFeaturesHemNote);
+end;
+
 procedure TFeaturesPanel.KindClick(Sender: TObject);
 begin
-  FZipGroup.Visible := FKinds.ItemIndex <> KIND_DART;
+  FZipGroup.Visible := FKinds.ItemIndex = KIND_ZIP;
   FDartGroup.Visible := FKinds.ItemIndex = KIND_DART;
+  FHemGroup.Visible := FKinds.ItemIndex = KIND_HEM;
 end;
 
 procedure TFeaturesPanel.SetDocument(ADocument: TPatternDocument);
@@ -313,6 +380,7 @@ var
 begin
   FEdgeKey := '';
   FPointKey := '';
+  FEdgeKeys := nil;
   Edges := 0;
   Points := 0;
   if Assigned(FDocument) then
@@ -322,6 +390,7 @@ begin
       if Node is TEdgeObject then
       begin
         FEdgeKey := Key;
+        Insert(Key, FEdgeKeys, Length(FEdgeKeys));
         Inc(Edges);
       end
       else if Node is TPointObject then
@@ -330,6 +399,8 @@ begin
         Inc(Points);
       end;
     end;
+  if Edges <> Length(Keys) then
+    FEdgeKeys := nil;
   // One of each at most, and nothing else
   if (Edges <> 1) or (Points > 1) or (Edges + Points <> Length(Keys)) then
   begin
@@ -356,8 +427,21 @@ begin
   FDartWidthEdit.Text := Dart.Width;
   FDartDepthEdit.Text := Dart.Depth;
   FDartHoleEdit.Text := Dart.HoleInset;
+  HemStartingValues;
   FGeneration := FDocument.Generation;
   ShowStyle;
+end;
+
+// The hem's fields at the chosen style's starting widths
+procedure TFeaturesPanel.HemStartingValues;
+var
+  Hem: THemSpec;
+begin
+  Hem := DefaultHem(FDocument.Pattern, [], THemStyle(Max(FHemStyleBox.ItemIndex, 0)));
+  FHemDepth := Hem.Depth;
+  FHemDepthEdit.Text := Hem.Depth;
+  FHemTurnEdit.Text := Hem.TurnUnder;
+  FHemStitchEdit.Text := Hem.StitchDistance;
 end;
 
 procedure TFeaturesPanel.ShowStyle;
@@ -388,6 +472,13 @@ begin
   FDartPositionLabel.Caption := Format(rsFeaturesDartPosition, [UnitText]);
   FDartWidthLabel.Caption := Format(rsFeaturesDartWidth, [UnitText]);
   FDartHoleLabel.Caption := Format(rsFeaturesDartHole, [UnitText]);
+  FHemDepthLabel.Caption := Format(rsFeaturesHemDepth, [UnitText]);
+  FHemTurnLabel.Caption := Format(rsFeaturesHemTurnUnder, [UnitText]);
+  FHemStitchLabel.Caption := Format(rsFeaturesHemStitch, [UnitText]);
+  FHemTurnEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) in [hsDouble, hsNarrow];
+  FHemTurnLabel.Enabled := FHemTurnEdit.Enabled;
+  FHemStitchEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) <> hsBlind;
+  FHemStitchLabel.Enabled := FHemStitchEdit.Enabled;
 end;
 
 function PointName(Document: TPatternDocument; const Key: string): string;
@@ -431,6 +522,82 @@ begin
   end;
   RefreshZip(Edge);
   RefreshDart(Edge);
+  RefreshHem;
+end;
+
+// The selected edges' names, in the order selected
+function TFeaturesPanel.EdgeNames: string;
+var
+  Key: string;
+begin
+  Result := '';
+  for Key in FEdgeKeys do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + PointName(FDocument, Key);
+  end;
+end;
+
+procedure TFeaturesPanel.RefreshHem;
+begin
+  FHemApply.Enabled := Assigned(FDocument) and (Length(FEdgeKeys) > 0);
+  if FHemApply.Enabled then
+    FHemEdgeLabel.Caption := Format(rsFeaturesAlong, [EdgeNames])
+  else
+    FHemEdgeLabel.Caption := rsFeaturesHemChoose;
+end;
+
+// A style starts with its own depth: a narrow hem is much smaller
+procedure TFeaturesPanel.HemStyleChange(Sender: TObject);
+begin
+  if Assigned(FDocument) then
+    HemStartingValues;
+  ShowStyle;
+end;
+
+// The topstitching follows the depth, until it is typed in itself
+procedure TFeaturesPanel.HemDepthChange(Sender: TObject);
+begin
+  if not Assigned(FDocument) then
+    Exit;
+  if Trim(FHemStitchEdit.Text) = HemStitchDistance(FDocument.Pattern, FHemDepth) then
+    FHemStitchEdit.Text := HemStitchDistance(FDocument.Pattern, Trim(FHemDepthEdit.Text));
+  FHemDepth := Trim(FHemDepthEdit.Text);
+end;
+
+// One undo step, or none when the hem cannot go there
+procedure TFeaturesPanel.HemApplyClick(Sender: TObject);
+var
+  Spec: THemSpec;
+  Made: THemMade;
+  Done, Problem: string;
+begin
+  if not Assigned(FDocument) or FDocument.ChangeOpen then
+    Exit;
+  Spec := DefaultHem(FDocument.Pattern, FEdgeKeys, THemStyle(Max(FHemStyleBox.ItemIndex, 0)));
+  Spec.Depth := Trim(FHemDepthEdit.Text);
+  Spec.TurnUnder := Trim(FHemTurnEdit.Text);
+  Spec.StitchDistance := Trim(FHemStitchEdit.Text);
+  Spec.Notches := FHemNotchBox.Checked;
+  Done := Format(rsFeaturesHemDone, [EdgeNames]);
+  FDocument.BeginChange(rsFeaturesUndoHem);
+  if not InsertHem(FDocument.Pattern, Spec, Made) then
+  begin
+    Done := FDocument.Pattern.LastError;
+    FDocument.CancelChange;
+    Say(Done);
+    Exit;
+  end;
+  FDocument.EndChange;
+  if FDocument.ChangeRefused then
+  begin
+    Say(FDocument.Pattern.LastError);
+    Exit;
+  end;
+  for Problem in Made.Problems do
+    Done := Format(rsFeaturesHemProblem, [Done, Problem]);
+  Say(Done);
 end;
 
 procedure TFeaturesPanel.RefreshZip(Edge: TObject);

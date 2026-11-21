@@ -48,6 +48,9 @@ type
     procedure TestOffsetZeroEdgeForFold;
     procedure TestOffsetConcaveCorner;
     procedure TestOffsetCutsOffLongSpike;
+    procedure TestMirroredEndsAtARightAngle;
+    procedure TestMirroredEndsOnAFlare;
+    procedure TestMirroredEndsEitherWayRound;
     procedure TestDetectSquare;
     procedure TestDetectEdgesDrawnAnyWay;
     procedure TestDetectOutsideIsRefused;
@@ -114,6 +117,16 @@ begin
 end;
 
 function Widths(const Values: array of double): TDoubleArray;
+var
+  Index: integer;
+begin
+  Result := nil;
+  SetLength(Result, Length(Values));
+  for Index := 0 to High(Values) do
+    Result[Index] := Values[Index];
+end;
+
+function Flags(const Values: array of boolean): TMirrorFlags;
 var
   Index: integer;
 begin
@@ -260,6 +273,51 @@ begin
   AssertTrue(OffsetOutline(Outline([0, 0, 200, 5, 0, 10]), Widths([10, 10, 10]), Cut));
   for P in Cut do
     AssertTrue('stays near the tip', P.X < 200 + 4 * 10 + 1);
+end;
+
+// Square to its sides, a hem's mirrored ends are the ordinary corners
+procedure TTestPiece.TestMirroredEndsAtARightAngle;
+var
+  Cut: TVec2Array;
+begin
+  AssertTrue(OffsetOutline(Outline([0, 0, 100, 0, 100, 100, 0, 100]), Widths([30, 10, 10, 10]), nil,
+    Flags([True, False, False, False]), Cut));
+  AssertNear('area', 120 * 140, Abs(SignedArea(Cut)), AREA_TOLERANCE);
+  AssertTrue(HasPoint(Cut, 110, -30));
+  AssertTrue(HasPoint(Cut, -10, -30));
+end;
+
+// Hand-worked: a skirt panel from a 60 waist at y = 0 to a 100 hem at
+// y = 100, its right side x = 80 + y / 5. Its 10 mm cutting line is
+// x = 80 + 10 sqrt(1.04) + y / 5, which meets the hem line at Q; reflected in
+// the hem line it is x = 80 + 10 sqrt(1.04) + (200 - y) / 5, which meets the
+// 30 mm hem's cutting line at R, short of the ordinary corner.
+procedure TTestPiece.TestMirroredEndsOnAFlare;
+var
+  Cut: TVec2Array;
+  Side: double;
+begin
+  Side := 10 * Sqrt(1.04);
+  AssertTrue(OffsetOutline(Outline([20, 0, 80, 0, 100, 100, 0, 100]), Widths([10, 10, 30, 10]), nil,
+    Flags([False, False, True, False]), Cut));
+  AssertTrue('Q on the right', HasPoint(Cut, 100 + Side, 100));
+  AssertTrue('R on the right', HasPoint(Cut, 94 + Side, 130));
+  AssertTrue('Q on the left', HasPoint(Cut, -Side, 100));
+  AssertTrue('R on the left', HasPoint(Cut, 6 - Side, 130));
+  AssertFalse('not the ordinary corner', HasPoint(Cut, 106 + Side, 130));
+end;
+
+procedure TTestPiece.TestMirroredEndsEitherWayRound;
+var
+  Cut: TVec2Array;
+  Side: double;
+begin
+  Side := 10 * Sqrt(1.04);
+  // The same panel the other way round: the hem is the segment from (0, 100)
+  AssertTrue(OffsetOutline(Outline([0, 100, 100, 100, 80, 0, 20, 0]), Widths([30, 10, 10, 10]), nil,
+    Flags([True, False, False, False]), Cut));
+  AssertTrue('R on the right', HasPoint(Cut, 94 + Side, 130));
+  AssertTrue('R on the left', HasPoint(Cut, 6 - Side, 130));
 end;
 
 procedure TTestPiece.TestDetectSquare;

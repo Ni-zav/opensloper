@@ -248,6 +248,9 @@ resourcestring
   rsMemberPathEdge = 'An edge of the outline';
   rsMemberPathReversed = 'Whether the path follows it from its end to its start';
   rsMemberPathAllowance = 'The edge''s own seam allowance, when it has one';
+  rsMemberPathAllowanceEnd = 'How the edge''s allowance ends where it meets its neighbours: plain, where their cutting ' +
+    'lines meet, or mirror, their allowance reflected in the edge, as a hem''s ends are so it lies flat turned up. Plain ' +
+    'when absent';
   rsMemberAllowance = 'The seam allowance';
   rsMemberGrainline = 'Left out for none';
   rsMemberGrainAngle = 'At an angle through the middle of the piece';
@@ -501,6 +504,7 @@ begin
   M('path[].edge', mkEdge, rsMemberPathEdge);
   M('path[].reversed', mkFlag, rsMemberPathReversed);
   M('path[].allowance', mkLength, rsMemberPathAllowance);
+  M('path[].allowanceEnd', mkChoice, rsMemberPathAllowanceEnd, 'plain, mirror');
   M('allowance', mkLength, rsMemberAllowance);
   M('grainline', mkGroup, rsMemberGrainline);
   M('grainline.angle', mkAngle, rsMemberGrainAngle);

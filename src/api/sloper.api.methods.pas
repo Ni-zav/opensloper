@@ -196,6 +196,25 @@ resourcestring
   rsApiDartHoleInset = 'How far back from the point the hole goes, along the centre line; 0 puts it on the point. ' +
     'Default 10 mm';
   rsApiDartFold = 'The end of the edge the dart is pressed towards, which shapes the cap. Default start';
+  rsApiInsertHem = 'Hems pieces along their edges, as the Features tab does, in one undo step: on each piece the edges'' ' +
+    'allowance at the hem''s depth (plus the turn-under for a double or narrow hem), their allowance ends mirroring the ' +
+    'neighbouring edges'' so the hem lies flat turned up, topstitching inside the piece, and a notch at each end of the hem ' +
+    'in the neighbouring edge. They are ordinary objects. The depth starts as #hem_depth, a variable the first hem adds, ' +
+    'so every hem shares it; a narrow hem starts at 6 mm of its own.';
+  rsApiHemReturns = '`edges` and `stitching` (the topstitching) as `get_object` gives them, `notches` (each with its ' +
+    '`piece` and `edge` IDs), `pieces` the IDs of the pieces hemmed, and `problems`, what is worth checking though it was ' +
+    'done, such as a hem deeper than its piece';
+  rsApiHemEdges = 'The edges to hem, on one or more pieces; each piece''s must run end to end';
+  rsApiHemStyle = 'single: turned once, the raw edge overlocked; double: turned twice; narrow: a small double hem; blind: ' +
+    'turned once with no topstitching. Default single';
+  rsApiHemDepth = 'How deep the hem is, turned up. Default #hem_depth, or 6 mm for a narrow hem';
+  rsApiHemTurnUnder = 'How much a double or narrow hem turns under besides its depth. Default 10 mm';
+  rsApiHemStitch = 'How far the topstitching is from the hem''s fold. Default 3 mm short of the depth';
+  rsApiHemNotches = 'Whether to notch the neighbouring edges where the hem turns up. Default true';
+  rsApiSetAllowanceEnd = 'Sets how an edge''s seam allowance ends where it meets its neighbours: plain, where their ' +
+    'cutting lines meet, or mirror, their allowance reflected in the edge, as a hem''s ends are so it lies flat turned up.';
+  rsApiAllowanceEndEdge = 'An edge of the piece';
+  rsApiAllowanceEnd = 'plain or mirror';
   rsApiSetDartCap = 'Gives a dart a cap: its seam allowance across the edge shaped as the dart lies folded, so it sews ' +
     'into the seam. The dart is two neighbouring edges of the piece meeting at its point.';
   rsApiDartCapFirst = 'One leg of the dart';
@@ -571,6 +590,13 @@ begin
   P('apex', apReference, False, rsApiDartApex);
   P('holeInset', apFormula, False, rsApiDartHoleInset);
   P('fold', apChoice, False, rsApiDartFold, 'start, end');
+  Method('feature_hem', agFeatures, rsApiInsertHem, rsApiHemReturns);
+  P('edges', apReferences, True, rsApiHemEdges);
+  P('style', apChoice, False, rsApiHemStyle, string.Join(', ', HEM_STYLE_NAMES));
+  P('depth', apFormula, False, rsApiHemDepth);
+  P('turnUnder', apFormula, False, rsApiHemTurnUnder);
+  P('stitchDistance', apFormula, False, rsApiHemStitch);
+  P('notches', apFlag, False, rsApiHemNotches);
   Method('convert_edge', agDrafting, rsApiConvertEdge, rsApiReturnsObject);
   Target;
   P('to', apChoice, True, rsApiConvertEdgeTo, 'line, curve');
@@ -659,6 +685,10 @@ begin
   P('first', apReference, True, rsApiDartCapFirst);
   P('second', apReference, True, rsApiDartCapSecond);
   P('towards', apChoice, True, rsApiDartCapTowards, Joined(DART_PRESS_NAMES));
+  Method('set_allowance_end', agPieces, rsApiSetAllowanceEnd, rsApiReturnsPiece);
+  PieceTarget;
+  P('edge', apReference, True, rsApiAllowanceEndEdge);
+  P('end', apChoice, True, rsApiAllowanceEnd, Joined(ALLOWANCE_END_NAMES));
   Method('set_piece_material', agPieces, rsApiSetPieceMaterial, rsApiReturnsPiece);
   PieceTarget;
   P('material', apMaterial, False, rsApiPieceMaterial);

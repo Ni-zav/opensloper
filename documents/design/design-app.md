@@ -147,6 +147,7 @@ The canvas feels like Inkscape, but every point records how it was placed relati
 - **Notches** on a point on the seam line or at a position along an edge, drawn as a 6 mm mark square to the edge.
 - **Cut and fold**: a cut count, a mirrored flag and `foldEdge`, a straight edge with no allowance and a bracket. The draft stays half a piece; output opens it.
 - **Seam allowance**: the piece's width and an edge's own (`edge2.allowance`). Clipper2 offsets with one width per path, so `OffsetOutline` builds the raw offset with a width per segment (mitred, bevelled past four times the allowance) and Clipper2's union removes the loops.
+- **Dart caps**: a piece lists its capped darts (`darts[]`: the two leg edges, neighbours in its path meeting at the apex, and the leg whose side it is pressed towards; `TPieceDart`, `SetDartCap`). A capped dart's legs have no allowance; instead `OffsetOutline` unions a fan from the apex that covers the dart's opening and its cap. The cap is worked out as by hand: the side not pressed to turns about the apex until its leg lies on the other (the dart closed), the outline round the dart in that state is offset with the same rules as any outline, and its cutting line between the folded centre line and the leg is the cap, mirrored in that leg for the half beside it and turned back for the other half; the cutting line past the leg, turned back, covers the corner on the other side. The properties offer a cap for each seam joining two neighbouring edges of the piece (the darts the Garment tab closes).
 - A piece is a node whose inputs are its edges; a gap over 0.01 mm makes it invalid.
 
 **Overlapping pieces.** View-state options on the selected pieces, kept out of undo:
@@ -299,7 +300,15 @@ Fashion drawing is left to Inkscape and Krita; hardware sizes are variables.
 
 ## Features
 
-The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips now; buttons, pockets, facings, hems later) in one step. **A feature is not an object**: Apply adds ordinary objects through the pattern's own methods, in one undo step, and nothing is saved as a feature, so the file format, evaluator and API stay as they are and the objects are the user's to edit. Changing a feature means undoing and applying it again; a feature kept as one editable object may follow once it is clear which settings people change. The features are in the LCL-free `Sloper.Core.Features`.
+The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips and darts now; buttons, pockets, facings, hems later) in one step. **A feature is not an object**: Apply adds ordinary objects through the pattern's own methods, in one undo step, and nothing is saved as a feature, so the file format, evaluator and API stay as they are and the objects are the user's to edit. Changing a feature means undoing and applying it again; a feature kept as one editable object may follow once it is clear which settings people change. The features are in the LCL-free `Sloper.Core.Features`.
+
+**Dart** (`InsertDart`, `TDartSpec`, `DefaultDart`) in one selected outline edge of one piece, optionally to a selected point:
+
+- `DartMid` along the edge at the position (halfway when none is given), from the start or the end, and a `DartLeg` either side at ± width / 2 along the edge (`AddAlongEdgePoint`, so they follow a curve).
+- `DartApex` at the depth from `DartMid`, square to the chord between the legs and into the piece; a picked point is used as it is, so the dart follows it.
+- The legs as outline lines; the edge is split at both legs (`FollowSplit`), the part between becomes construction, and `ReplaceInPath` puts the legs in its place in the piece's path. Notches on that part go, and seams that sewed it leave it out, as a dart's legs are not sewn to what the edge was.
+- A seam `Dart` between the legs (the Garment tab closes it), a notch at each leg, a Hole marker on a point back along the centre line from the apex, the centre line as a Fold marking, and the dart cap pressed towards the chosen end.
+- Refused: an edge in no piece or in more than one, a fold, a width of 0 or one running past an end, a depth of 0 or less, an apex outside the piece, and legs that would cross another edge of it.
 
 **Zip** (`InsertZip`, `TZipSpec`) along one selected edge of one or more pieces, in four styles, each with its own starting widths (`DefaultZip`):
 
@@ -307,7 +316,7 @@ The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips n
 - The length is `#zip_length`, a variable the first zip adds, so both sides of a seam share it.
 - **Centred** stitches round the opening, **invisible** has none, **lapped** is the opening's offset plus a line across to the stop, and **fly front** a J (an offset at the fly's width with a curve into the stop, square to the opening) plus a **FlyShield** piece cut on the fold, following `#zip_length`.
 - A zip as long as its edge is refused. When the edge is sewn to one without a zip, the status bar says the other side needs one too.
-- In the Automation API features are methods named `feature_` and the feature (`feature_zip`), in a Features group.
+- In the Automation API features are methods named `feature_` and the feature (`feature_zip`, `feature_dart`), in a Features group; `set_dart_cap` caps a dart drawn by hand.
 
 ## Garment view
 

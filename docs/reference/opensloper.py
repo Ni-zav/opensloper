@@ -611,6 +611,53 @@ class OpenSloper:
             "shieldWidth": shieldWidth,
         })
 
+    def feature_dart(
+        self,
+        edge: int | str,
+        *,
+        position: str | float | None = None,
+        from_: Literal["start", "end"] | None = None,
+        width: str | float | None = None,
+        depth: str | float | None = None,
+        apex: int | str | None = None,
+        holeInset: str | float | None = None,
+        fold: Literal["start", "end"] | None = None,
+    ) -> Any:
+        """Puts a dart in a piece's edge, as the Features tab does, in one undo step: a DartMid
+        point on the edge, the points either side where its legs leave it, a DartApex point at the
+        depth square to the edge (or the point given as `apex`), the legs in place of the edge
+        between them in the piece's outline, a seam closing the dart, a notch at each leg, a hole
+        near the point, the centre line as a fold, and a cap on the seam allowance across the dart.
+        They are ordinary objects.
+
+        Args:
+            edge: The edge the dart opens in, on one piece.
+            position: Where the dart's middle is along the edge, from the end `from` names. Default
+                halfway.
+            from_: The end of the edge the position is from. Default start.
+            width: The dart's width at the edge. Default 20 mm.
+            depth: How far the dart runs into the piece, square to the edge. Default 90 mm.
+            apex: A point the dart runs to instead, such as a bust point; the dart follows it.
+            holeInset: How far back from the point the hole goes, along the centre line; 0 puts it
+                on the point. Default 10 mm.
+            fold: The end of the edge the dart is pressed towards, which shapes the cap. Default
+                start.
+
+        Returns:
+            `mid`, `apex`, `legs` (the two legs, the start's side first), `seam`, `hole` and
+            `centre` as `get_object` gives them, and `piece`, the ID of the piece.
+        """
+        return self._send("feature_dart", {
+            "edge": edge,
+            "position": position,
+            "from": from_,
+            "width": width,
+            "depth": depth,
+            "apex": apex,
+            "holeInset": holeInset,
+            "fold": fold,
+        })
+
     def convert_edge(self, target: int | str, to: Literal["line", "curve"]) -> Any:
         """Changes an edge to a line or a curve in place, keeping its ID.
 
@@ -997,6 +1044,31 @@ class OpenSloper:
         return self._send("set_fold", _target(target), {
             "edge": edge,
             "none": none,
+        })
+
+    def set_dart_cap(
+        self,
+        target: int | str,
+        first: int | str,
+        second: int | str,
+        towards: Literal["none", "first", "second"],
+    ) -> Any:
+        """Gives a dart a cap: its seam allowance across the edge shaped as the dart lies folded, so
+        it sews into the seam. The dart is two neighbouring edges of the piece meeting at its point.
+
+        Args:
+            target: The piece, by its ID or its name.
+            first: One leg of the dart.
+            second: The other leg.
+            towards: The leg whose side the dart is pressed towards, or none to take the cap off.
+
+        Returns:
+            The piece, as `get_object` gives it.
+        """
+        return self._send("set_dart_cap", _target(target), {
+            "first": first,
+            "second": second,
+            "towards": towards,
         })
 
     def set_piece_material(

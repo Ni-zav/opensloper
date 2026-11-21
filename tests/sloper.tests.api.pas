@@ -56,6 +56,7 @@ type
     procedure TestCircleArcAndCircleCircle;
     procedure TestRectangleCornerAndOffset;
     procedure TestInsertZip;
+    procedure TestInsertDart;
     procedure TestMarkings;
     procedure TestSetRole;
     procedure TestSetMarker;
@@ -534,6 +535,40 @@ begin
   Call('get_object', '{"name": "Front"}');
   Call('undo', '{}');
   Call('get_object', Format('{"name": "%s"}', [ZIP_STOP_NAME]));
+  AssertTrue('one undo takes it all off', ErrorCode <> 0);
+end;
+
+// The Features tab's dart, in one call and one undo step, and its cap
+procedure TTestAPI.TestInsertDart;
+var
+  Edges, Legs: TJSONArray;
+  Top, First, Second: string;
+begin
+  Call('add_point', '{"type": "freePoint", "name": "O", "x": 0, "y": 0}');
+  Call('add_rectangle', '{"corner": "O", "width": 100, "height": 300, "role": "outline"}');
+  Edges := TJSONArray(FReply.Find('result'));
+  Top := Edges.Objects[0].Get('name', '');
+  Call('create_piece', '{"x": 50, "y": 150, "name": "Front"}');
+  Call('feature_dart', Format('{"edge": "%s", "depth": 400}', [Top]));
+  AssertTrue(ErrorText, Pos('is not inside', ErrorText) > 0);
+  Call('feature_dart', Format('{"edge": "%s", "fold": "end", "width": 16}', [Top]));
+  AssertEquals(DART_MID_NAME, TJSONObject(Answer.Find('mid')).Get('name', ''));
+  AssertEquals(DART_APEX_NAME, TJSONObject(Answer.Find('apex')).Get('name', ''));
+  AssertEquals(DART_SEAM_NAME, TJSONObject(Answer.Find('seam')).Get('name', ''));
+  AssertEquals('valid', TJSONObject(Answer.Find('seam')).Get('state', ''));
+  AssertNotNull('a hole', Answer.Find('hole'));
+  AssertNotNull('a centre line', Answer.Find('centre'));
+  Legs := TJSONArray(Answer.Find('legs'));
+  AssertEquals('two legs', 2, Legs.Count);
+  First := Legs.Objects[0].Get('name', '');
+  Second := Legs.Objects[1].Get('name', '');
+  Call('set_dart_cap', Format('{"name": "Front", "first": "%s", "second": "%s", "towards": "first"}', [First, Second]));
+  AssertEquals('valid', Answer.Get('state', ''));
+  Call('set_dart_cap', Format('{"name": "Front", "first": "%s", "second": "%s", "towards": "none"}', [First, Top]));
+  AssertTrue(ErrorText, ErrorCode <> 0);
+  Call('undo', '{}');
+  Call('undo', '{}');
+  Call('get_object', Format('{"name": "%s"}', [DART_MID_NAME]));
   AssertTrue('one undo takes it all off', ErrorCode <> 0);
 end;
 

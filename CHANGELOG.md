@@ -15,6 +15,17 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- A dart in the Features tab: choose an edge of a piece, and a point to run
+  to if you like, and Apply adds the dart's points and legs in place of the
+  edge between them, a seam closing it, notches, a hole near the point and
+  the centre line as a fold, in one undo step. Its seam allowance has a
+  cap, the shape of the dart pressed to one side, so it sews into the seam;
+  a dart drawn by hand can have one too, under Cap on in the piece's
+  properties. `feature_dart` and `set_dart_cap` do the same in the
+  Automation API (#72).
+- A tutorial, Adding a dart, puts a second dart in the skirt block's back
+  from the Features tab and caps every dart (#72).
+
 - A tutorial, Adding a zip, puts a zip in the skirt block's centre back
   from the Features tab (#76).
 

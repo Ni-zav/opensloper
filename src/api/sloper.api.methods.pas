@@ -180,6 +180,27 @@ resourcestring
   rsApiZipAllowance = 'The allowance along the opening; for a fly front, its extension past the seam. Default the style''s';
   rsApiZipStitch = 'How far the topstitching is from the seam. Default the style''s';
   rsApiZipShield = 'A fly shield''s width as worn; it is cut on the fold. Default 40 mm';
+  rsApiInsertDart = 'Puts a dart in a piece''s edge, as the Features tab does, in one undo step: a DartMid point on the ' +
+    'edge, the points either side where its legs leave it, a DartApex point at the depth square to the edge (or the point ' +
+    'given as `apex`), the legs in place of the edge between them in the piece''s outline, a seam closing the dart, a ' +
+    'notch at each leg, a hole near the point, the centre line as a fold, and a cap on the seam allowance across the dart. ' +
+    'They are ordinary objects.';
+  rsApiDartReturns = '`mid`, `apex`, `legs` (the two legs, the start''s side first), `seam`, `hole` and `centre` as ' +
+    '`get_object` gives them, and `piece`, the ID of the piece';
+  rsApiDartEdge = 'The edge the dart opens in, on one piece';
+  rsApiDartPosition = 'Where the dart''s middle is along the edge, from the end `from` names. Default halfway';
+  rsApiDartFrom = 'The end of the edge the position is from. Default start';
+  rsApiDartWidth = 'The dart''s width at the edge. Default 20 mm';
+  rsApiDartDepth = 'How far the dart runs into the piece, square to the edge. Default 90 mm';
+  rsApiDartApex = 'A point the dart runs to instead, such as a bust point; the dart follows it';
+  rsApiDartHoleInset = 'How far back from the point the hole goes, along the centre line; 0 puts it on the point. ' +
+    'Default 10 mm';
+  rsApiDartFold = 'The end of the edge the dart is pressed towards, which shapes the cap. Default start';
+  rsApiSetDartCap = 'Gives a dart a cap: its seam allowance across the edge shaped as the dart lies folded, so it sews ' +
+    'into the seam. The dart is two neighbouring edges of the piece meeting at its point.';
+  rsApiDartCapFirst = 'One leg of the dart';
+  rsApiDartCapSecond = 'The other leg';
+  rsApiDartCapTowards = 'The leg whose side the dart is pressed towards, or none to take the cap off';
   rsApiCornerEdgeA = 'The first edge';
   rsApiCornerEdgeB = 'The second edge';
   rsApiCornerRadius = 'The arc''s radius';
@@ -541,6 +562,15 @@ begin
   P('allowance', apFormula, False, rsApiZipAllowance);
   P('stitch', apFormula, False, rsApiZipStitch);
   P('shieldWidth', apFormula, False, rsApiZipShield);
+  Method('feature_dart', agFeatures, rsApiInsertDart, rsApiDartReturns);
+  P('edge', apReference, True, rsApiDartEdge);
+  P('position', apFormula, False, rsApiDartPosition);
+  P('from', apChoice, False, rsApiDartFrom, 'start, end');
+  P('width', apFormula, False, rsApiDartWidth);
+  P('depth', apFormula, False, rsApiDartDepth);
+  P('apex', apReference, False, rsApiDartApex);
+  P('holeInset', apFormula, False, rsApiDartHoleInset);
+  P('fold', apChoice, False, rsApiDartFold, 'start, end');
   Method('convert_edge', agDrafting, rsApiConvertEdge, rsApiReturnsObject);
   Target;
   P('to', apChoice, True, rsApiConvertEdgeTo, 'line, curve');
@@ -624,6 +654,11 @@ begin
   PieceTarget;
   P('edge', apReference, False, rsApiFoldEdge);
   P('none', apFlag, False, rsApiFoldNone);
+  Method('set_dart_cap', agPieces, rsApiSetDartCap, rsApiReturnsPiece);
+  PieceTarget;
+  P('first', apReference, True, rsApiDartCapFirst);
+  P('second', apReference, True, rsApiDartCapSecond);
+  P('towards', apChoice, True, rsApiDartCapTowards, Joined(DART_PRESS_NAMES));
   Method('set_piece_material', agPieces, rsApiSetPieceMaterial, rsApiReturnsPiece);
   PieceTarget;
   P('material', apMaterial, False, rsApiPieceMaterial);

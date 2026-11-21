@@ -267,6 +267,16 @@ type
     // A piece around the closed Path, with Allowance as the seam allowance of
     // every edge. An empty name takes the next free one: Piece, Piece2 and so on.
     function AddPiece(const AName: string; const Path: TPiecePath; const Allowance: string): TPieceObject;
+    // The edge in the piece's path becomes a run of edges, which must join
+    // up with the path around it. Notches along the edge go, as they would
+    // fall in what it was. A seam on the edge takes the run when SeamsTakeRun,
+    // and otherwise leaves the edge out, as a dart's legs are not sewn to
+    // what the edge was.
+    function ReplaceInPath(Piece: TPieceObject; const EdgeId: string; const Run: TPiecePath; SeamsTakeRun: boolean): boolean;
+    // A cap on the dart whose legs are these two edges, neighbours in the
+    // piece's path, pressed towards the first leg or the second; dpNone takes
+    // the cap off
+    function SetDartCap(Piece: TPieceObject; const FirstId, SecondId: string; Press: TDartPress): boolean;
     // Gives one edge of the path its own allowance; empty text goes back to
     // the piece's own
     function SetEdgeAllowance(Piece: TPieceObject; PathIndex: integer; const Text: string): boolean;
@@ -590,6 +600,9 @@ resourcestring
   rsPatternNoMarker = '%s has no marker; give it one such as Hole or Button first';
   rsPatternBadCutCount = 'A piece must be cut at least once';
   rsPatternFoldNotStraight = 'A fold has to be straight, and %s is not';
+  rsPatternReplaceFold = '%s is the fold of %s, which has to stay one edge';
+  rsPatternDartApart = '%s and %s are not neighbours in %s, meeting at a dart''s point';
+  rsPatternDartOnFold = 'A dart''s leg cannot be the fold of %s';
   rsPatternNoteAnchor = 'A note cannot hang from %s: it must be a %s';
   rsPatternNoteAnchorPoint = 'point';
   rsPatternNoteAnchorEdge = 'line or curve';
@@ -3018,6 +3031,67 @@ begin
     Exit(SetError(rsPatternBadCutCount));
   Piece.CutCount := Count;
   Piece.Mirrored := Mirrored;
+  Result := True;
+end;
+
+function TPattern.ReplaceInPath(Piece: TPieceObject; const EdgeId: string; const Run: TPiecePath; SeamsTakeRun: boolean): boolean;
+var
+  PathIndex, Index: integer;
+  Keys: TStringArray;
+  Entry: TPieceEdge;
+begin
+  PathIndex := Piece.PathIndexOf(EdgeId);
+  if PathIndex < 0 then
+    Exit(SetError(Format(rsPatternNotInPiece, [KeyLabel(FContext, EdgeId), Piece.DisplayName])));
+  if Length(Run) = 0 then
+    Exit(SetError(rsPatternPieceTooShort));
+  if Piece.FoldEdgeKey = EdgeId then
+    Exit(SetError(Format(rsPatternReplaceFold, [FindNode(EdgeId).DisplayName, Piece.DisplayName])));
+  Keys := nil;
+  for Entry in Run do
+  begin
+    if not CheckEdgeTarget(Entry.EdgeKey) then
+      Exit(False);
+    if (Entry.EdgeKey <> EdgeId) and (Piece.PathIndexOf(Entry.EdgeKey) >= 0) then
+      Exit(SetError(Format(rsPatternPieceRepeats, [FindNode(Entry.EdgeKey).DisplayName])));
+    Insert(Entry.EdgeKey, Keys, Length(Keys));
+  end;
+  for Index := High(Piece.Notches) downto 0 do
+    if Piece.Notches[Index].EdgeKey = EdgeId then
+      Piece.RemoveNotch(Index);
+  Piece.ReplacePathEdge(PathIndex, Run);
+  for Index := 0 to FObjects.Count - 1 do
+    if FObjects[Index] is TSeamObject then
+      if SeamsTakeRun then
+        TSeamObject(FObjects[Index]).SplitEntry(Piece.Key, EdgeId, Keys)
+      else
+        TSeamObject(FObjects[Index]).RemoveEntry(Piece.Key, EdgeId);
+  KeepInputsBefore(Piece);
+  Result := True;
+end;
+
+function TPattern.SetDartCap(Piece: TPieceObject; const FirstId, SecondId: string; Press: TDartPress): boolean;
+var
+  First, Second, Count, Index: integer;
+begin
+  if not CheckEdgeTarget(FirstId) or not CheckEdgeTarget(SecondId) then
+    Exit(False);
+  First := Piece.PathIndexOf(FirstId);
+  Second := Piece.PathIndexOf(SecondId);
+  if First < 0 then
+    Exit(SetError(Format(rsPatternNotInPiece, [FindNode(FirstId).DisplayName, Piece.DisplayName])));
+  if Second < 0 then
+    Exit(SetError(Format(rsPatternNotInPiece, [FindNode(SecondId).DisplayName, Piece.DisplayName])));
+  Count := Length(Piece.Path);
+  if (Count < 3) or (((First + 1) mod Count <> Second) and ((Second + 1) mod Count <> First)) then
+    Exit(SetError(Format(rsPatternDartApart, [FindNode(FirstId).DisplayName, FindNode(SecondId).DisplayName, Piece.DisplayName])));
+  if (Piece.FoldEdgeKey = FirstId) or (Piece.FoldEdgeKey = SecondId) then
+    Exit(SetError(Format(rsPatternDartOnFold, [Piece.DisplayName])));
+  Index := Piece.DartOf(FirstId, SecondId);
+  if Index >= 0 then
+    Piece.RemoveDart(Index);
+  if Press <> dpNone then
+    Piece.AddDart(FirstId, SecondId, Press = dpFirst);
   Result := True;
 end;
 

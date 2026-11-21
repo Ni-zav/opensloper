@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="552.533mm" height="687.863mm" viewBox="-41.267 -46.597 552.533 687.863">
+<rect x="-41.267" y="-46.597" width="552.533" height="687.863" fill="#ffffff"/>
+<path data-id="47" data-name="Front" d="M 389.236 -10 L 406.206 -10 L 480 -10 L 480 610 L 220 610 L 220 199.93 L 220.09 193.475 L 220.357 186.962 L 220.787 180.466 L 221.369 173.986 L 222.093 167.522 L 222.946 161.075 L 223.918 154.644 L 224.998 148.229 L 226.176 141.831 L 227.444 135.423 L 230.181 122.739 L 233.144 110.084 L 236.241 97.493 L 242.528 72.453 L 245.535 60.086 L 248.365 47.753 L 249.689 41.599 L 250.931 35.492 L 252.095 29.364 L 253.156 23.302 L 254.123 17.2 L 254.97 11.154 L 255.694 5.129 L 257.189 -10 L 340.044 -10 L 357.014 -10 L 373.125 -15.33 Z" fill="#ceddea" stroke="#202020" stroke-width="0.938"/>
+<path data-id="46" data-name="Back" d="M 162.531 -10 L 174.508 -10 L 202.811 -10 L 204.305 5.129 L 205.029 11.154 L 205.876 17.2 L 206.843 23.302 L 207.904 29.364 L 209.068 35.492 L 210.31 41.599 L 211.634 47.753 L 214.464 60.086 L 217.472 72.453 L 223.759 97.493 L 226.856 110.084 L 229.819 122.739 L 232.556 135.423 L 233.824 141.831 L 235.002 148.229 L 236.082 154.644 L 237.054 161.075 L 237.907 167.522 L 238.631 173.986 L 239.213 180.466 L 239.643 186.962 L 239.91 193.475 L 240 199.93 L 240 610 L -10 610 L -10 -10 L 73.43 -10 L 85.223 -10 L 96.875 -11.821 L 108.527 -10 L 108.528 -10 L 120.32 -10 L 126.992 -10 L 138.969 -10 L 150.75 -12.153 Z" fill="#ceddea" stroke="#202020" stroke-width="0.938"/>
+<path data-id="14" data-name="Waist_line" d="M 0 0 L 480 0" fill="none" stroke="#808080" stroke-width="0.5" stroke-dasharray="2.001 1.501"/>
+<path data-id="16" data-name="Hip_line" d="M 0 200 L 480 200" fill="none" stroke="#808080" stroke-width="0.5" stroke-dasharray="2.001 1.501"/>
+<path data-id="61" data-name="Line_DartLeg_DartLeg2" d="M 139.875 0 L 161.625 0" fill="none" stroke="#808080" stroke-width="0.5" stroke-dasharray="2.001 1.501"/>
+<path data-id="65" data-name="Line_DartMid_DartApex" d="M 150.75 0 L 150.75 120" fill="none" stroke="#8a3fc4" stroke-width="0.703" stroke-dasharray="8.442 2.11 1.407 2.11"/>
+<path data-id="18" data-name="Centre_back" d="M 0 0 L 0 600" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="19" data-name="Centre_front" d="M 480 0 L 480 600" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="20" data-name="Hem" d="M 0 600 L 480 600" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="25" data-name="Back_hip" d="M 193.75 0 C 199.56 66.413 230 133.333 230 200" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="26" data-name="Front_hip" d="M 266.25 0 C 260.44 66.413 230 133.333 230 200" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="27" data-name="Side_seam" d="M 230 200 L 230 600" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="28" data-name="Line_C_J" d="M 0 600 L 230 600" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="29" data-name="Line_J_F" d="M 230 600 L 480 600" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="34" data-name="Line_P_O" d="M 86 0 L 96.875 140" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="35" data-name="Line_O_Q" d="M 96.875 140 L 107.75 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="40" data-name="Line_V_R" d="M 387.625 0 L 373.125 90" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="41" data-name="Line_R_W" d="M 373.125 90 L 358.625 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="42" data-name="Back_waist_centre" d="M 0 0 L 86 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="43" data-name="Back_waist_side" d="M 107.75 0 L 193.75 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="44" data-name="Front_waist_side" d="M 266.25 0 L 358.625 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="45" data-name="Front_waist_centre" d="M 387.625 0 L 480 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="59" data-name="Line_Q_DartLeg" d="M 107.75 0 L 139.875 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="60" data-name="Line_DartLeg_L" d="M 139.875 0 L 193.75 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="62" data-name="Line_DartLeg2_L" d="M 161.625 0 L 193.75 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="57" data-name="Line_DartLeg_DartApex" d="M 139.875 0 L 150.75 120" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="58" data-name="Line_DartApex_DartLeg2" d="M 150.75 120 L 161.625 0" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="47" data-marks="Front" d="M 355 480 L 355 120 M 355 120 L 350.774 129.063 M 355 120 L 359.226 129.063 M 355 480 L 359.226 470.937 M 355 480 L 350.774 470.937 M 460 90 L 460 510 M 460 90 L 480 90 M 460 510 L 480 510 M 480 90 L 472.75 93.381 M 480 90 L 472.75 86.619 M 480 510 L 472.75 513.381 M 480 510 L 472.75 506.619 M 220 199.994 L 226 199.998" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="46" data-marks="Back" d="M 115 480 L 115 120 M 115 120 L 110.774 129.063 M 115 120 L 119.226 129.063 M 115 480 L 119.226 470.937 M 115 480 L 110.774 470.937 M 152.75 110 L 152.598 109.235 M 152.598 109.235 L 152.164 108.586 M 152.164 108.586 L 151.515 108.152 M 151.515 108.152 L 150.75 108 M 150.75 108 L 149.985 108.152 M 149.985 108.152 L 149.336 108.586 M 149.336 108.586 L 148.902 109.235 M 148.902 109.235 L 148.75 110 M 148.75 110 L 148.902 110.765 M 148.902 110.765 L 149.336 111.414 M 149.336 111.414 L 149.985 111.848 M 149.985 111.848 L 150.75 112 M 150.75 112 L 151.515 111.848 M 151.515 111.848 L 152.164 111.414 M 152.164 111.414 L 152.598 110.765 M 152.598 110.765 L 152.75 110 M 240 200 L 234 200 M 139.875 -10 L 139.875 -4 M 161.625 -10 L 161.625 -4" fill="none" stroke="#202020" stroke-width="0.938"/>
+<path data-id="64" data-marker="hole" d="M 152.75 110 L 152.598 109.235 M 152.598 109.235 L 152.164 108.586 M 152.164 108.586 L 151.515 108.152 M 151.515 108.152 L 150.75 108 M 150.75 108 L 149.985 108.152 M 149.985 108.152 L 149.336 108.586 M 149.336 108.586 L 148.902 109.235 M 148.902 109.235 L 148.75 110 M 148.75 110 L 148.902 110.765 M 148.902 110.765 L 149.336 111.414 M 149.336 111.414 L 149.985 111.848 M 149.985 111.848 L 150.75 112 M 150.75 112 L 151.515 111.848 M 151.515 111.848 L 152.164 111.414 M 152.164 111.414 L 152.598 110.765 M 152.598 110.765 L 152.75 110" fill="none" stroke="#202020" stroke-width="0.938"/>
+<circle data-id="10" data-name="A" cx="0" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="11" data-name="B" cx="0" cy="200" r="1.876" fill="#202020"/>
+<circle data-id="12" data-name="C" cx="0" cy="600" r="1.876" fill="#202020"/>
+<circle data-id="13" data-name="D" cx="480" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="15" data-name="E" cx="480" cy="200" r="1.876" fill="#202020"/>
+<circle data-id="17" data-name="F" cx="480" cy="600" r="1.876" fill="#202020"/>
+<circle data-id="21" data-name="G" cx="230" cy="200" r="1.876" fill="#202020"/>
+<circle data-id="22" data-name="J" cx="230" cy="600" r="1.876" fill="#202020"/>
+<circle data-id="23" data-name="L" cx="193.75" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="24" data-name="M" cx="266.25" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="30" data-name="N" cx="96.875" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="31" data-name="P" cx="86" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="32" data-name="Q" cx="107.75" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="33" data-name="O" cx="96.875" cy="140" r="1.876" fill="#202020"/>
+<circle data-id="36" data-name="S" cx="373.125" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="37" data-name="V" cx="387.625" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="38" data-name="W" cx="358.625" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="39" data-name="R" cx="373.125" cy="90" r="1.876" fill="#202020"/>
+<circle data-id="54" data-name="DartLeg" cx="139.875" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="55" data-name="DartLeg2" cx="161.625" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="53" data-name="DartMid" cx="150.75" cy="0" r="1.876" fill="#202020"/>
+<circle data-id="56" data-name="DartApex" cx="150.75" cy="120" r="1.876" fill="#202020"/>
+<circle data-id="64" data-name="H" cx="150.75" cy="110" r="1.876" fill="#202020"/>
+<text x="355" y="300" font-family="sans-serif" font-size="8.755" fill="#202020">Front, cut 1 on fold</text>
+<text x="115" y="300" font-family="sans-serif" font-size="8.755" fill="#202020">Back, cut 2 mirrored</text>
+<text x="2.814" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">A</text>
+<text x="2.814" y="194.56" font-family="sans-serif" font-size="8.755" fill="#202020">B</text>
+<text x="2.814" y="594.56" font-family="sans-serif" font-size="8.755" fill="#202020">C</text>
+<text x="482.814" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">D</text>
+<text x="482.814" y="194.56" font-family="sans-serif" font-size="8.755" fill="#202020">E</text>
+<text x="482.814" y="594.56" font-family="sans-serif" font-size="8.755" fill="#202020">F</text>
+<text x="232.814" y="194.56" font-family="sans-serif" font-size="8.755" fill="#202020">G</text>
+<text x="232.814" y="594.56" font-family="sans-serif" font-size="8.755" fill="#202020">J</text>
+<text x="196.564" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">L</text>
+<text x="269.064" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">M</text>
+<text x="99.689" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">N</text>
+<text x="88.814" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">P</text>
+<text x="110.564" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">Q</text>
+<text x="99.689" y="134.56" font-family="sans-serif" font-size="8.755" fill="#202020">O</text>
+<text x="375.939" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">S</text>
+<text x="390.439" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">V</text>
+<text x="361.439" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">W</text>
+<text x="375.939" y="84.56" font-family="sans-serif" font-size="8.755" fill="#202020">R</text>
+<text x="142.689" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">DartLeg</text>
+<text x="164.439" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">DartLeg2</text>
+<text x="112.883" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">DartMid</text>
+<text x="153.564" y="114.56" font-family="sans-serif" font-size="8.755" fill="#202020">DartApex</text>
+<text x="142.928" y="104.56" font-family="sans-serif" font-size="8.755" fill="#202020">H</text>
+<text x="242.814" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">Waist_line</text>
+<text x="242.814" y="194.56" font-family="sans-serif" font-size="8.755" fill="#202020">Hip_line</text>
+<text x="36.251" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">Line_DartLeg_DartLeg2</text>
+<text x="153.564" y="54.56" font-family="sans-serif" font-size="8.755" fill="#202020">Line_DartMid_DartApex</text>
+<text x="2.814" y="294.56" font-family="sans-serif" font-size="8.755" fill="#202020">Centre_back</text>
+<text x="417.094" y="310.693" font-family="sans-serif" font-size="8.755" fill="#202020">Centre_front</text>
+<text x="242.814" y="594.56" font-family="sans-serif" font-size="8.755" fill="#202020">Hem</text>
+<text x="216.814" y="94.25" font-family="sans-serif" font-size="8.755" fill="#202020">Back_hip</text>
+<text x="248.814" y="110.384" font-family="sans-serif" font-size="8.755" fill="#202020">Front_hip</text>
+<text x="232.814" y="394.56" font-family="sans-serif" font-size="8.755" fill="#202020">Side_seam</text>
+<text x="117.814" y="594.56" font-family="sans-serif" font-size="8.755" fill="#202020">Line_C_J</text>
+<text x="357.814" y="594.56" font-family="sans-serif" font-size="8.755" fill="#202020">Line_J_F</text>
+<text x="94.251" y="64.56" font-family="sans-serif" font-size="8.755" fill="#202020">Line_P_O</text>
+<text x="105.126" y="80.693" font-family="sans-serif" font-size="8.755" fill="#202020">Line_O_Q</text>
+<text x="383.189" y="39.56" font-family="sans-serif" font-size="8.755" fill="#202020">Line_V_R</text>
+<text x="368.689" y="55.693" font-family="sans-serif" font-size="8.755" fill="#202020">Line_R_W</text>
+<text x="0.435" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">Back_waist_centre</text>
+<text x="179.364" y="-5.44" font-family="sans-serif" font-size="8.755" fill="#202020">Back_waist_side</text>
+<text x="315.251" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">Front_waist_side</text>
+<text x="397.981" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">Front_waist_centre</text>
+<text x="120.201" y="2.626" font-family="sans-serif" font-size="8.755" fill="#202020">Line_Q_DartLeg</text>
+<text x="185.789" y="2.626" font-family="sans-serif" font-size="8.755" fill="#202020">Line_DartLeg_L</text>
+<text x="90.121" y="10.693" font-family="sans-serif" font-size="8.755" fill="#202020">Line_DartLeg2_L</text>
+<text x="148.126" y="70.693" font-family="sans-serif" font-size="8.755" fill="#202020">Line_DartLeg_DartApex</text>
+<text x="157.914" y="82.693" font-family="sans-serif" font-size="8.755" fill="#202020">Line_DartApex_DartLeg2</text>
+</svg>

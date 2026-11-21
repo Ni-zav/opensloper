@@ -58,6 +58,8 @@ type
   end;
 
   TPiecePath = array of TPieceEdge;
+  // One flag per edge of a path
+  TPathFlags = array of boolean;
   TPieceEdgeStarts = array of integer;
 
   // gkAngle lays the grainline through the piece's middle at a formula angle;
@@ -103,6 +105,20 @@ type
 
   TPieceMarkingArray = array of TPieceMarking;
 
+  // A dart with a cap: its two legs, edges of the path that meet at the apex,
+  // and the side it is pressed towards, which shapes the cap (see
+  // Sloper.Core.SeamAllowance)
+  TPieceDart = record
+    FirstKey, SecondKey: string;
+    // Pressed towards the first leg's side of the piece, else the second's
+    TowardsFirst: boolean;
+  end;
+
+  TPieceDartArray = array of TPieceDart;
+
+  // A dart's cap, pressed towards its first leg or its second, or no cap
+  TDartPress = (dpNone, dpFirst, dpSecond);
+
   // A marking worked out: Line for a line, Holes for holes of diameter
   // HoleSize, and Centres for buttons and match dots of that size
   TMarkingMark = record
@@ -134,6 +150,7 @@ type
     FNotchMarks: TNotchMarkArray;
     FMarkings: TPieceMarkingArray;
     FMarkingMarks: TMarkingMarkArray;
+    FDarts: TPieceDartArray;
     FCutCount: integer;
     FMirrored: boolean;
     FFoldEdgeKey: string;
@@ -145,12 +162,14 @@ type
     function BuildOutline(Context: TEvalContext; DefaultWidth: double; out Outline: TVec2Array; out Widths, EdgeWidths: TDoubleArray;
       out EdgeStarts: TPieceEdgeStarts): TEvalState;
     function ComputeGrainline(Context: TEvalContext; const Points: TVec2Array; out Line: TLine2): TEvalState;
-    function ComputeNotch(Context: TEvalContext; Index: integer; const EdgeWidths: TDoubleArray; Anticlockwise: boolean;
-      out Mark: TNotchMark): TEvalState;
+    function ComputeNotch(Context: TEvalContext; Index: integer; const EdgeWidths: TDoubleArray; const Capped: TPathFlags;
+      Anticlockwise: boolean; out Mark: TNotchMark): TEvalState;
     procedure ComputeFold(Context: TEvalContext; Anticlockwise: boolean; out Line: TLine2; out Inwards: double);
     function ComputeMarking(Context: TEvalContext; Index: integer; const Cut: TVec2Array; const Fold: TLine2; out Mark: TMarkingMark): TEvalState;
     function OutwardAngle(Edge: TEdgeObject; PathIndex: integer; Position: double; Anticlockwise: boolean): double;
-    function LocateNotch(Context: TEvalContext; Index: integer; out PathIndex: integer; out Position: double): TEvalState;
+    function LocateNotch(Context: TEvalContext; Index: integer; const Capped: TPathFlags; out PathIndex: integer;
+      out Position: double): TEvalState;
+    function BuildCaps(Context: TEvalContext; const Starts: TPieceEdgeStarts; out Caps: TDartCapArray; out Capped: TPathFlags): TEvalState;
   public
     constructor Create(const AKey: string; const APath: TPiecePath);
     function InputKeys: TStringArray; override;
@@ -174,6 +193,9 @@ type
     // The edge at PathIndex and the next one round the path become one: an
     // override either had goes to it, and later overrides move down one
     procedure JoinPathEdges(PathIndex: integer; const EdgeKey: string; Reversed: boolean);
+    // The edge at PathIndex becomes the run of edges, in order: an override
+    // it had goes to each of them, and later overrides move up
+    procedure ReplacePathEdge(PathIndex: integer; const Run: TPiecePath);
     procedure SetNotchEdge(Index: integer; const AEdgeKey: string);
     // Clears the old grainline's field, if any. gkAngle adds its field;
     // gkPoints takes the two point keys.
@@ -186,6 +208,11 @@ type
     function AddMarking(AKind: TMarkingKind; const APointKey, AEdgeKey: string): integer;
     procedure RemoveMarking(Index: integer);
     function MarkingField(Index: integer; const Part: string): string;
+    // A dart's cap, pressed towards the first or second leg
+    function AddDart(const AFirstKey, ASecondKey: string; ATowardsFirst: boolean): integer;
+    procedure RemoveDart(Index: integer);
+    // The dart with these two legs, either way round, or -1
+    function DartOf(const AKey, BKey: string): integer;
     // The mkLine marking along this edge, or -1
     function LineMarkingOf(const AEdgeKey: string): integer;
     // The mkPoint marking of this point or repeat, or -1
@@ -230,6 +257,8 @@ type
     property Markings: TPieceMarkingArray read FMarkings;
     // Last good marks, one per marking
     property MarkingMarks: TMarkingMarkArray read FMarkingMarks;
+    // Darts whose allowance is a cap
+    property Darts: TPieceDartArray read FDarts;
     // How many to cut, at least 1
     property CutCount: integer read FCutCount write FCutCount;
     // Copies after the first are cut mirrored, as a left and a right
@@ -257,6 +286,10 @@ type
 
   TPieceObjectArray = array of TPieceObject;
 
+const
+  // As written in pattern files and the Automation API
+  DART_PRESS_NAMES: array[TDartPress] of string = ('none', 'first', 'second');
+
 resourcestring
   rsPieceGap = 'There is a gap between %s and %s';
   rsPieceNoArea = 'The outline encloses no area';
@@ -269,6 +302,8 @@ resourcestring
   rsPieceStitchSpacing = 'Stitch holes need a spacing above 0';
   rsPieceNotchOffPiece = 'The notch at %s is not on the seam line';
   rsPieceNotchPastEnd = 'The notch at %s mm is off %s (%s mm long)';
+  rsPieceDartNotInPiece = 'The dart cap''s leg %s is not part of the piece';
+  rsPieceDartApart = 'The dart cap''s legs %s and %s do not meet at a point of the piece''s outline';
   // The piece's name, then how to cut it
   rsPieceCaption = '%s, %s';
   rsPieceCut = 'cut %d';
@@ -407,6 +442,74 @@ end;
 function TPieceObject.MarkingField(Index: integer; const Part: string): string;
 begin
   Result := 'marking' + IntToStr(Index + 1) + '.' + Part;
+end;
+
+function TPieceObject.AddDart(const AFirstKey, ASecondKey: string; ATowardsFirst: boolean): integer;
+begin
+  Result := Length(FDarts);
+  SetLength(FDarts, Result + 1);
+  FDarts[Result].FirstKey := AFirstKey;
+  FDarts[Result].SecondKey := ASecondKey;
+  FDarts[Result].TowardsFirst := ATowardsFirst;
+end;
+
+procedure TPieceObject.RemoveDart(Index: integer);
+begin
+  System.Delete(FDarts, Index, 1);
+end;
+
+function TPieceObject.DartOf(const AKey, BKey: string): integer;
+var
+  Index: integer;
+begin
+  for Index := 0 to High(FDarts) do
+    if ((FDarts[Index].FirstKey = AKey) and (FDarts[Index].SecondKey = BKey)) or
+      ((FDarts[Index].FirstKey = BKey) and (FDarts[Index].SecondKey = AKey)) then
+      Exit(Index);
+  Result := -1;
+end;
+
+// Each dart's points in the outline, in the order the path runs, and which
+// edges of the path are capped legs
+function TPieceObject.BuildCaps(Context: TEvalContext; const Starts: TPieceEdgeStarts; out Caps: TDartCapArray;
+  out Capped: TPathFlags): TEvalState;
+var
+  Index, Count, First, Second: integer;
+  Dart: TPieceDart;
+  Towards: boolean;
+begin
+  Caps := nil;
+  Capped := nil;
+  Count := Length(FPath);
+  SetLength(Capped, Count);
+  for Dart in FDarts do
+  begin
+    First := PathIndexOf(Dart.FirstKey);
+    Second := PathIndexOf(Dart.SecondKey);
+    if First < 0 then
+      Exit(Fail(esInvalid, Format(rsPieceDartNotInPiece, [KeyLabel(Context, Dart.FirstKey)])));
+    if Second < 0 then
+      Exit(Fail(esInvalid, Format(rsPieceDartNotInPiece, [KeyLabel(Context, Dart.SecondKey)])));
+    Towards := Dart.TowardsFirst;
+    // The path runs into the apex along one leg and out along the other
+    if (Second + 1) mod Count = First then
+    begin
+      Index := First;
+      First := Second;
+      Second := Index;
+      Towards := not Towards;
+    end
+    else if ((First + 1) mod Count <> Second) or (Count < 3) then
+      Exit(Fail(esInvalid, Format(rsPieceDartApart, [KeyLabel(Context, Dart.FirstKey), KeyLabel(Context, Dart.SecondKey)])));
+    Capped[First] := True;
+    Capped[Second] := True;
+    SetLength(Caps, Length(Caps) + 1);
+    Caps[High(Caps)].LegStart := Starts[First];
+    Caps[High(Caps)].Apex := Starts[Second];
+    Caps[High(Caps)].LegEnd := Starts[(Second + 1) mod Count];
+    Caps[High(Caps)].TowardsBefore := Towards;
+  end;
+  Result := esValid;
 end;
 
 function TPieceObject.LineMarkingOf(const AEdgeKey: string): integer;
@@ -728,7 +831,8 @@ begin
 end;
 
 // Where a notch falls: which edge of the path, and how far along it
-function TPieceObject.LocateNotch(Context: TEvalContext; Index: integer; out PathIndex: integer; out Position: double): TEvalState;
+function TPieceObject.LocateNotch(Context: TEvalContext; Index: integer; const Capped: TPathFlags; out PathIndex: integer;
+  out Position: double): TEvalState;
 var
   Notch: TPieceNotch;
   Node: TEvalNode;
@@ -757,10 +861,14 @@ begin
     Exit(Fail(esError, Format(rsDraftNotAPoint, [Notch.PointKey])));
   Spot := TPointObject(Node).Position;
   Best := NOTCH_POINT_TOLERANCE;
+  // At the end of a capped dart's leg the notch is cut in the edge beside it,
+  // which has an allowance, so a leg only takes a notch no other edge does
   for Entry := 0 to High(FPath) do
   begin
     TEdgeObject(Context.FindNode(FPath[Entry].EdgeKey)).Locate(Spot, Along, Gap);
-    if Gap <= Best then
+    if Gap > NOTCH_POINT_TOLERANCE then
+      Continue;
+    if (PathIndex < 0) or (Capped[PathIndex] and not Capped[Entry]) or ((Capped[PathIndex] = Capped[Entry]) and (Gap <= Best)) then
     begin
       Best := Gap;
       PathIndex := Entry;
@@ -798,14 +906,14 @@ begin
 end;
 
 function TPieceObject.ComputeNotch(Context: TEvalContext; Index: integer; const EdgeWidths: TDoubleArray;
-  Anticlockwise: boolean; out Mark: TNotchMark): TEvalState;
+  const Capped: TPathFlags; Anticlockwise: boolean; out Mark: TNotchMark): TEvalState;
 var
   PathIndex: integer;
   Position, Outwards: double;
   Edge: TEdgeObject;
 begin
   Mark := Default(TNotchMark);
-  Result := LocateNotch(Context, Index, PathIndex, Position);
+  Result := LocateNotch(Context, Index, Capped, PathIndex, Position);
   if Result <> esValid then
     Exit;
   Edge := TEdgeObject(Context.FindNode(FPath[PathIndex].EdgeKey));
@@ -827,6 +935,8 @@ var
   Index: integer;
   NewFold: TLine2;
   FoldInwards: double;
+  Caps: TDartCapArray;
+  Capped: TPathFlags;
 begin
   if not EvalLength(Context, PIECE_ALLOWANCE_FIELD, Width) then
     Exit(esError);
@@ -837,7 +947,10 @@ begin
     Exit;
   if Abs(SignedArea(Points)) < PIECE_JOIN_TOLERANCE then
     Exit(Fail(esInvalid, rsPieceNoArea));
-  if not OffsetOutline(Points, Widths, Cut) then
+  Result := BuildCaps(Context, Starts, Caps, Capped);
+  if Result <> esValid then
+    Exit;
+  if not OffsetOutline(Points, Widths, Caps, Cut) then
     Exit(Fail(esInvalid, rsPieceNoCutLine));
   Result := ComputeGrainline(Context, Points, Line);
   if Result <> esValid then
@@ -846,7 +959,7 @@ begin
   SetLength(Marks, Length(FNotches));
   for Index := 0 to High(FNotches) do
   begin
-    Result := ComputeNotch(Context, Index, EdgeWidths, SignedArea(Points) > 0, Marks[Index]);
+    Result := ComputeNotch(Context, Index, EdgeWidths, Capped, SignedArea(Points) > 0, Marks[Index]);
     if Result <> esValid then
       Exit;
   end;
@@ -1056,6 +1169,29 @@ begin
     AddOverride(Joined);
     Field(OverrideField(Joined)).ParseStored(OverrideText);
   end;
+end;
+
+procedure TPieceObject.ReplacePathEdge(PathIndex: integer; const Run: TPiecePath);
+var
+  Index, Added: integer;
+  OverrideText: string;
+begin
+  Added := Length(Run) - 1;
+  OverrideText := '';
+  if HasOverride(PathIndex) then
+    OverrideText := Field(OverrideField(PathIndex)).StoredText;
+  // From the end, so no field is renamed onto one still to move
+  for Index := High(FPath) downto PathIndex + 1 do
+    if (Added > 0) and HasOverride(Index) then
+      RenameField(OverrideField(Index), OverrideField(Index + Added));
+  System.Delete(FPath, PathIndex, 1);
+  System.Insert(Run, FPath, PathIndex);
+  if OverrideText <> '' then
+    for Index := PathIndex + 1 to PathIndex + Added do
+    begin
+      AddOverride(Index);
+      Field(OverrideField(Index)).ParseStored(OverrideText);
+    end;
 end;
 
 procedure TPieceObject.SetNotchEdge(Index: integer; const AEdgeKey: string);

@@ -9,6 +9,8 @@ can open it and compare.
   armholes, seams checked for length, and notes.
 - [Adding a zip](zip.md): a zip in the skirt block's centre back from the
   Features tab, and what one click of Apply makes.
+- [Adding a dart](darts.md): a second dart in the skirt block's back from
+  the Features tab, and a cap on every dart's seam allowance.
 
 For finished patterns without the steps, see
 [Example patterns](../getting-started/examples.md).

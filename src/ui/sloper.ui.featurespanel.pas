@@ -16,8 +16,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 }
 
-// The Features tab: sewing details to apply to the pattern in one step,
-// starting with a zip along the selected edge of a piece. Apply adds
+// The Features tab: sewing details to apply to the pattern in one step: a
+// zip along the selected edge of a piece, or a dart in it. Apply adds
 // ordinary objects, as one undo step (Sloper.Core.Features).
 unit Sloper.UI.FeaturesPanel;
 
@@ -36,30 +36,50 @@ type
     FDocument: TPatternDocument;
     // The pattern the fields' starting values were set for
     FGeneration: integer;
-    FEdgeKey: string;
+    // The one edge and the one point selected, if any
+    FEdgeKey, FPointKey: string;
     FKinds: TListBox;
-    FSettings: TGroupBox;
-    FEdgeLabel, FLengthLabel, FAllowanceLabel, FStitchLabel, FShieldLabel, FNote: TLabel;
+    // The group the next control goes in, and how far down it
+    FGroup: TGroupBox;
+    FNextTop: integer;
+    FZipGroup: TGroupBox;
+    FEdgeLabel, FLengthLabel, FAllowanceLabel, FStitchLabel, FShieldLabel: TLabel;
     FStyleBox, FFromBox: TComboBox;
     FLengthEdit, FAllowanceEdit, FStitchEdit, FShieldEdit: TEdit;
     FApply: TButton;
-    FNextTop: integer;
+    FDartGroup: TGroupBox;
+    FDartEdgeLabel, FDartPositionLabel, FDartWidthLabel, FDartDepthLabel, FDartHoleLabel: TLabel;
+    FDartFromBox, FDartFoldBox: TComboBox;
+    FDartPositionEdit, FDartWidthEdit, FDartDepthEdit, FDartHoleEdit: TEdit;
+    FDartApply: TButton;
     FOnMessage: TFeaturesMessageEvent;
     procedure SetDocument(ADocument: TPatternDocument);
     procedure DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
+    function AddGroup(const ACaption: string): TGroupBox;
     function AddLabel(const ACaption: string): TLabel;
+    function AddEdit: TEdit;
+    function AddChoices: TComboBox;
+    function AddApply(Below: TControl; OnApply: TNotifyEvent): TButton;
+    procedure AddNote(Below: TControl; const ACaption: string);
     procedure Place(Control: TControl);
+    procedure BuildZip;
+    procedure BuildDart;
     procedure StartingValues;
     procedure Refresh;
+    procedure RefreshZip(Edge: TObject);
+    procedure RefreshDart(Edge: TObject);
+    procedure KindClick(Sender: TObject);
     procedure StyleChange(Sender: TObject);
     // The style's own captions and which fields it takes
     procedure ShowStyle;
     procedure ApplyClick(Sender: TObject);
+    procedure DartApplyClick(Sender: TObject);
     procedure Say(const AText: string);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    // The canvas's selection: a zip goes along one selected edge
+    // The canvas's selection: a zip goes along one selected edge, and a dart
+    // into one, to a selected point if there is one
     procedure ShowSelection(const Keys: TStringArray);
     property Document: TPatternDocument read FDocument write SetDocument;
     property OnMessage: TFeaturesMessageEvent read FOnMessage write FOnMessage;
@@ -90,6 +110,20 @@ resourcestring
   rsFeaturesUndoZip = 'Insert Zip';
   rsFeaturesZipDone = 'Zip added along %s';
   rsFeaturesZipOtherSide = '%s; its seam joins another edge, which needs a zip too';
+  rsFeaturesDartIn = 'In %s';
+  rsFeaturesDartChoose = 'Select an edge of a piece on the canvas, and a point for the dart to run to if you like.';
+  rsFeaturesDartPosition = 'Middle from the end below (%s), blank for halfway';
+  rsFeaturesDartWidth = 'Width at the edge (%s)';
+  rsFeaturesDartDepth = 'Depth into the piece (%s)';
+  rsFeaturesDartToPoint = 'Runs to %s, the point selected';
+  rsFeaturesDartHole = 'Hole back from the point (%s), blank for none';
+  rsFeaturesDartFold = 'Pressed towards';
+  rsFeaturesDartNote = 'Apply adds the dart''s middle, legs and point, takes the edge between the legs out of the ' +
+    'outline, closes the dart with a seam, notches the legs, marks a hole near the point and the centre line as a fold, ' +
+    'and shapes the seam allowance across the dart as it lies pressed. They are ordinary objects, to change as you like; ' +
+    'one Undo takes them all off.';
+  rsFeaturesUndoDart = 'Insert Dart';
+  rsFeaturesDartDone = 'Dart added in %s';
 
 implementation
 
@@ -99,6 +133,8 @@ uses
 const
   // The list of features, about four rows, at 96 pixels per inch
   KIND_LIST_HEIGHT96 = 90;
+  KIND_ZIP = 0;
+  KIND_DART = 1;
 
 constructor TFeaturesPanel.Create(AOwner: TComponent);
 begin
@@ -111,70 +147,30 @@ begin
   FKinds.Parent := Self;
   FKinds.Align := alTop;
   FKinds.Items.Add(rsFeatureZip);
-  FKinds.ItemIndex := 0;
+  FKinds.Items.Add(rsFeatureDart);
+  FKinds.ItemIndex := KIND_ZIP;
   FKinds.Height := Scale96ToScreen(KIND_LIST_HEIGHT96);
-  FSettings := TGroupBox.Create(Self);
-  FSettings.Parent := Self;
-  FSettings.Align := alClient;
-  FSettings.Caption := rsFeatureZip;
-  SpaceChildren(FSettings);
-  FEdgeLabel := AddLabel('');
-  FEdgeLabel.Font.Style := [fsBold];
-  AddLabel(rsFeaturesStyle);
-  FStyleBox := TComboBox.Create(Self);
-  FStyleBox.Style := csDropDownList;
-  FStyleBox.Items.Add(rsFeaturesCentred);
-  FStyleBox.Items.Add(rsFeaturesInvisible);
-  FStyleBox.Items.Add(rsFeaturesLapped);
-  FStyleBox.Items.Add(rsFeaturesFlyFront);
-  FStyleBox.ItemIndex := 0;
-  FStyleBox.OnChange := @StyleChange;
-  Place(FStyleBox);
-  FLengthLabel := AddLabel('');
-  FLengthEdit := TEdit.Create(Self);
-  Place(FLengthEdit);
-  AddLabel(rsFeaturesFrom);
-  FFromBox := TComboBox.Create(Self);
-  FFromBox.Style := csDropDownList;
-  Place(FFromBox);
-  FAllowanceLabel := AddLabel('');
-  FAllowanceEdit := TEdit.Create(Self);
-  Place(FAllowanceEdit);
-  FStitchLabel := AddLabel('');
-  FStitchEdit := TEdit.Create(Self);
-  Place(FStitchEdit);
-  FShieldLabel := AddLabel('');
-  FShieldEdit := TEdit.Create(Self);
-  Place(FShieldEdit);
-  FApply := TButton.Create(Self);
-  FApply.Caption := rsFeaturesApply;
-  FApply.AutoSize := True;
-  FApply.OnClick := @ApplyClick;
-  Place(FApply);
-  FApply.Align := alNone;
-  FApply.Anchors := [akLeft, akTop];
-  FApply.AnchorSide[akTop].Control := FShieldEdit;
-  FApply.AnchorSide[akTop].Side := asrBottom;
-  FApply.BorderSpacing.Top := ControlGap;
-  FNote := TLabel.Create(Self);
-  FNote.Parent := FSettings;
-  FNote.WordWrap := True;
-  FNote.AutoSize := True;
-  FNote.Caption := rsFeaturesZipNote;
-  FNote.Anchors := [akLeft, akRight, akTop];
-  FNote.AnchorSide[akLeft].Control := FSettings;
-  FNote.AnchorSide[akRight].Control := FSettings;
-  FNote.AnchorSide[akRight].Side := asrBottom;
-  FNote.AnchorSide[akTop].Control := FApply;
-  FNote.AnchorSide[akTop].Side := asrBottom;
-  FNote.BorderSpacing.Top := ControlGap;
-  Refresh;
+  FKinds.OnClick := @KindClick;
+  BuildZip;
+  BuildDart;
+  KindClick(nil);
 end;
 
 destructor TFeaturesPanel.Destroy;
 begin
   SetDocument(nil);
   inherited Destroy;
+end;
+
+function TFeaturesPanel.AddGroup(const ACaption: string): TGroupBox;
+begin
+  Result := TGroupBox.Create(Self);
+  Result.Parent := Self;
+  Result.Align := alClient;
+  Result.Caption := ACaption;
+  SpaceChildren(Result);
+  FGroup := Result;
+  FNextTop := 0;
 end;
 
 // A caption over the field after it, both down the group in order
@@ -185,13 +181,113 @@ begin
   Place(Result);
 end;
 
+function TFeaturesPanel.AddEdit: TEdit;
+begin
+  Result := TEdit.Create(Self);
+  Place(Result);
+end;
+
+function TFeaturesPanel.AddChoices: TComboBox;
+begin
+  Result := TComboBox.Create(Self);
+  Result.Style := csDropDownList;
+  Place(Result);
+end;
+
+function TFeaturesPanel.AddApply(Below: TControl; OnApply: TNotifyEvent): TButton;
+begin
+  Result := TButton.Create(Self);
+  Result.Caption := rsFeaturesApply;
+  Result.AutoSize := True;
+  Result.OnClick := OnApply;
+  Place(Result);
+  Result.Align := alNone;
+  Result.Anchors := [akLeft, akTop];
+  Result.AnchorSide[akTop].Control := Below;
+  Result.AnchorSide[akTop].Side := asrBottom;
+  Result.BorderSpacing.Top := ControlGap;
+end;
+
+procedure TFeaturesPanel.AddNote(Below: TControl; const ACaption: string);
+var
+  Note: TLabel;
+begin
+  Note := TLabel.Create(Self);
+  Note.Parent := FGroup;
+  Note.WordWrap := True;
+  Note.AutoSize := True;
+  Note.Caption := ACaption;
+  Note.Anchors := [akLeft, akRight, akTop];
+  Note.AnchorSide[akLeft].Control := FGroup;
+  Note.AnchorSide[akRight].Control := FGroup;
+  Note.AnchorSide[akRight].Side := asrBottom;
+  Note.AnchorSide[akTop].Control := Below;
+  Note.AnchorSide[akTop].Side := asrBottom;
+  Note.BorderSpacing.Top := ControlGap;
+end;
+
 procedure TFeaturesPanel.Place(Control: TControl);
 begin
-  Control.Parent := FSettings;
+  Control.Parent := FGroup;
   Control.Align := alTop;
   // Each below the one before
   Inc(FNextTop, Control.Height + 1);
   Control.Top := FNextTop;
+end;
+
+procedure TFeaturesPanel.BuildZip;
+begin
+  FZipGroup := AddGroup(rsFeatureZip);
+  FEdgeLabel := AddLabel('');
+  FEdgeLabel.Font.Style := [fsBold];
+  AddLabel(rsFeaturesStyle);
+  FStyleBox := AddChoices;
+  FStyleBox.Items.Add(rsFeaturesCentred);
+  FStyleBox.Items.Add(rsFeaturesInvisible);
+  FStyleBox.Items.Add(rsFeaturesLapped);
+  FStyleBox.Items.Add(rsFeaturesFlyFront);
+  FStyleBox.ItemIndex := 0;
+  FStyleBox.OnChange := @StyleChange;
+  FLengthLabel := AddLabel('');
+  FLengthEdit := AddEdit;
+  AddLabel(rsFeaturesFrom);
+  FFromBox := AddChoices;
+  FAllowanceLabel := AddLabel('');
+  FAllowanceEdit := AddEdit;
+  FStitchLabel := AddLabel('');
+  FStitchEdit := AddEdit;
+  FShieldLabel := AddLabel('');
+  FShieldEdit := AddEdit;
+  FApply := AddApply(FShieldEdit, @ApplyClick);
+  AddNote(FApply, rsFeaturesZipNote);
+end;
+
+procedure TFeaturesPanel.BuildDart;
+begin
+  FDartGroup := AddGroup(rsFeatureDart);
+  FDartEdgeLabel := AddLabel('');
+  FDartEdgeLabel.Font.Style := [fsBold];
+  FDartEdgeLabel.WordWrap := True;
+  FDartPositionLabel := AddLabel('');
+  FDartPositionEdit := AddEdit;
+  AddLabel(rsFeaturesFrom);
+  FDartFromBox := AddChoices;
+  FDartWidthLabel := AddLabel('');
+  FDartWidthEdit := AddEdit;
+  FDartDepthLabel := AddLabel('');
+  FDartDepthEdit := AddEdit;
+  FDartHoleLabel := AddLabel('');
+  FDartHoleEdit := AddEdit;
+  AddLabel(rsFeaturesDartFold);
+  FDartFoldBox := AddChoices;
+  FDartApply := AddApply(FDartFoldBox, @DartApplyClick);
+  AddNote(FDartApply, rsFeaturesDartNote);
+end;
+
+procedure TFeaturesPanel.KindClick(Sender: TObject);
+begin
+  FZipGroup.Visible := FKinds.ItemIndex <> KIND_DART;
+  FDartGroup.Visible := FKinds.ItemIndex = KIND_DART;
 end;
 
 procedure TFeaturesPanel.SetDocument(ADocument: TPatternDocument);
@@ -210,10 +306,36 @@ begin
 end;
 
 procedure TFeaturesPanel.ShowSelection(const Keys: TStringArray);
+var
+  Key: string;
+  Node: TObject;
+  Edges, Points: integer;
 begin
   FEdgeKey := '';
-  if Length(Keys) = 1 then
-    FEdgeKey := Keys[0];
+  FPointKey := '';
+  Edges := 0;
+  Points := 0;
+  if Assigned(FDocument) then
+    for Key in Keys do
+    begin
+      Node := FDocument.Pattern.FindNode(Key);
+      if Node is TEdgeObject then
+      begin
+        FEdgeKey := Key;
+        Inc(Edges);
+      end
+      else if Node is TPointObject then
+      begin
+        FPointKey := Key;
+        Inc(Points);
+      end;
+    end;
+  // One of each at most, and nothing else
+  if (Edges <> 1) or (Points > 1) or (Edges + Points <> Length(Keys)) then
+  begin
+    FEdgeKey := '';
+    FPointKey := '';
+  end;
   Refresh;
 end;
 
@@ -222,12 +344,18 @@ end;
 procedure TFeaturesPanel.StartingValues;
 var
   Spec: TZipSpec;
+  Dart: TDartSpec;
 begin
   Spec := DefaultZip(FDocument.Pattern, '', TZipStyle(Max(FStyleBox.ItemIndex, 0)));
   FLengthEdit.Text := Spec.Length;
   FAllowanceEdit.Text := Spec.Allowance;
   FStitchEdit.Text := Spec.StitchDistance;
   FShieldEdit.Text := Spec.ShieldWidth;
+  Dart := DefaultDart(FDocument.Pattern, '');
+  FDartPositionEdit.Text := Dart.Position;
+  FDartWidthEdit.Text := Dart.Width;
+  FDartDepthEdit.Text := Dart.Depth;
+  FDartHoleEdit.Text := Dart.HoleInset;
   FGeneration := FDocument.Generation;
   ShowStyle;
 end;
@@ -257,6 +385,9 @@ begin
   FStitchLabel.Enabled := FStitchEdit.Enabled;
   FShieldEdit.Enabled := Style = zsFlyFront;
   FShieldLabel.Enabled := FShieldEdit.Enabled;
+  FDartPositionLabel.Caption := Format(rsFeaturesDartPosition, [UnitText]);
+  FDartWidthLabel.Caption := Format(rsFeaturesDartWidth, [UnitText]);
+  FDartHoleLabel.Caption := Format(rsFeaturesDartHole, [UnitText]);
 end;
 
 function PointName(Document: TPatternDocument; const Key: string): string;
@@ -270,11 +401,24 @@ begin
     Result := Key;
 end;
 
+// The edge's two ends as choices, keeping the one chosen
+procedure ShowEnds(Box: TComboBox; Document: TPatternDocument; Edge: TEdgeObject; const Caption: string);
+var
+  Index: integer;
+begin
+  Index := Max(Box.ItemIndex, 0);
+  Box.Items.Clear;
+  if not Assigned(Edge) then
+    Exit;
+  Box.Items.Add(Format(Caption, [PointName(Document, Edge.StartKey)]));
+  Box.Items.Add(Format(Caption, [PointName(Document, Edge.EndKey)]));
+  Box.ItemIndex := Index;
+end;
+
 procedure TFeaturesPanel.Refresh;
 var
   Node: TObject;
   Edge: TEdgeObject;
-  Index: integer;
 begin
   Edge := nil;
   if Assigned(FDocument) then
@@ -282,10 +426,16 @@ begin
     if FGeneration <> FDocument.Generation then
       StartingValues;
     Node := FDocument.Pattern.FindNode(FEdgeKey);
-    if Node is TEdgeObject then
+    if (Node is TEdgeObject) and not TEdgeObject(Node).IsClosed then
       Edge := TEdgeObject(Node);
   end;
-  FApply.Enabled := Assigned(Edge) and not Edge.IsClosed;
+  RefreshZip(Edge);
+  RefreshDart(Edge);
+end;
+
+procedure TFeaturesPanel.RefreshZip(Edge: TObject);
+begin
+  FApply.Enabled := Assigned(Edge) and (FPointKey = '');
   FFromBox.Enabled := FApply.Enabled;
   if not FApply.Enabled then
   begin
@@ -293,13 +443,36 @@ begin
     FFromBox.Items.Clear;
     Exit;
   end;
-  FEdgeLabel.Caption := Format(rsFeaturesAlong, [Edge.DisplayName]);
-  Index := Max(FFromBox.ItemIndex, 0);
-  FFromBox.Items.Clear;
-  FFromBox.Items.Add(Format(rsFeaturesFromPoint, [PointName(FDocument, Edge.StartKey)]));
-  FFromBox.Items.Add(Format(rsFeaturesFromPoint, [PointName(FDocument, Edge.EndKey)]));
-  FFromBox.ItemIndex := Index;
+  FEdgeLabel.Caption := Format(rsFeaturesAlong, [TEdgeObject(Edge).DisplayName]);
+  ShowEnds(FFromBox, FDocument, TEdgeObject(Edge), rsFeaturesFromPoint);
   StyleChange(nil);
+end;
+
+procedure TFeaturesPanel.RefreshDart(Edge: TObject);
+var
+  UnitText: string;
+begin
+  FDartApply.Enabled := Assigned(Edge);
+  FDartFromBox.Enabled := FDartApply.Enabled;
+  FDartFoldBox.Enabled := FDartApply.Enabled;
+  UnitText := MEASURE_UNIT_NAMES[muMillimetre];
+  if Assigned(FDocument) then
+    UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
+  FDartDepthEdit.Enabled := FPointKey = '';
+  if FPointKey = '' then
+    FDartDepthLabel.Caption := Format(rsFeaturesDartDepth, [UnitText])
+  else
+    FDartDepthLabel.Caption := Format(rsFeaturesDartToPoint, [PointName(FDocument, FPointKey)]);
+  if not Assigned(Edge) then
+  begin
+    FDartEdgeLabel.Caption := rsFeaturesDartChoose;
+    FDartFromBox.Items.Clear;
+    FDartFoldBox.Items.Clear;
+    Exit;
+  end;
+  FDartEdgeLabel.Caption := Format(rsFeaturesDartIn, [TEdgeObject(Edge).DisplayName]);
+  ShowEnds(FDartFromBox, FDocument, TEdgeObject(Edge), rsFeaturesFromPoint);
+  ShowEnds(FDartFoldBox, FDocument, TEdgeObject(Edge), rsFeaturesFromPoint);
 end;
 
 // A style starts with its own widths: a fly is wider than a lap
@@ -353,6 +526,41 @@ begin
   if Made.OtherSide then
     Done := Format(rsFeaturesZipOtherSide, [Done]);
   Say(Done);
+end;
+
+// One undo step, or none when the dart cannot go there
+procedure TFeaturesPanel.DartApplyClick(Sender: TObject);
+var
+  Spec: TDartSpec;
+  Made: TDartMade;
+  Reason: string;
+begin
+  if not Assigned(FDocument) or FDocument.ChangeOpen then
+    Exit;
+  Spec := DefaultDart(FDocument.Pattern, FEdgeKey);
+  Spec.FromEnd := FDartFromBox.ItemIndex = 1;
+  Spec.TowardsEnd := FDartFoldBox.ItemIndex = 1;
+  Spec.Position := Trim(FDartPositionEdit.Text);
+  Spec.Width := Trim(FDartWidthEdit.Text);
+  Spec.Depth := Trim(FDartDepthEdit.Text);
+  Spec.HoleInset := Trim(FDartHoleEdit.Text);
+  FDocument.BeginChange(rsFeaturesUndoDart);
+  if FPointKey <> '' then
+    Spec.ApexKey := FDocument.Pattern.UsePoint(FPointKey);
+  if not InsertDart(FDocument.Pattern, Spec, Made) then
+  begin
+    Reason := FDocument.Pattern.LastError;
+    FDocument.CancelChange;
+    Say(Reason);
+    Exit;
+  end;
+  FDocument.EndChange;
+  if FDocument.ChangeRefused then
+  begin
+    Say(FDocument.Pattern.LastError);
+    Exit;
+  end;
+  Say(Format(rsFeaturesDartDone, [PointName(FDocument, Made.PieceKey)]));
 end;
 
 end.

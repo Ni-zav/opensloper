@@ -134,7 +134,10 @@ mirrored piece, press Flip.
 
 A seam between a dart's two legs, one leg as side A and the other as side B,
 checks that the legs match, and lets [the Garment tab](garment.md) close the
-dart.
+dart. Such a dart can then have a cap on its seam allowance, chosen under
+**Cap on** in the piece's properties (see
+[The dart's cap](features.md#the-darts-cap)); the
+[Dart feature](features.md#dart) adds all of it in one step.
 
 A seam whose difference is outside its tolerance is a problem: the status bar
 counts it, the Objects tab's Problems filter lists it, and `opensloper-cli

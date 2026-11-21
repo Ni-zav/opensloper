@@ -2158,6 +2158,33 @@
             "additionalProperties": false
           }
         },
+        "darts": {
+          "description": "Darts whose seam allowance is a cap, shaped as the dart folds",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "first": {
+                "description": "One leg of the dart, an edge of the path",
+                "type": "integer",
+                "minimum": 1
+              },
+              "second": {
+                "description": "The other leg, next to it in the path, meeting it at the dart's point",
+                "type": "integer",
+                "minimum": 1
+              },
+              "towards": {
+                "description": "The leg whose side the dart is pressed towards",
+                "enum": [
+                  "first",
+                  "second"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "cut": {
           "description": "How many to cut",
           "type": "object",

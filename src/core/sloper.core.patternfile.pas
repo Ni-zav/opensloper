@@ -185,6 +185,7 @@ type
     function ReadGrainline(Item: TJSONObject; Piece: TPieceObject): boolean;
     function ReadNotches(Item: TJSONObject; Piece: TPieceObject): boolean;
     function ReadMarkings(Item: TJSONObject; Piece: TPieceObject): boolean;
+    function ReadDarts(Item: TJSONObject; Piece: TPieceObject): boolean;
     function ReadCut(Item: TJSONObject; Piece: TPieceObject): boolean;
     function ReadFold(Item: TJSONObject; Piece: TPieceObject): boolean;
     function ReadMaterial(Item: TJSONObject; Piece: TPieceObject): boolean;
@@ -471,6 +472,30 @@ begin
   end;
 end;
 
+function SaveDarts(Piece: TPieceObject): TJSONArray;
+var
+  Dart: TPieceDart;
+  Item: TJSONObject;
+begin
+  Result := TJSONArray.Create;
+  try
+    for Dart in Piece.Darts do
+    begin
+      Item := TJSONObject.Create;
+      Result.Add(Item);
+      Item.Add('first', JSONId(Dart.FirstKey));
+      Item.Add('second', JSONId(Dart.SecondKey));
+      if Dart.TowardsFirst then
+        Item.Add('towards', DART_PRESS_NAMES[dpFirst])
+      else
+        Item.Add('towards', DART_PRESS_NAMES[dpSecond]);
+    end;
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
+end;
+
 function SaveNotches(Piece: TPieceObject): TJSONArray;
 var
   Index: integer;
@@ -702,6 +727,8 @@ begin
         Result.Add('notches', SaveNotches(TPieceObject(DraftObject)));
       if Length(TPieceObject(DraftObject).Markings) > 0 then
         Result.Add('markings', SaveMarkings(TPieceObject(DraftObject)));
+      if Length(TPieceObject(DraftObject).Darts) > 0 then
+        Result.Add('darts', SaveDarts(TPieceObject(DraftObject)));
       Result.Add('cut', SaveCut(TPieceObject(DraftObject)));
       if TPieceObject(DraftObject).OnFold then
         Result.Add('foldEdge', JSONId(TPieceObject(DraftObject).FoldEdgeKey));
@@ -1418,6 +1445,41 @@ begin
   Result := True;
 end;
 
+// Optional: the darts with a cap
+function TPatternLoader.ReadDarts(Item: TJSONObject; Piece: TPieceObject): boolean;
+var
+  Data: TJSONData;
+  Dart: TJSONObject;
+  Index, Choice: integer;
+  FirstKey, SecondKey: string;
+begin
+  Data := Item.Find('darts');
+  if not Assigned(Data) then
+    Exit(True);
+  if Data.JSONType <> jtArray then
+    Exit(Missing('darts'));
+  for Index := 0 to Data.Count - 1 do
+  begin
+    if Data.Items[Index].JSONType <> jtObject then
+      Exit(Missing('darts'));
+    Dart := TJSONObject(Data.Items[Index]);
+    if not ReadInput(Dart, 'first', True, FirstKey) or not ReadInput(Dart, 'second', True, SecondKey) then
+      Exit(False);
+    if Piece.PathIndexOf(FirstKey) < 0 then
+      Exit(Problem(Format(rsPatternNotInPiece, [NodeLabel(FPattern.FindNode(FirstKey)), FId])));
+    if Piece.PathIndexOf(SecondKey) < 0 then
+      Exit(Problem(Format(rsPatternNotInPiece, [NodeLabel(FPattern.FindNode(SecondKey)), FId])));
+    if not Assigned(Dart.Find('towards')) then
+      Exit(Missing('towards'));
+    if not ReadChoice(Dart, 'towards', DART_PRESS_NAMES, Choice) then
+      Exit(False);
+    if TDartPress(Choice) = dpNone then
+      Exit(Missing('towards'));
+    Piece.AddDart(FirstKey, SecondKey, TDartPress(Choice) = dpFirst);
+  end;
+  Result := True;
+end;
+
 // Optional; cut once, not mirrored
 function TPatternLoader.ReadCut(Item: TJSONObject; Piece: TPieceObject): boolean;
 var
@@ -1559,8 +1621,8 @@ begin
       Exit;
     end;
   end;
-  if not ReadGrainline(Item, Piece) or not ReadNotches(Item, Piece) or not ReadMarkings(Item, Piece) or not ReadCut(Item, Piece) or
-    not ReadFold(Item, Piece) or not ReadMaterial(Item, Piece) or not ReadFill(Item, Piece) then
+  if not ReadGrainline(Item, Piece) or not ReadNotches(Item, Piece) or not ReadMarkings(Item, Piece) or not ReadDarts(Item, Piece) or
+    not ReadCut(Item, Piece) or not ReadFold(Item, Piece) or not ReadMaterial(Item, Piece) or not ReadFill(Item, Piece) then
     FreeAndNil(Result);
 end;
 

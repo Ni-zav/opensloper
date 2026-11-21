@@ -368,6 +368,10 @@ Formulas can read: `.holes`.
 | `markings[].edge` | edge ID | line, stitch: the edge |
 | `markings[].spacing` | length formula | stitch: the distance between holes, adjusted to fit |
 | `markings[].size` | length formula | stitch: the hole size |
+| `darts` | list | Darts whose seam allowance is a cap, shaped as the dart folds |
+| `darts[].first` | edge ID | One leg of the dart, an edge of the path |
+| `darts[].second` | edge ID | The other leg, next to it in the path, meeting it at the dart's point |
+| `darts[].towards` | one of: `first`, `second` | The leg whose side the dart is pressed towards |
 | `cut` | group | How many to cut |
 | `cut.count` | whole number | How many |
 | `cut.mirrored` | true or false | Whether every other one is mirrored |

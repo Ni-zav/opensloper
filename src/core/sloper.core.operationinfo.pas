@@ -267,6 +267,10 @@ resourcestring
   rsMemberCutCount = 'How many';
   rsMemberCutMirrored = 'Whether every other one is mirrored';
   rsMemberFoldEdge = 'The edge the piece is cut on the fold of, when it is';
+  rsMemberDarts = 'Darts whose seam allowance is a cap, shaped as the dart folds';
+  rsMemberDartFirst = 'One leg of the dart, an edge of the path';
+  rsMemberDartSecond = 'The other leg, next to it in the path, meeting it at the dart''s point';
+  rsMemberDartTowards = 'The leg whose side the dart is pressed towards';
   rsMemberMaterial = 'The material it is cut from';
   rsMemberFill = 'How it is filled on screen, when not as its material';
   rsMemberFillColor = 'Its own colour, as #rrggbb';
@@ -512,6 +516,10 @@ begin
   M('markings[].edge', mkEdge, rsMemberMarkingEdge);
   M('markings[].spacing', mkLength, rsMemberMarkingSpacing);
   M('markings[].size', mkLength, rsMemberMarkingSize);
+  M('darts', mkList, rsMemberDarts);
+  M('darts[].first', mkEdge, rsMemberDartFirst);
+  M('darts[].second', mkEdge, rsMemberDartSecond);
+  M('darts[].towards', mkChoice, rsMemberDartTowards, 'first, second');
   M('cut', mkGroup, rsMemberCut);
   M('cut.count', mkWhole, rsMemberCutCount);
   M('cut.mirrored', mkFlag, rsMemberCutMirrored);

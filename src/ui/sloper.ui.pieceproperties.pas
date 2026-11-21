@@ -17,8 +17,8 @@
 }
 
 // A piece's rows in the properties panel: how many to cut and whether
-// mirrored, the fold, edges with their own seam allowance, the grainline,
-// and the material and fill.
+// mirrored, the fold, the cap of each dart, edges with their own seam
+// allowance, the grainline, and the material and fill.
 unit Sloper.UI.PieceProperties;
 
 {$mode ObjFPC}{$H+}
@@ -36,6 +36,10 @@ type
     FFoldBox: TComboBox;
     // The edge of each fold choice; '' for none
     FFoldKeys: TStringArray;
+    // A cap for each dart: none, or pressed towards its first or second leg,
+    // in the order of TDartPress
+    FDartBoxes: array of TComboBox;
+    FDartLegs: TPieceDartArray;
     // Adds an edge's own seam allowance: one choice per edge without one,
     // after the prompt, with the path index of each
     FAllowanceBox: TComboBox;
@@ -51,6 +55,9 @@ type
     FFillColorBox: TComboBox;
     procedure AddRows(Piece: TPieceObject);
     procedure AddGrainRows(Piece: TPieceObject);
+    procedure AddDartRows(Piece: TPieceObject);
+    procedure RefreshDartRows(Piece: TPieceObject);
+    procedure DartChange(Sender: TObject);
     procedure RefreshGrainRows(Piece: TPieceObject);
     procedure RefreshMaterialRows(Piece: TPieceObject);
     procedure CutChange(Sender: TObject);
@@ -104,11 +111,17 @@ resourcestring
   rsPropRemoveEdgeAllowance = 'Remove edge allowance';
   rsPropChangeCut = 'Change cut';
   rsPropChangeFold = 'Change fold';
+  rsPropDartCap = 'Cap on %s';
+  rsPropDartCapHint = 'Shapes the seam allowance across the dart as it lies pressed, so it sews into the seam';
+  rsPropNoCap = 'None';
+  rsPropCapTowards = 'Pressed towards %s';
+  rsPropDartLegs = '%s and %s';
+  rsPropChangeDartCap = 'Change dart cap';
 
 implementation
 
 uses
-  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.UI.MaterialGrid, Sloper.UI.ObjectList, Sloper.UI.PropertyText;
+  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.UI.MaterialGrid, Sloper.UI.ObjectList, Sloper.UI.PropertyText;
 
 const
   MAX_CUT_COUNT = 99;
@@ -154,6 +167,7 @@ begin
     end;
   end;
   FFoldBox := Panel.AddChoiceRow(rsPropFold, FoldNames, @FoldChange);
+  AddDartRows(Piece);
   AllowanceNames := nil;
   Insert(rsPropOwnAllowancePrompt, AllowanceNames, 0);
   for Index := 0 to High(Piece.Path) do
@@ -220,6 +234,7 @@ begin
     FMirrorBox.Checked := Piece.Mirrored;
     RefreshMaterialRows(Piece);
     RefreshGrainRows(Piece);
+    RefreshDartRows(Piece);
   finally
     FFilling := False;
   end;
@@ -336,6 +351,102 @@ begin
     Exit;
   Panel.BeginEdit(rsPropChangeCut);
   Panel.EndEdit(Panel.Document.Pattern.SetCut(Piece, FCutEdit.Value, FMirrorBox.Checked), 'cut:' + Panel.SelectedKey);
+end;
+
+function NodeName(Pattern: TPattern; const Key: string): string;
+begin
+  if Assigned(Pattern.FindNode(Key)) then
+    Result := Pattern.FindNode(Key).DisplayName
+  else
+    Result := Key;
+end;
+
+// The piece's darts: each seam joining two neighbouring edges of it, and any
+// other pair of edges with a cap
+procedure TPieceSection.AddDartRows(Piece: TPieceObject);
+var
+  Pattern: TPattern;
+  Index, First, Second, Count: integer;
+  Seam: TSeamObject;
+  Dart: TPieceDart;
+  Captions: array of string;
+  Box: TComboBox;
+
+  procedure AddDart(const FirstKey, SecondKey, Caption: string);
+  begin
+    for Dart in FDartLegs do
+      if ((Dart.FirstKey = FirstKey) and (Dart.SecondKey = SecondKey)) or ((Dart.FirstKey = SecondKey) and (Dart.SecondKey = FirstKey)) then
+        Exit;
+    SetLength(FDartLegs, Length(FDartLegs) + 1);
+    FDartLegs[High(FDartLegs)].FirstKey := FirstKey;
+    FDartLegs[High(FDartLegs)].SecondKey := SecondKey;
+    Insert(Caption, Captions, Length(Captions));
+  end;
+
+begin
+  Pattern := Panel.Document.Pattern;
+  FDartLegs := nil;
+  FDartBoxes := nil;
+  Captions := nil;
+  Count := Length(Piece.Path);
+  for Index := 0 to Pattern.ObjectCount - 1 do
+  begin
+    if not (Pattern.Objects[Index] is TSeamObject) then
+      Continue;
+    Seam := TSeamObject(Pattern.Objects[Index]);
+    if (Length(Seam.SideA) <> 1) or (Length(Seam.SideB) <> 1) or (Seam.SideA[0].PieceKey <> Piece.Key) or
+      (Seam.SideB[0].PieceKey <> Piece.Key) then
+      Continue;
+    First := Piece.PathIndexOf(Seam.SideA[0].EdgeKey);
+    Second := Piece.PathIndexOf(Seam.SideB[0].EdgeKey);
+    if (First >= 0) and (Second >= 0) and (((First + 1) mod Count = Second) or ((Second + 1) mod Count = First)) then
+      AddDart(Seam.SideA[0].EdgeKey, Seam.SideB[0].EdgeKey, Seam.DisplayName);
+  end;
+  for Dart in Copy(Piece.Darts) do
+    AddDart(Dart.FirstKey, Dart.SecondKey, Format(rsPropDartLegs, [NodeName(Pattern, Dart.FirstKey),
+      NodeName(Pattern, Dart.SecondKey)]));
+  for Index := 0 to High(FDartLegs) do
+  begin
+    Box := Panel.AddChoiceRow(Format(rsPropDartCap, [Captions[Index]]), [rsPropNoCap,
+      Format(rsPropCapTowards, [NodeName(Pattern, FDartLegs[Index].FirstKey)]),
+      Format(rsPropCapTowards, [NodeName(Pattern, FDartLegs[Index].SecondKey)])], @DartChange);
+    Box.Tag := Index;
+    Box.Hint := rsPropDartCapHint;
+    Box.ShowHint := True;
+    Insert(Box, FDartBoxes, Length(FDartBoxes));
+  end;
+end;
+
+procedure TPieceSection.RefreshDartRows(Piece: TPieceObject);
+var
+  Index, Dart: integer;
+begin
+  for Index := 0 to High(FDartBoxes) do
+  begin
+    Dart := Piece.DartOf(FDartLegs[Index].FirstKey, FDartLegs[Index].SecondKey);
+    if Dart < 0 then
+      FDartBoxes[Index].ItemIndex := Ord(dpNone)
+    else if Piece.Darts[Dart].TowardsFirst = (Piece.Darts[Dart].FirstKey = FDartLegs[Index].FirstKey) then
+      FDartBoxes[Index].ItemIndex := Ord(dpFirst)
+    else
+      FDartBoxes[Index].ItemIndex := Ord(dpSecond);
+  end;
+end;
+
+procedure TPieceSection.DartChange(Sender: TObject);
+var
+  Node: TEvalNode;
+  Legs: TPieceDart;
+begin
+  if FFilling then
+    Exit;
+  Node := Panel.SelectedNode;
+  if not (Node is TPieceObject) then
+    Exit;
+  Legs := FDartLegs[TComboBox(Sender).Tag];
+  Panel.BeginEdit(rsPropChangeDartCap);
+  Panel.EndEdit(Panel.Document.Pattern.SetDartCap(TPieceObject(Node), Legs.FirstKey, Legs.SecondKey,
+    TDartPress(TComboBox(Sender).ItemIndex)));
 end;
 
 procedure TPieceSection.FoldChange(Sender: TObject);

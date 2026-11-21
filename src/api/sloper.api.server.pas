@@ -123,6 +123,8 @@ type
     function DoAddRectangle(Params: TJSONObject): TJSONData;
     function DoRoundCorner(Params: TJSONObject): TJSONData;
     function DoFeatureZip(Params: TJSONObject): TJSONData;
+    function DoFeatureDart(Params: TJSONObject): TJSONData;
+    function DoSetDartCap(Params: TJSONObject): TJSONData;
     function DoCreatePiece(Params: TJSONObject): TJSONData;
     function DoSetEdgeAllowance(Params: TJSONObject): TJSONData;
     function TargetPiece(Params: TJSONObject): TPieceObject;
@@ -224,6 +226,8 @@ resourcestring
   rsApiAdd = 'Add %s';
   rsApiSplit = 'Split edge';
   rsApiInsertZipChange = 'Insert Zip';
+  rsApiInsertDartChange = 'Insert Dart';
+  rsApiDartCapChange = 'Change dart cap';
   rsApiUnknownType = 'There is no type "%s"; use one of: %s';
   rsApiBadChoice = 'Parameter "%s" must be one of: %s';
   rsApiBadNodes = 'A curve path needs a "nodes" list, each with a point and angle';
@@ -1715,6 +1719,76 @@ begin
   end;
 end;
 
+// The Features tab's dart, as one undo step
+function TApiServer.DoFeatureDart(Params: TJSONObject): TJSONData;
+var
+  Spec: TDartSpec;
+  Made: TDartMade;
+  Text: string;
+  Answer: TJSONObject;
+  List: TJSONArray;
+
+  procedure AddNode(const AName, Key: string);
+  begin
+    if Key <> '' then
+      Answer.Add(AName, NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+  end;
+
+begin
+  Spec := DefaultDart(FDocument.Pattern, Reference(Params, 'edge'));
+  Spec.FromEnd := ChoiceParam(Params, 'from', ['start', 'end']) = 1;
+  Spec.TowardsEnd := ChoiceParam(Params, 'fold', ['start', 'end']) = 1;
+  Spec.Position := OptionalFormula(Params, 'position');
+  Text := OptionalFormula(Params, 'width');
+  if Text <> '' then
+    Spec.Width := Text;
+  Text := OptionalFormula(Params, 'depth');
+  if Text <> '' then
+    Spec.Depth := Text;
+  Text := OptionalFormula(Params, 'holeInset');
+  if Text <> '' then
+    Spec.HoleInset := Text;
+  BeginChange(rsApiInsertDartChange);
+  if Assigned(Params.Find('apex')) then
+    Spec.ApexKey := Reference(Params, 'apex', True);
+  if not InsertDart(FDocument.Pattern, Spec, Made) then
+    RefuseChange;
+  EndChange;
+  Answer := TJSONObject.Create;
+  try
+    AddNode('mid', Made.MidKey);
+    AddNode('apex', Made.ApexKey);
+    List := TJSONArray.Create;
+    Answer.Add('legs', List);
+    List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Made.LegKeys[0])));
+    List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Made.LegKeys[1])));
+    AddNode('seam', Made.SeamKey);
+    AddNode('hole', Made.HoleKey);
+    AddNode('centre', Made.CentreKey);
+    Answer.Add('piece', StrToInt(Made.PieceKey));
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
+function TApiServer.DoSetDartCap(Params: TJSONObject): TJSONData;
+var
+  Piece: TPieceObject;
+  First, Second: string;
+  Press: TDartPress;
+begin
+  Piece := TargetPiece(Params);
+  First := Reference(Params, 'first');
+  Second := Reference(Params, 'second');
+  Press := TDartPress(ChoiceParam(Params, 'towards', DART_PRESS_NAMES));
+  BeginChange(rsApiDartCapChange);
+  if not FDocument.Pattern.SetDartCap(Piece, First, Second, Press) then
+    RefuseChange;
+  Result := AddedNode(Piece);
+end;
+
 function TApiServer.DoSplitEdge(Params: TJSONObject): TJSONData;
 var
   Edge, Point, FirstKey, SecondKey: string;
@@ -2688,6 +2762,8 @@ begin
     'add_rectangle': Result := DoAddRectangle(Params);
     'round_corner': Result := DoRoundCorner(Params);
     'feature_zip': Result := DoFeatureZip(Params);
+    'feature_dart': Result := DoFeatureDart(Params);
+    'set_dart_cap': Result := DoSetDartCap(Params);
     'create_piece': Result := DoCreatePiece(Params);
     'set_edge_allowance': Result := DoSetEdgeAllowance(Params);
     'set_grainline': Result := DoSetGrainline(Params);

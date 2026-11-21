@@ -24,6 +24,7 @@ nav = [
     "tutorials/skirt-block.md",
     "tutorials/bodice-block.md",
     "tutorials/zip.md",
+    "tutorials/darts.md",
   ] },
   { "Measure" = [
     "measure/index.md",

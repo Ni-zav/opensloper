@@ -492,6 +492,19 @@ Puts a piece on the fold of one of its straight edges, or takes it off.
 
 Returns: The piece, as `get_object` gives it.
 
+### `set_dart_cap`
+
+Gives a dart a cap: its seam allowance across the edge shaped as the dart lies folded, so it sews into the seam. The dart is two neighbouring edges of the piece meeting at its point.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `id` or `name` | number or text | yes | The piece, by its ID or its name |
+| `first` | ID or name | yes | One leg of the dart |
+| `second` | ID or name | yes | The other leg |
+| `towards` | one of: `none`, `first`, `second` | yes | The leg whose side the dart is pressed towards, or none to take the cap off |
+
+Returns: The piece, as `get_object` gives it.
+
 ### `set_piece_material`
 
 Sets the material a piece is cut from.
@@ -633,6 +646,23 @@ Puts a zip along a piece's edge, as the Features tab does, in one undo step: a Z
 | `shieldWidth` | formula |  | A fly shield's width as worn; it is cut on the fold. Default 40 mm |
 
 Returns: `stop`, `opening` and `rest` (the edge's two parts) and `shield` (a fly front's) as `get_object` gives them, `stitching` the topstitching's objects, `pieces` the IDs of the pieces it went into, and `otherSide`, whether a seam joins the edge to another that needs a zip too.
+
+### `feature_dart`
+
+Puts a dart in a piece's edge, as the Features tab does, in one undo step: a DartMid point on the edge, the points either side where its legs leave it, a DartApex point at the depth square to the edge (or the point given as `apex`), the legs in place of the edge between them in the piece's outline, a seam closing the dart, a notch at each leg, a hole near the point, the centre line as a fold, and a cap on the seam allowance across the dart. They are ordinary objects.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `edge` | ID or name | yes | The edge the dart opens in, on one piece |
+| `position` | formula |  | Where the dart's middle is along the edge, from the end `from` names. Default halfway |
+| `from` | one of: `start`, `end` |  | The end of the edge the position is from. Default start |
+| `width` | formula |  | The dart's width at the edge. Default 20 mm |
+| `depth` | formula |  | How far the dart runs into the piece, square to the edge. Default 90 mm |
+| `apex` | ID or name |  | A point the dart runs to instead, such as a bust point; the dart follows it |
+| `holeInset` | formula |  | How far back from the point the hole goes, along the centre line; 0 puts it on the point. Default 10 mm |
+| `fold` | one of: `start`, `end` |  | The end of the edge the dart is pressed towards, which shapes the cap. Default start |
+
+Returns: `mid`, `apex`, `legs` (the two legs, the start's side first), `seam`, `hole` and `centre` as `get_object` gives them, and `piece`, the ID of the piece.
 
 ## Notes
 

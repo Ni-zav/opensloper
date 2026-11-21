@@ -64,6 +64,8 @@ type
     // The piece's edge, split, becomes its parts, given in the order the
     // piece's path runs; each side takes them in its own direction
     procedure SplitEntry(const PieceKey, EdgeKey: string; const PathOrder: array of string);
+    // The piece's edge leaves the seam, on whichever side it is
+    procedure RemoveEntry(const PieceKey, EdgeKey: string);
     // The piece's two edges become one edge, where the first of them was
     procedure JoinEntries(const PieceKey, KeyA, KeyB, NewKey: string);
     // Length of side B over side A, from the last good evaluation
@@ -274,6 +276,22 @@ procedure TSeamObject.SplitEntry(const PieceKey, EdgeKey: string; const PathOrde
 begin
   SplitIn(FSideA, True);
   SplitIn(FSideB, FReversed);
+end;
+
+procedure TSeamObject.RemoveEntry(const PieceKey, EdgeKey: string);
+
+  procedure RemoveIn(var Side: TSeamSide);
+  var
+    Index: integer;
+  begin
+    for Index := High(Side) downto 0 do
+      if (Side[Index].PieceKey = PieceKey) and (Side[Index].EdgeKey = EdgeKey) then
+        Delete(Side, Index, 1);
+  end;
+
+begin
+  RemoveIn(FSideA);
+  RemoveIn(FSideB);
 end;
 
 procedure TSeamObject.JoinEntries(const PieceKey, KeyA, KeyB, NewKey: string);

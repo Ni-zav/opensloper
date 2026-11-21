@@ -31,7 +31,8 @@ type
   // Lengths a new object starts with
   TStartingLength = (slPieceAllowance, slSeamTolerance, slArcRadius, slOffsetDistance, slCornerRadius, slStitchSpacing,
     slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch,
-    slLapStitch, slFlyExtension, slFlyStitch, slFlyShieldWidth, slFlyShieldExtra, slFeatureGap);
+    slLapStitch, slFlyExtension, slFlyStitch, slFlyShieldWidth, slFlyShieldExtra, slFeatureGap, slDartWidth, slDartDepth,
+    slDartHoleInset);
 
 const
   MEASURE_UNIT_NAMES: array[TMeasureUnit] of string = ('mm', 'cm', 'in');
@@ -59,7 +60,10 @@ const
     ('30', '3', '1.25'),      // a fly front's stitching from the centre front
     ('40', '4', '1.5'),       // a fly shield's width, folded
     ('20', '2', '0.75'),      // how far a fly shield runs past the zip
-    ('50', '5', '2'));        // the room between the pattern and a piece a feature adds
+    ('50', '5', '2'),         // the room between the pattern and a piece a feature adds
+    ('20', '2', '0.75'),      // a dart's width at the edge
+    ('90', '9', '3.5'),       // a dart's depth into the piece
+    ('10', '1', '0.375'));    // how far back from a dart's point its hole goes
 
 // The unit with this name (mm, cm or in, any case)
 function MeasureUnitFromName(const AName: string; out AUnit: TMeasureUnit): boolean;

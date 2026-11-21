@@ -1,0 +1,17 @@
+/* OpenSloper user documentation: changes to the Zensical theme.
+   Licensed CC BY-SA 4.0, as the rest of the documentation. */
+
+/* Use the whole width of the browser on a desktop, not the theme's 61rem */
+.md-grid {
+  max-width: none;
+}
+
+/* Keep names in tables whole: break code at spaces only, never mid-word,
+   and never break the names in a table's first column */
+.md-typeset table:not([class]) code {
+  word-break: normal;
+}
+
+.md-typeset table:not([class]) td:first-child code {
+  white-space: nowrap;
+}

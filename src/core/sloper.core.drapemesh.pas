@@ -80,7 +80,7 @@ resourcestring
 implementation
 
 uses
-  Math, Generics.Collections, Generics.Defaults, Sloper.Core.Numeric, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.EvalTypes,
+  Math, Generics.Collections, Sloper.Core.Numeric, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.EvalTypes,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement;
 
 const
@@ -152,8 +152,6 @@ type
     Pin: integer;
     Position: double;
   end;
-
-  TPinPlaceList = specialize TList<TPinPlace>;
 
   TPinPair = record
     SourceId: integer;
@@ -765,7 +763,7 @@ begin
   end;
 end;
 
-function ComparePinPlaces(constref First, Second: TPinPlace): integer;
+function ComparePinPlaces(const First, Second: TPinPlace): integer;
 begin
   Result := CompareValue(First.Position, Second.Position);
   if Result = 0 then
@@ -776,8 +774,9 @@ function TDrapeMesher.MeshItem(Item: integer; out PinVertex: TMeshIndexArray): T
 var
   Line: TItemLine;
   Pins: array of double;
-  Order: TPinPlaceList;
+  Order: array of TPinPlace;
   Place: TPinPlace;
+  Later: integer;
   Merged: array of integer;
   MergedAt: array of double;
   Points: TVec2Array;
@@ -810,29 +809,31 @@ begin
       Pins[Pin] := 0;
   end;
   // Pins in order, each merged into the one before when close to it
-  Order := TPinPlaceList.Create;
-  try
-    for Pin := 0 to High(Pins) do
+  Order := nil;
+  SetLength(Order, Length(Pins));
+  for Pin := 0 to High(Pins) do
+  begin
+    Place.Pin := Pin;
+    Place.Position := Pins[Pin];
+    Later := Pin;
+    while (Later > 0) and (ComparePinPlaces(Place, Order[Later - 1]) < 0) do
     begin
-      Place.Pin := Pin;
-      Place.Position := Pins[Pin];
-      Order.Add(Place);
+      Order[Later] := Order[Later - 1];
+      Dec(Later);
     end;
-    Order.Sort(specialize TComparer<TPinPlace>.Construct(@ComparePinPlaces));
-    Merged := nil;
-    SetLength(Merged, Length(Pins));
-    MergedAt := nil;
-    for Place in Order do
-      if (Length(MergedAt) > 0) and (Place.Position - MergedAt[High(MergedAt)] < PIN_MERGE_SHARE * FSpacing) then
-        Merged[Place.Pin] := High(MergedAt)
-      else
-      begin
-        Merged[Place.Pin] := Length(MergedAt);
-        Insert(Place.Position, MergedAt, Length(MergedAt));
-      end;
-  finally
-    FreeAndNil(Order);
+    Order[Later] := Place;
   end;
+  Merged := nil;
+  SetLength(Merged, Length(Pins));
+  MergedAt := nil;
+  for Place in Order do
+    if (Length(MergedAt) > 0) and (Place.Position - MergedAt[High(MergedAt)] < PIN_MERGE_SHARE * FSpacing) then
+      Merged[Place.Pin] := High(MergedAt)
+    else
+    begin
+      Merged[Place.Pin] := Length(MergedAt);
+      Insert(Place.Position, MergedAt, Length(MergedAt));
+    end;
   // The last merged round to the first
   if (Length(MergedAt) > 1) and (MergedAt[0] + Total - MergedAt[High(MergedAt)] < PIN_MERGE_SHARE * FSpacing) then
   begin

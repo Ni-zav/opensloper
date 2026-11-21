@@ -13,6 +13,8 @@ and buttonholes, pockets and facings.
 ## Zip
 
 A zip goes along an edge of a piece, such as a centre back or a side seam.
+The tutorial [Adding a zip](../tutorials/zip.md) puts one in a skirt step
+by step.
 
 1. Open the **Features** tab and choose **Zip**.
 2. Click the edge on the canvas. The tab says **Along** and the edge's name.

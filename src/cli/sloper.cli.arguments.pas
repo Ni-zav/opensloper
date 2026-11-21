@@ -64,7 +64,11 @@ resourcestring
   rsOptOutput = 'layout, export, export-draft, doc: the file to write; drape: the scene file, with the meshes written beside it';
   rsOptSpacing = 'drape: how far apart the mesh''s points are, in mm; default: 10';
   rsOptLabels = 'export-draft: name the points and pieces';
+  rsOptLabel = 'export-draft: name only these objects, separated by commas, in place of --labels';
   rsOptUpTo = 'export-draft: draw only this object and those before it, as the pattern was when it was added';
+  rsOptRegion = 'export-draft: draw only this part, in mm: left, top, right and bottom, such as -40,-40,260,300';
+  rsOptAnimate = 'export-draft: an svg that shows the pattern, then each of these patterns in turn, fading from one ' +
+    'to the next and looping; --upto applies to the first';
   rsOptFormat = 'export: pdf, svg, dxf or machine-dxf; default: the extension of --output, or pdf. export-draft: svg or png; ' +
     'default: the extension of --output, or svg';
   rsOptConnect = 'serve: work on the pattern open in the design window, which must allow assistants to connect ' +
@@ -106,7 +110,9 @@ const
   CLI_COMMANDS: array[0..10] of TCliCommand = (
     (Name: 'check'; Usage: 'check PATTERN [-m FILE] [-s SIZE] [--json]'; Description: rsCmdCheck),
     (Name: 'export'; Usage: 'export LAYOUT [-o FILE] [--format=FORMAT] [--profile=NAME]'; Description: rsCmdExport),
-    (Name: 'export-draft'; Usage: 'export-draft PATTERN [-o FILE] [-m FILE] [-s SIZE] [--format=FORMAT] [--width=PIXELS] [--labels] [--upto=NAME]';
+    (Name: 'export-draft'; Usage: 'export-draft PATTERN [-o FILE] [-m FILE] [-s SIZE] [--format=FORMAT] [--width=PIXELS] [--labels] [--label=NAMES] [--upto=NAME]'
+    +
+    ' [--region=L,T,R,B] [--animate=FILE[,FILE...]]';
     Description: rsCmdExportDraft),
     (Name: 'layout'; Usage: 'layout PATTERN [-o FILE] [-m FILE] [-s SIZE]'; Description: rsCmdLayout),
     (Name: 'measurements'; Usage: 'measurements list FILE [-s SIZE] [--json]' + LineEnding +
@@ -117,7 +123,7 @@ const
     (Name: 'serve'; Usage: 'serve [--connect]'; Description: rsCmdServe),
     (Name: 'check-connection'; Usage: 'check-connection [--url=URL] [--ca-file=FILE]'; Description: rsCmdCheckConnection),
     (Name: 'doc'; Usage: 'doc TOPIC [-o FILE]' + LineEnding + 'doc'; Description: rsCmdDoc));
-  CLI_OPTIONS: array[0..18] of TCliOption = (
+  CLI_OPTIONS: array[0..21] of TCliOption = (
     (Name: 'help'; Short: '-h'; Long: '--help'; Parameter: ''; Description: rsOptHelp),
     (Name: 'version'; Short: '-V'; Long: '--version'; Parameter: ''; Description: rsOptVersion),
     (Name: 'measurements'; Short: '-m'; Long: '--measurements'; Parameter: 'file'; Description: rsOptMeasurements),
@@ -128,7 +134,10 @@ const
     (Name: 'format'; Short: ''; Long: '--format'; Parameter: 'format'; Description: rsOptFormat),
     (Name: 'profile'; Short: ''; Long: '--profile'; Parameter: 'name'; Description: rsOptProfile),
     (Name: 'labels'; Short: ''; Long: '--labels'; Parameter: ''; Description: rsOptLabels),
+    (Name: 'label'; Short: ''; Long: '--label'; Parameter: 'names'; Description: rsOptLabel),
     (Name: 'upto'; Short: ''; Long: '--upto'; Parameter: 'name'; Description: rsOptUpTo),
+    (Name: 'region'; Short: ''; Long: '--region'; Parameter: 'l,t,r,b'; Description: rsOptRegion),
+    (Name: 'animate'; Short: ''; Long: '--animate'; Parameter: 'files'; Description: rsOptAnimate),
     (Name: 'width'; Short: ''; Long: '--width'; Parameter: 'pixels'; Description: rsOptWidth),
     (Name: 'spacing'; Short: ''; Long: '--spacing'; Parameter: 'mm'; Description: rsOptSpacing),
     (Name: 'run'; Short: ''; Long: '--run'; Parameter: ''; Description: rsOptRun),

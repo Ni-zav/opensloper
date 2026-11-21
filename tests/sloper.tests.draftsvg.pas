@@ -60,6 +60,9 @@ type
     procedure TestNoFillsLeavesOutHatching;
     procedure TestLooseMarkerIsDrawn;
     procedure TestHiddenRolesLeftOut;
+    procedure TestAnimationHoldsEveryFrame;
+    procedure TestAnimationOfOneIsTheDraft;
+    procedure TestLabelNamesOnly;
   end;
 
 implementation
@@ -222,6 +225,61 @@ begin
   Build;
   // The curve dips to about y = 35, so check the sides and the top
   AssertHas('5% of 100 mm each side', 'viewBox="-5 -55 110 ', Render);
+end;
+
+// Each pattern a frame of its own in turn, in one view that holds both
+procedure TTestDraftSVG.TestAnimationHoldsEveryFrame;
+var
+  Later: TPattern;
+  Svg: string;
+  Options: TDraftSVGOptions;
+begin
+  Build;
+  Later := TPattern.Create;
+  try
+    Later.AddFreePoint('Far', '300', '200');
+    Later.Evaluate;
+    Options := DefaultDraftSVGOptions;
+    Options.HasRegion := True;
+    Options.Region.MinX := -10;
+    Options.Region.MinY := -60;
+    Options.Region.MaxX := 310;
+    Options.Region.MaxY := 210;
+    Svg := AnimatedDraftToSVG([FPattern, Later], Options);
+  finally
+    FreeAndNil(Later);
+  end;
+  AssertHas('the view', 'viewBox="-10 -60 320 270"', Svg);
+  AssertHas('the first frame', '<g class="frame" style="animation-name:frame0">', Svg);
+  AssertHas('the second frame', '<g class="frame" style="animation-name:frame1">', Svg);
+  AssertHas('the first frame draws C', 'data-name="C"', Svg);
+  AssertHas('the second draws Far', 'data-name="Far"', Svg);
+  AssertHas('the first is seen at the start', '@keyframes frame0{0%{opacity:1}', Svg);
+  AssertHas('the second fades in at half way', '50%{opacity:0}60%{opacity:1}', Svg);
+  AssertHas('without motion, no animation', 'prefers-reduced-motion', Svg);
+  AssertTrue('the first frame comes first', Pos('data-name="C"', Svg) < Pos('data-name="Far"', Svg));
+end;
+
+// By name in any case, in place of Labels
+procedure TTestDraftSVG.TestLabelNamesOnly;
+var
+  Options: TDraftSVGOptions;
+  Svg: string;
+begin
+  Build;
+  Options := DefaultDraftSVGOptions;
+  Options.Labels := True;
+  Options.LabelNames := ['b'];
+  Svg := DraftToSVG(FPattern, Options);
+  AssertHas('B is named', '>B</text>', Svg);
+  AssertLacks('A is not', '>A</text>', Svg);
+  AssertLacks('C is not', '>C</text>', Svg);
+end;
+
+procedure TTestDraftSVG.TestAnimationOfOneIsTheDraft;
+begin
+  Build;
+  AssertEquals(Render, AnimatedDraftToSVG([FPattern], DefaultDraftSVGOptions));
 end;
 
 procedure TTestDraftSVG.TestRegion;

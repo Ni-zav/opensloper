@@ -74,7 +74,7 @@ The four built-in profiles cannot be changed, so a layout naming one always prin
 
 ## Draft export
 
-File → Export Draft SVG… and `opensloper-cli export-draft` write the draft itself as a true-scale SVG in mm, for teaching, documentation and review in Inkscape. It needs only a draft, even an unfinished one, and is not for cutting. In the app it matches the screen; the CLI names everything only with `--labels`, and `--upto` draws the pattern as it was when an object was added, for tutorial pictures.
+File → Export Draft SVG… and `opensloper-cli export-draft` write the draft itself as a true-scale SVG in mm, for teaching, documentation and review in Inkscape. It needs only a draft, even an unfinished one, and is not for cutting. In the app it matches the screen; the CLI names everything only with `--labels`, `--upto` draws the pattern as it was when an object was added, for tutorial pictures, `--region` only part of the draft, `--label` names only the objects listed (by name, so across an animation's frames), and `--animate` fades from the pattern to one or more others in a looping SVG, its frames drawn at one scale in one view, for showing what a change makes (CSS animation, off where the reader asks for reduced motion, when the last frame shows).
 
 ## Other exports and packing
 

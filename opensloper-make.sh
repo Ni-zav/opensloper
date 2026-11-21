@@ -402,13 +402,16 @@ cmd_docs() {
         *) "$cli" doc "$topic" -o "docs/reference/$topic.md" ;;
       esac
     done
-    # Tutorial pictures, as listed in docs/tutorials/images.list
+    # Tutorial pictures, as listed in docs/tutorials/images.list, drawn from
+    # docs/ so the paths in its options are as written there
     mkdir -p docs/tutorials/images
-    grep -v '^#' docs/tutorials/images.list | while read -r image pattern upto; do
+    grep -v '^#' docs/tutorials/images.list | while read -r image pattern upto options; do
       [ -z "$image" ] && continue
-      local args=(export-draft "docs/$pattern" --labels -o "docs/tutorials/images/$image")
+      local args=(export-draft "$pattern" --labels -o "tutorials/images/$image")
       [ "$upto" != "-" ] && args+=("--upto=$upto")
-      "$cli" "${args[@]}" > /dev/null
+      # shellcheck disable=SC2206 # the options are words, without spaces
+      [ -n "$options" ] && args+=($options)
+      (cd docs && "../$cli" "${args[@]}" > /dev/null)
     done
   else
     echo "Note: $cli is not built, so docs/reference/ and the tutorial pictures are left as they are" \

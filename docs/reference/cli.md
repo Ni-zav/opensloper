@@ -33,7 +33,7 @@ opensloper-cli export LAYOUT [-o FILE] [--format=FORMAT] [--profile=NAME]
 Export a pattern's draft as SVG or a PNG image, as the drafting window shows it
 
 ```
-opensloper-cli export-draft PATTERN [-o FILE] [-m FILE] [-s SIZE] [--format=FORMAT] [--width=PIXELS] [--labels] [--upto=NAME]
+opensloper-cli export-draft PATTERN [-o FILE] [-m FILE] [-s SIZE] [--format=FORMAT] [--width=PIXELS] [--labels] [--label=NAMES] [--upto=NAME] [--region=L,T,R,B] [--animate=FILE[,FILE...]]
 ```
 
 ### layout
@@ -117,7 +117,10 @@ opensloper-cli doc
 | `--format` | format | export: pdf, svg, dxf or machine-dxf; default: the extension of --output, or pdf. export-draft: svg or png; default: the extension of --output, or svg |
 | `--profile` | name | export: a machine profile from the settings, in place of the layout's |
 | `--labels` |  | export-draft: name the points and pieces |
+| `--label` | names | export-draft: name only these objects, separated by commas, in place of --labels |
 | `--upto` | name | export-draft: draw only this object and those before it, as the pattern was when it was added |
+| `--region` | l,t,r,b | export-draft: draw only this part, in mm: left, top, right and bottom, such as -40,-40,260,300 |
+| `--animate` | files | export-draft: an svg that shows the pattern, then each of these patterns in turn, fading from one to the next and looping; --upto applies to the first |
 | `--width` | pixels | export-draft: the width of a png in pixels, from 16 to 4096; default: 1600 |
 | `--spacing` | mm | drape: how far apart the mesh's points are, in mm; default: 10 |
 | `--run` |  | drape: run Blender on the files written, which saves the draped result as NAME.blend |

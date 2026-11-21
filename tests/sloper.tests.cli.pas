@@ -73,6 +73,11 @@ type
     procedure TestMaterialsSaysWhatItLeftOut;
     procedure TestExportDraftUpToRepeatPoint;
     procedure TestExportDraftBadWidth;
+    procedure TestExportDraftAnimate;
+    procedure TestExportDraftAnimatePngRefused;
+    procedure TestExportDraftRegion;
+    procedure TestExportDraftBadRegion;
+    procedure TestExportDraftLabelUnknown;
     procedure TestMaterialsOfPattern;
     procedure TestMaterialsOfLayout;
     procedure TestMaterialsJSON;
@@ -503,6 +508,47 @@ procedure TTestCLI.TestExportDraftBadWidth;
 begin
   AssertEquals(EXIT_FAILURE, Run(['export-draft', SizedToteBag(150, 140), '--format=png', '--width=wide']));
   AssertEquals(rsDraftWidth, FErr.Trim);
+end;
+
+// The pattern then the other, each with its own measurements
+procedure TTestCLI.TestExportDraftAnimate;
+var
+  Svg, Content: string;
+begin
+  Svg := InFolder('animated.svg');
+  AssertEquals(FErr, 0, Run(['export-draft', SizedToteBag(150, 140), '-o', Svg, '--animate=' + SizedToteBag(120, 140)]));
+  Content := ReadWholeFile(Svg);
+  AssertTrue('the first frame', Pos('animation-name:frame0', Content) > 0);
+  AssertTrue('the second frame', Pos('animation-name:frame1', Content) > 0);
+  AssertTrue('no third', Pos('animation-name:frame2', Content) = 0);
+end;
+
+procedure TTestCLI.TestExportDraftAnimatePngRefused;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['export-draft', SizedToteBag(150, 140), '--format=png', '--animate=' + SizedToteBag(150, 140)]));
+  AssertEquals(rsDraftAnimatePng, FErr.Trim);
+end;
+
+procedure TTestCLI.TestExportDraftRegion;
+var
+  Svg: string;
+begin
+  Svg := InFolder('region.svg');
+  AssertEquals(FErr, 0, Run(['export-draft', SizedToteBag(150, 140), '-o', Svg, '--region=-40,-20.5,260,300']));
+  AssertTrue('the region', Pos('viewBox="-40 -20.5 300 320.5"', ReadWholeFile(Svg)) > 0);
+end;
+
+procedure TTestCLI.TestExportDraftBadRegion;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['export-draft', SizedToteBag(150, 140), '--region=0,0,10']));
+  AssertEquals(rsDraftRegion, FErr.Trim);
+  AssertEquals(EXIT_FAILURE, Run(['export-draft', SizedToteBag(150, 140), '--region=10,0,0,10']));
+end;
+
+procedure TTestCLI.TestExportDraftLabelUnknown;
+begin
+  AssertEquals(EXIT_FAILURE, Run(['export-draft', SizedToteBag(150, 140), '--label=Nothing']));
+  AssertEquals(Format(rsLabelUnknown, ['Nothing']), FErr.Trim);
 end;
 
 // In the pattern's material order, each with its size, what it needs and how

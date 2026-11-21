@@ -68,6 +68,9 @@ resourcestring
   rsWroteFile = 'Wrote %s';
   rsDraftFormat = 'export-draft writes svg or png, not "%s"';
   rsDraftWidth = 'The width must be a whole number of pixels, such as 1600';
+  rsDraftRegion = 'The region must be four numbers of millimetres, left, top, right and bottom, such as -40,-40,260,300';
+  rsDraftAnimatePng = 'Only an svg can be animated';
+  rsLabelUnknown = 'There is no object named "%s" to label';
   rsWarning = 'Warning: %s';
   // Material, size, what is needed, pieces
   rsMaterialsEntry = '%s%s: %s (%d pieces)';
@@ -82,7 +85,7 @@ implementation
 
 uses
   SysUtils, fpjson, ConsoleTools, Sloper.CLI.Arguments, Sloper.Docs.Reference, Sloper.Core.Version, Sloper.Core.JSON,
-  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
+  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
   Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.PatternSources,
   Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Core.Mesher, Sloper.Core.DrapeFile, Sloper.Output.DrapeExport,
   Sloper.Output.BlenderRun, Sloper.Core.AppPaths,
@@ -231,18 +234,44 @@ begin
   Result := True;
 end;
 
-function RunExportDraft(const PatternFile, MeasurementOption, SizeOption, OutputOption, UpTo, FormatOption, WidthOption: string;
-  WithLabels: boolean): integer;
+// --region: left, top, right and bottom in mm, the right of the left and
+// below the top
+function ParseDraftRegion(const Text: string; out Region: TRect2): boolean;
 var
-  Pattern: TPattern;
-  Measurements: TMeasurementSet;
+  Parts: TStringArray;
+  Values: array[0..3] of double;
+  Index: integer;
+  Settings: TFormatSettings;
+begin
+  Region := Default(TRect2);
+  Settings := DefaultFormatSettings;
+  Settings.DecimalSeparator := '.';
+  Parts := Text.Split([',']);
+  Result := Length(Parts) = 4;
+  for Index := 0 to High(Parts) do
+    Result := Result and TryStrToFloat(Trim(Parts[Index]), Values[Index], Settings);
+  if not Result then
+    Exit;
+  Region.MinX := Values[0];
+  Region.MinY := Values[1];
+  Region.MaxX := Values[2];
+  Region.MaxY := Values[3];
+  Result := (Region.MaxX > Region.MinX) and (Region.MaxY > Region.MinY);
+end;
+
+function RunExportDraft(const PatternFile, MeasurementOption, SizeOption, OutputOption, UpTo, FormatOption, WidthOption, RegionOption,
+  AnimateOption, LabelOption: string; WithLabels: boolean): integer;
+var
+  Patterns: array of TPattern;
+  MeasurementSets: array of TMeasurementSet;
+  Files: TStringArray;
   Options: TDraftSVGOptions;
   MeasurementPath, Target, Err, Problem, DraftFormat: string;
   Content: rawbytestring;
-  BlockedCount, Width: integer;
+  BlockedCount, Width, Index: integer;
+  LabelName: string;
+  Found: boolean;
 begin
-  Measurements := nil;
-  Pattern := nil;
   // The format given, else the output file's extension, else svg
   DraftFormat := LowerCase(FormatOption);
   if (DraftFormat = '') and (OutputOption <> '') then
@@ -262,31 +291,68 @@ begin
     WriteLn(CliErr^, rsDraftWidth);
     Exit(EXIT_FAILURE);
   end;
+  Options := DefaultDraftSVGOptions;
+  Options.Labels := WithLabels;
+  Options.PatternFileName := PatternFile;
+  Options.HasRegion := RegionOption <> '';
+  if Options.HasRegion and not ParseDraftRegion(RegionOption, Options.Region) then
+  begin
+    WriteLn(CliErr^, rsDraftRegion);
+    Exit(EXIT_FAILURE);
+  end;
+  if (AnimateOption <> '') and (DraftFormat <> DRAFT_FORMAT_SVG) then
+  begin
+    WriteLn(CliErr^, rsDraftAnimatePng);
+    Exit(EXIT_FAILURE);
+  end;
+  // The pattern, then those --animate shows after it
+  Files := [PatternFile];
+  if AnimateOption <> '' then
+    Files := Concat(Files, AnimateOption.Split([',']));
+  Patterns := nil;
+  MeasurementSets := nil;
+  SetLength(Patterns, Length(Files));
+  SetLength(MeasurementSets, Length(Files));
   try
-    Measurements := TMeasurementSet.Create;
-    Pattern := TPattern.Create;
-    if not CheckFileExists(PatternFile) then
-      Exit(EXIT_FAILURE);
-    if not LoadPatternFromFile(Pattern, PatternFile, Err) then
+    for Index := 0 to High(Files) do
     begin
-      WriteLn(CliErr^, Format(rsLoadFailed, [PatternFile, Err]));
-      Exit(EXIT_FAILURE);
+      MeasurementSets[Index] := TMeasurementSet.Create;
+      Patterns[Index] := TPattern.Create;
+      if not CheckFileExists(Files[Index]) then
+        Exit(EXIT_FAILURE);
+      if not LoadPatternFromFile(Patterns[Index], Files[Index], Err) then
+      begin
+        WriteLn(CliErr^, Format(rsLoadFailed, [Files[Index], Err]));
+        Exit(EXIT_FAILURE);
+      end;
+      if not UseMeasurements(Patterns[Index], MeasurementSets[Index], Files[Index], MeasurementOption, SizeOption, MeasurementPath) then
+        Exit(EXIT_FAILURE);
     end;
-    if not UseMeasurements(Pattern, Measurements, PatternFile, MeasurementOption, SizeOption, MeasurementPath) then
+    if (UpTo <> '') and not KeepUpTo(Patterns[0], UpTo) then
       Exit(EXIT_FAILURE);
-    if (UpTo <> '') and not KeepUpTo(Pattern, UpTo) then
-      Exit(EXIT_FAILURE);
-    Pattern.Evaluate;
-    Options := DefaultDraftSVGOptions;
-    Options.Labels := WithLabels;
-    Options.PatternFileName := PatternFile;
+    for Index := 0 to High(Patterns) do
+      Patterns[Index].Evaluate;
+    // Each name in one draft at least
+    if LabelOption <> '' then
+      Options.LabelNames := LabelOption.Split([','], TStringSplitOptions.ExcludeEmpty);
+    for LabelName in Options.LabelNames do
+    begin
+      Found := False;
+      for Index := 0 to High(Patterns) do
+        Found := Found or Assigned(Patterns[Index].FindObject(LabelName));
+      if not Found then
+      begin
+        WriteLn(CliErr^, Format(rsLabelUnknown, [LabelName]));
+        Exit(EXIT_FAILURE);
+      end;
+    end;
     Target := OutputOption;
     if Target = '' then
       // ExtractFilePath keeps its separator, and is empty for a file in this folder
       Target := ChangeFileExt(PatternFile, '.' + DraftFormat);
     if DraftFormat = DRAFT_FORMAT_SVG then
-      Content := DraftToSVG(Pattern, Options)
-    else if not DraftToPNG(Pattern, Options, Width, Content, Err) then
+      Content := AnimatedDraftToSVG(Patterns, Options)
+    else if not DraftToPNG(Patterns[0], Options, Width, Content, Err) then
     begin
       WriteLn(CliErr^, Err);
       Exit(EXIT_FAILURE);
@@ -297,13 +363,17 @@ begin
       Exit(EXIT_FAILURE);
     end;
     WriteLn(CliOut^, Format(rsWroteFile, [Target]));
-    for Problem in PatternProblems(Pattern, BlockedCount) do
-      WriteLn(CliErr^, Format(rsWarning, [Problem]));
+    for Index := 0 to High(Patterns) do
+      for Problem in PatternProblems(Patterns[Index], BlockedCount) do
+        WriteLn(CliErr^, Format(rsWarning, [Problem]));
     Result := 0;
   finally
-    // The pattern reads the measurement set, so it goes first
-    FreeAndNil(Pattern);
-    FreeAndNil(Measurements);
+    // A pattern reads its measurement set, so it goes first
+    for Index := 0 to High(Patterns) do
+    begin
+      FreeAndNil(Patterns[Index]);
+      FreeAndNil(MeasurementSets[Index]);
+    end;
   end;
 end;
 
@@ -946,7 +1016,8 @@ begin
     else if CommandName = 'export-draft' then
       Result := RunExportDraft(PatternFile, Parser.GetOptionValueAsString('measurements'), Parser.GetOptionValueAsString('size'),
         Parser.GetOptionValueAsString('output'), Parser.GetOptionValueAsString('upto'), Parser.GetOptionValueAsString('format'),
-        Parser.GetOptionValueAsString('width'), Parser.IsOption('labels'))
+        Parser.GetOptionValueAsString('width'), Parser.GetOptionValueAsString('region'), Parser.GetOptionValueAsString('animate'),
+        Parser.GetOptionValueAsString('label'), Parser.IsOption('labels'))
     else
       Result := RunExport(PatternFile, Parser.GetOptionValueAsString('output'), Parser.GetOptionValueAsString('format'),
         Parser.GetOptionValueAsString('profile'));

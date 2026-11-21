@@ -282,11 +282,14 @@ begin
   end;
 end;
 
-// docs/tutorials/images.list names objects to draw up to; each must still exist
+// docs/tutorials/images.list names objects to draw up to, and patterns to
+// animate; each must still exist
 procedure TTestDocs.TestTutorialImagesDrawWhatExists;
+const
+  ANIMATE_OPTION = '--animate=';
 var
   Lines: TStringList;
-  Line, Err, Text: string;
+  Line, Err, Text, Option, Animated: string;
   Parts: TStringArray;
   Pattern: TPattern;
   Measurements: TMeasurementSet;
@@ -300,8 +303,13 @@ begin
       if (Trim(Line) = '') or Line.StartsWith('#') then
         Continue;
       Parts := Line.Split([' '], TStringSplitOptions.ExcludeEmpty);
-      AssertEquals(Line, 3, Length(Parts));
+      AssertTrue(Line, Length(Parts) >= 3);
       AssertTrue(Parts[0] + ' is drawn', FileExists(ConcatPaths([DocsFolder, 'tutorials', 'images', Parts[0]])));
+      // The patterns an animation shows after the first, from docs/
+      for Option in Copy(Parts, 3, MaxInt) do
+        if Option.StartsWith(ANIMATE_OPTION) then
+          for Animated in Copy(Option, Length(ANIMATE_OPTION) + 1, MaxInt).Split([',']) do
+            AssertTrue(Parts[0] + ': ' + Animated + ' is there', FileExists(ConcatPaths([DocsFolder, Animated])));
       if Parts[2] = '-' then
         Continue;
       Measurements := TMeasurementSet.Create;

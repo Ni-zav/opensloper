@@ -42,4 +42,4 @@ The [tutorials](../tutorials/index.md) have patterns of their own, built step
 by step, in the same folder.
 
 Each pattern has a drape file beside it (`.sdrape`), with its pieces placed
-round the body, for the [drape app](../drape/index.md#examples) and Blender.
+round the body, for the [drape app](../drape/blender.md#examples) and Blender.

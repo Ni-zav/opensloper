@@ -68,7 +68,7 @@ fits turned. Only one piece at a time is checked: how much material they all
 need together is on the publish app's Materials tab.
 
 **Fabric** says how the material drapes when its pieces are
-[draped in Blender](../drape/index.md#drape-in-blender): cotton, silk,
+[draped in Blender](../drape/blender.md): cotton, silk,
 jersey, wool, denim, canvas or leather. Each has its own weight and
 stiffness, so silk falls in soft folds and canvas stands stiffer. A
 material with no fabric set drapes as cotton.

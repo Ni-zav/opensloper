@@ -15,3 +15,10 @@
 .md-typeset table:not([class]) td:first-child code {
   white-space: nowrap;
 }
+
+/* A draft drawn at true scale, given { .draft }: no taller than the window,
+   so a wide screen shows it whole */
+.md-typeset img.draft {
+  max-height: 80vh;
+  width: auto;
+}

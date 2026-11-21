@@ -82,7 +82,7 @@ Then draw, with the Line tool (++l++):
 | Back_chest_line | B | UB | Construction |
 | Back_waist_line | C | WB | Construction |
 
-![The back frame](images/bodice-1-frame.svg)
+![The back frame](images/bodice-1-frame.svg){ .draft }
 
 ## 3. The back neck and shoulder
 
@@ -109,7 +109,7 @@ the Curve tool (++c++), and set:
 angle points back along the curve, so it is a quarter turn from the shoulder,
 down into the neck. Change the shoulder's angle and the neck follows.
 
-![The back neck and shoulder](images/bodice-2-shoulder.svg)
+![The back neck and shoulder](images/bodice-2-shoulder.svg){ .draft }
 
 ## 4. The back armhole
 
@@ -136,7 +136,7 @@ down (its end angle, 90, points back up). The bottom curve leaves XB straight
 down (270) and arrives at UB going level, so the armhole turns smoothly into
 the side seam.
 
-![The back armhole](images/bodice-3-armhole.svg)
+![The back armhole](images/bodice-3-armhole.svg){ .draft }
 
 ## 5. The back dart
 
@@ -159,7 +159,7 @@ Draw the waist and the dart as outlines: **Back_waist_centre** from C to DB1,
 the dart's sides DB1 to PB and PB to DB2, and **Back_waist_side** from DB2 to
 WB.
 
-![The back with its dart](images/bodice-4-dart.svg)
+![The back with its dart](images/bodice-4-dart.svg){ .draft }
 
 The back is complete: a closed outline from A round to C and back up.
 
@@ -224,7 +224,7 @@ Length `@neck_back_to_waist - #scye_depth - 3`. Draw **Front_waist_centre**
 from FC to DF1, the dart's sides DF1 to BP and BP to DF2, and
 **Front_waist_side** from DF2 to WF, all as outlines.
 
-![The front](images/bodice-5-front.svg)
+![The front](images/bodice-5-front.svg){ .draft }
 
 ## 7. Pieces
 
@@ -275,7 +275,7 @@ Notes put instructions on the pattern, and print with their piece.
 - With the Callout tool (++a++), click on BP, then a little above and to the
   right of it, and type `Bust point`. The callout points at it with an arrow.
 
-![The finished pieces](images/bodice-6-pieces.svg)
+![The finished pieces](images/bodice-6-pieces.svg){ .draft }
 
 ## What next
 

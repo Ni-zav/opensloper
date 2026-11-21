@@ -78,7 +78,7 @@ right of C in the same way, each with Length `#half_hip`, then draw:
 | Centre_front | D | F | Outline |
 | Hem | C | F | Outline |
 
-![The frame](images/skirt-1-frame.svg)
+![The frame](images/skirt-1-frame.svg){ .draft }
 
 Change a measurement in the Measurements tab and click Save, or try the slider at the bottom
 of it, and the frame follows.
@@ -114,7 +114,7 @@ The hem is still one edge, and a piece is made of whole edges, so split it
 where the side seam meets it: select the Hem and J, then Tools → Edge → Split
 Edge. The Hem is now two parts, Line_C_J and Line_J_F.
 
-![The side seam](images/skirt-2-side.svg)
+![The side seam](images/skirt-2-side.svg){ .draft }
 
 ## 4. The darts and the waist
 
@@ -147,7 +147,7 @@ between the darts:
 | Front_waist_side | M | W |
 | Front_waist_centre | V | D |
 
-![The darts and the waist](images/skirt-3-darts.svg)
+![The darts and the waist](images/skirt-3-darts.svg){ .draft }
 
 ## 5. Pieces
 
@@ -166,7 +166,7 @@ lines are left out. Name them **Back** and **Front** in the properties.
 
 Both pieces start with a 10 mm seam allowance and a grainline straight down.
 
-![The finished pieces](images/skirt-4-pieces.svg)
+![The finished pieces](images/skirt-4-pieces.svg){ .draft }
 
 ## 6. Seams
 

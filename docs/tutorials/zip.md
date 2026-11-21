@@ -73,7 +73,7 @@ and change the formula of `zip_length` to `180`.
 ZipStop moves up the seam, and with it the split, the end of the wider
 allowance, the notch and the end of the topstitching.
 
-![The skirt with its zip](images/zip-1-pieces.svg)
+![The skirt with its zip](images/zip-1-pieces.svg){ .draft }
  Every zip you add to
 this pattern starts as `#zip_length`, so a zip on another piece stays the
 same length; type a number or another formula in the tab's Length for one of

@@ -65,7 +65,7 @@ implementation
 
 uses
   Math, Sloper.Core.Bezier, Sloper.Core.Bounds, Sloper.Core.Drag, Sloper.Core.EvalTypes, Sloper.Core.Materials, Sloper.Core.Piece,
-  Sloper.Core.TextFields,
+  Sloper.Core.TextFields, Sloper.Core.LabelPlacement,
   // Measures notes in a named font, here and wherever this unit is used
   Sloper.Output.Fonts;
 
@@ -89,6 +89,16 @@ const
   HATCH_SHARE = 0.012;
   // A callout's leader, in mm, as printed
   NOTE_LINE_WIDTH = 0.25;
+  // A name's place, and how far down it its baseline is, in font sizes, with
+  // room for descenders and a little space between lines
+  LABEL_HEIGHT = 1.2;
+  LABEL_ASCENT = 0.9;
+  // A name's room beyond its estimated width, for fonts wider than the estimate
+  LABEL_WIDTH_SPARE = 1.1;
+  // How far a name is from its point, in point radii
+  LABEL_GAP_DOTS = 1.5;
+  // How many lines further out a name may move from its point or piece
+  LABEL_RINGS = 2;
 
 type
   TDraftView = record
@@ -292,41 +302,18 @@ begin
       [Piece.Key, EscapeXML(Piece.DisplayName), Trim(PathText), StateColor(Piece.State, INK_COLOR), Num(Extent * LINE_SHARE)]) + #10;
 end;
 
-function PieceLabelElement(Pattern: TPattern; Piece: TPieceObject; Extent: double): string;
-var
-  Middle: TVec2;
+// A name's text at its place's top-left corner, as sized by LabelSize
+function LabelElement(const TopLeft: TVec2; Extent: double; const Color, Text: string): string;
 begin
-  Middle := Piece.Middle;
   Result := Format('<text x="%s" y="%s" font-family="sans-serif" font-size="%s" fill="%s">%s</text>',
-    [Num(Middle.X), Num(Middle.Y), Num(Extent * FONT_SHARE), StateColor(Piece.State, INK_COLOR), EscapeXML(Pattern.PieceCaption(Piece))]) + #10;
+    [Num(TopLeft.X), Num(TopLeft.Y + Extent * FONT_SHARE * LABEL_ASCENT), Num(Extent * FONT_SHARE), Color, EscapeXML(Text)]) + #10;
 end;
 
-function LabelElement(const At: TVec2; Extent: double; const Color, Text: string): string;
-var
-  Offset: double;
+function PointElement(Point: TPointObject; Extent: double): string;
 begin
-  Offset := Extent * POINT_SHARE * 1.5;
-  Result := Format('<text x="%s" y="%s" font-family="sans-serif" font-size="%s" fill="%s">%s</text>',
-    [Num(At.X + Offset), Num(At.Y - Offset), Num(Extent * FONT_SHARE), Color, EscapeXML(Text)]) + #10;
-end;
-
-// Halfway along the edge, where the canvas puts its name
-function EdgeLabelElement(Edge: TEdgeObject; Extent: double): string;
-begin
-  Result := LabelElement(Edge.PointAtLength(Edge.Length / 2), Extent, StateColor(Edge.State, INK_COLOR), Edge.DisplayName);
-end;
-
-function PointElement(Point: TPointObject; Extent: double; Labels: boolean): string;
-var
-  Radius: double;
-  Color: string;
-begin
-  Radius := Extent * POINT_SHARE;
-  Color := StateColor(Point.State, INK_COLOR);
   Result := Format('<circle data-id="%s" data-name="%s" cx="%s" cy="%s" r="%s" fill="%s"/>',
-    [Point.Key, EscapeXML(Point.DisplayName), Num(Point.Position.X), Num(Point.Position.Y), Num(Radius), Color]) + #10;
-  if Labels then
-    Result := Result + LabelElement(Point.Position, Extent, Color, Point.DisplayName);
+    [Point.Key, EscapeXML(Point.DisplayName), Num(Point.Position.X), Num(Point.Position.Y), Num(Extent * POINT_SHARE),
+    StateColor(Point.State, INK_COLOR)]) + #10;
 end;
 
 // A point's or repeat's marker, whether or not it is on a piece yet
@@ -395,12 +382,39 @@ begin
     Result[Index] := Pattern.Objects[Index];
 end;
 
-function DraftToSVG(Pattern: TPattern; const Options: TDraftSVGOptions): string;
+// The notes that print, in the order they are drawn
+function PrintedNotes(Pattern: TPattern; const Options: TDraftSVGOptions; const Shown: TDraftObjectArray): TNoteObjectArray;
 var
-  View: TDraftView;
+  DraftObject: TDraftObject;
+begin
+  Result := nil;
+  // Screen-only notes never leave the app
+  if Options.HideAnnotations then
+    Exit;
+  for DraftObject in Shown do
+    if (DraftObject is TNoteObject) and TNoteObject(DraftObject).Print then
+      Insert(TNoteObject(DraftObject), Result, Length(Result));
+end;
+
+// The names asked for, each moved where it covers no note, no point and no
+// other name: pieces' first, then points', then lines', which can move along
+// their lines
+function LabelsElement(Pattern: TPattern; const Options: TDraftSVGOptions; const View: TDraftView; const Pieces: TPieceObjectArray;
+  const Points: TPointObjectArray; const Edges: TDraftObjectArray; const Notes: TNoteObjectArray): string;
+var
+  Requests: TLabelRequestArray;
+  Texts, Colors: TStringArray;
+  Obstacles: TRect2Array;
+  Places: TVec2Array;
+  FontSize, Tall, Gap: double;
   Index: integer;
   DraftObject: TDraftObject;
+  Piece: TPieceObject;
   Point: TPointObject;
+  Edge: TEdgeObject;
+  Note: TNoteObject;
+  Along: TVec2Array;
+  Fraction: double;
 
   function Labelled(DraftObject: TDraftObject): boolean;
   var
@@ -414,59 +428,114 @@ var
     Result := False;
   end;
 
-  function Shown(DraftObject: TDraftObject): boolean;
+  function Width(const Text: string): double;
+  begin
+    Result := TextWidth(Text, FontSize / POINTS_TO_MM) * LABEL_WIDTH_SPARE;
+  end;
+
+  procedure Request(const Text, Color: string; const APlaces: TVec2Array);
+  var
+    Item: TLabelRequest;
+  begin
+    Item.Width := Width(Text);
+    Item.Height := Tall;
+    Item.Places := APlaces;
+    Insert(Item, Requests, Length(Requests));
+    Insert(Text, Texts, Length(Texts));
+    Insert(Color, Colors, Length(Colors));
+  end;
+
+begin
+  Result := '';
+  Requests := nil;
+  Texts := nil;
+  Colors := nil;
+  Obstacles := nil;
+  FontSize := View.Extent * FONT_SHARE;
+  Tall := FontSize * LABEL_HEIGHT;
+  Gap := View.Extent * POINT_SHARE * LABEL_GAP_DOTS;
+  for Note in Notes do
+    Insert(NoteFrame(Note, NoteFieldValues(Pattern, Note, PatternFieldValues(Pattern, Options.PatternFileName))), Obstacles, Length(Obstacles));
+  for Piece in Pieces do
+    if Labelled(Piece) then
+      Request(Pattern.PieceCaption(Piece), StateColor(Piece.State, INK_COLOR),
+        PlacesStacked(Vec2(Piece.Middle.X, Piece.Middle.Y - FontSize * LABEL_ASCENT), Width(Pattern.PieceCaption(Piece)), Tall, LABEL_RINGS));
+  for Point in Points do
+  begin
+    Insert(RectAround(Point.Position, View.Extent * POINT_SHARE), Obstacles, Length(Obstacles));
+    if Labelled(Point) then
+      Request(Point.DisplayName, StateColor(Point.State, INK_COLOR), PlacesAround(Point.Position, Width(Point.DisplayName), Tall, Gap, LABEL_RINGS));
+  end;
+  for DraftObject in Edges do
+    if Labelled(DraftObject) then
+    begin
+      Edge := TEdgeObject(DraftObject);
+      Along := nil;
+      for Fraction in LABEL_ALONG_FRACTIONS do
+        Insert(Edge.PointAtLength(Edge.Length * Fraction), Along, Length(Along));
+      Request(Edge.DisplayName, StateColor(Edge.State, INK_COLOR), PlacesAlong(Along, Width(Edge.DisplayName), Tall, Gap));
+    end;
+  Places := PlaceLabels(Requests, Obstacles, True, Rect2(View.Left, View.Top, View.Left + View.Width, View.Top + View.Height));
+  for Index := 0 to High(Requests) do
+    Result := Result + LabelElement(Places[Index], View.Extent, Colors[Index], Texts[Index]);
+end;
+
+function DraftToSVG(Pattern: TPattern; const Options: TDraftSVGOptions): string;
+var
+  View: TDraftView;
+  DraftObject: TDraftObject;
+  Shown, Edges: TDraftObjectArray;
+  Ordered, Pieces: TPieceObjectArray;
+  Piece: TPieceObject;
+  Points: TPointObjectArray;
+  Point: TPointObject;
+  Notes: TNoteObjectArray;
+  Note: TNoteObject;
+
+  function IsShown(DraftObject: TDraftObject): boolean;
   begin
     Result := DraftObject.HasResult and (not Options.FollowPieceView or (Pattern.HiddenPieceCount = 0) or not Pattern.IsHidden(DraftObject));
   end;
 
-var
-  Pieces: TPieceObjectArray;
-  Piece: TPieceObject;
 begin
   View := DraftView(Pattern, Options);
   Result := SVGStart(View);
   if Options.FollowPieceView then
-    Pieces := Pattern.PiecesInDrawOrder
+    Ordered := Pattern.PiecesInDrawOrder
   else
-    Pieces := Pattern.PieceList;
-  // Pieces under edges, edges under points
-  for Piece in Pieces do
-    if Shown(Piece) then
-      Result := Result + PieceElement(Pattern, Piece, View.Extent, Options.NoFills);
-  for DraftObject in EdgesInDrawOrder(AllObjects(Pattern)) do
-  begin
-    if Shown(DraftObject) and (Length(TEdgeObject(DraftObject).Segments) > 0) and not (TEdgeObject(DraftObject).Role in Options.HiddenRoles) then
-    begin
-      Result := Result + EdgeElement(TEdgeObject(DraftObject), View.Extent);
-      if Labelled(DraftObject) then
-        Result := Result + EdgeLabelElement(TEdgeObject(DraftObject), View.Extent);
-    end;
-  end;
-  for Piece in Pieces do
-    if Shown(Piece) then
-    begin
-      Result := Result + PieceMarksElement(Piece, View.Extent);
-      if Labelled(Piece) then
-        Result := Result + PieceLabelElement(Pattern, Piece, View.Extent);
-    end;
-  for Index := 0 to Pattern.ObjectCount - 1 do
-  begin
-    DraftObject := Pattern.Objects[Index];
-    if (DraftObject.Marker <> pmPlain) and Shown(DraftObject) then
-      Result := Result + MarkerElement(DraftObject, View.Extent);
-  end;
+    Ordered := Pattern.PieceList;
+  Pieces := nil;
+  for Piece in Ordered do
+    if IsShown(Piece) then
+      Insert(Piece, Pieces, Length(Pieces));
+  Shown := nil;
+  for DraftObject in AllObjects(Pattern) do
+    if IsShown(DraftObject) then
+      Insert(DraftObject, Shown, Length(Shown));
+  Points := nil;
   for Point in Pattern.AllPoints do
-    if Shown(Point) then
-      Result := Result + PointElement(Point, View.Extent, Labelled(Point));
-  // Screen-only notes never leave the app
-  if not Options.HideAnnotations then
-    for Index := 0 to Pattern.ObjectCount - 1 do
-    begin
-      DraftObject := Pattern.Objects[Index];
-      if (DraftObject is TNoteObject) and Shown(DraftObject) and TNoteObject(DraftObject).Print then
-        Result := Result + NoteElement(TNoteObject(DraftObject), NoteFieldValues(Pattern, TNoteObject(DraftObject),
-          PatternFieldValues(Pattern, Options.PatternFileName)));
-    end;
+    if IsShown(Point) then
+      Insert(Point, Points, Length(Points));
+  Edges := nil;
+  for DraftObject in EdgesInDrawOrder(Shown) do
+    if (Length(TEdgeObject(DraftObject).Segments) > 0) and not (TEdgeObject(DraftObject).Role in Options.HiddenRoles) then
+      Insert(DraftObject, Edges, Length(Edges));
+  Notes := PrintedNotes(Pattern, Options, Shown);
+  // Pieces under edges, edges under points, then names and notes over all
+  for Piece in Pieces do
+    Result := Result + PieceElement(Pattern, Piece, View.Extent, Options.NoFills);
+  for DraftObject in Edges do
+    Result := Result + EdgeElement(TEdgeObject(DraftObject), View.Extent);
+  for Piece in Pieces do
+    Result := Result + PieceMarksElement(Piece, View.Extent);
+  for DraftObject in Shown do
+    if DraftObject.Marker <> pmPlain then
+      Result := Result + MarkerElement(DraftObject, View.Extent);
+  for Point in Points do
+    Result := Result + PointElement(Point, View.Extent);
+  Result := Result + LabelsElement(Pattern, Options, View, Pieces, Points, Edges, Notes);
+  for Note in Notes do
+    Result := Result + NoteElement(Note, NoteFieldValues(Pattern, Note, PatternFieldValues(Pattern, Options.PatternFileName)));
   Result := Result + '</svg>' + #10;
 end;
 

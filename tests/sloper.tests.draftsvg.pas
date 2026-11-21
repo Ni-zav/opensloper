@@ -46,6 +46,8 @@ type
     procedure TestConstructionIsDashed;
     procedure TestLabels;
     procedure TestAllLabelsEdges;
+    procedure TestLabelKeepsOffANote;
+    procedure TestLabelsAtOnePlaceDoNotCover;
     procedure TestChosenLabelsOnly;
     procedure TestChosenNoneLabelsNothing;
     procedure TestViewBoxHasAMargin;
@@ -65,7 +67,8 @@ type
 implementation
 
 uses
-  Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.Geometry, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Output.DraftSVG;
+  Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.Geometry, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Output.DraftSVG, Sloper.Core.Note,
+  Sloper.Core.TextFields;
 
 procedure TTestDraftSVG.SetUp;
 begin
@@ -185,6 +188,70 @@ procedure TTestDraftSVG.TestAllLabelsEdges;
 begin
   Build;
   AssertHas('the line, as on screen', '>Line_A_B</text>', Render(True));
+end;
+
+// The x and y of the text element holding Name
+function LabelSpot(const Text, Name: string; out X, Y: double): boolean;
+var
+  Close, Start: integer;
+  Element: string;
+
+  function Attribute(const Key: string): double;
+  var
+    From: integer;
+  begin
+    From := Pos(Key + '="', Element) + Length(Key) + 2;
+    Result := StrToFloat(Copy(Element, From, Pos('"', Copy(Element, From, MaxInt)) - 1), DefaultFormatSettings);
+  end;
+
+begin
+  Close := Pos('>' + Name + '</text>', Text);
+  if Close = 0 then
+    Exit(False);
+  Start := Close;
+  while (Start > 1) and (Copy(Text, Start, 5) <> '<text') do
+    Dec(Start);
+  Element := Copy(Text, Start, Close - Start);
+  X := Attribute('x');
+  Y := Attribute('y');
+  Result := True;
+end;
+
+// The issue #77 case: a note where a point's name would go, which stays put
+// while the name moves
+procedure TTestDraftSVG.TestLabelKeepsOffANote;
+var
+  Note: TNoteObject;
+  Frame: TRect2;
+  Text: string;
+  X, Y: double;
+begin
+  Build;
+  Note := FPattern.AddNote('', 'A note over the name', naFree, '', '', '101', '-54');
+  FPattern.Evaluate;
+  Frame := NoteFrame(Note, Default(TFieldValues));
+  AssertTrue('the note covers where C''s name went', (Frame.MinX < 103) and (Frame.MaxY > -53));
+  Text := Render(True);
+  AssertTrue('C named', LabelSpot(Text, 'C', X, Y));
+  // The text's baseline is inside the note's frame only if it covers it
+  AssertFalse(Format('C at %g, %g, inside the note', [X, Y]), (X >= Frame.MinX) and (X <= Frame.MaxX) and (Y >= Frame.MinY) and
+    (Y <= Frame.MaxY));
+  AssertHas('the note where it was put', 'x="101"', Text);
+end;
+
+procedure TTestDraftSVG.TestLabelsAtOnePlaceDoNotCover;
+var
+  Text: string;
+  FirstX, FirstY, SecondX, SecondY: double;
+begin
+  FPattern.AddFreePoint('First', '0', '0');
+  FPattern.AddFreePoint('Second', '0', '0.5');
+  FPattern.AddFreePoint('Far', '100', '100');
+  FPattern.Evaluate;
+  Text := Render(True);
+  AssertTrue('first named', LabelSpot(Text, 'First', FirstX, FirstY));
+  AssertTrue('second named', LabelSpot(Text, 'Second', SecondX, SecondY));
+  AssertTrue('not on top of each other', (Abs(FirstX - SecondX) > 1) or (Abs(FirstY - SecondY) > 1));
 end;
 
 function TTestDraftSVG.RenderChosen(const Keys: TStringArray): string;

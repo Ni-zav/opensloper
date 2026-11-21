@@ -58,6 +58,7 @@ uses
   Sloper.Tests.UnitCheck,
   Sloper.Tests.API,
   Sloper.Tests.DraftSVG,
+  Sloper.Tests.LabelPlacement,
   Sloper.Tests.Fonts,
   Sloper.Tests.Settings,
   Sloper.Tests.RecentFiles,

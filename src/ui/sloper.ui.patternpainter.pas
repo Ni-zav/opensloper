@@ -28,7 +28,7 @@ interface
 
 uses
   Classes, SysUtils, Graphics, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam,
-  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.UI.View,
+  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.LabelPlacement, Sloper.UI.View,
   Sloper.UI.SuggestionGrade, Sloper.UI.Snap, Sloper.UI.Scene;
 
 type
@@ -66,6 +66,9 @@ type
     FState: TPaintState;
     FEdgeSlots: TEdgeSlotArray;
     FCopyLinks: TCopyLinkArray;
+    // Where the notes were drawn this frame, in pixels, for labels to keep off
+    FNoteFrames: TRect2Array;
+    function NearScreen(const At: TVec2): boolean;
     function IsSelected(const Key: string): boolean;
     // Normal, greyed when the object is locked, then in its state's colour
     function InkFor(Node: TDraftObject; const Normal: TBGRAPixel): TBGRAPixel;
@@ -143,6 +146,12 @@ const
   COINCIDENT_GAP = 3;
   FLATTEN_PIXELS = 0.25;
   LABEL_FONT_HEIGHT = 13;
+  // How far a label is from its point or line, and how many lines further
+  // out it may move to keep clear of others, in pixels
+  LABEL_GAP_PIXELS = 4;
+  LABEL_RINGS = 2;
+  // Labels this far off the canvas are left out, in pixels
+  OFFSCREEN_LABEL_PIXELS = 200;
   SNAP_MARKER_SIZE = 6;
   CHEVRON_SIZE = 7;
   CHEVRON_SPREAD = 150;
@@ -354,6 +363,7 @@ begin
   if (FBitmap.Width <> Width) or (FBitmap.Height <> Height) then
     FBitmap.SetSize(Width, Height);
   FBitmap.Fill(Paper);
+  FNoteFrames := nil;
   FBitmap.FontHeight := LABEL_FONT_HEIGHT;
   FBitmap.FontQuality := fqFineAntialiasing;
 end;
@@ -925,6 +935,12 @@ begin
     Frame := NoteFrame(Note, Values, Shown);
     TopLeft := FState.View.ToScreen(Vec2(Box.MinX, Box.MinY));
     BottomRight := FState.View.ToScreen(Vec2(Box.MaxX, Box.MaxY));
+    First := FState.View.ToScreen(Vec2(Frame.MinX, Frame.MinY));
+    Last := FState.View.ToScreen(Vec2(Frame.MaxX, Frame.MaxY));
+    // One far off the screen would only spread out the labels' grid
+    if (Last.X > -OFFSCREEN_LABEL_PIXELS) and (First.X < FBitmap.Width + OFFSCREEN_LABEL_PIXELS) and (Last.Y > -OFFSCREEN_LABEL_PIXELS) and
+      (First.Y < FBitmap.Height + OFFSCREEN_LABEL_PIXELS) then
+      Insert(Rect2(First.X, First.Y, Last.X, Last.Y), FNoteFrames, Length(FNoteFrames));
     if Selected then
       InkColor := SelectedInk
     else
@@ -1048,44 +1064,100 @@ begin
   end;
 end;
 
-// Over the drawing, so that no edge or point crosses out a label
+// Whether a label put near At can show, so that one far off the screen is
+// neither placed nor drawn
+function TPatternPainter.NearScreen(const At: TVec2): boolean;
+begin
+  Result := (At.X > -OFFSCREEN_LABEL_PIXELS) and (At.Y > -OFFSCREEN_LABEL_PIXELS) and (At.X < FBitmap.Width + OFFSCREEN_LABEL_PIXELS) and
+    (At.Y < FBitmap.Height + OFFSCREEN_LABEL_PIXELS);
+end;
+
+// Over the drawing, so that no edge or point crosses out a label, and each
+// moved where it covers no note, no point and no other label: pieces' first,
+// then points', then lines', which can move along their lines
 procedure TPatternPainter.DrawLabels(const Keys: TStringArray);
 var
+  Requests: TLabelRequestArray;
+  Texts: TStringArray;
+  Colors: array of TBGRAPixel;
+  Obstacles: TRect2Array;
+  Places: TVec2Array;
   Key: string;
   Node: TEvalNode;
-  Model: TVec2Array;
+  Point: TPointObject;
+  Model, Line: TVec2Array;
   Screen: TVec2;
-  InkColor: TBGRAPixel;
-begin
-  for Key in Keys do
+  Index, Pass: integer;
+  Size: TSize;
+  Radius: double;
+
+  procedure Request(DraftObject: TDraftObject; const Text: string; const APlaces: TVec2Array);
+  var
+    Item: TLabelRequest;
+    InkColor: TBGRAPixel;
   begin
-    Node := FPattern.FindNode(Key);
-    if Node is TPointObject then
-    begin
-      Screen := FState.View.ToScreen(TPointObject(Node).Position);
-      Screen := Vec2(Screen.X + 6, Screen.Y - LABEL_FONT_HEIGHT - 2);
-    end
-    else if Node is TPieceObject then
-      Screen := FState.View.ToScreen(PieceMiddle(TPieceObject(Node)))
-    else if Node is TEdgeObject then
-    begin
-      Model := EdgePolyline(TEdgeObject(Node), FState.View.PixelsToMM(FLATTEN_PIXELS));
-      if Length(Model) = 0 then
-        Continue;
-      Screen := FState.View.ToScreen(PolylineMiddle(Model));
-      Screen := Vec2(Screen.X + 4, Screen.Y + 2);
-    end
-    else
-      Continue;
-    if IsSelected(Key) then
+    if IsSelected(DraftObject.Key) then
       InkColor := SelectedInk
     else
-      InkColor := InkFor(TDraftObject(Node), Ink);
-    if Node is TPieceObject then
-      FBitmap.TextOut(Screen.X, Screen.Y, FPattern.PieceCaption(TPieceObject(Node)), InkColor)
-    else
-      FBitmap.TextOut(Screen.X, Screen.Y, Node.DisplayName, InkColor);
+      InkColor := InkFor(DraftObject, Ink);
+    Item.Width := Size.cx;
+    Item.Height := Size.cy;
+    Item.Places := APlaces;
+    Insert(Item, Requests, Length(Requests));
+    Insert(Text, Texts, Length(Texts));
+    Insert(InkColor, Colors, Length(Colors));
   end;
+
+begin
+  Requests := nil;
+  Texts := nil;
+  Colors := nil;
+  Obstacles := Copy(FNoteFrames);
+  Radius := POINT_RADIUS;
+  if FState.SmallPoints then
+    Radius := SMALL_POINT_RADIUS;
+  for Point in ShownPoints(FPattern) do
+    if Point.HasResult then
+    begin
+      Screen := FState.View.ToScreen(Point.Position);
+      if NearScreen(Screen) then
+        Insert(RectAround(Screen, Radius), Obstacles, Length(Obstacles));
+    end;
+  for Pass := 0 to 2 do
+    for Key in Keys do
+    begin
+      Node := FPattern.FindNode(Key);
+      if (Pass = 0) and (Node is TPieceObject) then
+      begin
+        Screen := FState.View.ToScreen(PieceMiddle(TPieceObject(Node)));
+        Size := FBitmap.TextSize(FPattern.PieceCaption(TPieceObject(Node)));
+        if NearScreen(Screen) then
+          Request(TDraftObject(Node), FPattern.PieceCaption(TPieceObject(Node)), PlacesStacked(Screen, Size.cx, Size.cy, LABEL_RINGS));
+      end
+      else if (Pass = 1) and (Node is TPointObject) then
+      begin
+        Screen := FState.View.ToScreen(TPointObject(Node).Position);
+        Size := FBitmap.TextSize(Node.DisplayName);
+        if NearScreen(Screen) then
+          Request(TDraftObject(Node), Node.DisplayName, PlacesAround(Screen, Size.cx, Size.cy, LABEL_GAP_PIXELS, LABEL_RINGS));
+      end
+      else if (Pass = 2) and (Node is TEdgeObject) then
+      begin
+        Model := EdgePolyline(TEdgeObject(Node), FState.View.PixelsToMM(FLATTEN_PIXELS));
+        if Length(Model) = 0 then
+          Continue;
+        Line := nil;
+        SetLength(Line, Length(Model));
+        for Index := 0 to High(Model) do
+          Line[Index] := FState.View.ToScreen(Model[Index]);
+        Size := FBitmap.TextSize(Node.DisplayName);
+        if NearScreen(PolylineMiddle(Line)) then
+          Request(TDraftObject(Node), Node.DisplayName, PlacesAlong(PolylinePlaces(Line), Size.cx, Size.cy, LABEL_GAP_PIXELS));
+      end;
+    end;
+  Places := PlaceLabels(Requests, Obstacles, False, Default(TRect2));
+  for Index := 0 to High(Requests) do
+    FBitmap.TextOut(Places[Index].X, Places[Index].Y, Texts[Index], Colors[Index]);
 end;
 
 procedure TPatternPainter.DrawSnap(const Snap: TSnap; Preview: TSnapPreview; const StartAt: TVec2);

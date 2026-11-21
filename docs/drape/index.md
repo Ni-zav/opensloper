@@ -128,6 +128,12 @@ is sewn and falls. Attach both halves' waists, or every piece's, as the
 garment is held. With no body, an attached edge is held where it is placed,
 so a bag hangs from its top edges.
 
+An attached edge cannot move, so place it where it is once sewn. Where a seam
+ends on attached edges, as a bag's side seams end at its top, those ends stay
+as far apart as you placed them: put the front's and back's tops together.
+Attach an edge on one side of a seam only, such as the bag's top and not its
+lining's, and let the seam pull the other side to it.
+
 ## Several patterns
 
 A drape can hold several patterns, such as a top and a skirt, or a lining
@@ -252,8 +258,7 @@ Drape… in the design app opens:
 | Bodice block, bodice with curve paths | Front and back flat in front of and behind the body, at the shoulders; the simulation sews the shoulders, sides and darts |
 | Skirt block | The front in front of the body and the two backs behind it, waist at the waist |
 | Circle skirt | The two halves laid flat round the waist like a disc, waists attached, the figure without arms; the hem falls when gravity comes on. The waistband is left out |
-| Tote bag | No body: the bag's front and back and its lining hang from their attached top edges. The pocket and straps are left out |
+| Tote bag | No body: the bag's front and back hang from their attached top edges, placed together as the sewn bag's top is, and the lining inside hangs from the seam round the top. The pocket and straps are left out |
 
-The tote bag's outer material is canvas and its lining cotton. Even canvas
-sags a little from the top edge alone, more than a real canvas bag would.
+The tote bag's outer material is canvas and its lining cotton.
 

@@ -21,16 +21,13 @@
       "copy": 1,
       "position": [
         0,
-        -45,
+        -2,
         800
       ],
       "rotation": [
         0,
         0,
         180
-      ],
-      "attached": [
-        47
       ]
     },
     {
@@ -39,7 +36,7 @@
       "copy": 1,
       "position": [
         0,
-        -60,
+        -6,
         800
       ],
       "rotation": [
@@ -57,16 +54,13 @@
       "copy": 2,
       "position": [
         0,
-        45,
+        2,
         800
       ],
       "rotation": [
         0,
         0,
         0
-      ],
-      "attached": [
-        47
       ]
     },
     {
@@ -75,7 +69,7 @@
       "copy": 2,
       "position": [
         0,
-        60,
+        6,
         800
       ],
       "rotation": [

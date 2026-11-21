@@ -5,7 +5,7 @@
   "notes": "A knee-length full circle skirt with a buttoned waistband, drafted from the waist with arcs. Each skirt piece is a quarter circle cut on the fold, so the two make a full circle. Example pattern: measurements from a size table, arcs, a fold, an edge with its own allowance, notches by distance and a button marker.",
   "measurementFile": "../measurements/size-table.slm",
   "identity": "598d736b-ca68-4855-a9d7-1ab559bb90b7",
-  "nextId": 33,
+  "nextId": 34,
   "variables": [
     {
       "id": 1,
@@ -359,6 +359,26 @@
       "size": 12,
       "print": true,
       "align": "centre"
+    },
+    {
+      "id": 33,
+      "type": "seam",
+      "name": "Side",
+      "sideA": [
+        {
+          "piece": 29,
+          "edge": 14
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 29,
+          "edge": 14
+        }
+      ],
+      "reversed": true,
+      "ease": "0",
+      "tolerance": "0.1"
     }
   ]
 }

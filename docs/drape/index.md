@@ -6,8 +6,9 @@ simulation. A drape is saved as a `.sdrape` file. It reads the saved patterns
 and never changes them.
 
 !!! note "New"
-    Draping is new, and so far tried on the bodice block; other garments
-    may need the settings tuned. See
+    Draping is new. It has been tried on every example pattern, and each has
+    a drape file beside it to start from (see [Examples](#examples)); other
+    garments may need the settings tuned. See
     [issue #11](https://github.com/opensloper/opensloper/issues/11).
 
 ## Start a drape
@@ -52,6 +53,10 @@ By default the figure uses the first pattern's measurements and size. On the
 Patterns tab, **Choose Measurements…** picks another measurement file, **Use
 the First Pattern's** goes back, and **Size** picks the size of a size table.
 **No body** leaves the figure out, for bags and other accessories.
+
+Untick **Arms** to leave the figure's arms and hands out, as a dress form
+with legs. A full skirt laid round the waist would catch on arms that hang
+beside it; a skirt or trousers drape the same without them.
 
 The **gap** is how far pieces are placed off the body and apart across a
 seam, 20 mm by default, so the simulation has room to pull them in.
@@ -109,6 +114,20 @@ would lie sewn together and opened out. **Fold Over Seam** turns it over about
 the seam instead, onto the other piece. Darts are left out: the simulation
 sews them shut.
 
+### Attach an edge to the body
+
+A garment held up only by the body can slide off it in the simulation: a
+skirt that is wide at the hip, such as a circle skirt, falls past the hips to
+the floor. Attach its waist to hold it there. Select the piece, and on the
+Properties tab tick the edge under **Attached to the body**. Attached edges
+are drawn thick and green. Each tick is one step to undo.
+
+In Blender an attached edge starts on the body's surface, at the nearest
+point to where it is placed, and stays there while the rest of the garment
+is sewn and falls. Attach both halves' waists, or every piece's, as the
+garment is held. With no body, an attached edge is held where it is placed,
+so a bag hangs from its top edges.
+
 ## Several patterns
 
 A drape can hold several patterns, such as a top and a skirt, or a lining
@@ -128,8 +147,9 @@ It uses the Anthropic API key set in the General tab of
 **Edit → Preferences**, the same key as the design app's Claude tab (see
 [Asking Claude](../design/claude.md#setting-it-up)).
 
-Claude places, turns, flips and aligns pieces, guesses placements and sets the
-gap, as you can on the tabs, and can look at the body and pieces as a picture.
+Claude places, turns, flips and aligns pieces, guesses placements, attaches
+edges, takes the figure's arms away or gives them back and sets the gap, as
+you can on the tabs, and can look at the body and pieces as a picture.
 Each change is one step on the undo history. It cannot save the drape, change
 a pattern or run Blender.
 
@@ -166,7 +186,7 @@ opensloper-cli drape skirt.sdrape --run
 | --- | --- |
 | `skirt.pieces.obj` | Each placed piece as a mesh of small, even triangles, made from its seam line (the seam allowance left out), opened out on a fold |
 | `skirt.body.obj` | The body, when the drape has one |
-| `skirt.blender.json` | Where each piece goes, its material and colour, and which vertices each seam sews together |
+| `skirt.blender.json` | Where each piece goes, its material and colour, its attached vertices, and which vertices each seam sews together |
 | `skirt.blender.py` | The script that drapes them in Blender |
 
 `--spacing` sets how far apart the mesh's points are, 10 mm unless given:
@@ -196,7 +216,8 @@ blender --background --python skirt.blender.py
 ```
 
 It joins each pattern's pieces into one cloth object, with an edge between
-every pair of points a seam sews, and the body pushes the cloth away. For
+every pair of points a seam sews, and the body pushes the cloth away.
+Attached edges are pinned: onto the body, or where they are placed. For
 the first 40 frames the seams close with no gravity, so the pieces do not
 fall before they are sewn; then gravity comes on and the garment settles,
 up to frame 120 (`--frames` changes this). Each piece keeps its own group
@@ -206,10 +227,28 @@ its real scale. Open `skirt.blend` in Blender to look round the garment:
 it opens at the last frame, and playing it back shows the pieces being
 sewn.
 
-Simulating takes a while: a bodice at the 10 mm spacing takes about a
-minute and a half. A larger `--spacing` is quicker for a first look.
+Simulating takes a while: at the 10 mm spacing a bodice or a tote bag takes
+about a minute and a half, a straight skirt two minutes and a full circle
+skirt three and a half. A larger `--spacing` is quicker for a first look.
 
 After `--` the script takes options of its own, such as
 `--frames`, `--sewing-frames`, `--mass` (each vertex's, in kg),
 `--quality` and `--no-simulate` (set up the scene without running it);
 `blender --background --python skirt.blender.py -- --help` lists them.
+
+## Examples
+
+Each [example pattern](../getting-started/examples.md) and tutorial pattern
+in `docs/examples` has a drape file beside it, named like it, which File →
+Drape… in the design app opens:
+
+| Drape | How it is placed |
+| --- | --- |
+| Bodice block, bodice with curve paths | Front and back flat in front of and behind the body, at the shoulders; the simulation sews the shoulders, sides and darts |
+| Skirt block | The front in front of the body and the two backs behind it, waist at the waist |
+| Circle skirt | The two halves laid flat round the waist like a disc, waists attached, the figure without arms; the hem falls when gravity comes on. The waistband is left out |
+| Tote bag | No body: the bag's front and back and its lining hang from their attached top edges. The pocket and straps are left out |
+
+A canvas bag drapes as soft as cotton for now: every fabric is simulated
+alike, until materials carry hints of their own.
+

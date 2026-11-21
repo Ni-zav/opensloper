@@ -168,6 +168,10 @@ resourcestring
   rsFileDrapeBodyMeasurementFile = 'The body''s measurement file, relative to the drape file''s folder; the first ' +
     'source''s when left out';
   rsFileDrapeBodySize = 'The body''s size, for a size table; the first source''s when left out';
+  rsFileDrapeBodyArms = 'Whether the figure has its arms, true when left out; false leaves them and the hands out, so a ' +
+    'full skirt does not catch on them';
+  rsFileDrapeAttached = 'The IDs of the piece''s edges held to the body in Blender, as a waist or a strap''s end, or ' +
+    'held where they are placed when there is no body';
   rsFileDrapeGap = 'How far pieces are placed off the body and apart across a seam';
   rsFileDrapePlacements = 'Where each copy of each piece is placed; a copy not listed is left out';
   rsFileDrapePosition = 'Where the piece''s anchor goes: x, y and z. The anchor is the middle of its grainline, else ' +
@@ -195,6 +199,8 @@ resourcestring
   rsFileBlenderMaterial = 'The name of the material it is cut from; left out when it has none';
   rsFileBlenderColor = 'The colour to show it in, as #RRGGBB';
   rsFileBlenderVertices = 'How many vertices its mesh has';
+  rsFileBlenderAttached = 'Its vertices held to the body, or where they are placed when there is no body: those of its ' +
+    'attached edges, from 0';
   rsFileBlenderPosition = 'Where its origin goes: the object''s location';
   rsFileBlenderRotation = 'Its turns in degrees, in Blender''s XYZ Euler order: the object''s rotation_euler';
   rsFileBlenderSeams = 'The seams between placed copies, each with the vertices it sews together';
@@ -383,6 +389,9 @@ const
     '        0,' + LineEnding +
     '        0,' + LineEnding +
     '        0' + LineEnding +
+    '      ],' + LineEnding +
+    '      "attached": [' + LineEnding +
+    '        12' + LineEnding +
     '      ]' + LineEnding +
     '    }' + LineEnding +
     '  ]' + LineEnding +
@@ -416,6 +425,11 @@ const
     '        0,' + LineEnding +
     '        0,' + LineEnding +
     '        0' + LineEnding +
+    '      ],' + LineEnding +
+    '      "attached": [' + LineEnding +
+    '        0,' + LineEnding +
+    '        1,' + LineEnding +
+    '        2' + LineEnding +
     '      ]' + LineEnding +
     '    }' + LineEnding +
     '  ],' + LineEnding +
@@ -618,6 +632,7 @@ begin
   R('body.kind', mkChoice, rsFileDrapeBodyKind, 'measurements, none');
   M('body.measurementFile', mkText, rsFileDrapeBodyMeasurementFile);
   M('body.size', mkText, rsFileDrapeBodySize);
+  M('body.arms', mkFlag, rsFileDrapeBodyArms);
   M('gap', mkSize, rsFileDrapeGap);
   M('placements', mkList, rsFileDrapePlacements);
   R('placements[].source', mkWhole, rsFilePlacementSource);
@@ -625,6 +640,7 @@ begin
   M('placements[].copy', mkWhole, rsFilePlacementCopy);
   R('placements[].position[]', mkSize, rsFileDrapePosition);
   R('placements[].rotation[]', mkSize, rsFileDrapeRotation);
+  M('placements[].attached[]', mkWhole, rsFileDrapeAttached);
 
   FileFormat(BLENDER_FORMAT, BLENDER_EXTENSION, BLENDER_VERSION, rsFileBlenderTitle, rsFileBlenderSummary, BLENDER_EXAMPLE);
   R('format', mkChoice, rsFileFormat, BLENDER_FORMAT);
@@ -645,6 +661,7 @@ begin
   R('objects[].vertices', mkWhole, rsFileBlenderVertices);
   R('objects[].position[]', mkSize, rsFileBlenderPosition);
   R('objects[].rotation[]', mkSize, rsFileBlenderRotation);
+  M('objects[].attached[]', mkWhole, rsFileBlenderAttached);
   R('seams', mkList, rsFileBlenderSeams);
   R('seams[].source', mkWhole, rsFileBlenderSeamSource);
   R('seams[].seam', mkWhole, rsFileBlenderSeam);

@@ -5,7 +5,7 @@
   "notes": "A simplified bodice block, half back and half front, each cut on the fold, with a waist dart in each. A starting point for tops and dresses rather than a tested fit. Example pattern: curves square to the shoulder, curve paths for the armholes, darts, notches, and seams checked for length, with ease on the shoulder.",
   "measurementFile": "../measurements/size-table.slm",
   "identity": "a7ed61eb-4f5c-4f77-a68a-e82ec3ad1669",
-  "nextId": 57,
+  "nextId": 59,
   "variables": [
     {
       "id": 1,
@@ -624,6 +624,46 @@
       "size": 10,
       "print": true,
       "leader": "arrow"
+    },
+    {
+      "id": 57,
+      "type": "seam",
+      "name": "Back_dart",
+      "sideA": [
+        {
+          "piece": 51,
+          "edge": 27
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 51,
+          "edge": 28
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 58,
+      "type": "seam",
+      "name": "Front_dart",
+      "sideA": [
+        {
+          "piece": 52,
+          "edge": 48
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 52,
+          "edge": 47
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
     }
   ]
 }

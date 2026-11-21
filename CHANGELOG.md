@@ -76,6 +76,15 @@ Changed, Fixed and Removed under each version.
   sheet or the body as a picture, each change is one step to undo, and it
   cannot save, export, print or run Blender. The tab says what is sent to
   Anthropic before the first question (#64).
+- The drape app, `opensloper-drape`, places the pieces of one or more
+  patterns round a figure built from the measurements, and drapes them in
+  Blender's cloth simulation (File → Drape in Blender…, or
+  `opensloper-cli drape --run`). Open it from the design app with File →
+  Drape… (Ctrl+D). An edge can be attached to the body, so a skirt's
+  waist holds it up, and with no body an attached edge holds a bag up where
+  it is placed; the figure's arms can be left out, so a full skirt does not
+  catch on them. Every example pattern has seams and a drape file to start
+  from (#11).
 
 ### Changed
 

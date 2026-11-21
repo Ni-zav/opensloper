@@ -55,12 +55,16 @@ type
   end;
 
   TDrapeLineArray = array of TDrapeLine;
+  TVec2Polylines = array of TVec2Array;
 
 // The scene from back to front. A drape with no body (or bkNone) draws only
 // its pieces.
 function BuildDrapeScene(Drape: TDrape; const Camera: TDrapeCamera): TDrapeFaceArray;
 // The drape's seam links on screen, to draw over the faces
 function DrapeSceneLines(Drape: TDrape; const Camera: TDrapeCamera): TDrapeLineArray;
+// Each placed piece's attached edges on screen, a line of points each, to
+// draw over the faces
+function DrapeAttachedLines(Drape: TDrape; const Camera: TDrapeCamera): TVec2Polylines;
 // The index of the frontmost piece face under Point, or -1; the body is never
 // picked
 function DrapePieceAt(const Faces: TDrapeFaceArray; const Point: TVec2): integer;
@@ -150,7 +154,6 @@ end;
 // The light comes from the camera, so what faces the viewer is brightest
 function BodyFaces(Drape: TDrape; const Camera: TDrapeCamera): TSceneFaceArray;
 var
-  Measures: TBodyMeasures;
   Mesh: TBodyMesh;
   Triangle: TBodyTriangle;
   Normal, Toward: TVec3;
@@ -158,9 +161,8 @@ var
   Corners: array[0..2] of TVec3;
 begin
   Result := nil;
-  if not Drape.BodyMeasures(Measures) then
+  if not Drape.BodyMesh(Mesh) then
     Exit;
-  Mesh := BuildBodyForm(Measures);
   Toward := -Camera.Forward;
   for Triangle in Mesh.Triangles do
   begin
@@ -293,6 +295,31 @@ begin
   for Link in Drape.SeamLinks do
     if Camera.Project(Link.From, Line.From, Depth) and Camera.Project(Link.Onto, Line.Onto, Depth) then
       Insert(Line, Result, Length(Result));
+end;
+
+function DrapeAttachedLines(Drape: TDrape; const Camera: TDrapeCamera): TVec2Polylines;
+var
+  Item, Index: integer;
+  Line: TVec3Array;
+  Shown: TVec2Array;
+  Depth: double;
+  Visible: boolean;
+begin
+  Result := nil;
+  for Item := 0 to High(Drape.Items) do
+    for Line in Drape.AttachedLines(Item) do
+    begin
+      Shown := nil;
+      SetLength(Shown, Length(Line));
+      Visible := True;
+      for Index := 0 to High(Line) do
+        Visible := Visible and Camera.Project(Line[Index], Shown[Index], Depth);
+      if Visible then
+      begin
+        SetLength(Result, Length(Result) + 1);
+        Result[High(Result)] := Shown;
+      end;
+    end;
 end;
 
 function DrapePieceAt(const Faces: TDrapeFaceArray; const Point: TVec2): integer;

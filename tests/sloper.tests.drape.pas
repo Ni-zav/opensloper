@@ -83,6 +83,7 @@ type
     procedure TestHeadIsPlain;
     procedure TestSizeOfATable;
     procedure TestBackLengthPlacesTheWaist;
+    procedure TestFigureWithoutArms;
   end;
 
   // A front and a back joined by a side seam, in a drape file
@@ -122,6 +123,8 @@ type
     procedure TestAlignableSeams;
     procedure TestSeamLinks;
     procedure TestSceneWithoutBody;
+    procedure TestAttachEdges;
+    procedure TestAttachedEdgeGone;
   end;
 
   TTestDrapeDocument = class(TOSTestCase)
@@ -714,6 +717,28 @@ begin
   AssertTrue('arms hang out and down', (ArmDirection(1).X > 0) and (ArmDirection(1).Z < 0) and (ArmDirection(-1).X < 0));
 end;
 
+// A full skirt does not catch on the arms: without them the figure is no wider
+// than its shoulders, bust or hips
+procedure TTestBodyForm.TestFigureWithoutArms;
+var
+  Measures: TBodyMeasures;
+  Whole, Bare: TBodyMesh;
+  Point: TVec3;
+  Widest: double;
+begin
+  Measures := DefaultBodyMeasures;
+  Whole := BuildBodyForm(Measures);
+  Bare := BuildBodyForm(Measures, False);
+  AssertTrue('fewer points', Length(Bare.Vertices) < Length(Whole.Vertices));
+  Widest := 0;
+  for Point in Bare.Vertices do
+    Widest := Max(Widest, Abs(Point.X));
+  AssertTrue('no wider than the shoulders, bust or hips', Widest <= Max(Measures.ShoulderWidth / 2,
+    Max(Measures.BustCircumference, Measures.HipCircumference) / 4) + 1e-6);
+  AssertTrue('still closed', MeshVolume(Bare) > 0);
+  AssertTrue('smaller', MeshVolume(Bare) < MeshVolume(Whole));
+end;
+
 // Issue #70: no nose, as the feet show which way the figure faces; the head
 // reaches as far forwards as backwards
 procedure TTestBodyForm.TestHeadIsPlain;
@@ -857,6 +882,47 @@ begin
       Actual.Y, Actual.Z]));
 end;
 
+// An edge is attached to the body by its key, the fold left out, and let go
+procedure TTestDrapeFile.TestAttachEdges;
+var
+  Top, Fold: string;
+begin
+  Top := EdgeBetween(FFront, Vec2(0, 0), Vec2(120, 0));
+  Fold := EdgeBetween(FFront, Vec2(0, 0), Vec2(0, 200));
+  AssertEquals('every edge', 4, Length(FDrape.AttachableEdges(FrontCopy)));
+  AssertTrue(FPattern.LastError, FPattern.SetFoldEdge(FFront, Fold));
+  FPattern.Evaluate;
+  AssertEquals('not the fold', 3, Length(FDrape.AttachableEdges(FrontCopy)));
+  FDrape.Place(FrontCopy, UprightPlacement(Vec3(0, 0, 0)));
+  FDrape.SetAttached(0, Top, True);
+  FDrape.SetAttached(0, Top, True);
+  AssertEquals('once', 1, Length(FDrape.Items[0].Attached));
+  AssertTrue('attached', FDrape.IsAttached(0, Top));
+  FDrape.Place(FrontCopy, UprightPlacement(Vec3(100, 0, 0)));
+  AssertTrue('kept as it moves', FDrape.IsAttached(0, Top));
+  FDrape.SetAttached(0, Top, False);
+  AssertFalse('let go', FDrape.IsAttached(0, Top));
+  AssertFalse('no such item', FDrape.IsAttached(5, Top));
+end;
+
+procedure TTestDrapeFile.TestAttachedEdgeGone;
+var
+  Problem: TDrapeProblem;
+  Found: integer;
+begin
+  FDrape.Place(FrontCopy, UprightPlacement(Vec3(0, 0, 0)));
+  FDrape.Place(BackCopy, UprightPlacement(Vec3(300, 0, 0)));
+  FDrape.SetAttached(0, '9999', True);
+  Found := 0;
+  for Problem in FDrape.Problems do
+    if Problem.Text = Format(rsDrapeAttachedGone, ['dress.sloper', 'Front', '9999']) then
+    begin
+      Inc(Found);
+      AssertEquals('on the front', 0, Problem.Item);
+    end;
+  AssertEquals('listed', 1, Found);
+end;
+
 procedure TTestDrapeFile.TestSaveAndLoad;
 var
   Loaded: TDrape;
@@ -869,10 +935,15 @@ begin
   Placement.Position := Vec3(10.5, -170, 1100);
   Placement.Rotation := Vec3(5, -10, 90);
   FDrape.Place(BackCopy, Placement);
+  FDrape.Body.NoArms := True;
+  FDrape.SetAttached(0, EdgeBetween(FBack, Vec2(200, 0), Vec2(300, 0)), True);
   Text := FDrape.SaveToText;
   Loaded := TDrape.Create;
   try
     AssertTrue(Err, Loaded.LoadFromText(Text, Err));
+    AssertTrue('without arms', Loaded.Body.NoArms);
+    AssertEquals('attached', 1, Length(Loaded.Items[0].Attached));
+    AssertTrue('the top', Loaded.IsAttached(0, EdgeBetween(FBack, Vec2(200, 0), Vec2(300, 0))));
     AssertEquals('name', 'Dress', Loaded.Name);
     AssertEquals('sources', 1, Loaded.Sources.Count);
     AssertEquals('pattern', 'dress.sloper', Loaded.Sources[0].PatternFile);
@@ -920,6 +991,9 @@ begin
     Format(rsDrapeUnknownSource, [1, 2]));
   Refused('repeated', HEAD + '"placements": [{"source": 1, "piece": 3, "position": [0, 0, 0], "rotation": [0, 0, 0]}, ' +
     '{"source": 1, "piece": 3, "copy": 1, "position": [1, 0, 0], "rotation": [0, 0, 0]}]}', Format(rsDrapeRepeatedPlacement, [2]));
+  Refused('attached', HEAD + '"placements": [{"source": 1, "piece": 3, "position": [0, 0, 0], "rotation": [0, 0, 0], ' +
+    '"attached": ["waist"]}]}', Format(rsDrapeBadAttached, [1]));
+  Refused('arms', HEAD + '"body": {"kind": "measurements", "arms": "no"}}', rsDrapeBadBody);
 end;
 
 procedure TTestDrapeFile.TestUnplacedAndPlace;

@@ -72,6 +72,7 @@ type
     procedure TestUnplaceGuessAndUndo;
     procedure TestPlaceByNumbers;
     procedure TestRender;
+    procedure TestAttachEdgeAndArms;
   end;
 
 implementation
@@ -357,6 +358,30 @@ begin
   Answer := Call('turn_piece', '{"index": 0, "axis": "z", "angle": 180}');
   AssertNear('out again', -1, Answer.Objects['facing'].Get('y', 0.0), 1e-6);
   AssertTrue('an axis it knows', Refusal('turn_piece', '{"index": 0, "axis": "w", "angle": 10}') <> '');
+end;
+
+procedure TTestDrapeTools.TestAttachEdgeAndArms;
+var
+  Edges: TJSONArray;
+  Name: string;
+  Index: integer;
+begin
+  Edges := Call('list_edges', '{"index": 0}').Arrays['edges'];
+  AssertTrue('edges', Edges.Count > 0);
+  for Index := 0 to Edges.Count - 1 do
+    AssertFalse('none attached yet', Edges.Objects[Index].Booleans['attached']);
+  Name := Edges.Objects[0].Get('name', '');
+  AssertEquals('attached', Name, Call('attach_edge', Format('{"index": 0, "edge": "%s"}', [Name])).Arrays['attached'].Strings[0]);
+  AssertEquals(CHANGE_PREFIX + rsDrapeChangeAttach, FDocument.UndoDescription);
+  AssertTrue('listed', Call('list_edges', '{"index": 0}').Arrays['edges'].Objects[0].Booleans['attached']);
+  AssertEquals('let go', 0, Call('attach_edge', Format('{"index": 0, "edge": "%s", "attached": false}', [Name])).Arrays['attached'].Count);
+  AssertEquals(CHANGE_PREFIX + rsDrapeChangeDetach, FDocument.UndoDescription);
+  AssertEquals(Format(rsDrapeNoEdge, ['Nowhere']), Refusal('attach_edge', '{"index": 0, "edge": "Nowhere"}'));
+  AssertFalse('no arms', Call('set_arms', '{"arms": false}').Booleans['arms']);
+  AssertTrue('the body', FDocument.Drape.Body.NoArms);
+  AssertFalse('in the state', Call('drape_state').Objects['body'].Booleans['arms']);
+  Call('undo');
+  AssertFalse('arms again', FDocument.Drape.Body.NoArms);
 end;
 
 procedure TTestDrapeTools.TestAlignToSeam;

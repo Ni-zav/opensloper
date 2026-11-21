@@ -1,0 +1,49 @@
+{
+  "format": "drape",
+  "version": 1,
+  "units": "mm",
+  "name": "Bodice with curve paths",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "bodice-curve-paths.sloper"
+    }
+  ],
+  "body": {
+    "kind": "measurements"
+  },
+  "gap": 20,
+  "placements": [
+    {
+      "source": 1,
+      "piece": 52,
+      "copy": 1,
+      "position": [
+        -125,
+        -150,
+        1225
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 51,
+      "copy": 1,
+      "position": [
+        -125,
+        150,
+        1225
+      ],
+      "rotation": [
+        0,
+        0,
+        180
+      ]
+    }
+  ]
+}

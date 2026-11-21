@@ -27,7 +27,7 @@ unit Sloper.Drape.MainForm;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, fpjson, Sloper.API.AppLink,
+  Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, ComCtrls, Menus, Spin, Dialogs, ActnList, CheckLst, fpjson, Sloper.API.AppLink,
   Sloper.Core.PatternSources, Sloper.Core.DrapeFile, Sloper.Core.DrapePlacement, Sloper.Core.Seam, Sloper.Document.DrapeDocument, Sloper.Drape.View,
   Sloper.UI.Commands, Sloper.Core.Shortcuts, Sloper.UI.RecentMenu, Sloper.UI.SideTabs, Sloper.UI.SavePrompt, Sloper.UI.ProblemsPanel,
   Sloper.UI.AssistantPanel;
@@ -54,6 +54,10 @@ type
     FSeamBox: TListBox;
     FSeams: TSeamObjectArray;
     FAlignButton, FFoldButton: TButton;
+    FArmsBox: TCheckBox;
+    // The selected piece's edges, ticked when attached to the body
+    FAttachBox: TCheckListBox;
+    FAttachEdges: TStringArray;
     // What each line of the Pieces tab stands for
     FPieceCopies: TDrapePieceCopyArray;
     FCommands: TCommandSet;
@@ -111,6 +115,8 @@ type
     procedure BodySetClick(Sender: TObject);
     procedure BodyPatternSetClick(Sender: TObject);
     procedure BodySizeChange(Sender: TObject);
+    procedure ArmsChange(Sender: TObject);
+    procedure AttachClickCheck(Sender: TObject);
     procedure GapChange(Sender: TObject);
     procedure PieceBoxClick(Sender: TObject);
     procedure PieceBoxDoubleClick(Sender: TObject);
@@ -192,6 +198,13 @@ resourcestring
   rsBodySize = 'Size:';
   rsBodySizeOfPattern = '(the pattern''s)';
   rsGap = 'Gap (mm):';
+  rsArms = 'Arms';
+  rsArmsChange = 'Change Arms';
+  rsAttachGroup = 'Attached to the body';
+  rsAttachHint = 'Ticked edges are held to the body in Blender, as a waist, or where they are placed when there is no body';
+  rsAttachNone = 'Select a placed piece to attach its edges';
+  rsAttachChange = 'Attach Edge';
+  rsDetachChange = 'Let Go of Edge';
   rsPiecesHint = 'Double-click a piece that is not placed to place it by a guess';
   rsPlaced = '%s';
   rsNotPlaced = '%s - not placed';
@@ -533,6 +546,11 @@ begin
   PlaceRow(FBodySizeBox);
   FBodySizeBox.Style := csDropDownList;
   FBodySizeBox.OnChange := @BodySizeChange;
+  FArmsBox := TCheckBox.Create(Self);
+  FArmsBox.Caption := rsArms;
+  FArmsBox.BorderSpacing.Top := ControlGap;
+  PlaceRow(FArmsBox);
+  FArmsBox.OnChange := @ArmsChange;
   FGapEdit := AddSpin(rsGap, 0, MAX_GAP, 1);
   FGapEdit.OnChange := @GapChange;
   EndGroup;
@@ -585,6 +603,12 @@ begin
   FAlignButton := AddButton(rsAlignToSeam, @AlignClick);
   FFoldButton := AddButton(rsFoldOverSeam, @AlignClick);
   FFoldButton.Tag := 1;
+  BeginGroup(rsAttachGroup);
+  AddLabel(rsAttachHint);
+  FAttachBox := TCheckListBox.Create(Self);
+  PlaceRow(FAttachBox);
+  FAttachBox.Height := LIST_HEIGHT;
+  FAttachBox.OnClickCheck := @AttachClickCheck;
   EndGroup;
 end;
 
@@ -664,6 +688,8 @@ begin
   else
     FBodySizeBox.ItemIndex := FBodySizeBox.Items.Add(Drape.Body.Size);
   FBodySizeBox.Enabled := (Drape.Body.Kind <> bkNone) and (FBodySizeBox.Items.Count > 1);
+  FArmsBox.Checked := not Drape.Body.NoArms;
+  FArmsBox.Enabled := Drape.Body.Kind <> bkNone;
   FGapEdit.Value := Drape.Gap;
 end;
 
@@ -713,7 +739,7 @@ end;
 
 procedure TDrapeForm.RefreshPropertiesTab;
 var
-  Axis, Keep: integer;
+  Axis, Keep, Index: integer;
   Seam: TSeamObject;
   Placement: TDrapePlacement;
   Copy: TDrapePieceCopy;
@@ -768,6 +794,23 @@ begin
     FSeamBox.Enabled := Length(FSeams) > 0;
     FAlignButton.Enabled := Length(FSeams) > 0;
     FFoldButton.Enabled := Length(FSeams) > 0;
+    FAttachEdges := nil;
+    if Has then
+      FAttachEdges := FDocument.Drape.AttachableEdges(Copy);
+    FAttachBox.Items.BeginUpdate;
+    try
+      FAttachBox.Items.Clear;
+      for Index := 0 to High(FAttachEdges) do
+      begin
+        FAttachBox.Items.Add(FDocument.Drape.EdgeName(Copy, FAttachEdges[Index]));
+        FAttachBox.Checked[Index] := FDocument.Drape.IsAttached(FView.Selected, FAttachEdges[Index]);
+      end;
+      if not Has then
+        FAttachBox.Items.Add(rsAttachNone);
+    finally
+      FAttachBox.Items.EndUpdate;
+    end;
+    FAttachBox.Enabled := Length(FAttachEdges) > 0;
   finally
     FRefreshing := False;
   end;
@@ -1178,6 +1221,34 @@ begin
     FDocument.Drape.Body.Size := ''
   else
     FDocument.Drape.Body.Size := FBodySizeBox.Text;
+  FDocument.EndChange;
+end;
+
+procedure TDrapeForm.ArmsChange(Sender: TObject);
+begin
+  if FRefreshing or (FDocument.Drape.Body.NoArms = not FArmsBox.Checked) then
+    Exit;
+  FDocument.BeginChange(rsArmsChange);
+  FDocument.Drape.Body.NoArms := not FArmsBox.Checked;
+  FDocument.EndChange;
+end;
+
+procedure TDrapeForm.AttachClickCheck(Sender: TObject);
+var
+  Index: integer;
+  Attach: boolean;
+begin
+  Index := FAttachBox.ItemIndex;
+  if FRefreshing or (Index < 0) or (Index > High(FAttachEdges)) or (FView.Selected < 0) then
+    Exit;
+  Attach := FAttachBox.Checked[Index];
+  if FDocument.Drape.IsAttached(FView.Selected, FAttachEdges[Index]) = Attach then
+    Exit;
+  if Attach then
+    FDocument.BeginChange(rsAttachChange)
+  else
+    FDocument.BeginChange(rsDetachChange);
+  FDocument.Drape.SetAttached(FView.Selected, FAttachEdges[Index], Attach);
   FDocument.EndChange;
 end;
 

@@ -105,7 +105,9 @@ function TorsoRings(const Measures: TBodyMeasures): TBodyRingArray;
 function RingPoints(const Ring: TBodyRing; Segments: integer = BODY_RING_SEGMENTS): TVec3Array;
 // The perimeter of an ellipse of these half-axes drawn with Segments points
 function RingPerimeter(HalfWidth, HalfDepth: double; Segments: integer = BODY_RING_SEGMENTS): double;
-function BuildBodyForm(const Measures: TBodyMeasures): TBodyMesh;
+// The figure from its measurements; WithArms False leaves its arms and hands
+// out, as a dress form with legs
+function BuildBodyForm(const Measures: TBodyMeasures; WithArms: boolean = True): TBodyMesh;
 // The way an arm hangs from the shoulder: Side is 1 for the body's left (+X),
 // -1 for its right
 function ArmDirection(Side: integer): TVec3;
@@ -591,7 +593,7 @@ begin
   AddSweep(Mesh, Sections, Vec3(1, 0, 0), Vec3(0, 1, 0), LIMB_SEGMENTS);
 end;
 
-function BuildBodyForm(const Measures: TBodyMeasures): TBodyMesh;
+function BuildBodyForm(const Measures: TBodyMeasures; WithArms: boolean): TBodyMesh;
 var
   Side: integer;
   Offset: double;
@@ -607,7 +609,8 @@ begin
   begin
     AddRings(Result, Legs, Vec3(Side * Offset, 0, 0), LIMB_SEGMENTS);
     AddFoot(Result, Measures, Side * Offset);
-    AddArm(Result, Measures, Side);
+    if WithArms then
+      AddArm(Result, Measures, Side);
   end;
   AddHead(Result, Measures);
 end;

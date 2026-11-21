@@ -87,6 +87,13 @@
             "items": {
               "type": "number"
             }
+          },
+          "attached": {
+            "description": "Its vertices held to the body, or where they are placed when there is no body: those of its attached edges, from 0",
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           }
         },
         "required": [

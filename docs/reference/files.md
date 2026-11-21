@@ -295,6 +295,7 @@ Version 1. JSON Schema, for files of this version: [drape.schema.json](schemas/d
 | `body.kind` | one of: `measurements`, `none` | yes | measurements: a generic body built from a measurement set; none: no body, for accessories |
 | `body.measurementFile` | text |  | The body's measurement file, relative to the drape file's folder; the first source's when left out |
 | `body.size` | text |  | The body's size, for a size table; the first source's when left out |
+| `body.arms` | true or false |  | Whether the figure has its arms, true when left out; false leaves them and the hands out, so a full skirt does not catch on them |
 | `gap` | number |  | How far pieces are placed off the body and apart across a seam |
 | `placements` | list |  | Where each copy of each piece is placed; a copy not listed is left out |
 | `placements[].source` | whole number | yes | The source the piece is from |
@@ -302,6 +303,7 @@ Version 1. JSON Schema, for files of this version: [drape.schema.json](schemas/d
 | `placements[].copy` | whole number |  | Which copy, from 1, for a piece cut more than once |
 | `placements[].position[]` | list, each number | yes | Where the piece's anchor goes: x, y and z. The anchor is the middle of its grainline, else the middle of its seam line's extent |
 | `placements[].rotation[]` | list, each number | yes | The turns in degrees about x, then y, then z, anticlockwise looking from the positive end of each axis: Blender's XYZ Euler angles. Unturned, a piece stands upright facing -y, as drawn |
+| `placements[].attached[]` | list, each whole number |  | The IDs of the piece's edges held to the body in Blender, as a waist or a strap's end, or held where they are placed when there is no body |
 
 ### Example
 
@@ -338,6 +340,9 @@ Version 1. JSON Schema, for files of this version: [drape.schema.json](schemas/d
         0,
         0,
         0
+      ],
+      "attached": [
+        12
       ]
     }
   ]
@@ -370,6 +375,7 @@ Version 1. JSON Schema, for files of this version: [blender.schema.json](schemas
 | `objects[].vertices` | whole number | yes | How many vertices its mesh has |
 | `objects[].position[]` | list, each number | yes | Where its origin goes: the object's location |
 | `objects[].rotation[]` | list, each number | yes | Its turns in degrees, in Blender's XYZ Euler order: the object's rotation_euler |
+| `objects[].attached[]` | list, each whole number |  | Its vertices held to the body, or where they are placed when there is no body: those of its attached edges, from 0 |
 | `seams` | list | yes | The seams between placed copies, each with the vertices it sews together |
 | `seams[].source` | whole number | yes | The source the seam is from |
 | `seams[].seam` | whole number | yes | The seam's ID in its pattern |
@@ -410,6 +416,11 @@ Version 1. JSON Schema, for files of this version: [blender.schema.json](schemas
         0,
         0,
         0
+      ],
+      "attached": [
+        0,
+        1,
+        2
       ]
     }
   ],

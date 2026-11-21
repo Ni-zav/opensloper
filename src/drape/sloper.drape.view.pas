@@ -115,6 +115,9 @@ const
   // Turns snap to this with Shift
   TURN_SNAP = 15;
   SEAM_LINE_COLOR: TColor = $002F6BE0;
+  // Attached edges: green, thicker than a selected piece's edge
+  ATTACHED_LINE_COLOR: TColor = $00409A2E;
+  ATTACHED_LINE_WIDTH = 4;
 
 constructor TDrapeCanvas.Create(AOwner: TComponent);
 begin
@@ -178,6 +181,7 @@ var
   Index: integer;
   Middle: TVec2;
   Line: TDrapeLine;
+  Attached: TVec2Array;
 begin
   Canvas.Brush.Color := Color;
   Canvas.FillRect(ClientRect);
@@ -211,6 +215,17 @@ begin
   Canvas.Pen.Width := 1;
   for Line in DrapeSceneLines(FDocument.Drape, FCamera) do
     Canvas.Line(Round(Line.From.X + Middle.X), Round(Line.From.Y + Middle.Y), Round(Line.Onto.X + Middle.X), Round(Line.Onto.Y + Middle.Y));
+  // Attached edges, thick, so what holds the garment up shows
+  Canvas.Pen.Color := ATTACHED_LINE_COLOR;
+  Canvas.Pen.Width := Scale96ToForm(ATTACHED_LINE_WIDTH);
+  for Attached in DrapeAttachedLines(FDocument.Drape, FCamera) do
+  begin
+    Points := nil;
+    SetLength(Points, Length(Attached));
+    for Index := 0 to High(Attached) do
+      Points[Index] := Point(Round(Attached[Index].X + Middle.X), Round(Attached[Index].Y + Middle.Y));
+    Canvas.Polyline(Points);
+  end;
 end;
 
 procedure TDrapeCanvas.ShowView(View: TDrapeView);
@@ -233,7 +248,6 @@ end;
 procedure TDrapeCanvas.FitNow;
 var
   Low, High, Point: TVec3;
-  Measures: TBodyMeasures;
   Mesh: TBodyMesh;
   Index: integer;
   Points: TVec3Array;
@@ -259,12 +273,9 @@ begin
   Started := False;
   Low := Vec3(0, 0, 0);
   High := Low;
-  if FDocument.Drape.BodyMeasures(Measures) then
-  begin
-    Mesh := BuildBodyForm(Measures);
+  if FDocument.Drape.BodyMesh(Mesh) then
     for Point in Mesh.Vertices do
       Grow(Point);
-  end;
   for Index := 0 to System.High(FDocument.Drape.Items) do
     if FDocument.Drape.PlacedOutline(FDocument.Drape.Items[Index].Piece, Points) then
       for Point in Points do

@@ -39,6 +39,7 @@ type
     procedure TestPythonClientCreatesPatternFiles;
     procedure TestDocTextLinks;
     procedure TestExamplePatternsHaveNoProblems;
+    procedure TestExampleDrapesSewEverySeam;
     procedure TestTutorialImagesDrawWhatExists;
   end;
 
@@ -47,7 +48,7 @@ implementation
 uses
   SysUtils, Classes, ConsoleTools, Sloper.Core.JSON, Sloper.Core.Formula, Sloper.Core.Measurements, Sloper.Core.Pattern,
   Sloper.Core.PatternFile, Sloper.Core.PatternCheck, Sloper.CLI.Arguments, Sloper.Docs.Reference,
-  Sloper.API.Methods, Sloper.Docs.Python, Sloper.Core.Units;
+  Sloper.API.Methods, Sloper.Docs.Python, Sloper.Core.Units, Sloper.Core.DrapeFile, Sloper.Core.DrapeMesh, Sloper.Core.Piece;
 
 function DocsFolder: string;
 begin
@@ -234,6 +235,49 @@ begin
       end;
     end;
   finally
+    FreeAndNil(Files);
+  end;
+end;
+
+// Every example drape in docs/examples opens, places what it means to (the
+// rest only waits), and leaves no seam open
+procedure TTestDocs.TestExampleDrapesSewEverySeam;
+var
+  Files: TStringList;
+  FileName, Err: string;
+  Drape: TDrape;
+  Problem: TDrapeProblem;
+  Waiting: TStringList;
+  Copy: TDrapePieceCopy;
+  Piece: TPieceObject;
+begin
+  Files := TStringList.Create;
+  Waiting := TStringList.Create;
+  try
+    FindFiles(ConcatPaths([DocsFolder, 'examples']), DRAPE_EXTENSION, Files);
+    AssertTrue('there are drapes', Files.Count > 0);
+    for FileName in Files do
+    begin
+      Drape := TDrape.Create;
+      try
+        AssertTrue(ExtractFileName(FileName) + ': ' + Err, Drape.LoadFromFile(FileName, Err));
+        Drape.LoadSources;
+        AssertTrue(ExtractFileName(FileName) + ': placed', Length(Drape.Items) > 0);
+        Waiting.Clear;
+        for Copy in Drape.Unplaced do
+          if Drape.FindPiece(Copy, Piece) then
+            Waiting.Add(Format(rsDrapeUnplaced, [ExtractFileName(Drape.FindSource(Copy.SourceId).PatternFile), Piece.DisplayName,
+              Copy.Copy, Piece.CutCount]));
+        for Problem in Drape.Problems do
+          AssertTrue(ExtractFileName(FileName) + ': ' + Problem.Text, Waiting.IndexOf(Problem.Text) >= 0);
+        for Problem in DrapeSeamProblems(Drape) do
+          Fail(ExtractFileName(FileName) + ': ' + Problem.Text);
+      finally
+        FreeAndNil(Drape);
+      end;
+    end;
+  finally
+    FreeAndNil(Waiting);
     FreeAndNil(Files);
   end;
 end;

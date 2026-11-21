@@ -148,7 +148,7 @@ The script is generated next to the OBJ and JSON, for one Blender version stated
 - **Seams that cross** (a side seam meeting an armhole seam) meet at shared corner vertices; check that they do not pull the corner two ways.
 - **Testing.** Core parts (placement maths, guesses, Align to Seam, projection, body form, mesher, pairing, writer) get unit tests; the app is checked on Xvfb; the script needs a manual check, or an optional test run when a `blender` binary is found.
 - **Moving in 3D with a mouse** is the hard part of the app. Dragging in the camera's plane plus Around the Body and Align to Seam should cover most placing; watch how it goes before adding more handles.
-- **Closing without a body.** An accessory may collapse under gravity in the simulation; the script may need to pin a piece (a bag's base) or add a simple stand. Try on the accessory examples before deciding.
+- **Closing without a body.** An accessory may collapse under gravity in the simulation; the script may need to pin a piece (a bag's base) or add a simple stand. Decided 2026-11-21: attached edges are pinned where they are placed when there is no body, so the tote bag hangs from its top edges.
 - **Placements going stale.** A piece whose shape changes a lot keeps its anchor's position and turn, which may then cross its neighbours; Align to Seam fixes it. A placement is never recalculated silently.
 - **Open:** whether the draped result is shown back in the app; seams across patterns.
 
@@ -161,7 +161,7 @@ The script is generated next to the OBJ and JSON, for one Blender version stated
 5. Mesher in the core, with tests.
 6. Seam pairing feeding the mesher's outline resampling, with tests (built 2026-11-20, `Sloper.Core.DrapeMesh`).
 7. OBJ and seam JSON writer (pieces and body), CLI command, schemas (built 2026-11-20, `Sloper.Output.DrapeExport`, `opensloper-cli drape`; see the design document). Seams left open show in the app's Problems tab (built 2026-11-20).
-8. Blender script and running Blender from the app, checked by hand on the tutorial patterns in `docs/examples/`, garments and accessories. Both built 2026-11-20: the script (`data/blender/drape.py`) and running it from the app (File → Drape in Blender…) or `opensloper-cli drape --run`, checked on the bodice block; the other examples are still to try.
+8. Blender script and running Blender from the app, checked by hand on the tutorial patterns in `docs/examples/`, garments and accessories. Both built 2026-11-20: the script (`data/blender/drape.py`) and running it from the app (File → Drape in Blender…) or `opensloper-cli drape --run`, checked on the bodice block, then on every example (2026-11-21): seams added to the skirt block, circle skirt, tote bag and curve-path bodice, a drape file beside each, attachments to the body and a figure without arms. Fabric hints from materials are what is left (the tote's canvas drapes as cotton).
 9. User documentation, packaging the fourth app.
 10. Later: the user's own body.
 

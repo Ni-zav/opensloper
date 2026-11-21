@@ -30,7 +30,10 @@
 // seam's points, those very close together merged. A piece on a fold is meshed
 // whole, opened out; each half is sewn on its own. Which copies are sewn
 // together goes by where they are placed: each copy of the piece with the most
-// copies on the seam takes the nearest unused copy of every other piece on it.
+// copies on the seam takes the nearest unused copy of every other piece on it;
+// a piece on both sides has a copy chosen for each, never the same copy when
+// the sides share an edge (a centre back). The outline vertices of each
+// item's attached edges are listed, for pinning to the body.
 // Drafted coordinates, mm. No LCL dependency.
 unit Sloper.Core.DrapeMesh;
 
@@ -60,6 +63,9 @@ type
     Pairs: TDrapeSeamPairArray;
     // Seams left open on a copy
     Problems: TDrapeProblemArray;
+    // For each item, the outline vertices of its attached edges, both halves
+    // on a fold, in order round the outline
+    Attached: array of TMeshIndexArray;
   end;
 
 // The placed items meshed at about Spacing (mm), and their seams paired
@@ -113,6 +119,18 @@ type
 
   TSeamInstanceArray = array of TSeamInstance;
 
+  // Which of a seam's sides a piece's copies are chosen for: a piece on both
+  // sides has a copy chosen for each, which may be the same copy (a dart, a
+  // sleeve's underarm) or another (a centre back, a bag's sides)
+  TSeamRoleSide = (srBoth, srSideA, srSideB);
+
+  TSeamRole = record
+    PieceKey: string;
+    Side: TSeamRoleSide;
+  end;
+
+  TSeamRoleArray = array of TSeamRole;
+
   // The stretch of an item's line that a seam entry covers. Forward when the
   // seam runs the way the line does.
   TSeamSegment = record
@@ -151,6 +169,13 @@ type
 
   TSeamBreakList = specialize TList<TSeamBreak>;
 
+  // An attached stretch of an item's line, from one pin to another
+  TAttachedRange = record
+    Item, FirstPin, LastPin: integer;
+  end;
+
+  TAttachedRangeArray = array of TAttachedRange;
+
   { TDrapeMesher }
 
   TDrapeMesher = class
@@ -172,15 +197,17 @@ type
     function InstancesOf(SourceId: integer; const PieceKey: string): TSeamInstanceArray;
     // Where an instance's stretches of the seam lie once placed: their ends
     // and middles
-    function InstancePoints(Seam: TSeamObject; const Instance: TSeamInstance; const PieceKey: string): TVec3Array;
-    function SideSegments(Seam: TSeamObject; OnSideB: boolean; const Keys: TStringArray; const Group: TSeamInstanceArray;
+    function InstancePoints(Seam: TSeamObject; const Instance: TSeamInstance; const Role: TSeamRole): TVec3Array;
+    function SideSegments(Seam: TSeamObject; OnSideB: boolean; const Roles: TSeamRoleArray; const Group: TSeamInstanceArray;
       out Parts: TSeamSegmentArray; out Total: double): boolean;
     procedure AddCorners(Breaks: TSeamBreakList; const Parts: TSeamSegmentArray; Total: double);
     function SeamFractions(const PartsA, PartsB: TSeamSegmentArray; TotalA, TotalB: double): TDoubleArray;
     function AddPin(Item: integer; Position: double): integer;
     function PinsAt(const Parts: TSeamSegmentArray; Total, Fraction: double): TPinRefArray;
-    procedure PairGroup(Source: TPatternSource; Seam: TSeamObject; const Keys: TStringArray; const Group: TSeamInstanceArray);
+    procedure PairGroup(Source: TPatternSource; Seam: TSeamObject; const Roles: TSeamRoleArray; const Group: TSeamInstanceArray);
     procedure PairSeam(Source: TPatternSource; Seam: TSeamObject);
+    // Pins the ends of the items' attached edges
+    function PinAttached: TAttachedRangeArray;
     function MeshItem(Item: integer; out PinVertex: TMeshIndexArray): TFlatMesh;
   public
     constructor Create(ADrape: TDrape; ASpacing: double);
@@ -339,7 +366,13 @@ begin
     end;
 end;
 
-function TDrapeMesher.InstancePoints(Seam: TSeamObject; const Instance: TSeamInstance; const PieceKey: string): TVec3Array;
+// Whether a side's entry is for the role
+function RoleTakes(const Role: TSeamRole; const Entry: TSeamEntry; OnSideB: boolean): boolean;
+begin
+  Result := (Entry.PieceKey = Role.PieceKey) and ((Role.Side = srBoth) or ((Role.Side = srSideB) = OnSideB));
+end;
+
+function TDrapeMesher.InstancePoints(Seam: TSeamObject; const Instance: TSeamInstance; const Role: TSeamRole): TVec3Array;
 
   procedure AddSide(const Side: TSeamSide; OnSideB: boolean);
   var
@@ -350,7 +383,7 @@ function TDrapeMesher.InstancePoints(Seam: TSeamObject; const Instance: TSeamIns
   begin
     Line := FLines[Instance.Item];
     for Entry in Side do
-      if (Entry.PieceKey = PieceKey) and Segment(Seam, Entry, OnSideB, Instance, Part) then
+      if RoleTakes(Role, Entry, OnSideB) and Segment(Seam, Entry, OnSideB, Instance, Part) then
         for Share := 0 to 2 do
           Insert(PlacePoint(PointAlong(Instance.Item, PositionIn(Part, Part.Length * Share / 2)), Line.Anchor, Line.Mirrored,
             Line.Placement), Result, Length(Result));
@@ -362,7 +395,7 @@ begin
   AddSide(Seam.SideB, True);
 end;
 
-function TDrapeMesher.SideSegments(Seam: TSeamObject; OnSideB: boolean; const Keys: TStringArray; const Group: TSeamInstanceArray;
+function TDrapeMesher.SideSegments(Seam: TSeamObject; OnSideB: boolean; const Roles: TSeamRoleArray; const Group: TSeamInstanceArray;
   out Parts: TSeamSegmentArray; out Total: double): boolean;
 var
   Side: TSeamSide;
@@ -379,9 +412,9 @@ begin
   for Entry in Side do
   begin
     Key := 0;
-    while (Key < Length(Keys)) and (Keys[Key] <> Entry.PieceKey) do
+    while (Key < Length(Roles)) and not RoleTakes(Roles[Key], Entry, OnSideB) do
       Inc(Key);
-    if (Key >= Length(Keys)) or not Segment(Seam, Entry, OnSideB, Group[Key], Part) then
+    if (Key >= Length(Roles)) or not Segment(Seam, Entry, OnSideB, Group[Key], Part) then
       Exit(False);
     Insert(Part, Parts, Length(Parts));
     Total := Total + Part.Length;
@@ -509,7 +542,7 @@ begin
   end;
 end;
 
-procedure TDrapeMesher.PairGroup(Source: TPatternSource; Seam: TSeamObject; const Keys: TStringArray; const Group: TSeamInstanceArray);
+procedure TDrapeMesher.PairGroup(Source: TPatternSource; Seam: TSeamObject; const Roles: TSeamRoleArray; const Group: TSeamInstanceArray);
 var
   PartsA, PartsB: TSeamSegmentArray;
   TotalA, TotalB, Fraction: double;
@@ -517,7 +550,7 @@ var
   Pair: TPinPair;
   Index: integer;
 begin
-  if not SideSegments(Seam, False, Keys, Group, PartsA, TotalA) or not SideSegments(Seam, True, Keys, Group, PartsB, TotalB) then
+  if not SideSegments(Seam, False, Roles, Group, PartsA, TotalA) or not SideSegments(Seam, True, Roles, Group, PartsB, TotalB) then
     Exit;
   Pair.SourceId := Source.Id;
   Pair.SeamKey := Seam.Key;
@@ -539,19 +572,20 @@ end;
 
 procedure TDrapeMesher.PairSeam(Source: TPatternSource; Seam: TSeamObject);
 var
-  Keys: TStringArray;
+  Roles: TSeamRoleArray;
   Instances: array of TSeamInstanceArray;
   Used: array of array of boolean;
   Group: TSeamInstanceArray;
   Points, Candidate: TVec3Array;
-  Entry: TSeamEntry;
+  Entry, Other: TSeamEntry;
   Index, Key, Main, Best, Choice, Turn, Later: integer;
   BestDistance, Gap: double;
-  Point, Other: TVec3;
-  Complete: boolean;
+  Point, Near: TVec3;
+  Complete, SharesEdge: boolean;
   MainPiece, Missing: TPieceObject;
   Order: array of integer;
   Reach: array of double;
+  Chosen: array of boolean;
 
 // Once for a copy, though both its halves on a fold may be left open
   procedure AddProblem(const Text: string; Item: integer);
@@ -569,40 +603,81 @@ var
   // How near two instances' stretches of the seam come
   function Closest(const First, Second: TVec3Array): double;
   var
-    Near, Far: TVec3;
+    Here, There: TVec3;
   begin
     Result := Infinity;
-    for Near in First do
-      for Far in Second do
-        Result := Min(Result, Distance3(Near, Far));
+    for Here in First do
+      for There in Second do
+        Result := Min(Result, Distance3(Here, There));
   end;
 
-  procedure AddKey(const PieceKey: string);
+  function OnSide(const Side: TSeamSide; const PieceKey: string): boolean;
   var
-    Known: string;
+    Known: TSeamEntry;
   begin
-    for Known in Keys do
-      if Known = PieceKey then
+    for Known in Side do
+      if Known.PieceKey = PieceKey then
+        Exit(True);
+    Result := False;
+  end;
+
+  procedure AddRole(const PieceKey: string; Side: TSeamRoleSide);
+  var
+    Known: TSeamRole;
+    Role: TSeamRole;
+  begin
+    for Known in Roles do
+      if (Known.PieceKey = PieceKey) and (Known.Side = Side) then
         Exit;
-    Insert(PieceKey, Keys, Length(Keys));
+    Role.PieceKey := PieceKey;
+    Role.Side := Side;
+    Insert(Role, Roles, Length(Roles));
+  end;
+
+  // Whether the instance is the copy already chosen for the piece's role on
+  // the other side, which a seam sharing an edge must not sew to itself
+  function Itself(Key: integer; const Instance: TSeamInstance): boolean;
+  var
+    Role: integer;
+  begin
+    if not SharesEdge or (Roles[Key].Side = srBoth) then
+      Exit(False);
+    for Role := 0 to High(Roles) do
+      if (Role <> Key) and Chosen[Role] and (Roles[Role].PieceKey = Roles[Key].PieceKey) and
+        (Group[Role].Item = Instance.Item) and (Group[Role].MirrorHalf = Instance.MirrorHalf) then
+        Exit(True);
+    Result := False;
   end;
 
 begin
-  Keys := nil;
+  Roles := nil;
   for Entry in Seam.SideA do
-    AddKey(Entry.PieceKey);
+    if OnSide(Seam.SideB, Entry.PieceKey) then
+      AddRole(Entry.PieceKey, srSideA)
+    else
+      AddRole(Entry.PieceKey, srBoth);
   for Entry in Seam.SideB do
-    AddKey(Entry.PieceKey);
-  if Length(Keys) = 0 then
+    if OnSide(Seam.SideA, Entry.PieceKey) then
+      AddRole(Entry.PieceKey, srSideB)
+    else
+      AddRole(Entry.PieceKey, srBoth);
+  if Length(Roles) = 0 then
     Exit;
+  // An edge on both sides (a centre back) is sewn between copies, never a copy
+  // to itself
+  SharesEdge := False;
+  for Entry in Seam.SideA do
+    for Other in Seam.SideB do
+      if (Entry.PieceKey = Other.PieceKey) and (Entry.EdgeKey = Other.EdgeKey) then
+        SharesEdge := True;
   Instances := nil;
-  SetLength(Instances, Length(Keys));
+  SetLength(Instances, Length(Roles));
   Used := nil;
-  SetLength(Used, Length(Keys));
+  SetLength(Used, Length(Roles));
   Main := 0;
-  for Key := 0 to High(Keys) do
+  for Key := 0 to High(Roles) do
   begin
-    Instances[Key] := InstancesOf(Source.Id, Keys[Key]);
+    Instances[Key] := InstancesOf(Source.Id, Roles[Key].PieceKey);
     // A piece with no copy placed is a problem of its own
     if Length(Instances[Key]) = 0 then
       Exit;
@@ -620,11 +695,12 @@ begin
   begin
     Order[Index] := Index;
     Reach[Index] := Infinity;
-    Points := InstancePoints(Seam, Instances[Main][Index], Keys[Main]);
-    for Key := 0 to High(Keys) do
+    Points := InstancePoints(Seam, Instances[Main][Index], Roles[Main]);
+    for Key := 0 to High(Roles) do
       if Key <> Main then
         for Choice := 0 to High(Instances[Key]) do
-          Reach[Index] := Min(Reach[Index], Closest(Points, InstancePoints(Seam, Instances[Key][Choice], Keys[Key])));
+          if not (SharesEdge and (Roles[Key].PieceKey = Roles[Main].PieceKey) and (Choice = Index)) then
+            Reach[Index] := Min(Reach[Index], Closest(Points, InstancePoints(Seam, Instances[Key][Choice], Roles[Key])));
   end;
   for Turn := 1 to High(Order) do
   begin
@@ -638,26 +714,31 @@ begin
     end;
   end;
   Group := nil;
-  SetLength(Group, Length(Keys));
+  SetLength(Group, Length(Roles));
+  Chosen := nil;
+  SetLength(Chosen, Length(Roles));
   for Turn := 0 to High(Order) do
   begin
+    for Key := 0 to High(Roles) do
+      Chosen[Key] := False;
     Group[Main] := Instances[Main][Order[Turn]];
-    Points := InstancePoints(Seam, Group[Main], Keys[Main]);
+    Chosen[Main] := True;
+    Points := InstancePoints(Seam, Group[Main], Roles[Main]);
     Complete := True;
-    for Key := 0 to High(Keys) do
+    for Key := 0 to High(Roles) do
     begin
       if Key = Main then
         Continue;
       Best := -1;
       BestDistance := 0;
       for Choice := 0 to High(Instances[Key]) do
-        if not Used[Key][Choice] then
+        if not Used[Key][Choice] and not Itself(Key, Instances[Key][Choice]) then
         begin
-          Candidate := InstancePoints(Seam, Instances[Key][Choice], Keys[Key]);
+          Candidate := InstancePoints(Seam, Instances[Key][Choice], Roles[Key]);
           for Point in Candidate do
-            for Other in Points do
+            for Near in Points do
             begin
-              Gap := Distance3(Point, Other);
+              Gap := Distance3(Point, Near);
               if (Best < 0) or (Gap < BestDistance) then
               begin
                 Best := Choice;
@@ -676,10 +757,11 @@ begin
       end;
       Used[Key][Best] := True;
       Group[Key] := Instances[Key][Best];
-      Insert(InstancePoints(Seam, Group[Key], Keys[Key]), Points, Length(Points));
+      Chosen[Key] := True;
+      Insert(InstancePoints(Seam, Group[Key], Roles[Key]), Points, Length(Points));
     end;
     if Complete then
-      PairGroup(Source, Seam, Keys, Group);
+      PairGroup(Source, Seam, Roles, Group);
   end;
 end;
 
@@ -794,8 +876,46 @@ begin
     PinVertex[Pin] := KeptAt[PointOf[Merged[Pin]]];
 end;
 
+function TDrapeMesher.PinAttached: TAttachedRangeArray;
+var
+  Item, PathIndex: integer;
+  EdgeKey: string;
+  Instance: TSeamInstance;
+  Half: boolean;
+  Low, High: double;
+  Range: TAttachedRange;
+begin
+  Result := nil;
+  for Item := 0 to System.High(FLines) do
+    if Assigned(FLines[Item].Piece) then
+      for EdgeKey in FDrape.Items[Item].Attached do
+      begin
+        PathIndex := FLines[Item].Piece.PathIndexOf(EdgeKey);
+        if (PathIndex < 0) or (EdgeKey = FLines[Item].Piece.FoldEdgeKey) then
+          Continue;
+        Instance.Item := Item;
+        for Half := False to True do
+        begin
+          if Half and (FLines[Item].FoldStart < 0) then
+            Continue;
+          Instance.MirrorHalf := Half;
+          if EdgeRange(Instance, PathIndex, Low, High) and (High - Low > ALONG_TOLERANCE) then
+          begin
+            Range.Item := Item;
+            Range.FirstPin := AddPin(Item, Low);
+            Range.LastPin := AddPin(Item, High);
+            Insert(Range, Result, Length(Result));
+          end;
+        end;
+      end;
+end;
+
 function TDrapeMesher.Run: TDrapeMeshing;
 var
+  Ranges: TAttachedRangeArray;
+  Range: TAttachedRange;
+  Taken: array of boolean;
+  Vertex, Last, Count: integer;
   Item: integer;
   PinVertices: array of TMeshIndexArray;
   Pair: TPinPair;
@@ -805,6 +925,7 @@ var
 begin
   Result := Default(TDrapeMeshing);
   PairAll;
+  Ranges := PinAttached;
   SetLength(Result.Meshes, Length(FLines));
   PinVertices := nil;
   SetLength(PinVertices, Length(FLines));
@@ -836,6 +957,31 @@ begin
     FreeAndNil(Seen);
   end;
   Result.Problems := FProblems;
+  // Round the outline from each range's first pin to its last
+  SetLength(Result.Attached, Length(FLines));
+  for Item := 0 to High(FLines) do
+  begin
+    Count := Result.Meshes[Item].OutlineCount;
+    Taken := nil;
+    SetLength(Taken, Count);
+    for Range in Ranges do
+      if (Range.Item = Item) and (Length(PinVertices[Item]) > 0) then
+      begin
+        Vertex := PinVertices[Item][Range.FirstPin];
+        Last := PinVertices[Item][Range.LastPin];
+        if (Vertex < 0) or (Last < 0) or (Vertex >= Count) or (Last >= Count) then
+          Continue;
+        Taken[Vertex] := True;
+        while Vertex <> Last do
+        begin
+          Vertex := (Vertex + 1) mod Count;
+          Taken[Vertex] := True;
+        end;
+      end;
+    for Vertex := 0 to Count - 1 do
+      if Taken[Vertex] then
+        Insert(Vertex, Result.Attached[Item], Length(Result.Attached[Item]));
+  end;
 end;
 
 procedure TDrapeMesher.PairAll;

@@ -1,0 +1,56 @@
+{
+  "format": "drape",
+  "version": 1,
+  "units": "mm",
+  "name": "Circle skirt",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "circle-skirt.sloper"
+    }
+  ],
+  "body": {
+    "kind": "measurements",
+    "arms": false
+  },
+  "gap": 20,
+  "placements": [
+    {
+      "source": 1,
+      "piece": 29,
+      "copy": 1,
+      "position": [
+        321.7,
+        -372,
+        1030
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "attached": [
+        11
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 29,
+      "copy": 2,
+      "position": [
+        -321.7,
+        372,
+        1030
+      ],
+      "rotation": [
+        -90,
+        0,
+        180
+      ],
+      "attached": [
+        11
+      ]
+    }
+  ]
+}

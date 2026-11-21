@@ -57,6 +57,9 @@ type
   TDrapeBody = record
     Kind: TDrapeBodyKind;
     MeasurementFile, Size: string;
+    // The figure is built without its arms, so a full skirt does not catch on
+    // them
+    NoArms: boolean;
   end;
 
   TDrapePieceCopy = record
@@ -69,9 +72,13 @@ type
   TDrapeItem = record
     Piece: TDrapePieceCopy;
     Placement: TDrapePlacement;
+    // Keys of the piece's edges held to the body in the simulation (a waist,
+    // a strap's end), or held where they are placed when there is no body
+    Attached: TStringArray;
   end;
 
   TDrapeItemArray = array of TDrapeItem;
+  TVec3Polylines = array of TVec3Array;
 
   // A line between the two sides of a seam, at its start, middle or end, as
   // the view draws them so a piece far from its partner stands out
@@ -136,6 +143,9 @@ type
     // body's size, else the source's. False when there is no body; the default
     // form when no set can be read.
     function BodyMeasures(out Measures: TBodyMeasures): boolean;
+    // The body as it is drawn and exported, with its arms unless Body.NoArms.
+    // False when there is no body.
+    function BodyMesh(out Mesh: TBodyMesh): boolean;
     function SaveToText: string;
     function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
     function SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
@@ -147,6 +157,17 @@ type
     // Places the copy, or moves it when it is placed
     procedure Place(const Copy: TDrapePieceCopy; const Placement: TDrapePlacement);
     procedure Unplace(const Copy: TDrapePieceCopy);
+    // The edges of the copy's piece that can be attached: its outline's, the
+    // fold left out
+    function AttachableEdges(const Copy: TDrapePieceCopy): TStringArray;
+    // The edge's name as the drafting app shows it, else its key
+    function EdgeName(const Copy: TDrapePieceCopy; const EdgeKey: string): string;
+    function IsAttached(Item: integer; const EdgeKey: string): boolean;
+    // The item's attached edges as placed, each a line of points; on a fold,
+    // the mirrored half's too
+    function AttachedLines(Item: integer): TVec3Polylines;
+    // Attaches the item's edge, or lets it go
+    procedure SetAttached(Item: integer; const EdgeKey: string; Attach: boolean);
     // Every copy of every working piece of the loaded sources with no item
     function Unplaced: TDrapePieceCopyArray;
     // The copy's points placed on the body: its seam line, opened out on a
@@ -195,11 +216,13 @@ resourcestring
   rsDrapeBodyProblem = 'The body: %s';
   rsDrapeBodySize = 'Size "%s" is not in the body''s measurement set';
   rsDrapeNoPieces = '%s has no pieces. Make them in the drafting app and save the pattern';
+  rsDrapeAttachedGone = '%s: %s is attached by edge %s, which is no longer on its outline';
+  rsDrapeBadAttached = 'Placement %d has an attached edge that is not valid';
 
 implementation
 
 uses
-  Math, fpjson, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.EvalTypes;
+  Math, fpjson, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.EvalTypes, Sloper.Core.Evaluator;
 
 const
   BODY_KIND_NAMES: array[TDrapeBodyKind] of string = ('measurements', 'none');
@@ -353,6 +376,16 @@ begin
   Measures := BodyMeasuresFrom(BodySet, SizeIndex);
 end;
 
+function TDrape.BodyMesh(out Mesh: TBodyMesh): boolean;
+var
+  Measures: TBodyMeasures;
+begin
+  Mesh := Default(TBodyMesh);
+  Result := BodyMeasures(Measures);
+  if Result then
+    Mesh := BuildBodyForm(Measures, not Body.NoArms);
+end;
+
 procedure TDrape.GuessFrame(out Height, Depth: double);
 var
   Measures: TBodyMeasures;
@@ -394,11 +427,22 @@ begin
   Result := True;
 end;
 
+function HasKey(const Keys: TStringArray; const Key: string): boolean;
+var
+  Known: string;
+begin
+  for Known in Keys do
+    if Known = Key then
+      Exit(True);
+  Result := False;
+end;
+
 function TDrape.SaveToText: string;
 var
   Root, Item: TJSONObject;
-  List: TJSONArray;
+  List, Edges: TJSONArray;
   Entry: TDrapeItem;
+  EdgeKey: string;
 begin
   Root := TJSONObject.Create;
   try
@@ -414,6 +458,8 @@ begin
       Item.Add('measurementFile', Body.MeasurementFile);
     if Body.Size <> '' then
       Item.Add('size', Body.Size);
+    if Body.NoArms then
+      Item.Add('arms', False);
     Root.Add('gap', JSONFloat(Gap));
     List := TJSONArray.Create;
     Root.Add('placements', List);
@@ -426,6 +472,13 @@ begin
       Item.Add('copy', Entry.Piece.Copy);
       Item.Add('position', Vec3ToJSON(Entry.Placement.Position));
       Item.Add('rotation', Vec3ToJSON(Entry.Placement.Rotation));
+      if Length(Entry.Attached) > 0 then
+      begin
+        Edges := TJSONArray.Create;
+        Item.Add('attached', Edges);
+        for EdgeKey in Entry.Attached do
+          Edges.Add(StrToInt(EdgeKey));
+      end;
     end;
     Result := JSONToText(Root);
   finally
@@ -456,14 +509,20 @@ begin
     end;
   GetJSONString(Item, 'measurementFile', Body.MeasurementFile);
   GetJSONString(Item, 'size', Body.Size);
+  if Assigned(Item.Find('arms')) then
+  begin
+    if Item.Find('arms').JSONType <> jtBoolean then
+      Exit(False);
+    Body.NoArms := not Item.Booleans['arms'];
+  end;
 end;
 
 function TDrape.LoadFromText(const Text: string; out ErrorMessage: string): boolean;
 var
   Root, Item: TJSONObject;
-  Data: TJSONData;
-  TextValue: string;
-  Version, Index, PieceId: integer;
+  Data, EdgeList: TJSONData;
+  TextValue, EdgeKey: string;
+  Version, Index, PieceId, Edge: integer;
   Entry: TDrapeItem;
 
   function Fail(const Msg: string): boolean;
@@ -516,6 +575,21 @@ begin
           Exit(Fail(Format(rsDrapeBadPlacement, [Index + 1])));
         if IndexOf(Entry.Piece) >= 0 then
           Exit(Fail(Format(rsDrapeRepeatedPlacement, [Index + 1])));
+        EdgeList := Item.Find('attached');
+        if Assigned(EdgeList) then
+        begin
+          if EdgeList.JSONType <> jtArray then
+            Exit(Fail(Format(rsDrapeBadAttached, [Index + 1])));
+          for Edge := 0 to EdgeList.Count - 1 do
+          begin
+            if (EdgeList.Items[Edge].JSONType <> jtNumber) or (TJSONNumber(EdgeList.Items[Edge]).NumberType <> ntInteger) or
+              (EdgeList.Items[Edge].AsInteger < 1) then
+              Exit(Fail(Format(rsDrapeBadAttached, [Index + 1])));
+            EdgeKey := IntToStr(EdgeList.Items[Edge].AsInteger);
+            if not HasKey(Entry.Attached, EdgeKey) then
+              Insert(EdgeKey, Entry.Attached, Length(Entry.Attached));
+          end;
+        end;
         SetLength(Items, Length(Items) + 1);
         Items[High(Items)] := Entry;
       end;
@@ -594,6 +668,98 @@ begin
   Index := IndexOf(Copy);
   if Index >= 0 then
     System.Delete(Items, Index, 1);
+end;
+
+function TDrape.AttachableEdges(const Copy: TDrapePieceCopy): TStringArray;
+var
+  Piece: TPieceObject;
+  Index: integer;
+begin
+  Result := nil;
+  if not FindPiece(Copy, Piece) then
+    Exit;
+  for Index := 0 to High(Piece.Path) do
+    if Piece.Path[Index].EdgeKey <> Piece.FoldEdgeKey then
+      Insert(Piece.Path[Index].EdgeKey, Result, Length(Result));
+end;
+
+function TDrape.EdgeName(const Copy: TDrapePieceCopy; const EdgeKey: string): string;
+var
+  Source: TPatternSource;
+  Node: TObject;
+begin
+  Result := EdgeKey;
+  Source := FindSource(Copy.SourceId);
+  if not Assigned(Source) or not Assigned(Source.Pattern) then
+    Exit;
+  Node := Source.Pattern.FindNode(EdgeKey);
+  if Node is TEvalNode then
+    Result := TEvalNode(Node).DisplayName;
+end;
+
+function TDrape.IsAttached(Item: integer; const EdgeKey: string): boolean;
+begin
+  Result := (Item >= 0) and (Item <= High(Items)) and HasKey(Items[Item].Attached, EdgeKey);
+end;
+
+function TDrape.AttachedLines(Item: integer): TVec3Polylines;
+var
+  Piece: TPieceObject;
+  Outline, Points, Mirrored: TVec2Array;
+  EdgeKey: string;
+  PathIndex, First, Last, Count, Index: integer;
+  Fold: TLine2;
+  Anchor: TVec2;
+  Flipped: boolean;
+begin
+  Result := nil;
+  if (Item < 0) or (Item > High(Items)) or not FindPiece(Items[Item].Piece, Piece) or (Piece.State <> esValid) then
+    Exit;
+  Outline := Piece.Outline;
+  Count := Length(Outline);
+  if (Count < 3) or (Length(Piece.EdgeStarts) <> Length(Piece.Path)) then
+    Exit;
+  Anchor := PieceAnchor(Piece);
+  Flipped := CopyIsMirrored(Piece, Items[Item].Piece.Copy);
+  for EdgeKey in Items[Item].Attached do
+  begin
+    PathIndex := Piece.PathIndexOf(EdgeKey);
+    if (PathIndex < 0) or (EdgeKey = Piece.FoldEdgeKey) then
+      Continue;
+    First := Piece.EdgeStarts[PathIndex];
+    if PathIndex < High(Piece.Path) then
+      Last := Piece.EdgeStarts[PathIndex + 1]
+    else
+      Last := Count;
+    Points := nil;
+    for Index := First to Last do
+      Insert(Outline[Index mod Count], Points, Length(Points));
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)] := PlacePoints(Points, Anchor, Flipped, Items[Item].Placement);
+    if PlacedFoldStart(Piece) >= 0 then
+    begin
+      Fold := Piece.FoldLine;
+      Mirrored := nil;
+      for Index := 0 to High(Points) do
+        Insert(MirrorPoint(Points[Index], Fold.P1, Fold.P2), Mirrored, Length(Mirrored));
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := PlacePoints(Mirrored, Anchor, Flipped, Items[Item].Placement);
+    end;
+  end;
+end;
+
+procedure TDrape.SetAttached(Item: integer; const EdgeKey: string; Attach: boolean);
+var
+  Index: integer;
+begin
+  if (Item < 0) or (Item > High(Items)) or (IsAttached(Item, EdgeKey) = Attach) then
+    Exit;
+  if Attach then
+    Insert(EdgeKey, Items[Item].Attached, Length(Items[Item].Attached))
+  else
+    for Index := High(Items[Item].Attached) downto 0 do
+      if Items[Item].Attached[Index] = EdgeKey then
+        System.Delete(Items[Item].Attached, Index, 1);
 end;
 
 function CanPlace(Piece: TPieceObject): boolean;
@@ -998,6 +1164,8 @@ var
   Piece: TPieceObject;
   Copy: TDrapePieceCopy;
   BodySet: TMeasurementSet;
+  Edges: TStringArray;
+  EdgeKey: string;
 begin
   Result := nil;
   if FBodyError <> '' then
@@ -1037,8 +1205,15 @@ begin
       Continue;
     if not FindPiece(Items[Index].Piece, Piece) then
       Add(Format(rsDrapePieceGone, [ExtractFileName(Source.PatternFile), Items[Index].Piece.PieceKey]), Index)
-    else if Items[Index].Piece.Copy > Piece.CutCount then
-      Add(Format(rsDrapeExtraCopy, [ExtractFileName(Source.PatternFile), Piece.DisplayName, Piece.CutCount, Items[Index].Piece.Copy]), Index);
+    else
+    begin
+      if Items[Index].Piece.Copy > Piece.CutCount then
+        Add(Format(rsDrapeExtraCopy, [ExtractFileName(Source.PatternFile), Piece.DisplayName, Piece.CutCount, Items[Index].Piece.Copy]), Index);
+      Edges := AttachableEdges(Items[Index].Piece);
+      for EdgeKey in Items[Index].Attached do
+        if not HasKey(Edges, EdgeKey) then
+          Add(Format(rsDrapeAttachedGone, [ExtractFileName(Source.PatternFile), Piece.DisplayName, EdgeKey]), Index);
+    end;
   end;
   for Copy in Unplaced do
     if FindPiece(Copy, Piece) then

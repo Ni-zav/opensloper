@@ -1,0 +1,49 @@
+{
+  "format": "drape",
+  "version": 1,
+  "units": "mm",
+  "name": "Bodice block",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "bodice-block.sloper"
+    }
+  ],
+  "body": {
+    "kind": "measurements"
+  },
+  "gap": 20,
+  "placements": [
+    {
+      "source": 1,
+      "piece": 64,
+      "copy": 1,
+      "position": [
+        -125,
+        -150,
+        1225
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 63,
+      "copy": 1,
+      "position": [
+        -125,
+        150,
+        1225
+      ],
+      "rotation": [
+        0,
+        0,
+        180
+      ]
+    }
+  ]
+}

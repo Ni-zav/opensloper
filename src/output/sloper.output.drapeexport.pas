@@ -18,7 +18,8 @@
 
 // A drape exported for Blender's cloth simulation: the scene file
 // (NAME.blender.json) lists each placed copy as an object with its placement,
-// material and colour, and the pairs of vertices each seam sews; the meshes
+// material and colour and its vertices held to the body, and the pairs of
+// vertices each seam sews; the meshes
 // are OBJ files beside it, the pieces' (NAME.pieces.obj) and the body's
 // (NAME.body.obj). Each piece's mesh is in its own frame, its anchor at the
 // origin (Sloper.Core.DrapePlacement), so its placement sets the Blender
@@ -141,7 +142,6 @@ end;
 function BuildDrapeExport(Drape: TDrape; Spacing: double): TDrapeExport;
 var
   Item: integer;
-  Measures: TBodyMeasures;
   Piece: TPieceObject;
   Problem: TDrapeProblem;
 begin
@@ -161,9 +161,7 @@ begin
     end;
   for Problem in Result.Meshing.Problems do
     Insert(Problem, Result.Problems, Length(Result.Problems));
-  Result.HasBody := Drape.BodyMeasures(Measures);
-  if Result.HasBody then
-    Result.Body := BuildBodyForm(Measures);
+  Result.HasBody := Drape.BodyMesh(Result.Body);
 end;
 
 function DrapeObjectName(Drape: TDrape; Item: integer): string;
@@ -207,6 +205,8 @@ var
   Source: TPatternSource;
   Material: TPatternMaterial;
   Entry: TDrapeItem;
+  Attached: TJSONArray;
+  Vertex: integer;
 begin
   Entry := Drape.Items[Item];
   Drape.FindPiece(Entry.Piece, Piece);
@@ -224,6 +224,13 @@ begin
   Result.Add('vertices', Length(Exported.Meshing.Meshes[Item].Points));
   Result.Add('position', Vec3ToJSON(Entry.Placement.Position));
   Result.Add('rotation', Vec3ToJSON(Entry.Placement.Rotation));
+  if Length(Exported.Meshing.Attached[Item]) > 0 then
+  begin
+    Attached := TJSONArray.Create;
+    Result.Add('attached', Attached);
+    for Vertex in Exported.Meshing.Attached[Item] do
+      Attached.Add(Vertex);
+  end;
 end;
 
 function SceneSeams(Drape: TDrape; const Exported: TDrapeExport): TJSONArray;

@@ -18,7 +18,7 @@
 
 // The drape app's view as SVG, from one of its fixed views: the body and the
 // placed pieces as Sloper.Core.DrapeScene draws them, back to front, the
-// seams' links over them, and each piece numbered by its place in the
+// seams' links and the attached edges over them, and each piece numbered by its place in the
 // drape's list, so whoever looks can name it. For the Claude tab, which sees
 // it as an image. No LCL dependency.
 unit Sloper.Output.DrapeSVG;
@@ -42,12 +42,14 @@ const
   MARGIN = 20;
   PIECE_STROKE = '#333333';
   SEAM_STROKE = '#E07020';
+  ATTACHED_STROKE = '#2E9A40';
   LABEL_COLOR = '#000000';
   LABEL_HALO = '#FFFFFF';
   // Widths and sizes, in screen units
   PIECE_STROKE_WIDTH = 1;
   BODY_STROKE_WIDTH = 0.5;
   SEAM_STROKE_WIDTH = 1.5;
+  ATTACHED_STROKE_WIDTH = 4;
   LABEL_SIZE = 14;
   LABEL_HALO_WIDTH = 3;
   NUMBER_DECIMALS = 2;
@@ -82,6 +84,7 @@ var
   Body, Labels: TStringBuilder;
   Labelled: array of boolean;
   Color, Stroke: string;
+  Attached: TVec2Array;
   StrokeWidth: double;
 begin
   Faces := BuildDrapeScene(Drape, CameraForView(DefaultDrapeCamera, View));
@@ -144,6 +147,9 @@ begin
     for Line in Lines do
       Body.Append(Format('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>', [Num(Line.From.X),
         Num(Line.From.Y), Num(Line.Onto.X), Num(Line.Onto.Y), SEAM_STROKE, Num(SEAM_STROKE_WIDTH)])).Append(#10);
+    for Attached in DrapeAttachedLines(Drape, CameraForView(DefaultDrapeCamera, View)) do
+      Body.Append(Format('<polyline points="%s" fill="none" stroke="%s" stroke-width="%s" stroke-linejoin="round" ' +
+        'stroke-linecap="round"/>', [PointsText(Attached), ATTACHED_STROKE, Num(ATTACHED_STROKE_WIDTH)])).Append(#10);
     Body.Append(Labels.ToString);
     Body.Append('</svg>').Append(#10);
     Result := Body.ToString;

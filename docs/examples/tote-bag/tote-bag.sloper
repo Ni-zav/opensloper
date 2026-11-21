@@ -5,7 +5,7 @@
   "notes": "A lined tote bag with boxed corners, a patch pocket and two straps. Change the variables to resize it; it needs no measurements. Example pattern: variables, materials, a moved copy for the lining, rounded corners, placement lines, notches, a seam check and notes.",
   "measurementFile": "",
   "identity": "fbd14888-b68f-47fa-8b92-a9512418ca88",
-  "nextId": 99,
+  "nextId": 107,
   "variables": [
     {
       "id": 1,
@@ -1007,6 +1007,166 @@
       "size": 12,
       "print": true,
       "align": "centre"
+    },
+    {
+      "id": 99,
+      "type": "seam",
+      "name": "Sides",
+      "sideA": [
+        {
+          "piece": 90,
+          "edge": 24
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 90,
+          "edge": 18
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 100,
+      "type": "seam",
+      "name": "Base_seam",
+      "sideA": [
+        {
+          "piece": 90,
+          "edge": 21
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 90,
+          "edge": 21
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 101,
+      "type": "seam",
+      "name": "Corner_left",
+      "sideA": [
+        {
+          "piece": 90,
+          "edge": 22
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 90,
+          "edge": 23
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 102,
+      "type": "seam",
+      "name": "Corner_right",
+      "sideA": [
+        {
+          "piece": 90,
+          "edge": 19
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 90,
+          "edge": 20
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 103,
+      "type": "seam",
+      "name": "Lining_sides",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 54
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 91,
+          "edge": 48
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 104,
+      "type": "seam",
+      "name": "Lining_base",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 51
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 91,
+          "edge": 51
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 105,
+      "type": "seam",
+      "name": "Lining_corner_left",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 52
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 91,
+          "edge": 53
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 106,
+      "type": "seam",
+      "name": "Lining_corner_right",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 49
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 91,
+          "edge": 50
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
     }
   ],
   "materials": [

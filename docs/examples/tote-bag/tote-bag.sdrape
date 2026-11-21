@@ -1,0 +1,91 @@
+{
+  "format": "drape",
+  "version": 1,
+  "units": "mm",
+  "name": "Tote bag",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "tote-bag.sloper"
+    }
+  ],
+  "body": {
+    "kind": "none"
+  },
+  "gap": 20,
+  "placements": [
+    {
+      "source": 1,
+      "piece": 91,
+      "copy": 1,
+      "position": [
+        0,
+        -45,
+        800
+      ],
+      "rotation": [
+        0,
+        0,
+        180
+      ],
+      "attached": [
+        47
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 90,
+      "copy": 1,
+      "position": [
+        0,
+        -60,
+        800
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "attached": [
+        17
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 91,
+      "copy": 2,
+      "position": [
+        0,
+        45,
+        800
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "attached": [
+        47
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 90,
+      "copy": 2,
+      "position": [
+        0,
+        60,
+        800
+      ],
+      "rotation": [
+        0,
+        0,
+        180
+      ],
+      "attached": [
+        17
+      ]
+    }
+  ]
+}

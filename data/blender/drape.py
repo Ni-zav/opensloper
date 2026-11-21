@@ -22,9 +22,10 @@ opensloper-cli drape writes this script beside the scene file it reads
     blender --background --python NAME.blender.py
 
 It imports the pieces and the body, joins each pattern's pieces into one cloth
-object with a loose edge between every pair of vertices a seam sews, sets up
-the cloth and collisions, runs the simulation and saves NAME.blend, at its last
-frame. Options go after "--":
+object with a loose edge between every pair of vertices a seam sews, holds the
+vertices of attached edges on the body (or where they are placed, without
+one), sets up the cloth and collisions, runs the simulation and saves
+NAME.blend, at its last frame. Options go after "--":
 
     blender --background --python NAME.blender.py -- --frames 80 --output dress.blend
 
@@ -67,6 +68,11 @@ BENDING_STIFFNESS = 0.5
 # The most force a sewing edge pulls with; 0 has no limit
 SEWING_FORCE = 5
 BODY_COLOR = (0.89, 0.84, 0.77, 1)
+# The vertex group of the vertices held to the body, or where they are placed
+# when there is no body: the cloth's pin group
+ATTACHED_GROUP = "Attached"
+# How far off the body's surface the attached vertices are held, in metres
+ATTACHED_OFFSET = COLLISION_DISTANCE + BODY_THICKNESS
 PROGRESS_PREFIX = "OpenSloper:"
 
 
@@ -146,6 +152,7 @@ def build_garment(name, indexes, scene, imported, materials):
     vertices, faces, face_uvs, face_materials = [], [], [], []
     starts = {}
     groups = []
+    attached = []
     slots = []
     for index in indexes:
         entry = scene["objects"][index]
@@ -156,6 +163,7 @@ def build_garment(name, indexes, scene, imported, materials):
         position = Vector(entry["position"])
         starts[index] = len(vertices)
         groups.append((entry["name"], range(len(vertices), len(vertices) + len(piece.vertices))))
+        attached.extend(len(vertices) + vertex for vertex in entry.get("attached", []))
         vertices.extend((turn @ vertex.co + position) * METRES_PER_MM for vertex in piece.vertices)
         material = material_for(entry.get("material", ""), entry["color"], materials)
         if material not in slots:
@@ -187,12 +195,26 @@ def build_garment(name, indexes, scene, imported, materials):
     for group_name, members in groups:
         group = garment.vertex_groups.new(name=group_name)
         group.add(list(members), 1.0, "REPLACE")
-    return garment, len(edges)
+    if attached:
+        garment.vertex_groups.new(name=ATTACHED_GROUP).add(attached, 1.0, "REPLACE")
+    return garment, len(edges), len(attached)
 
 
-def add_cloth(garment, options, others):
+def add_cloth(garment, options, others, body):
+    attached = ATTACHED_GROUP in garment.vertex_groups
+    # Attached vertices start on the body, where the shrinkwrap puts them, and
+    # stay there: the cloth pins what the modifiers before it give
+    if attached and body is not None:
+        wrap = garment.modifiers.new("Attach", "SHRINKWRAP")
+        wrap.target = body
+        wrap.vertex_group = ATTACHED_GROUP
+        wrap.wrap_method = "NEAREST_SURFACEPOINT"
+        wrap.wrap_mode = "OUTSIDE_SURFACE"
+        wrap.offset = ATTACHED_OFFSET
     cloth = garment.modifiers.new("Cloth", "CLOTH")
     settings = cloth.settings
+    if attached:
+        settings.vertex_group_mass = ATTACHED_GROUP
     settings.mass = options.mass
     settings.quality = options.quality
     settings.tension_stiffness = TENSION_STIFFNESS
@@ -259,8 +281,7 @@ def main():
     bpy.context.scene.unit_settings.length_unit = "MILLIMETERS"
     report("importing the pieces")
     imported = import_obj(os.path.join(folder, scene["pieces"]))
-    if "body" in scene:
-        add_body(os.path.join(folder, scene["body"]))
+    body = add_body(os.path.join(folder, scene["body"])) if "body" in scene else None
     by_source = {}
     for index, entry in enumerate(scene["objects"]):
         by_source.setdefault(entry["source"], []).append(index)
@@ -268,13 +289,13 @@ def main():
     garments = []
     for indexes in by_source.values():
         name = scene["objects"][indexes[0]]["name"].rsplit(" ", 2)[0] if len(by_source) > 1 else scene.get("name") or "Garment"
-        garment, sewn = build_garment(name, indexes, scene, imported, materials)
-        report(f"{name}: {len(garment.data.vertices)} vertices, {sewn} sewing edges")
+        garment, sewn, held = build_garment(name, indexes, scene, imported, materials)
+        report(f"{name}: {len(garment.data.vertices)} vertices, {sewn} sewing edges, {held} attached")
         garments.append(garment)
     for item in imported.values():
         bpy.data.objects.remove(item)
     for garment in garments:
-        add_cloth(garment, options, len(garments) > 1)
+        add_cloth(garment, options, len(garments) > 1, body)
     add_view()
     target = bpy.context.scene
     target.frame_start = 1

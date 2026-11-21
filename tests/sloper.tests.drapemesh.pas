@@ -25,7 +25,7 @@ unit Sloper.Tests.DrapeMesh;
 interface
 
 uses
-  SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft, Sloper.Core.Pattern,
+  SysUtils, Math, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Geometry3, Sloper.Core.Draft, Sloper.Core.Pattern,
   Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.PatternSources, Sloper.Core.DrapePlacement, Sloper.Core.DrapeFile,
   Sloper.Core.Mesher, Sloper.Core.DrapeMesh;
 
@@ -57,6 +57,9 @@ type
     procedure TestOpenSeamIsAProblem;
     procedure TestSeamProblemsWithoutMeshing;
     procedure TestOpenFoldHalvesListedOnce;
+    procedure TestSameEdgeSewsTwoCopies;
+    procedure TestOwnPieceSewnToNearestCopy;
+    procedure TestAttachedEdgeVertices;
   end;
 
 implementation
@@ -416,6 +419,111 @@ begin
   AssertEquals('one for each front', 2, Length(Problems));
   AssertEquals('the half far from the back', First, Problems[0].Item);
   AssertEquals('the other front', Second, Problems[1].Item);
+end;
+
+// A centre back: the same edge on both sides, sewn between the copies, never
+// a copy to itself
+procedure TTestDrapeMesh.TestSameEdgeSewsTwoCopies;
+var
+  Back: TPieceObject;
+  Seam: TSeamObject;
+  Centre: string;
+  Left, Right: integer;
+  Meshing: TDrapeMeshing;
+  Pair: TDrapeSeamPair;
+begin
+  Back := Shape('Back', [0, 100, 100, 0], [0, 0, 200, 200]);
+  Centre := EdgeBetween(Back, Vec2(0, 0), Vec2(0, 200));
+  Seam := FPattern.AddSeam('Centre', Side([Back], [Centre]), Side([Back], [Centre]));
+  AssertNotNull(FPattern.LastError, Seam);
+  // The same edge runs the same way on both copies
+  Seam.Reversed := True;
+  AssertTrue(FPattern.LastError, FPattern.SetCut(Back, 2, True));
+  FPattern.Evaluate;
+  Left := Place(Back, 1, 60);
+  Right := Place(Back, 2, -60);
+  Meshing := MeshDrape(FDrape, SPACING);
+  AssertMeshesWhole(Meshing);
+  AssertEquals('problems', 0, Length(Meshing.Problems));
+  AssertEquals('once along the seam', 21, Length(Meshing.Pairs));
+  for Pair in Meshing.Pairs do
+  begin
+    AssertTrue('between the copies', Pair.FirstItem <> Pair.SecondItem);
+    AssertTrue('first a copy', (Pair.FirstItem = Left) or (Pair.FirstItem = Right));
+    AssertNear('at the same height', Vertex(Meshing, Pair.FirstItem, Pair.FirstVertex).Y,
+      Vertex(Meshing, Pair.SecondItem, Pair.SecondVertex).Y);
+  end;
+end;
+
+// A bag's front and back cut from one piece: each copy's left side is sewn to
+// the right side of the copy placed beside it, not to its own as a sleeve's is
+procedure TTestDrapeMesh.TestOwnPieceSewnToNearestCopy;
+var
+  Body: TPieceObject;
+  Meshing: TDrapeMeshing;
+  Pair: TDrapeSeamPair;
+begin
+  Body := Shape('Body', [0, 100, 100, 0], [0, 0, 200, 200]);
+  AssertNotNull(FPattern.LastError, FPattern.AddSeam('Sides', Side([Body], [EdgeBetween(Body, Vec2(0, 0), Vec2(0, 200))]),
+    Side([Body], [EdgeBetween(Body, Vec2(100, 0), Vec2(100, 200))])));
+  AssertTrue(FPattern.LastError, FPattern.SetCut(Body, 2, False));
+  FPattern.Evaluate;
+  // The back's right side 10 mm from the front's left
+  Place(Body, 1, 0);
+  Place(Body, 2, -110);
+  Meshing := MeshDrape(FDrape, SPACING);
+  AssertMeshesWhole(Meshing);
+  AssertEquals('problems', 0, Length(Meshing.Problems));
+  AssertEquals('both sides', 42, Length(Meshing.Pairs));
+  for Pair in Meshing.Pairs do
+  begin
+    AssertTrue('between the copies', Pair.FirstItem <> Pair.SecondItem);
+    AssertNear('a left side first', 0, Vertex(Meshing, Pair.FirstItem, Pair.FirstVertex).X);
+    AssertNear('to a right side', 100, Vertex(Meshing, Pair.SecondItem, Pair.SecondVertex).X);
+  end;
+  // Placed apart, a copy is sewn into a tube of its own
+  Place(Body, 2, 1000);
+  Meshing := MeshDrape(FDrape, SPACING);
+  for Pair in Meshing.Pairs do
+    AssertEquals('its own sides', Pair.FirstItem, Pair.SecondItem);
+end;
+
+// An attached edge gives the outline vertices along it, its corners too, and
+// on a fold those of both halves
+procedure TTestDrapeMesh.TestAttachedEdgeVertices;
+var
+  Front: TPieceObject;
+  Item, Index: integer;
+  Meshing: TDrapeMeshing;
+  Point: TVec2;
+  Lowest, Highest: double;
+begin
+  Front := Shape('Front', [0, 120, 120, 0], [0, 0, 200, 200]);
+  Item := Place(Front, 1, 0);
+  FDrape.SetAttached(Item, EdgeBetween(Front, Vec2(0, 0), Vec2(120, 0)), True);
+  Meshing := MeshDrape(FDrape, SPACING);
+  AssertMeshesWhole(Meshing);
+  AssertEquals('every 10 mm, both ends', 13, Length(Meshing.Attached[Item]));
+  for Index in Meshing.Attached[Item] do
+  begin
+    AssertTrue('on the outline', Index < Meshing.Meshes[Item].OutlineCount);
+    AssertNear('along the top', 0, Vertex(Meshing, Item, Index).Y);
+  end;
+  AssertTrue(FPattern.LastError, FPattern.SetFoldEdge(Front, EdgeBetween(Front, Vec2(0, 0), Vec2(0, 200))));
+  FPattern.Evaluate;
+  Meshing := MeshDrape(FDrape, SPACING);
+  AssertEquals('both halves, the fold''s point once', 25, Length(Meshing.Attached[Item]));
+  Lowest := 0;
+  Highest := 0;
+  for Index in Meshing.Attached[Item] do
+  begin
+    Point := Vertex(Meshing, Item, Index);
+    AssertNear('along the top', 0, Point.Y);
+    Lowest := Min(Lowest, Point.X);
+    Highest := Max(Highest, Point.X);
+  end;
+  AssertNear('the half as drafted', 120, Highest);
+  AssertNear('the mirrored half', -120, Lowest);
 end;
 
 initialization

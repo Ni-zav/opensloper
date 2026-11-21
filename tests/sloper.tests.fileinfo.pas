@@ -80,11 +80,12 @@ const
   FULL_DRAPE =
     '{"format": "drape", "version": 1, "units": "mm", "name": "Dress", "nextId": 2,' +
     ' "sources": [{"id": 1, "pattern": "dress.sloper", "measurementFile": "sizes.slm", "size": "38"}],' +
-    ' "body": {"kind": "measurements", "measurementFile": "me.slm", "size": "40"}, "gap": 15,' +
-    ' "placements": [{"source": 1, "piece": 42, "copy": 2, "position": [10, -170, 900], "rotation": [0, 90, 0]}]}';
+    ' "body": {"kind": "measurements", "measurementFile": "me.slm", "size": "40", "arms": false}, "gap": 15,' +
+    ' "placements": [{"source": 1, "piece": 42, "copy": 2, "position": [10, -170, 900], "rotation": [0, 90, 0],' +
+    ' "attached": [7]}]}';
 
-// The Blender scene of the bodice block example, placed by guesses, with every
-// member the export writes
+// The Blender scene of the bodice block example, placed by guesses and an edge
+// attached, with every member the export writes
 function FullBlenderScene: string;
 var
   Drape: TDrape;
@@ -97,6 +98,7 @@ begin
     Drape.AddSource('bodice-block.sloper', '', '');
     Drape.LoadSources;
     Drape.GuessPlacements;
+    Drape.SetAttached(0, Drape.AttachableEdges(Drape.Items[0].Piece)[0], True);
     Result := DrapeSceneText(Drape, BuildDrapeExport(Drape), 'bodice.pieces.obj', 'bodice.body.obj', DEFAULT_MESH_SPACING);
   finally
     FreeAndNil(Drape);

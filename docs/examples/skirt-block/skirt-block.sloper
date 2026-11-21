@@ -4,7 +4,8 @@
   "units": "mm",
   "notes": "A straight skirt block: half back and half front. The pattern of the straight skirt tutorial.",
   "measurementFile": "skirt.slm",
-  "nextId": 48,
+  "identity": "6a0ae3f4-c1be-4472-9cf5-c0f2250fca1f",
+  "nextId": 53,
   "variables": [
     {
       "id": 1,
@@ -474,6 +475,94 @@
         "mirrored": false
       },
       "foldEdge": 19
+    },
+    {
+      "id": 48,
+      "type": "seam",
+      "name": "Centre_back_seam",
+      "sideA": [
+        {
+          "piece": 46,
+          "edge": 18
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 46,
+          "edge": 18
+        }
+      ],
+      "reversed": true,
+      "ease": "0",
+      "tolerance": "1"
+    },
+    {
+      "id": 49,
+      "type": "seam",
+      "name": "Back_dart",
+      "sideA": [
+        {
+          "piece": 46,
+          "edge": 34
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 46,
+          "edge": 35
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "1"
+    },
+    {
+      "id": 50,
+      "type": "seam",
+      "name": "Front_dart",
+      "sideA": [
+        {
+          "piece": 47,
+          "edge": 41
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 47,
+          "edge": 40
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "1"
+    },
+    {
+      "id": 52,
+      "type": "seam",
+      "name": "Side",
+      "sideA": [
+        {
+          "piece": 47,
+          "edge": 26
+        },
+        {
+          "piece": 47,
+          "edge": 27
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 46,
+          "edge": 25
+        },
+        {
+          "piece": 46,
+          "edge": 27
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "1"
     }
   ]
 }

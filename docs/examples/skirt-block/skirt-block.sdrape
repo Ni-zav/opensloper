@@ -1,0 +1,64 @@
+{
+  "format": "drape",
+  "version": 1,
+  "units": "mm",
+  "name": "Skirt block",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "skirt-block.sloper"
+    }
+  ],
+  "body": {
+    "kind": "measurements"
+  },
+  "gap": 20,
+  "placements": [
+    {
+      "source": 1,
+      "piece": 47,
+      "copy": 1,
+      "position": [
+        -125,
+        -150,
+        745
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 46,
+      "copy": 1,
+      "position": [
+        -120,
+        150,
+        745
+      ],
+      "rotation": [
+        0,
+        0,
+        180
+      ]
+    },
+    {
+      "source": 1,
+      "piece": 46,
+      "copy": 2,
+      "position": [
+        120,
+        150,
+        745
+      ],
+      "rotation": [
+        0,
+        0,
+        180
+      ]
+    }
+  ]
+}

@@ -168,9 +168,33 @@ Both pieces start with a 10 mm seam allowance and a grainline straight down.
 
 ![The finished pieces](images/skirt-4-pieces.svg)
 
+## 6. Seams
+
+Seams say which edges are sewn together, so the app checks their lengths and
+the [drape app](../drape/index.md) knows what to sew.
+
+Choose the Seam tool (++e++). The side seam runs over two edges on each piece,
+the hip curve and the straight edge below it, and the straight edge is shared:
+click on its front side to pick the front.
+
+- Side seam: click Front_hip, then Side_seam on the front side, press
+  ++tab++, click Back_hip, then Side_seam on the back side, and press
+  ++enter++. Name it **Side** in the Objects tab.
+- Centre back: the two backs are sewn along Centre_back. Click Centre_back,
+  press ++tab++, click it again, and press ++enter++; name it
+  **Centre_back_seam**. Both copies' edges run the same way, from the waist
+  down, so press **Flip** in its properties to pair waist with waist.
+- Darts: each dart is a seam between its two legs. Click Line_P_O, ++tab++,
+  Line_O_Q, ++enter++ for **Back_dart**, and Line_R_W, ++tab++, Line_V_R,
+  ++enter++ for **Front_dart**.
+
+Every side matches its partner, so the status bar shows no problems.
+
 ## What next
 
 - Change the measurements, or the ease, and watch the whole block follow.
 - Open File → Publish… to lay the pieces out and print them.
+- Open File → Drape… to see the skirt on a body and drape it in Blender: the
+  example's drape file, beside the pattern, has the pieces placed already.
 - Read [Measurements and formulas](../design/formulas.md) and
   [Pieces](../design/pieces.md) for more on each step.

@@ -76,6 +76,10 @@
         "size": {
           "description": "The body's size, for a size table; the first source's when left out",
           "type": "string"
+        },
+        "arms": {
+          "description": "Whether the figure has its arms, true when left out; false leaves them and the hands out, so a full skirt does not catch on them",
+          "type": "boolean"
         }
       },
       "required": [
@@ -117,6 +121,13 @@
             "type": "array",
             "items": {
               "type": "number"
+            }
+          },
+          "attached": {
+            "description": "The IDs of the piece's edges held to the body in Blender, as a waist or a strap's end, or held where they are placed when there is no body",
+            "type": "array",
+            "items": {
+              "type": "integer"
             }
           }
         },

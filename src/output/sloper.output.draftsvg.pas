@@ -36,9 +36,6 @@ type
     // then ignored
     LabelChosen: boolean;
     LabelKeys: TStringArray;
-    // Names only the objects with these names, compared as names are, in
-    // every draft an animation shows; Labels is then ignored
-    LabelNames: TStringArray;
     // Pieces are left unfilled, as with View -> Piece Fills off
     NoFills: boolean;
     // Show only this part of the draft, in model millimetres
@@ -57,10 +54,6 @@ type
 
 function DefaultDraftSVGOptions: TDraftSVGOptions;
 function DraftToSVG(Pattern: TPattern; const Options: TDraftSVGOptions): string;
-// The patterns' drafts in turn, each for a few seconds and fading into the
-// next, looping, all drawn at the same scale in a view that holds them all.
-// Where animation is off or not shown, the last is drawn.
-function AnimatedDraftToSVG(const Patterns: array of TPattern; const Options: TDraftSVGOptions): string;
 // A number as written in SVG
 function SVGNumber(Value: double): string;
 function EscapeXML(const Text: string): string;
@@ -96,12 +89,6 @@ const
   HATCH_SHARE = 0.012;
   // A callout's leader, in mm, as printed
   NOTE_LINE_WIDTH = 0.25;
-  // How long an animation shows each draft, and how long the next takes to
-  // fade in over it, in seconds
-  FRAME_SECONDS = 2.5;
-  FADE_SECONDS = 0.5;
-  // Between two keyframes that change at once, in percent
-  KEYFRAME_STEP = 0.01;
 
 type
   TDraftView = record
@@ -408,9 +395,9 @@ begin
     Result[Index] := Pattern.Objects[Index];
 end;
 
-// Everything drawn, in the view given
-function DraftElements(Pattern: TPattern; const Options: TDraftSVGOptions; const View: TDraftView): string;
+function DraftToSVG(Pattern: TPattern; const Options: TDraftSVGOptions): string;
 var
+  View: TDraftView;
   Index: integer;
   DraftObject: TDraftObject;
   Point: TPointObject;
@@ -419,13 +406,6 @@ var
   var
     Key: string;
   begin
-    if Length(Options.LabelNames) > 0 then
-    begin
-      for Key in Options.LabelNames do
-        if SameText(Key, DraftObject.Name) then
-          Exit(True);
-      Exit(False);
-    end;
     if not Options.LabelChosen then
       Exit(Options.Labels);
     for Key in Options.LabelKeys do
@@ -443,7 +423,8 @@ var
   Pieces: TPieceObjectArray;
   Piece: TPieceObject;
 begin
-  Result := '';
+  View := DraftView(Pattern, Options);
+  Result := SVGStart(View);
   if Options.FollowPieceView then
     Pieces := Pattern.PiecesInDrawOrder
   else
@@ -486,83 +467,6 @@ begin
         Result := Result + NoteElement(TNoteObject(DraftObject), NoteFieldValues(Pattern, TNoteObject(DraftObject),
           PatternFieldValues(Pattern, Options.PatternFileName)));
     end;
-end;
-
-function DraftToSVG(Pattern: TPattern; const Options: TDraftSVGOptions): string;
-var
-  View: TDraftView;
-begin
-  View := DraftView(Pattern, Options);
-  Result := SVGStart(View) + DraftElements(Pattern, Options, View) + '</svg>' + #10;
-end;
-
-// When frame Frame of Count is seen, as CSS keyframes of its opacity: it fades
-// in over the one before, which stays until it has, and the first is back
-// under the last as that fades out to start again
-function FrameKeyframes(Frame, Count: integer): string;
-var
-  Total: double;
-
-  function At(Seconds: double): double;
-  begin
-    Result := 100 * Seconds / Total;
-  end;
-
-  function Key(Percent, Opacity: double): string;
-  begin
-    Result := Format('%s%%{opacity:%s}', [Num(Percent), Num(Opacity)]);
-  end;
-
-begin
-  Total := Count * FRAME_SECONDS;
-  Result := Format('@keyframes frame%d{', [Frame]);
-  if Frame = 0 then
-    Result := Result + Key(0, 1) + Key(At(FRAME_SECONDS + FADE_SECONDS), 1) +
-      Key(At(FRAME_SECONDS + FADE_SECONDS) + KEYFRAME_STEP, 0) + Key(At(Total - FADE_SECONDS) - KEYFRAME_STEP, 0) +
-      Key(At(Total - FADE_SECONDS), 1) + Key(100, 1)
-  else
-  begin
-    Result := Result + Key(0, 0) + Key(At(Frame * FRAME_SECONDS), 0) + Key(At(Frame * FRAME_SECONDS + FADE_SECONDS), 1);
-    if Frame < Count - 1 then
-      Result := Result + Key(At((Frame + 1) * FRAME_SECONDS + FADE_SECONDS), 1) +
-        Key(At((Frame + 1) * FRAME_SECONDS + FADE_SECONDS) + KEYFRAME_STEP, 0) + Key(100, 0)
-    else
-      Result := Result + Key(At(Total - FADE_SECONDS), 1) + Key(100, 0);
-  end;
-  Result := Result + '}' + #10;
-end;
-
-function AnimatedDraftToSVG(const Patterns: array of TPattern; const Options: TDraftSVGOptions): string;
-var
-  View, Frame: TDraftView;
-  Index: integer;
-  Right, Bottom: double;
-begin
-  if Length(Patterns) = 1 then
-    Exit(DraftToSVG(Patterns[0], Options));
-  View := DraftView(Patterns[0], Options);
-  for Index := 1 to High(Patterns) do
-  begin
-    Frame := DraftView(Patterns[Index], Options);
-    Right := Max(View.Left + View.Width, Frame.Left + Frame.Width);
-    Bottom := Max(View.Top + View.Height, Frame.Top + Frame.Height);
-    View.Left := Min(View.Left, Frame.Left);
-    View.Top := Min(View.Top, Frame.Top);
-    View.Width := Right - View.Left;
-    View.Height := Bottom - View.Top;
-    View.Extent := Max(View.Extent, Frame.Extent);
-  end;
-  Result := SVGStart(View) + '<style>' + #10 +
-    Format('.frame{animation-duration:%ss;animation-iteration-count:infinite;animation-timing-function:linear}',
-    [Num(Length(Patterns) * FRAME_SECONDS)]) + #10;
-  for Index := 0 to High(Patterns) do
-    Result := Result + FrameKeyframes(Index, Length(Patterns));
-  // Each frame has its own background, so the last hides the rest
-  Result := Result + '@media (prefers-reduced-motion: reduce){.frame{animation:none}}' + #10 + '</style>' + #10;
-  for Index := 0 to High(Patterns) do
-    Result := Result + Format('<g class="frame" style="animation-name:frame%d">', [Index]) + #10 +
-      Format('<rect x="%s" y="%s" width="%s" height="%s" fill="#ffffff"/>', [Num(View.Left), Num(View.Top), Num(View.Width),
-      Num(View.Height)]) + #10 + DraftElements(Patterns[Index], Options, View) + '</g>' + #10;
   Result := Result + '</svg>' + #10;
 end;
 

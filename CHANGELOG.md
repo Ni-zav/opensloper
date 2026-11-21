@@ -16,11 +16,7 @@ Changed, Fixed and Removed under each version.
 ### Added
 
 - A tutorial, Adding a zip, puts a zip in the skirt block's centre back
-  from the Features tab, with an animated picture of what Apply makes (#76).
-- `opensloper-cli export-draft --animate=FILE,...` writes an animated SVG
-  that fades from the pattern to each of the others in turn,
-  `--region=L,T,R,B` draws only part of the draft, and `--label=NAMES`
-  names only the objects listed.
+  from the Features tab (#76).
 
 ## 0.5.0
 

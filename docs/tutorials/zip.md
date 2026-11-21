@@ -11,8 +11,6 @@ The finished pattern is in the documentation's examples:
 skirt block and its measurements in
 [skirt.slm](../examples/skirt-block/skirt.slm).
 
-![The back of the skirt before and after Apply](images/zip-apply.svg)
-
 ## 1. Start from the skirt block
 
 Open the skirt block you drafted in the first tutorial, or download
@@ -46,8 +44,7 @@ Leave them as they are and click **Apply**. The status bar says
 
 ## 3. What Apply made
 
-The picture at the top shows the back before and after. Apply added
-ordinary objects, which you can select and change as you could any you drew:
+Apply added ordinary objects, which you can select and change as you could any you drew:
 
 - **ZipStop**, a point on Centre_back the zip's length from A. Its Distance or
   ratio is `#zip_length`.
@@ -74,7 +71,10 @@ skirt's waist to hip. A common skirt zip is 18 cm. Open the **Variables** tab
 and change the formula of `zip_length` to `180`.
 
 ZipStop moves up the seam, and with it the split, the end of the wider
-allowance, the notch and the end of the topstitching. Every zip you add to
+allowance, the notch and the end of the topstitching.
+
+![The skirt with its zip](images/zip-1-pieces.svg)
+ Every zip you add to
 this pattern starts as `#zip_length`, so a zip on another piece stays the
 same length; type a number or another formula in the tab's Length for one of
 its own.

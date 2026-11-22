@@ -441,6 +441,11 @@
         <UnitName Value="Sloper.Tests.API"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.editorserver.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.EditorServer"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.draftsvg.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.DraftSVG"/>

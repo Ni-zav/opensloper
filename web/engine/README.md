@@ -14,8 +14,8 @@ say what it showed. It is built twice from the same units:
 
 | File | What it is |
 | --- | --- |
-| `engine_serve.lpr` | The program: `TApiServer` over stdin and stdout |
-| `engine_lib.lpr` | The library: `TApiServer` behind `engine_handle` |
+| `engine_serve.lpr` | The program: `TEditorApiServer` (the API with the editor's methods) over stdin and stdout |
+| `engine_lib.lpr` | The library: `TEditorApiServer` behind `engine_handle` |
 | `browser/` | A page that runs the library in a Web Worker and times it (TypeScript) |
 | `stubs/` | Stand-ins for `Sloper.Output.DraftPNG` and `Sloper.Output.GarmentPNG` with the same interface, without BGRABitmap; PNG is refused |
 | `build.sh` | Builds `out/engine_serve.wasm` and `out/browser/engine_lib.wasm`; run it through `./opensloper-make.sh web` |

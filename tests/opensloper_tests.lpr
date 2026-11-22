@@ -57,6 +57,7 @@ uses
   Sloper.Tests.FileVersions,
   Sloper.Tests.UnitCheck,
   Sloper.Tests.API,
+  Sloper.Tests.EditorServer,
   Sloper.Tests.DraftSVG,
   Sloper.Tests.LabelPlacement,
   Sloper.Tests.Fonts,

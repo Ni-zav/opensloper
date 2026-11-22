@@ -25,13 +25,13 @@ program engine_serve;
 uses
   Sloper.Core.CodePage,
   SysUtils,
-  Sloper.API.Server;
+  Sloper.API.EditorServer;
 
 var
-  Server: TApiServer;
+  Server: TEditorApiServer;
   Line, Reply: string;
 begin
-  Server := TApiServer.Create;
+  Server := TEditorApiServer.Create;
   try
     while not EOF(Input) do
     begin

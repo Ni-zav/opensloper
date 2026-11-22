@@ -40,7 +40,7 @@ type
     // The reply to an MCP method, or nil when Method is not one
     function CallMcp(const Method: string; Params: TJSONObject; out Handled: boolean): TJSONData;
   public
-    // On a document of its own
+    // On a document of its own, answering the editor_ methods too
     constructor Create;
     // Calling Backend, such as a connection to the design window; it is freed
     // with the server
@@ -86,7 +86,7 @@ resourcestring
 implementation
 
 uses
-  StrUtils, Sloper.Core.JSON, Sloper.Core.OperationInfo, Sloper.Core.Version;
+  StrUtils, Sloper.Core.JSON, Sloper.Core.OperationInfo, Sloper.Core.Version, Sloper.API.EditorServer;
 
 const
   // Newest first; a client asking for another is answered with the newest
@@ -347,7 +347,7 @@ end;
 constructor TMcpServer.Create;
 begin
   inherited Create;
-  FApi := TApiServer.Create;
+  FApi := TEditorApiServer.Create;
   FBackend := FApi;
 end;
 

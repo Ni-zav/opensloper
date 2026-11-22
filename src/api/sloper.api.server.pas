@@ -72,12 +72,6 @@ type
     FEarlyChange: boolean;
     // The document's Generation when the client last heard from it
     FGeneration: integer;
-    // Opens a change on the document, refusing while the user has one open;
-    // CheckLocks as in TPatternDocument.BeginChange
-    procedure BeginChange(const Description: string; CheckLocks: boolean = True);
-    // Ends the change, raising the reason when it was refused for changing a
-    // locked object
-    procedure EndChange;
     procedure ConfirmWrite(const Path: string);
     // As a reply gives them: in full, or with WithholdsFiles the pattern by
     // its file name alone and the measurement file not at all
@@ -92,9 +86,6 @@ type
     function DocumentInfo: TJSONObject;
     function ProblemsResult(WithReport: boolean): TJSONObject;
     // Cancels the open change and raises the pattern's reason for refusing it
-    procedure RefuseChange;
-    function Reference(Params: TJSONObject; const AName: string; Use: boolean = True): string;
-    function AddedNode(Node: TEvalNode): TJSONData;
     function DoOpen(Params: TJSONObject): TJSONData;
     function DoSave(Params: TJSONObject): TJSONData;
     function DoGetMeasurements: TJSONData;
@@ -163,8 +154,23 @@ type
     function DoSetText(Params: TJSONObject): TJSONData;
     function DoExport(Params: TJSONObject): TJSONData;
     function DoConvertUnits(Params: TJSONObject): TJSONData;
+  protected
+    // Opens a change on the document, refusing while the user has one open;
+    // CheckLocks as in TPatternDocument.BeginChange
+    procedure BeginChange(const Description: string; CheckLocks: boolean = True);
+    // Ends the change, raising the reason when it was refused for changing a
+    // locked object
+    procedure EndChange;
+    // Cancels the open change and raises the pattern's reason for refusing it
+    procedure RefuseChange;
+    // Ends the change that added Node, or refuses it when Node is nil, and
+    // gives Node as get_object does
+    function AddedNode(Node: TEvalNode): TJSONData;
+    // The key of the object a parameter names by ID or name. With Use, a
+    // repeat's point without an ID gets one, in the call's change.
+    function Reference(Params: TJSONObject; const AName: string; Use: boolean = True): string;
     // Runs the method by name, for CallMethod
-    function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
+    function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; virtual;
   public
     // With a document of its own, empty until open
     constructor Create;
@@ -192,6 +198,8 @@ type
 
 // An object as a selection lists it: its id, name and type
 function NodeReference(Node: TEvalNode): TJSONObject;
+// An object as get_object gives it
+function NodeToJSON(Document: TPatternDocument; Node: TEvalNode): TJSONObject;
 
 // Reading a call's parameters, for this server and the publish and drape
 // apps' tools: each raises EApiError when a parameter is the wrong kind

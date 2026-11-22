@@ -27,10 +27,10 @@ library engine_lib;
 uses
   Sloper.Core.CodePage,
   SysUtils,
-  Sloper.API.Server;
+  Sloper.API.EditorServer;
 
 var
-  Server: TApiServer = nil;
+  Server: TEditorApiServer = nil;
 
   function engine_alloc(Size: longword): pointer;
   begin
@@ -49,7 +49,7 @@ var
     Line, Reply: rawbytestring;
   begin
     if not Assigned(Server) then
-      Server := TApiServer.Create;
+      Server := TEditorApiServer.Create;
     SetString(Line, Request, Size);
     SetCodePage(Line, CP_UTF8, False);
     Reply := UTF8Encode(UTF8Decode(Server.HandleLine(Line)));

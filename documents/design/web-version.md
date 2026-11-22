@@ -1,45 +1,49 @@
 # Web version
 
-Part of the [OpenSloper design](../opensloper-design-document.md). Planned, not built beyond a spike. A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor, with a Django server for accounts, cloud storage, subscriptions and the marketplace.
+Part of the [OpenSloper design](../opensloper-design-document.md). Planned, not built beyond a spike. A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor, with a Django server for accounts and subscriptions. The site never holds users' files.
 
 **Why it is possible.** The core has no LCL dependency and the Automation API already exposes every document operation as JSON-RPC, so the web needs a new UI, not a new engine, and name rules, formula checks and undo are the same code everywhere.
 
 | Part | Runs in | Language | Does |
 | --- | --- | --- | --- |
-| Engine | Browser (Web Worker) and server | Pascal, compiled to Wasm | Core, document and API layers: evaluation, undo, pieces, exports |
+| Engine | Browser (Web Worker) | Pascal, compiled to Wasm | Core, document and API layers: evaluation, undo, pieces, exports |
 | Editor | Browser | TypeScript | Canvas, tools, panels; talks to the engine through the API |
-| Server | Server | Python, Django | Accounts, cloud files, subscriptions, marketplace, server-side checks and exports |
+| Server | Server | Python, Django | The editor's files, accounts, subscriptions, simple pages |
 
-The editor runs in the browser: sending every drag to the server would make dragging lag, so the server never takes part in interactive drafting.
+The editor runs in the browser: sending every drag to the server would make dragging lag, so the server never takes part in drafting.
+
+**No user data on the site.** Patterns and measurement files stay on the user's machine. Body measurements are personal data under PDPA, and stored files cost hosting, so the server keeps only what an account and a subscription need: a login and an email address, with payment through a provider so no card data is held. Everything the engine does (evaluation, checks, exports) happens in the browser.
 
 ## Engine
 
 - **Compiler:** FPC's `wasm32-wasip1` target, only in the development compiler (trunk 3.3.1), so the web build uses a self-built cross-compiler while the desktop stays on the stable one; the core must compile with both, which `opensloper-make.sh test` will check. pas2js was rejected: it has no pointers, which Clipper2 uses.
 - **One entry point**, `handle(request) → response`, taking and returning a JSON-RPC message as text, the same as `opensloper-cli serve`. Methods the editor needs are added to the Automation API, so the desktop's MCP server gains them too.
-- **In the module:** `src/core`, `src/document`, `src/api` and the PDF, SVG and DXF writers. No LCL and no BGRABitmap, so `render` gives SVG only; PNG must be reached through something the module can leave out.
-- **Shared UI logic moves behind the API** rather than being rewritten in TypeScript: `Sloper.UI.Snap`, `Sloper.UI.Scene`, `Sloper.UI.RulerTicks` with `Sloper.UI.View`, `Sloper.UI.Completion` and `Sloper.UI.ObjectList`.
+- **In the module:** `src/core`, `src/document`, `src/editor`, `src/api` and the PDF, SVG and DXF writers. No LCL and no BGRABitmap, so `render` gives SVG only; PNG must be reached through something the module can leave out.
+- **Shared editing logic moves to `src/editor`** (`Sloper.Editor.*`), a layer without the LCL between the document and the apps, rather than being rewritten in TypeScript or put in `src/core`, which stays the pattern model. The order is core → document → editor → API and UI, and the check forbids the LCL there as in core. As much as possible goes there: the units of `src/ui` that already do without the LCL (Scene, Snap, View, RulerTicks, Completion, ObjectList, Suggestion, SuggestionGrade, SelectionEdits, PanelEdits and PropertyText), then the logic still inside LCL units, the canvas tools' drags and the properties panel's fields, taken out as the web editor needs it. Layout helpers for desktop widgets (CanvasInput, GridColumns, SideTabsLayout) stay in `src/ui`.
+- **Behind the API** goes what needs the evaluated pattern: snapping against a scene the engine keeps between calls, so a mouse move is a cheap query, completion, the object lists, formula suggestions and selection edits. View and RulerTicks are pixel arithmetic run on every frame, so the TypeScript editor mirrors them rather than calling the worker, and tests compare the two.
 - **Runs in a Web Worker**, so a slow evaluation never freezes the page.
 
 **Spike results** (branch `web-spike`, `web/engine/`). FPC trunk compiles the core, document, API, output and Clipper2 unchanged, with its own Wasm linker. Every regression case gives the same objects, values, states and SVG as the desktop, and layout exports are byte for byte the same. A formula edit with the bodice block's full evaluation takes 3.7 ms in Wasm against 1.7 ms native; the module is 4.3 MB, 570 KB with Brotli. In headless Chromium the engine is ready in about 45 ms and an edit takes 3 to 18 ms at the median, so evaluating on every drag in a worker is affordable. Two fixes were needed: `Sloper.Core.AppPaths` now treats WASI as neither Windows nor Unix, and FPC trunk's WASI `ExpandFileName` doubles a leading `/` (patched locally, to report to FPC).
 
 ## Files and storage
 
-The browser has no ordinary filesystem, so the engine stops opening files by path: storage gains functions that read and write strings, with the path functions as wrappers, and the API gains `open` and `save` variants that carry contents. References between files stay relative paths with `/`, resolved by whoever supplies the file, so a set of files moves between desktop and web unchanged. Files live in the user's cloud library or, without an account, in browser storage, with import and export of ordinary files. File watching becomes the server telling open editors a file changed, under the same rules. File formats do not change.
+The browser has no ordinary filesystem, so the engine stops opening files by path: storage gains functions that read and write strings, with the path functions as wrappers, and the API gains `open` and `save` variants that carry contents. References between files stay relative paths with `/`, resolved by whoever supplies the file, so a set of files moves between desktop and web unchanged. Files are opened and saved on the user's machine through the File System Access API where the browser has it (a pattern then saves back to the file it came from, and its measurement file is found beside it from one folder the user grants), else by upload and download. Work in progress is kept in browser storage (OPFS) so a closed tab loses nothing; it never leaves the machine. File watching is dropped on the web. File formats do not change.
 
 ## Editor
 
-A TypeScript single-page app per job, as on the desktop, sharing one engine module; drafting and measurements first, publish after. The canvas draws from the computed geometry the engine reports (Canvas2D, WebGL if needed), not from `render`'s SVG. Tools, shortcuts, snapping, undo steps and colours match the desktop, following these design files. Output is written by the engine and downloaded; printing goes through the browser's PDF viewer.
+A TypeScript single-page app per job, as on the desktop, sharing one engine module. Drafting comes first, opening measurement files the user supplies; the measurements editor follows on the same structure, then publish. There are no measurement forms on the server. The canvas draws from the computed geometry the engine reports (Canvas2D, WebGL if needed), not from `render`'s SVG. Tools, shortcuts, snapping, undo steps and colours match the desktop, following these design files. Output is written by the engine and downloaded; printing goes through the browser's PDF viewer. **It works offline** as an installable web app: a service worker caches the editor and the `.wasm` file, the only things it fetches, so it installs from the browser and runs without a connection. Anything a subscription gates is checked when online, with a grace period offline.
+
+**Plain TypeScript, no UI library**, with the structure of the desktop UI copied. Each `src/ui` unit that the web needs becomes a module of the same name (`Sloper.UI.ListPanel` → `ui/listPanel.ts`), with the same classes and hierarchy: a list panel base with the objects, variables and measurements panels; property sections for the properties panel; tool handlers with the snap tool under the point, edge and shape tools; a canvas host. A fix or feature then lands in the same place in both. Names follow TypeScript's conventions (no `T` prefix, camelCase members) but are otherwise unchanged. The differences are kept where the platforms differ:
+
+- **The document is a proxy.** `PatternDocument` in TypeScript sends JSON-RPC to the worker and gets back the same change set (`pattern`, `objectsReplaced`, `measurements`, `history`, `file`, `view`), which it passes to listeners as the desktop's `AddListener` does. Every call is asynchronous; during a drag only the latest request counts and older answers are dropped.
+- **Widgets are ours.** A small control base wraps a DOM element, standing in for the LCL's `TCustomControl` and `TPanel`; the list grid is our own on a table. Nothing from npm in the shipped editor.
+- **No `Free`, but listeners are removed** when a panel goes, through a `dispose` method, so a closed panel is never kept alive by the document.
+- **Shared tables come from the engine**, not copied: shortcuts, commands and their captions are read from it as JSON, so the two editors cannot drift. User-visible text sits in one strings module, as `resourcestring` on the desktop.
 
 ## Server
 
-Django serves the editor and `.wasm` file, accounts (with the admin as back office), the cloud library (folders, version history, sharing; files stored as they are), subscriptions, the marketplace (uploads checked by the engine) and simple pages as templates. It runs the same engine for jobs that need no browser (checks, previews, PDFs), in a task queue, preferably as `opensloper-cli serve` subprocesses, else the Wasm module through `wasmtime`, and only if both are too slow the core as a shared library. It can offer the Automation API as an MCP endpoint over a user's cloud files. Its own packages are kept to what the job needs and locked, and nothing they use reaches the engine.
+Django serves the editor and `.wasm` file, accounts (with the admin as back office), subscriptions and simple pages as templates. It stores no patterns or measurements and runs no engine jobs. Its own packages are kept to what the job needs and locked, and nothing they use reaches the engine.
 
-**Licence.** The engine and editor sent to the browser are distributed, so GPLv3 applies and the source is offered. The Django server is not distributed, so GPLv3 does not require publishing it (the project does not use AGPL); server code linked with the engine is treated as GPL. To be checked with a lawyer before the service is sold.
+**What a subscription pays for.** The engine and editor are GPL and run in the browser, so anyone may host a copy; a subscription cannot sell the program, only what the site adds. That is our own library of blocks and patterns, drafted by us and licensed apart from the code (pattern files are data, not part of the program); use of the Claude assistant, whose API calls cost money per use, passed through the server and not kept (measurements in a prompt are still processed, so the privacy notice says so); and official builds and support. The first web version is the editor alone; subscriptions come once it works.
 
-## Open questions
-
-- Should the shared UI units move into `src/core`, or be compiled into the module where they are?
-- Plain TypeScript or a UI library for the panels?
-- Does the web version start with drafting, or with measurements as Django forms?
-- Can the desktop apps open and save cloud files with the same accounts, and when?
-- Should the web editor work offline, as an installable web app?
+**Licence.** The engine and editor sent to the browser are distributed, so GPLv3 applies and the source is offered. The Django server is not distributed, so GPLv3 does not require publishing it (the project does not use AGPL), and it does not link the engine. To be checked with a lawyer before the service is sold.

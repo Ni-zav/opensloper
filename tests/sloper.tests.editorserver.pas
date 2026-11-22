@@ -69,6 +69,13 @@ type
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
     procedure TestSeamInScene;
+    // Notes as the canvas draws them, fields filled in
+    procedure TestNotesInScene;
+    // A note lies over whatever is under it
+    procedure TestNoteHitFirst;
+    procedure TestTextTool;
+    // A callout's tip must be on something; its text goes where the second click is
+    procedure TestCalloutTool;
     procedure TestMissingParamRefused;
     // Claude is not offered the editor's methods as tools
     procedure TestNotOfferedAsTools;
@@ -501,6 +508,82 @@ begin
   AssertTrue('the piece''s label', Pos('Flap', Piece.Strings['caption']) > 0);
   AssertNear('its middle', 50, Piece.Arrays['middle'].Floats[0], 1);
   AssertEquals('a chevron per edge', 12, Piece.Arrays['chevrons'].Count);
+end;
+
+procedure TTestEditorServer.TestNotesInScene;
+var
+  Note: TJSONObject;
+begin
+  Call('add_note', '{"text": "Cut 2\n{pattern.name}", "x": 10, "y": 20, "size": 12, "align": "centre"}');
+  Answer;
+  Call('editor_scene', '{"fileName": "skirt.sloper"}');
+  AssertEquals('one note', 1, Answer.Arrays['notes'].Count);
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('two lines', 2, Note.Arrays['lines'].Count);
+  AssertEquals('the field filled in', 'skirt', Note.Arrays['lines'].Strings[1]);
+  AssertNear('size', 12, Note.Floats['size'], TOLERANCE);
+  AssertTrue('a line is taller than its points', Note.Floats['lineHeight'] > 12 * 25.4 / 72);
+  AssertEquals('align', 'centre', Note.Strings['align']);
+  AssertNear('its text from its top left', 10, Note.Arrays['box'].Floats[0], TOLERANCE);
+  AssertNear('down', 20, Note.Arrays['box'].Floats[1], TOLERANCE);
+  AssertEquals('a free note has no leader', 0, Note.Arrays['leaderStrokes'].Count);
+  Call('editor_scene');
+  AssertEquals('no file, the field as typed', '{pattern.name}', Answer.Arrays['notes'].Objects[0].Arrays['lines'].Strings[1]);
+end;
+
+procedure TTestEditorServer.TestNoteHitFirst;
+var
+  Note: integer;
+begin
+  AddSquare;
+  Call('add_note', '{"text": "Over the line", "x": 40, "y": -1}');
+  Note := Answer.Integers['id'];
+  Call('editor_objects_at', '{"x": 42, "y": 0, "pointRadius": 2, "edgeRadius": 2}');
+  AssertEquals('the note first', Note, Answer.Arrays['objects'].Integers[0]);
+  AssertTrue('then the edge under it', Answer.Arrays['objects'].Count > 1);
+end;
+
+procedure TTestEditorServer.TestTextTool;
+var
+  Note: integer;
+begin
+  AddSquare;
+  Call('editor_tool_snap', '{"tool": "text", "x": 100.5, "y": 0.5, "radius": 2}');
+  AssertTrue('hung from the point', Pos('B', Answer.Strings['description']) > 0);
+  Call('editor_tool_click', '{"tool": "text", "x": 100.5, "y": 0.5, "radius": 2}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Note := Selected;
+  Call('get_object', '{"id": ' + IntToStr(Note) + '}');
+  AssertEquals('a note', 'note', Answer.Strings['type']);
+  AssertEquals('saying Text', 'Text', Answer.Strings['text']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Add note', Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestCalloutTool;
+var
+  Note: TJSONObject;
+begin
+  AddSquare;
+  Call('editor_tool_click', '{"tool": "callout", "x": 300, "y": 300, "radius": 2}');
+  AssertFalse('nothing to point at', Answer.Booleans['started']);
+  AssertTrue('says so', Answer.Strings['message'] <> '');
+  Call('editor_tool_click', '{"tool": "callout", "x": 100.5, "y": 0.5, "radius": 2}');
+  AssertTrue('the tip on B', Answer.Booleans['started']);
+  Call('editor_tool_snap', '{"tool": "callout", "x": 150, "y": -40, "radius": 2, "start": {"x": 100.5, "y": 0.5, ' +
+    '"radius": 2}}');
+  AssertTrue('asks where the text goes', Pos('text goes', Answer.Strings['description']) > 0);
+  Call('editor_tool_click', '{"tool": "callout", "x": 150, "y": -40, "radius": 2, "start": {"x": 100.5, "y": 0.5, ' +
+    '"radius": 2}}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Add callout', Answer.Strings['undo']);
+  Call('editor_scene');
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('an arrow', 'arrow', Note.Strings['leader']);
+  AssertTrue('its leader drawn', Note.Arrays['leaderStrokes'].Count >= 4);
+  AssertNear('pointing at B', 100, Note.Arrays['anchorAt'].Floats[0], TOLERANCE);
+  AssertNear('its text where clicked', 150, Note.Arrays['box'].Floats[0], 0.1);
 end;
 
 procedure TTestEditorServer.TestMissingParamRefused;

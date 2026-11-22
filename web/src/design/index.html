@@ -73,8 +73,20 @@
         touch-action: none;
       }
       #canvas-host {
+        position: relative;
         min-width: 0;
         min-height: 0;
+      }
+      .note-editor {
+        position: absolute;
+        min-width: 12em;
+        padding: 2px 4px;
+        border: 1px solid #2574d6;
+        border-radius: 2px;
+        font-family: system-ui, sans-serif;
+        line-height: 1.25;
+        background: #fff;
+        resize: both;
       }
       #status {
         grid-column: 1 / 3;

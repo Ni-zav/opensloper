@@ -40,6 +40,8 @@ export interface CanvasToolHost {
   showToolObjects(ids: string[]): void;
   // The sides of the seam being picked, a polyline per edge
   showSeamSides(sideA: number[][], sideB: number[][]): void;
+  // A note was added: its text is typed next
+  noteAdded(id: string): void;
   // Where a point is, for the guide to the point a snap lines up with
   pointAt(id: string): Vec2 | undefined;
   // A failure that is no refusal of the engine's, which the page reports
@@ -201,6 +203,16 @@ export class SnapTool extends CanvasToolHandler {
       params.extend = /^\d+$/.test(this.lastCurve) ? Number(this.lastCurve) : this.lastCurve;
     }
     const answer = await this.toolClick(params);
+    const made = idsField(answer, 'select')[0];
+    if (
+      (this.name === 'text' || this.name === 'callout') &&
+      booleanField(answer, 'done') === true &&
+      made !== undefined
+    ) {
+      this.dropStart();
+      this.host.noteAdded(made);
+      return;
+    }
     if (booleanField(answer, 'started') === true) {
       // The message asking for the second click stays until the pointer moves
       this.start = here;
@@ -264,6 +276,15 @@ export class SeamTool extends CanvasToolHandler {
   private sideA: JsonRecord[] = [];
   private sideB: JsonRecord[] = [];
   private onB = false;
+  // Each step waits for the one before, so Enter makes the seam with every
+  // edge clicked before it, however fast
+  private steps: Promise<void> = Promise.resolve();
+
+  private queue(step: () => Promise<void>): void {
+    this.steps = this.steps.then(step).catch((error: unknown) => {
+      this.report(error);
+    });
+  }
 
   override reset(): void {
     this.sideA = [];
@@ -281,23 +302,21 @@ export class SeamTool extends CanvasToolHandler {
   }
 
   override click(at: Vec2): void {
-    this.pick(this.place(at)).catch((error: unknown) => {
-      this.report(error);
-    });
+    const place = this.place(at);
+    this.queue(async () => this.pick(place));
   }
 
   override keyDown(event: KeyboardEvent): boolean {
     if (event.key === 'Tab') {
-      this.onB = !event.shiftKey;
-      this.pick({}).catch((error: unknown) => {
-        this.report(error);
+      const onB = !event.shiftKey;
+      this.queue(async () => {
+        this.onB = onB;
+        await this.pick({});
       });
       return true;
     }
     if (event.key === 'Enter') {
-      this.make().catch((error: unknown) => {
-        this.report(error);
-      });
+      this.queue(async () => this.make());
       return true;
     }
     return false;
@@ -306,9 +325,7 @@ export class SeamTool extends CanvasToolHandler {
   // Undo may have taken away a piece or edge picked
   override sceneChanged(): void {
     if (this.sideA.length > 0 || this.sideB.length > 0) {
-      this.pick({}).catch((error: unknown) => {
-        this.report(error);
-      });
+      this.queue(async () => this.pick({}));
     }
   }
 

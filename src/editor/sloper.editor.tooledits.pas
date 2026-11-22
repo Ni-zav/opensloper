@@ -19,7 +19,7 @@
 // What the canvas tools' clicks make, each as one undo step: a point, a line
 // or curve between two snaps (making their points), a curve carried on, a
 // circle or rectangle, a piece of the region clicked, a notch added or
-// removed, a seam between the edges picked. The desktop's tools (Sloper.UI.CanvasTools) and the web editor's,
+// removed, a seam between the edges picked, a note or a callout. The desktop's tools (Sloper.UI.CanvasTools) and the web editor's,
 // through the editor methods, both call these, so a click does the same
 // everywhere. Kept free of the LCL.
 unit Sloper.Editor.ToolEdits;
@@ -72,6 +72,13 @@ function PickSeamEntry(Pattern: TPattern; const At: TVec2; Radius: double; var S
 function SeamProgressText(Pattern: TPattern; const SideA, SideB: TSeamSide; OnB: boolean): string;
 // The seam between the sides picked; refused while either is empty
 function AddSeamFromSides(Document: TPatternDocument; const SideA, SideB: TSeamSide): TSelectionEdit;
+// A note saying "Text", hung from where the Text tool's click at Click snapped
+function AddNoteFromSnap(Document: TPatternDocument; const Snap: TSnap; const Click: TVec2): TSelectionEdit;
+// Why the Callout tool's first click at Click cannot be its tip, as when it
+// is on nothing; '' when it can
+function CalloutStartRefusal(Pattern: TPattern; const Tip: TSnap; const TipClick: TVec2): string;
+// A callout pointing where its first click snapped, its text at BoxAt
+function AddCalloutFromSnap(Document: TPatternDocument; const Tip: TSnap; const TipClick, BoxAt: TVec2): TSelectionEdit;
 
 resourcestring
   rsToolAddLine = 'Add line';
@@ -91,12 +98,16 @@ resourcestring
   rsToolSeamProgress = 'Side %s: A %s, B %s, difference %s. Tab changes side, Enter makes the seam';
   rsToolSeamSides = 'Pick edges for both sides first';
   rsToolAddSeam = 'Add seam';
+  rsToolAddNote = 'Add note';
+  rsToolNewNoteText = 'Text';
+  rsToolCalloutBox = 'Click where the callout''s text goes';
+  rsToolAddCallout = 'Add callout';
 
 implementation
 
 uses
-  Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Editor.Scene,
-  Sloper.Editor.Tools;
+  Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Note,
+  Sloper.Editor.Scene, Sloper.Editor.Tools;
 
 const
   // Curve handles start this fraction of the way along the chord
@@ -368,6 +379,42 @@ begin
   Seam := Document.Pattern.AddSeam('', SideA, SideB);
   if Assigned(Seam) then
     Result := Committed(Document, True, [Seam.Key])
+  else
+    Result := Committed(Document, False, []);
+end;
+
+function AddNoteFromSnap(Document: TPatternDocument; const Snap: TSnap; const Click: TVec2): TSelectionEdit;
+var
+  Note: TNoteObject;
+begin
+  Document.BeginChange(rsToolAddNote);
+  Note := NoteFromSnap(Document.Pattern, Snap, Click, rsToolNewNoteText);
+  if Assigned(Note) then
+    Result := Committed(Document, True, [Note.Key])
+  else
+    Result := Committed(Document, False, []);
+end;
+
+function CalloutStartRefusal(Pattern: TPattern; const Tip: TSnap; const TipClick: TVec2): string;
+var
+  Anchor: TNoteAnchor;
+  AnchorKey: string;
+  Ratio: double;
+begin
+  Result := '';
+  NoteAnchorFromSnap(Pattern, Tip, TipClick, Anchor, AnchorKey, Ratio);
+  if Anchor = naFree then
+    Result := rsPatternCalloutFree;
+end;
+
+function AddCalloutFromSnap(Document: TPatternDocument; const Tip: TSnap; const TipClick, BoxAt: TVec2): TSelectionEdit;
+var
+  Note: TNoteObject;
+begin
+  Document.BeginChange(rsToolAddCallout);
+  Note := CalloutFromSnap(Document.Pattern, Tip, TipClick, BoxAt, rsToolNewNoteText, nlArrow);
+  if Assigned(Note) then
+    Result := Committed(Document, True, [Note.Key])
   else
     Result := Committed(Document, False, []);
 end;

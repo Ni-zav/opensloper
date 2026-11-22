@@ -17,13 +17,14 @@ machine: the page opens and saves them as text, and sends nothing anywhere.
 | `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                            |
 
 So far the canvas draws the scene (pieces with their marks, notches and
-direction, edges, selected seams, markers, points and labels placed clear of
-each other), zooms with the wheel, pans with the middle button, selects by
-clicking and boxing, and drags points as one undo step; the Point, Line,
-Curve, Circle, Rectangle, Piece, Notch and Seam tools work as on the desktop,
-making edges in the role the role box chooses. Open, Measurements, Save,
-Undo, Redo, Fit and the labels mode are on the toolbar. Notes with the Text
-and Callout tools, and the panels, follow the same pattern.
+direction, edges, selected seams, notes and callouts, markers, points and
+labels placed clear of each other), zooms with the wheel, pans with the
+middle button, selects by clicking and boxing, and drags points and notes as
+one undo step; every drawing tool of the desktop's works (Point, Line,
+Curve, Circle, Rectangle, Piece, Notch, Seam, Text and Callout), and a
+note's text is typed over the canvas. Open, Measurements, Save, Undo, Redo,
+Fit, the role box and the labels mode are on the toolbar. The panels and
+curve handles follow the same pattern.
 
 ## Setting up
 

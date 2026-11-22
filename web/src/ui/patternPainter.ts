@@ -11,7 +11,7 @@ import {
   rectAround,
   type LabelRequest,
 } from '../editor/labelPlacement.ts';
-import type { EvalState, Scene, SceneObject, Tables } from '../editor/scene.ts';
+import type { EvalState, Scene, SceneNote, SceneObject, Tables } from '../editor/scene.ts';
 import type { Rect2, Vec2, ViewTransform } from '../editor/view.ts';
 
 // Screen pixels
@@ -45,6 +45,21 @@ const LABEL_GAP_PIXELS = 4;
 const LABEL_RINGS = 2;
 // Labels this far off the canvas are left out, in pixels
 const OFFSCREEN_LABEL_PIXELS = 200;
+// Points to mm, for a note's size
+const POINTS_TO_MM = 25.4 / 72;
+// Text smaller than this many pixels is drawn as a faint bar
+const MIN_NOTE_PIXELS = 3;
+// How strongly a dimmed note's ink shows, and a note too small to read, of 255
+const DIM_NOTE_ALPHA = 60;
+const NOTE_BAR_ALPHA = 40;
+// A callout's dot at its tip, in mm, and at least this many pixels
+const LEADER_DOT_RADIUS = 0.8;
+const MIN_DOT_PIXELS = 1.5;
+// The tint round a hovered or selected note's text, in pixels past it
+const NOTE_TINT_ACROSS = 2;
+const NOTE_TINT_DOWN = 1;
+// The family a note without one of its own is drawn in
+const DEFAULT_NOTE_FONT = 'system-ui, sans-serif';
 // The grid's lines, in mm, drawn while they are at least this many pixels apart
 const GRID_STEP = 10;
 const GRID_MAJOR_EVERY = 10;
@@ -80,6 +95,7 @@ const ERROR_INK = rgba(209, 52, 56);
 const BLOCKED_INK = rgba(226, 140, 40);
 const SEAM_INK_A = rgba(214, 96, 37);
 const SEAM_INK_B = rgba(20, 140, 120);
+const WHITE = rgba(255, 255, 255);
 
 function css(color: Rgba): string {
   return `rgba(${String(color.red)}, ${String(color.green)}, ${String(color.blue)}, ${String(color.alpha / FULL_ALPHA)})`;
@@ -141,6 +157,8 @@ export class PatternPainter {
   private readonly context: CanvasRenderingContext2D;
   private width = 0;
   private height = 0;
+  // Where the notes were drawn this frame, for labels to keep off
+  private noteFrames: Rect2[] = [];
   private state: PaintState | undefined;
 
   constructor(context: CanvasRenderingContext2D) {
@@ -152,6 +170,7 @@ export class PatternPainter {
     this.width = width;
     this.height = height;
     this.state = state;
+    this.noteFrames = [];
     this.context.fillStyle = css(PAPER);
     this.context.fillRect(0, 0, width, height);
   }
@@ -199,6 +218,14 @@ export class PatternPainter {
     this.drawLayer(scene, tables, false);
   }
 
+  // Each note's text in its size and font, with a callout's leader, a white
+  // box when it has one, and the tint of being hovered or selected
+  drawNotes(scene: Scene): void {
+    for (const note of scene.notes) {
+      this.drawNote(note);
+    }
+  }
+
   // The selected seams, each side in its colour with chevrons the way it
   // runs, and the sides the Seam tool is picking
   drawSeams(scene: Scene): void {
@@ -234,7 +261,7 @@ export class PatternPainter {
       requests.push({ width, height, places: places(width) });
       texts.push({ text, color: css(this.isSelected(item) ? SELECTED_INK : inkFor(item, INK)) });
     };
-    const obstacles: Rect2[] = [];
+    const obstacles: Rect2[] = [...this.noteFrames];
     for (const point of scene.points) {
       const at = state.view.toScreen(point);
       if (this.nearScreen(at)) {
@@ -393,6 +420,84 @@ export class PatternPainter {
         this.context.lineTo(at.x + shift.x, at.y + shift.y);
       }
     }
+  }
+
+  private drawNote(note: SceneNote): void {
+    const state = this.paintState();
+    const view = state.view;
+    const context = this.context;
+    const selected = this.isSelected(note);
+    const topLeft = view.toScreen({ x: note.box.minX, y: note.box.minY });
+    const bottomRight = view.toScreen({ x: note.box.maxX, y: note.box.maxY });
+    const frameFirst = view.toScreen({ x: note.frame.minX, y: note.frame.minY });
+    const frameLast = view.toScreen({ x: note.frame.maxX, y: note.frame.maxY });
+    if (this.nearScreen(frameFirst) || this.nearScreen(frameLast)) {
+      this.noteFrames.push({ minX: frameFirst.x, minY: frameFirst.y, maxX: frameLast.x, maxY: frameLast.y });
+    }
+    let ink = selected ? SELECTED_INK : inkFor(note, INK);
+    // A screen-only note is drawn lighter, as it never prints
+    if (!note.print) {
+      ink = { ...ink, alpha: Math.trunc(ink.alpha / 2) };
+    }
+    if (note.dimmed) {
+      ink = { ...ink, alpha: DIM_NOTE_ALPHA };
+    }
+    if (note.leader !== 'none' && note.leaderStrokes.length >= 4) {
+      this.strokeSegments(note.leaderStrokes, css(ink), 1);
+      if (note.leader === 'dot') {
+        const spot = view.toScreen(note.anchorAt);
+        context.fillStyle = css(ink);
+        context.beginPath();
+        context.arc(spot.x, spot.y, Math.max(MIN_DOT_PIXELS, LEADER_DOT_RADIUS * view.scale), 0, 2 * Math.PI);
+        context.fill();
+      }
+    } else if (selected && note.anchor !== 'free') {
+      // A plain note shows faintly what it hangs from
+      const anchor = view.toScreen(note.anchorAt);
+      context.strokeStyle = css(HOVER_HALO);
+      context.lineWidth = 1;
+      context.setLineDash(GUIDE_DOTS);
+      context.beginPath();
+      context.moveTo(anchor.x, anchor.y);
+      context.lineTo(topLeft.x, topLeft.y);
+      context.stroke();
+      context.setLineDash([]);
+    }
+    if (note.boxed) {
+      context.fillStyle = css(WHITE);
+      context.fillRect(frameFirst.x, frameFirst.y, frameLast.x - frameFirst.x, frameLast.y - frameFirst.y);
+    }
+    if (selected || note.id === state.hoverId) {
+      context.fillStyle = css(PIECE_HOVER_TINT);
+      context.fillRect(
+        topLeft.x - NOTE_TINT_ACROSS,
+        topLeft.y - NOTE_TINT_DOWN,
+        bottomRight.x - topLeft.x + 2 * NOTE_TINT_ACROSS,
+        bottomRight.y - topLeft.y + 2 * NOTE_TINT_DOWN,
+      );
+    }
+    const emPixels = note.size * POINTS_TO_MM * view.scale;
+    if (emPixels < MIN_NOTE_PIXELS) {
+      context.fillStyle = css({ ...ink, alpha: NOTE_BAR_ALPHA });
+      context.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+      return;
+    }
+    const family = note.font === '' ? DEFAULT_NOTE_FONT : `"${note.font}", ${DEFAULT_NOTE_FONT}`;
+    context.font = `${note.italic ? 'italic ' : ''}${note.bold ? 'bold ' : ''}${String(emPixels)}px ${family}`;
+    context.fillStyle = css(ink);
+    context.textBaseline = 'top';
+    const boxPixels = bottomRight.x - topLeft.x;
+    note.lines.forEach((line, index) => {
+      const width = context.measureText(line).width;
+      // As AlignedLeft
+      let left = topLeft.x;
+      if (note.align === 'centre') {
+        left += (boxPixels - width) / 2;
+      } else if (note.align === 'right') {
+        left += boxPixels - width;
+      }
+      context.fillText(line, left, topLeft.y + index * note.lineHeight * view.scale);
+    });
   }
 
   // Near enough the canvas for its label to matter

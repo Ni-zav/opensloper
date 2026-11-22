@@ -19,6 +19,8 @@ const PAPER = [252, 251, 248];
 // Pixels of the pattern's ink an opened skirt draws at the least
 const MIN_INKED_PIXELS = 500;
 const DRAG_PIXELS = 40;
+// How long the page is watched while idle, in ms
+const IDLE_MS = 1000;
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -52,13 +54,22 @@ async function bodyData(page: Page, name: string): Promise<string> {
   return page.$eval('body', (body, key) => body.dataset[key] ?? '', name);
 }
 
+// Waits for a body data value; on a timeout, says what the page showed instead
 async function waitForData(page: Page, name: string, value: string): Promise<void> {
-  await page.waitForFunction(
-    (key, expected) => document.body.dataset[key] === expected,
-    { timeout: TIMEOUT_MS },
-    name,
-    value,
-  );
+  try {
+    await page.waitForFunction(
+      (key, expected) => document.body.dataset[key] === expected,
+      { timeout: TIMEOUT_MS },
+      name,
+      value,
+    );
+  } catch (error: unknown) {
+    const shown = await page.evaluate(() => ({
+      data: Object.fromEntries(Object.entries(document.body.dataset)),
+      status: document.querySelector('#status')?.textContent,
+    }));
+    throw new Error(`waiting for ${name} "${value}": ${JSON.stringify(shown)}`, { cause: error });
+  }
 }
 
 // Chooses a tool by its button, whose hint is its caption and keys
@@ -122,6 +133,20 @@ try {
       problems.push(`console: ${message.text()}`);
     }
   });
+  // Counts the scenes asked of the engine, in body data, to check an idle page asks nothing
+  await page.evaluateOnNewDocument(() => {
+    // Kept to be called with each worker as this, through Reflect.apply
+    // oxlint-disable-next-line typescript/unbound-method
+    const original = Worker.prototype.postMessage;
+    Object.defineProperty(Worker.prototype, 'postMessage', {
+      value: function (this: Worker, ...args: unknown[]): unknown {
+        if (JSON.stringify(args[0]).includes('editor_scene')) {
+          document.body.dataset.sceneCalls = String(Number(document.body.dataset.sceneCalls ?? '0') + 1);
+        }
+        return Reflect.apply(original, this, args);
+      },
+    });
+  });
   await page.goto(`http://127.0.0.1:${String(port)}/`);
   await waitForData(page, 'ready', 'true');
 
@@ -141,6 +166,11 @@ try {
   await page.click('#toolbar button[title="Fit everything in the window"]');
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.equal(await inkedPixels(page), inked, 'opened fitted to the window');
+  // Fitting after each scene once led to a new scene after each fit, forever
+  const calls = async (): Promise<number> => Number(await bodyData(page, 'sceneCalls'));
+  const callsBefore = await calls();
+  await new Promise((resolve) => setTimeout(resolve, IDLE_MS));
+  assert.equal((await calls()) - callsBefore, 0, 'an idle page asks the engine for nothing');
 
   const canvas = await page.$('#canvas');
   const box = await canvas?.boundingBox();
@@ -207,6 +237,38 @@ try {
   await page.keyboard.press('Enter');
   await waitForData(page, 'undo', 'Add seam');
 
+  // A note: the Text tool adds it and opens its text to type
+  await chooseTool(page, 'Text');
+  await clickAt(page, box, 60, 650);
+  await waitForData(page, 'undo', 'Add note');
+  await page.waitForSelector('textarea.note-editor', { timeout: TIMEOUT_MS });
+  await page.keyboard.type('Cut 2 on fold');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Enter');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', 'Change note');
+  assert.equal(await page.$('textarea.note-editor'), null, 'the text field closed');
+
+  // A callout from the circle's centre, its text to the right
+  await chooseTool(page, 'Callout');
+  await clickAt(page, box, 130, 560);
+  assert.match(await status(page), /text goes/, 'asks where its text goes');
+  await clickAt(page, box, 240, 600);
+  await waitForData(page, 'undo', 'Add callout');
+  await page.waitForSelector('textarea.note-editor', { timeout: TIMEOUT_MS });
+  await page.keyboard.press('Escape');
+
+  // Dragging the note by its text
+  await chooseTool(page, 'Select');
+  await page.mouse.move(box.x + 64, box.y + 653);
+  await page.mouse.down();
+  for (let step = 1; step <= 4; step++) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.mouse.move(box.x + 64 + step * 10, box.y + 653 + step * 5);
+  }
+  await page.mouse.up();
+  await waitForData(page, 'undo', 'Move note');
+
   // Every label drawn adds ink
   await page.select('#labels', 'none');
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -224,7 +286,8 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; added, dragged and undid a point; drew a line, a rectangle, ` +
-      `a piece, a notch, a circle and a seam; labelled everything. ${await status(page)}`,
+      `a piece, a notch, a circle and a seam; wrote a note and a callout and moved the note; labelled everything. ` +
+      (await status(page)),
   );
 } finally {
   await browser.close();

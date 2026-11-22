@@ -2,6 +2,7 @@
 // edges and points to draw, and the tables the editor reads from the engine
 // rather than copying (tools, edge roles).
 import {
+  stringsField,
   booleanField,
   idField,
   numberField,
@@ -46,6 +47,28 @@ export interface SceneSeam extends SceneObject {
   chevronsB: number[];
 }
 
+// A note as the canvas draws it: its text, fields filled in, line by line;
+// its look; where its text and its frame (the white box, or just the text)
+// are; and a callout's leader, as segments
+export interface SceneNote extends SceneObject {
+  print: boolean;
+  lines: string[];
+  // Points at true print size, and mm from one line to the next
+  size: number;
+  lineHeight: number;
+  align: 'left' | 'centre' | 'right';
+  boxed: boolean;
+  font: string;
+  bold: boolean;
+  italic: boolean;
+  box: Rect2;
+  frame: Rect2;
+  anchor: string;
+  anchorAt: Vec2;
+  leader: string;
+  leaderStrokes: number[];
+}
+
 // The marker of a point or edge, as segments as a piece's marks are
 export interface SceneMarker extends SceneObject {
   strokes: number[];
@@ -73,6 +96,7 @@ export interface Scene {
   edges: SceneEdge[];
   markers: SceneMarker[];
   seams: SceneSeam[];
+  notes: SceneNote[];
   points: ScenePoint[];
 }
 
@@ -117,7 +141,23 @@ function sceneObject(record: JsonRecord): SceneObject {
   };
 }
 
-export const EMPTY_SCENE: Scene = { isolated: '', pieces: [], edges: [], markers: [], seams: [], points: [] };
+export const EMPTY_SCENE: Scene = {
+  isolated: '',
+  pieces: [],
+  edges: [],
+  markers: [],
+  seams: [],
+  notes: [],
+  points: [],
+};
+
+const ALIGNS = ['left', 'centre', 'right'] as const;
+
+// A rectangle given as [minX, minY, maxX, maxY]
+function rectField(record: JsonRecord, name: string): Rect2 {
+  const values = numbersField(record, name) ?? [];
+  return { minX: values[0] ?? 0, minY: values[1] ?? 0, maxX: values[2] ?? 0, maxY: values[3] ?? 0 };
+}
 
 // A place given as [x, y]
 function pointField(record: JsonRecord, name: string): Vec2 {
@@ -178,7 +218,26 @@ export function parseScene(result: JsonRecord): Scene {
       chevronsB: numbersField(record, 'chevronsB') ?? [],
     }),
   );
-  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, seams, points };
+  const notes = recordsField(result, 'notes').map((record): SceneNote =>
+    Object.assign(sceneObject(record), {
+      print: booleanField(record, 'print') ?? true,
+      lines: stringsField(record, 'lines') ?? [],
+      size: numberField(record, 'size') ?? 0,
+      lineHeight: numberField(record, 'lineHeight') ?? 0,
+      align: ALIGNS.find((align) => align === stringField(record, 'align')) ?? 'left',
+      boxed: booleanField(record, 'boxed') ?? false,
+      font: stringField(record, 'font') ?? '',
+      bold: booleanField(record, 'bold') ?? false,
+      italic: booleanField(record, 'italic') ?? false,
+      box: rectField(record, 'box'),
+      frame: rectField(record, 'frame'),
+      anchor: stringField(record, 'anchor') ?? 'free',
+      anchorAt: pointField(record, 'anchorAt'),
+      leader: stringField(record, 'leader') ?? 'none',
+      leaderStrokes: numbersField(record, 'leaderStrokes') ?? [],
+    }),
+  );
+  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, seams, notes, points };
 }
 
 export function parseTables(result: JsonRecord): Tables {

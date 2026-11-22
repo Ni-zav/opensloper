@@ -28,7 +28,8 @@ unit Sloper.API.EditorServer;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Editor.Snap;
+  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
+  Sloper.Editor.Snap;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -46,6 +47,7 @@ type
     function DoChanges: TJSONData;
     // The snap for the call's place, radius and anchor
     function CallSnap(Params: TJSONObject): TSnap;
+    function FieldValuesFor(Params: TJSONObject): TFieldValues;
     function DoScene(Params: TJSONObject): TJSONData;
     function DoSnap(Params: TJSONObject): TJSONData;
     function DoObjectsAt(Params: TJSONObject): TJSONData;
@@ -80,7 +82,10 @@ resourcestring
   rsEditorSceneReturns = '`isolated`, the piece shown alone or null; `pieces`, each with `id`, `name`, `state`, ' +
     '`locked`, `dimmed`, `fillColor`, `fillStyle`, its `cutLine`, `marks` (grainline, fold and marking strokes) and ' +
     '`notches`, each a flat list of segments x1, y1, x2, y2, its label''s `caption`, its `middle` (x, y) and its ' +
-    '`chevrons` (x, y and angle for each); `seams`, each with its sides'' edges as `sideA` and `sideB` (a polyline ' +
+    '`chevrons` (x, y and angle for each); `notes` (left out while annotations are hidden), each with `print`, ' +
+    '`lines` with fields filled in, `size` in points, `lineHeight` in mm, `align`, `boxed`, `font`, `bold`, ' +
+    '`italic`, `box` and `frame` (minX, minY, maxX, maxY), `anchorAt` (x, y), `leader` and `leaderStrokes` ' +
+    '(segments); `seams`, each with its sides'' edges as `sideA` and `sideB` (a polyline ' +
     'each) and their `chevronsA` and `chevronsB`; `markers`, each with the `id` of its point or edge and ' +
     'its `strokes`, as marks are; `edges`, each with `id`, `name`, `role`, ' +
     '`state`, `locked`, `dimmed`, `copyOf`, its `line`, and `slot` and `normal` when it lies on another edge; `points`, ' +
@@ -94,8 +99,8 @@ resourcestring
   rsEditorAnchor = 'The point a line being drawn starts from, by ID or name: lining up with it comes first';
   rsEditorSnapReturns = '`kind` (free, point, crossing, edge, horizontal or vertical), where the point goes (`x`, `y`), ' +
     '`description` in words, and `objects`, the IDs of what it works from';
-  rsEditorObjectsAt = 'Everything under a place, in the order a click picks it: points nearest first, then edges ' +
-    'nearest first, then pieces smallest first.';
+  rsEditorObjectsAt = 'Everything under a place, in the order a click picks it: notes, the one drawn on top first, ' +
+    'then points nearest first, then edges nearest first, then pieces smallest first.';
   rsEditorPointRadius = 'How near a point must be, in mm';
   rsEditorEdgeRadius = 'How near an edge must be, in mm';
   rsEditorObjectsReturns = '`objects`, their IDs';
@@ -115,7 +120,8 @@ resourcestring
   rsEditorToolClick = 'Does what a click of a canvas tool does, as one undo step: point adds the point it snaps to; ' +
     'line and curve take a first click, then make the edge with its points, carrying on from its end; circle and ' +
     'rectangle take a first click, then make the shape; piece makes a piece of the closed outline round the place; ' +
-    'notch removes the notches there, or adds one where a piece''s seam line passes.';
+    'notch removes the notches there, or adds one where a piece''s seam line passes; text adds a note hung from what ' +
+    'it snaps to; callout takes what its tip points at, then where its text goes.';
   rsEditorExtend = 'For the curve tool, the curve or curve path to carry on through the click as one path, as ' +
     'Shift+click does';
   rsEditorRole = 'The role of the edges a line, curve, circle or rectangle makes; outline by default';
@@ -123,6 +129,8 @@ resourcestring
     'keep as `start`; `select`, the IDs to select, or null to leave the selection; `message` for the status bar; ' +
     'for line and curve, `end`, where the next one starts (`x`, `y`), and for a curve `curve`, the edge to carry on';
   rsEditorBusy = 'Finish the drag first';
+  rsEditorFileName = 'The pattern file''s name, for the {pattern.name} field in notes; by default the file it was opened from';
+  rsEditorNoteMargin = 'How near a note''s text must be, in mm; 0 by default';
   rsEditorLabelKeys = 'Which objects the canvas labels: in contextual mode the hovered object, the selection with ' +
     'what it reads and what reads it, and the objects a tool is working with; every point, edge and piece in all; ' +
     'none in none.';
@@ -217,8 +225,8 @@ const
   // The finest flattening asked for, in mm, so a curve cannot become millions of points
   MIN_TOLERANCE = 0.001;
   // The tools whose clicks snap, and every tool editor_tool_click takes
-  SNAP_TOOL_NAMES: array[0..4] of string = ('point', 'line', 'curve', 'circle', 'rectangle');
-  CLICK_TOOL_NAMES: array[0..6] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'piece', 'notch');
+  SNAP_TOOL_NAMES: array[0..6] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'text', 'callout');
+  CLICK_TOOL_NAMES: array[0..8] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'piece', 'notch', 'text', 'callout');
   SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical');
   OBJECT_FILTER_NAMES: array[TObjectFilter] of string = ('all', 'points', 'edges', 'pieces', 'notes', 'problems');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
@@ -236,6 +244,7 @@ begin
   begin
     AddApiMethod(Built, 'editor_scene', rsEditorScene, rsEditorSceneReturns, True);
     AddApiParam(Built, 'tolerance', apNumber, False, rsEditorTolerance);
+    AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
     AddApiMethod(Built, 'editor_snap', rsEditorSnap, rsEditorSnapReturns, True);
     AddApiParam(Built, 'x', apNumber, True, rsEditorX);
     AddApiParam(Built, 'y', apNumber, True, rsEditorY);
@@ -246,6 +255,8 @@ begin
     AddApiParam(Built, 'y', apNumber, True, rsEditorY);
     AddApiParam(Built, 'pointRadius', apNumber, True, rsEditorPointRadius);
     AddApiParam(Built, 'edgeRadius', apNumber, True, rsEditorEdgeRadius);
+    AddApiParam(Built, 'noteMargin', apNumber, False, rsEditorNoteMargin);
+    AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
     AddApiMethod(Built, 'editor_objects_in_box', rsEditorObjectsInBox, rsEditorObjectsReturns, True);
     AddApiParam(Built, 'minX', apNumber, True, rsEditorMinX);
     AddApiParam(Built, 'minY', apNumber, True, rsEditorMinY);
@@ -428,6 +439,12 @@ begin
   end;
 end;
 
+// A rectangle as [minX, minY, maxX, maxY]
+function RectToJSON(const Rect: TRect2): TJSONArray;
+begin
+  Result := TJSONArray.Create([ReportFloat(Rect.MinX), ReportFloat(Rect.MinY), ReportFloat(Rect.MaxX), ReportFloat(Rect.MaxY)]);
+end;
+
 // What every object in the scene has
 function SceneObject(Pattern: TPattern; DraftObject: TDraftObject): TJSONObject;
 var
@@ -449,6 +466,56 @@ begin
   end;
 end;
 
+// The fields notes show: the pattern's name from the call's file name, or the file it came from
+function TEditorApiServer.FieldValuesFor(Params: TJSONObject): TFieldValues;
+var
+  FileName: string;
+begin
+  FileName := OptionalString(Params, 'fileName');
+  if FileName = '' then
+    FileName := Document.FileName;
+  Result := PatternFieldValues(Document.Pattern, FileName);
+end;
+
+// A note as the canvas draws it: its text with fields filled in, line by
+// line, its look, where its text and frame are, and its leader
+function NoteToSceneJSON(Pattern: TPattern; Note: TNoteObject; const PatternValues: TFieldValues): TJSONObject;
+var
+  Values: TFieldValues;
+  Shown: string;
+  Lines: TJSONArray;
+  Line: string;
+  Frame: TRect2;
+  Start: TVec2;
+  Strokes: TLine2Array;
+begin
+  Shown := Note.ShownText;
+  Values := NoteFieldValues(Pattern, Note, PatternValues, Shown);
+  Frame := NoteFrame(Note, Values, Shown);
+  Result := SceneObject(Pattern, Note);
+  Result.Add('print', Note.Print);
+  Lines := TJSONArray.Create;
+  for Line in TextLines(ExpandFields(Shown, Values)) do
+    Lines.Add(Line);
+  Result.Add('lines', Lines);
+  Result.Add('size', ReportFloat(Note.Size));
+  Result.Add('lineHeight', ReportFloat(LineHeight(Note.Size)));
+  Result.Add('align', TEXT_ALIGN_NAMES[Note.Align]);
+  Result.Add('boxed', Note.Boxed);
+  Result.Add('font', Note.Style.Font);
+  Result.Add('bold', Note.Style.Bold);
+  Result.Add('italic', Note.Style.Italic);
+  Result.Add('box', RectToJSON(NoteBox(Note, Values, Shown)));
+  Result.Add('frame', RectToJSON(Frame));
+  Result.Add('anchor', NOTE_ANCHOR_NAMES[Note.Anchor]);
+  Result.Add('anchorAt', LineToJSON([Note.AnchorPosition]));
+  Result.Add('leader', NOTE_LEADER_NAMES[Note.Leader]);
+  Strokes := nil;
+  if (Note.Leader <> nlNone) and LeaderStart(Frame, Note.AnchorPosition, Start) then
+    Strokes := LeaderStrokes(Start, Note.AnchorPosition, Note.Leader);
+  Result.Add('leaderStrokes', SegmentsToJSON(Strokes));
+end;
+
 function TEditorApiServer.DoScene(Params: TJSONObject): TJSONData;
 var
   Pattern: TPattern;
@@ -463,8 +530,10 @@ var
   Slot: TEdgeSlot;
   Index: integer;
   Seam: TSeamObject;
+  Values: TFieldValues;
 begin
   Pattern := Document.Pattern;
+  Values := FieldValuesFor(Params);
   Tolerance := DEFAULT_TOLERANCE;
   OptionalNumber(Params, 'tolerance', Tolerance);
   if Tolerance < MIN_TOLERANCE then
@@ -512,6 +581,13 @@ begin
         end;
       List.Add(Item);
     end;
+
+    List := TJSONArray.Create;
+    Scene.Add('notes', List);
+    if not Pattern.View.HideAnnotations then
+      for Index := 0 to Pattern.ObjectCount - 1 do
+        if (Pattern.Objects[Index] is TNoteObject) and Pattern.Objects[Index].HasResult and not Pattern.IsHidden(Pattern.Objects[Index]) then
+          List.Add(NoteToSceneJSON(Pattern, TNoteObject(Pattern.Objects[Index]), Values));
 
     // Drawn while selected, each side in its colour with its direction
     List := TJSONArray.Create;
@@ -588,12 +664,16 @@ end;
 function TEditorApiServer.DoObjectsAt(Params: TJSONObject): TJSONData;
 var
   At: TVec2;
-  PointRadius, EdgeRadius: double;
+  PointRadius, EdgeRadius, NoteMargin: double;
 begin
   At := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
   PointRadius := RequireNumber(Params, 'pointRadius');
   EdgeRadius := RequireNumber(Params, 'edgeRadius');
-  Result := TJSONObject.Create(['objects', KeysToJSON(ObjectsAt(Document.Pattern, At, PointRadius, EdgeRadius))]);
+  NoteMargin := 0;
+  OptionalNumber(Params, 'noteMargin', NoteMargin);
+  // A note lies over whatever is under it
+  Result := TJSONObject.Create(['objects', KeysToJSON(Concat(NotesAt(Document.Pattern, At, FieldValuesFor(Params), NoteMargin),
+    ObjectsAt(Document.Pattern, At, PointRadius, EdgeRadius)))]);
 end;
 
 function TEditorApiServer.DoObjectsInBox(Params: TJSONObject): TJSONData;
@@ -612,6 +692,12 @@ function TEditorApiServer.SnapOf(Group: TJSONObject; const AnchorKey: string): T
 begin
   Result := FindSnap(Document.Pattern, Vec2(RequireNumber(Group, 'x'), RequireNumber(Group, 'y')), RequireNumber(Group, 'radius'),
     AnchorKey);
+end;
+
+// The place itself, as a group of x and y gives it
+function PlaceOf(Group: TJSONObject): TVec2;
+begin
+  Result := Vec2(RequireNumber(Group, 'x'), RequireNumber(Group, 'y'));
 end;
 
 // The call's start group, or nil when it has none
@@ -660,6 +746,12 @@ begin
     Snap := SnapOf(Params, '');
   if Assigned(Group) and ((ToolName = 'circle') or (ToolName = 'rectangle')) then
     Description := ShapeSizeText(Document.Pattern, Start.Position, Snap.Position, ToolName = 'circle')
+  else if ToolName = 'text' then
+    Description := NoteSnapDescription(Document.Pattern, Snap, PlaceOf(Params))
+  else if (ToolName = 'callout') and Assigned(Group) then
+    Description := rsToolCalloutBox
+  else if ToolName = 'callout' then
+    Description := CalloutSnapDescription(Document.Pattern, Snap, PlaceOf(Params))
   else
     Description := SnapDescription(Document.Pattern, Snap);
   Answer := SnapToJSON(Snap);
@@ -704,9 +796,18 @@ begin
     Start := SnapOf(Group, '');
   EndKey := '';
   // The first click of a two-click tool is kept by the editor; nothing changes yet
-  if not Assigned(Group) and (ToolName <> 'point') and (ToolName <> 'piece') and (ToolName <> 'notch') then
+  if not Assigned(Group) and (ToolName <> 'point') and (ToolName <> 'piece') and (ToolName <> 'notch') and (ToolName <> 'text') then
   begin
     Answer := EditToJSON(Default(TSelectionEdit));
+    // A callout's tip must be on something
+    if ToolName = 'callout' then
+    begin
+      Answer.Strings['message'] := CalloutStartRefusal(Document.Pattern, SnapOf(Params, ''), PlaceOf(Params));
+      Answer.Add('started', Answer.Strings['message'] = '');
+      if Answer.Strings['message'] = '' then
+        Answer.Strings['message'] := rsToolCalloutBox;
+      Exit(Answer);
+    end;
     Answer.Add('started', True);
     if ToolName = 'circle' then
       Answer.Strings['message'] := rsToolCircleRim
@@ -728,6 +829,8 @@ begin
     'piece': Edit := AddPieceAt(Document, Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y')));
     'notch': Edit := ToggleNotchAt(Document, Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y')),
         RequireNumber(Params, 'radius'));
+    'text': Edit := AddNoteFromSnap(Document, SnapOf(Params, ''), PlaceOf(Params));
+    'callout': Edit := AddCalloutFromSnap(Document, Start, PlaceOf(Group), PlaceOf(Params));
   end;
   Answer := EditToJSON(Edit);
   Answer.Add('started', False);

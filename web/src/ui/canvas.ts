@@ -6,7 +6,7 @@
 // through LatestOnly, so only the newest counts.
 import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
 import { EngineError } from '../engine/engine.ts';
-import { booleanField, idsField, numberField, stringField } from '../engine/replies.ts';
+import { booleanField, idsField, stringField } from '../engine/replies.ts';
 import { EMPTY_SCENE, parseScene, sceneBounds, type Scene, type Tables } from '../editor/scene.ts';
 import { ViewTransform, ZOOM_STEP, type Vec2 } from '../editor/view.ts';
 import {
@@ -18,23 +18,29 @@ import {
   type CanvasToolHost,
 } from './canvasTools.ts';
 import { LatestOnly } from './latestOnly.ts';
+import { NoteEditor } from './noteEditor.ts';
 import { PatternPainter, type SnapMarker } from './patternPainter.ts';
 
 // A press that moves further than this, in pixels, is a drag, not a click
 const DRAG_THRESHOLD = 4;
 // Curves are flattened to within this many pixels
 const FLATTEN_PIXELS = 0.25;
+// How near a note's text a click must be, in pixels, as NOTE_HIT_PIXELS
+const NOTE_HIT_PIXELS = 2;
+// Points to mm, for a note's size
+const POINTS_TO_MM = 25.4 / 72;
 // Pixels left round the pattern when it is fitted
 const FIT_MARGIN = 24;
+// A zoom changed by less than this share of itself flattens nothing again
+const ZOOM_UNCHANGED = 0.01;
 // After the wheel stops this long, in ms, curves are flattened again for the new zoom
 const ZOOM_SETTLE_MS = 150;
 const MIDDLE_BUTTON = 1;
 const LEFT_BUTTON = 0;
 const RIGHT_BUTTON = 2;
 
-// The tools that snap, and those that act where they are clicked; the
-// desktop's Text and Callout follow with notes drawn
-const SNAP_TOOLS = ['point', 'line', 'curve', 'circle', 'rectangle'];
+// The tools that snap, and those that act where they are clicked
+const SNAP_TOOLS = ['point', 'line', 'curve', 'circle', 'rectangle', 'text', 'callout'];
 const CLICK_TOOLS = ['piece', 'notch'];
 
 // As TLabelMode: the selection and what it works with, every object, or none
@@ -92,6 +98,7 @@ export class PatternCanvas implements CanvasToolHost {
   private toolIds: string[] = [];
   private seamA: number[][] = [];
   private seamB: number[][] = [];
+  private readonly noteEditor: NoteEditor;
   private scene: Scene = EMPTY_SCENE;
   private selection = new Set<string>();
   private hoverId = '';
@@ -134,6 +141,9 @@ export class PatternCanvas implements CanvasToolHost {
       this.tools.set(name, new ClickTool(this, name));
     }
     this.tools.set('seam', new SeamTool(this, 'seam'));
+    this.noteEditor = new NoteEditor(element.parentElement ?? window.document.body, document, (text) => {
+      this.events.message(text);
+    });
     const fail = (error: unknown): void => {
       this.report(error);
     };
@@ -151,6 +161,7 @@ export class PatternCanvas implements CanvasToolHost {
     element.addEventListener('pointerup', this.pointerUp);
     element.addEventListener('pointerleave', this.pointerLeave);
     element.addEventListener('wheel', this.wheel, { passive: false });
+    element.addEventListener('dblclick', this.doubleClick);
     element.addEventListener('contextmenu', (event) => {
       event.preventDefault();
     });
@@ -190,9 +201,17 @@ export class PatternCanvas implements CanvasToolHost {
   // Shows everything, as the Fit command
   fitAll(): void {
     const bounds = sceneBounds(this.scene);
-    if (bounds !== undefined) {
-      this.view.fit(bounds, this.element.clientWidth, this.element.clientHeight, FIT_MARGIN);
+    if (bounds === undefined) {
+      return;
+    }
+    const scale = this.view.scale;
+    this.view.fit(bounds, this.element.clientWidth, this.element.clientHeight, FIT_MARGIN);
+    // Curves are flattened again only for another zoom: a fit after each
+    // scene, while the pattern is first shown, would otherwise never stop
+    if (Math.abs(this.view.scale - scale) > scale * ZOOM_UNCHANGED) {
       this.zoomed();
+    } else {
+      this.repaint();
     }
   }
 
@@ -239,6 +258,42 @@ export class PatternCanvas implements CanvasToolHost {
   showMessage(text: string): void {
     this.events.message(text);
   }
+
+  // Opens the note's text to type, once the scene shows it
+  noteAdded(id: string): void {
+    this.editNote(id).catch((error: unknown) => {
+      this.report(error);
+    });
+  }
+
+  private async editNote(id: string): Promise<void> {
+    await this.scenes.idle();
+    const note = this.scene.notes.find((each) => each.id === id);
+    if (note !== undefined) {
+      const at = this.view.toScreen({ x: note.box.minX, y: note.box.minY });
+      await this.noteEditor.open(id, at, note.size * POINTS_TO_MM * this.view.scale);
+    }
+  }
+
+  // Double-clicking a note goes to its text
+  private readonly doubleClick = (event: MouseEvent): void => {
+    if (this.tool !== SELECT_TOOL) {
+      return;
+    }
+    const at = this.screenAt(event);
+    this.objectsAt(at)
+      .then((hits) => {
+        const id = hits[0];
+        if (id !== undefined && this.scene.notes.some((note) => note.id === id)) {
+          this.select([id]);
+          this.noteAdded(id);
+        }
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        this.report(error);
+      });
+  };
 
   pointAt(id: string): Vec2 | undefined {
     return this.scene.points.find((point) => point.id === id);
@@ -312,6 +367,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.painter.drawGrid();
     this.painter.drawPattern(this.scene, this.tables);
     this.painter.drawSeams(this.scene);
+    this.painter.drawNotes(this.scene);
     this.painter.drawLabels(this.scene);
     this.painter.drawSnap();
     this.painter.drawBox();
@@ -332,6 +388,7 @@ export class PatternCanvas implements CanvasToolHost {
       // Another pattern: what was selected or shown means nothing now
       this.generation = this.document.state.generation;
       this.autoFit = true;
+      this.noteEditor.close();
       this.selection.clear();
       this.events.selectionChanged([]);
     } else if (changes.has('pattern') && !changes.has('measurements')) {
@@ -353,13 +410,15 @@ export class PatternCanvas implements CanvasToolHost {
   }
 
   private async loadScene(tolerance: number): Promise<void> {
-    this.scene = parseScene(await this.document.read('editor_scene', { tolerance }));
+    this.scene = parseScene(await this.document.read('editor_scene', { tolerance, fileName: this.document.fileName }));
     if (this.autoFit) {
       this.fitAll();
     }
     // Objects gone, as after undo, leave the selection
     const shown = new Set(
-      [...this.scene.pieces, ...this.scene.edges, ...this.scene.seams, ...this.scene.points].map((item) => item.id),
+      [...this.scene.pieces, ...this.scene.edges, ...this.scene.seams, ...this.scene.notes, ...this.scene.points].map(
+        (item) => item.id,
+      ),
     );
     const kept = [...this.selection].filter((id) => shown.has(id));
     if (kept.length !== this.selection.size) {
@@ -396,6 +455,8 @@ export class PatternCanvas implements CanvasToolHost {
       y: model.y,
       pointRadius: radius,
       edgeRadius: radius,
+      noteMargin: this.view.pixelsToMM(NOTE_HIT_PIXELS),
+      fileName: this.document.fileName,
     });
     return idsField(answer, 'objects');
   }
@@ -543,7 +604,12 @@ export class PatternCanvas implements CanvasToolHost {
   // A press on a point drags it; anywhere else draws a selection box
   private async startDragOrBox(): Promise<void> {
     const id = (await this.pressHits)[0];
-    const point = this.scene.points.find((each) => each.id === id);
+    const note = this.scene.notes.find((each) => each.id === id);
+    // A note is dragged by its text's top left
+    const point =
+      note === undefined
+        ? this.scene.points.find((each) => each.id === id)
+        : { id: note.id, name: note.name, x: note.box.minX, y: note.box.minY };
     if (point === undefined) {
       this.mode = 'boxing';
       this.repaint();
@@ -577,10 +643,9 @@ export class PatternCanvas implements CanvasToolHost {
       x: model.x + this.dragOffset.x,
       y: model.y + this.dragOffset.y,
     });
+    // As on the desktop, only a drag that cannot follow says why
     if (booleanField(answer, 'moved') === false) {
       this.events.message(stringField(answer, 'reason') ?? '');
-    } else {
-      this.events.message(`${String(numberField(answer, 'x'))}, ${String(numberField(answer, 'y'))}`);
     }
   }
 

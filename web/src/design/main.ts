@@ -266,7 +266,11 @@ class DesignApp {
   }
 
   private keyDown(event: KeyboardEvent): void {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLSelectElement ||
+      event.target instanceof HTMLTextAreaElement
+    ) {
       return;
     }
     const matches = (command: string): boolean => {

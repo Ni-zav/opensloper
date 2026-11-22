@@ -93,12 +93,6 @@ type
 function CreateCanvasTools(Host: TCanvasToolHost): TCanvasToolHandlers;
 procedure FreeCanvasTools(var Tools: TCanvasToolHandlers);
 
-resourcestring
-  rsToolAddNote = 'Add note';
-  rsToolNewNoteText = 'Text';
-  rsToolCalloutBox = 'Click where the callout''s text goes';
-  rsToolAddCallout = 'Add callout';
-
 implementation
 
 uses
@@ -600,24 +594,12 @@ end;
 // The note is selected, ready for its text to be typed in the properties
 procedure TTextTool.Click;
 var
-  Document: TPatternDocument;
-  Note: TNoteObject;
-  Key, Reason: string;
+  Edit: TSelectionEdit;
 begin
-  Document := Host.Document;
-  Document.BeginChange(rsToolAddNote);
-  Note := NoteFromSnap(Document.Pattern, FSnap, FSnapClick, rsToolNewNoteText);
-  Reason := Document.Pattern.LastError;
-  Key := '';
-  if Assigned(Note) then
-    Key := Note.Key;
-  if not Document.Commit(Assigned(Note)) then
-  begin
-    Host.ShowMessage(Reason);
-    Exit;
-  end;
-  Host.Select([Key]);
-  Host.NoteAdded;
+  Edit := AddNoteFromSnap(Host.Document, FSnap, FSnapClick);
+  ApplyEdit(Edit);
+  if Edit.Done then
+    Host.NoteAdded;
 end;
 
 { TCalloutTool }
@@ -646,14 +628,12 @@ end;
 // The first click says what the tip points at, which cannot be nothing
 procedure TCalloutTool.StartCallout;
 var
-  Anchor: TNoteAnchor;
-  AnchorKey: string;
-  Ratio: double;
+  Reason: string;
 begin
-  NoteAnchorFromSnap(Host.Document.Pattern, FSnap, FSnapClick, Anchor, AnchorKey, Ratio);
-  if Anchor = naFree then
+  Reason := CalloutStartRefusal(Host.Document.Pattern, FSnap, FSnapClick);
+  if Reason <> '' then
   begin
-    Host.ShowMessage(rsPatternCalloutFree);
+    Host.ShowMessage(Reason);
     Exit;
   end;
   FStart := FSnap;
@@ -665,26 +645,15 @@ end;
 // The second click: the text goes where it was, and the tip where the first snapped
 procedure TCalloutTool.AddCallout;
 var
-  Document: TPatternDocument;
-  Note: TNoteObject;
-  Key, Reason: string;
+  Edit: TSelectionEdit;
 begin
-  Document := Host.Document;
   FHasStart := False;
-  Document.BeginChange(rsToolAddCallout);
-  Note := CalloutFromSnap(Document.Pattern, FStart, FStartClick, FSnapClick, rsToolNewNoteText, nlArrow);
-  Reason := Document.Pattern.LastError;
-  Key := '';
-  if Assigned(Note) then
-    Key := Note.Key;
-  if not Document.Commit(Assigned(Note)) then
-  begin
-    Host.ShowMessage(Reason);
-    Exit;
-  end;
-  Host.ShowMessage(rsToolCalloutHint);
-  Host.Select([Key]);
-  Host.NoteAdded;
+  Edit := AddCalloutFromSnap(Host.Document, FStart, FStartClick, FSnapClick);
+  if Edit.Done then
+    Edit.Message := rsToolCalloutHint;
+  ApplyEdit(Edit);
+  if Edit.Done then
+    Host.NoteAdded;
 end;
 
 { TPieceTool }

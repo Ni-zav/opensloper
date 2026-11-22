@@ -16,11 +16,13 @@ machine: the page opens and saves them as text, and sends nothing anywhere.
 | `tests/`        | Unit tests (`*.test.ts`, `node --test`) and `design.ts`, which drives the built app in headless Chromium |
 | `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                |
 
-So far the canvas draws the scene, zooms with the wheel, pans with the middle
-button, selects by clicking and boxing, drags points as one undo step, and
-the Point tool adds points where they snap; Open, Measurements, Save, Undo,
-Redo and Fit are on the toolbar. The other tools and the panels follow the
-same pattern.
+So far the canvas draws the scene (pieces with their marks and notches,
+edges, markers, points), zooms with the wheel, pans with the middle button,
+selects by clicking and boxing, and drags points as one undo step; the
+Point, Line, Curve, Circle, Rectangle, Piece and Notch tools work as on the
+desktop, making edges in the role the role box chooses. Open, Measurements,
+Save, Undo, Redo and Fit are on the toolbar. Seam, Text and Callout, labels
+and the panels follow the same pattern.
 
 ## Setting up
 
@@ -37,7 +39,7 @@ cd web && npm ci
 
 ```
 ./opensloper-make.sh web       # the engine, then npm run build: check, unit tests, bundle
-cd web && npm run test:browser # the app in headless Chromium (CHROMIUM names the browser)
+cd web && npm run test:browser # the app in headless Chromium (CHROMIUM names the browser; SCREENSHOT=name keeps name.png)
 python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design
 ```
 

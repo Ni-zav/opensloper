@@ -17,8 +17,8 @@
 }
 
 // Text the properties panel works out from the pattern: the pieces a marking
-// is on, what a note hangs from, an edge allowance's caption, and a note's
-// text as typed. Kept free of the LCL so it can be unit-tested.
+// is on, what a note hangs from, an edge allowance's caption, a note's text
+// as typed, and the edge roles' names. Kept free of the LCL so it can be unit-tested.
 unit Sloper.Editor.PropertyText;
 
 {$mode ObjFPC}{$H+}
@@ -38,8 +38,18 @@ function EdgeAllowanceCaption(Pattern: TPattern; Piece: TPieceObject; const Fiel
 // A note's text as typed in a multi-line field: its line breaks become line
 // feeds, and those at the end go, since the field adds one after the last line
 function NoteTextFromField(const AText: string): string;
+// An edge role's name, as the role box and the properties show it
+function RoleCaption(Role: TEdgeRole): string;
 
 resourcestring
+  rsRoleConstruction = 'Construction';
+  rsRoleOutline = 'Outline';
+  rsRolePlacement = 'Placement';
+  rsRoleStitch = 'Stitch';
+  rsRoleFold = 'Fold';
+  rsRoleCut = 'Cut';
+  rsRoleSkive = 'Skive line';
+  rsRoleEdgeFinish = 'Edge finish';
   rsPropMarkedOnNone = 'No piece';
   rsPropNotMarking = '-';
   rsPropNoteAnchorPoint = 'Point %s';
@@ -101,6 +111,21 @@ begin
   Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
   while (Result <> '') and (Result[Length(Result)] = #10) do
     SetLength(Result, Length(Result) - 1);
+end;
+
+function RoleCaption(Role: TEdgeRole): string;
+begin
+  case Role of
+    erConstruction: Result := rsRoleConstruction;
+    erOutline: Result := rsRoleOutline;
+    erPlacement: Result := rsRolePlacement;
+    erStitch: Result := rsRoleStitch;
+    erFold: Result := rsRoleFold;
+    erCut: Result := rsRoleCut;
+    erSkive: Result := rsRoleSkive;
+    else
+      Result := rsRoleEdgeFinish;
+  end;
 end;
 
 end.

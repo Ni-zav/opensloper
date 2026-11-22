@@ -106,6 +106,7 @@ class DesignApp {
       iconButton(ICONS.fit, STRINGS.fit, STRINGS.fitHint, () => {
         this.canvas.fitAll();
       }),
+      this.roleBox(),
     );
     for (const tool of tables.tools.filter((each) => this.canvas.hasTool(each.name))) {
       const button = iconButton(tool.icon, tool.caption, `${tool.caption} (${tool.keys})`, () => {
@@ -148,6 +149,20 @@ class DesignApp {
         showFailure(error);
       }
     });
+  }
+
+  // The role new edges get, as the desktop's role box
+  private roleBox(): HTMLSelectElement {
+    const box = document.createElement('select');
+    box.id = 'role';
+    box.title = STRINGS.drawRoleHint;
+    for (const role of this.tables.roles.values()) {
+      box.add(new Option(role.caption, role.name, false, role.name === this.canvas.drawRole));
+    }
+    box.addEventListener('change', () => {
+      this.canvas.drawRole = box.value;
+    });
+    return box;
   }
 
   private useTool(name: string): void {
@@ -217,7 +232,7 @@ class DesignApp {
   }
 
   private keyDown(event: KeyboardEvent): void {
-    if (event.target instanceof HTMLInputElement) {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
       return;
     }
     const matches = (command: string): boolean => {

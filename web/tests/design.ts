@@ -2,7 +2,8 @@
 // Chromium as a user would: opens a regression pattern with its measurements,
 // checks the canvas drew it, adds a point with the Point tool, drags it with
 // the Select tool and undoes. Serves the app itself on a free port. Node runs
-// this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by default.
+// this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
+// default, and SCREENSHOT, a file name without .png, keeps a picture of the end.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -58,6 +59,19 @@ async function waitForData(page: Page, name: string, value: string): Promise<voi
     name,
     value,
   );
+}
+
+// Chooses a tool by its button, whose hint is its caption and keys
+async function chooseTool(page: Page, caption: string): Promise<void> {
+  await page.click(`#tools button[title^="${caption} ("]`);
+}
+
+// Clicks the canvas at a place relative to its top left
+async function clickAt(page: Page, origin: { x: number; y: number }, x: number, y: number): Promise<void> {
+  await page.mouse.move(origin.x + x, origin.y + y);
+  // The snap shown is the one clicked: let it catch up, as a user's hand does
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await page.mouse.click(origin.x + x, origin.y + y);
 }
 
 async function status(page: Page): Promise<string> {
@@ -124,7 +138,7 @@ try {
   const inked = await inkedPixels(page);
   assert.ok(inked > MIN_INKED_PIXELS, `the pattern is drawn: ${String(inked)} pixels`);
   // Opening fitted all of it, measurements and all, so Fit changes nothing
-  await page.click('#toolbar button:last-child');
+  await page.click('#toolbar button[title="Fit everything in the window"]');
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.equal(await inkedPixels(page), inked, 'opened fitted to the window');
 
@@ -157,9 +171,42 @@ try {
   await page.keyboard.up('Control');
   await waitForData(page, 'undo', 'Add point');
 
+  // The drawing tools, in the empty space left of the pattern
+  await chooseTool(page, 'Line');
+  await clickAt(page, box, 60, 120);
+  await clickAt(page, box, 200, 120);
+  await waitForData(page, 'undo', 'Add line');
+  await page.keyboard.press('Escape');
+
+  await chooseTool(page, 'Rectangle');
+  await clickAt(page, box, 60, 300);
+  assert.match(await status(page), /opposite corner/, 'the rectangle asks for its other corner');
+  await clickAt(page, box, 200, 450);
+  await waitForData(page, 'undo', 'Add rectangle');
+  assert.equal((await bodyData(page, 'selection')).split(' ').length, 4, 'its four edges selected');
+
+  await chooseTool(page, 'Piece');
+  await clickAt(page, box, 130, 375);
+  await waitForData(page, 'undo', 'Add piece');
+  await chooseTool(page, 'Notch');
+  await clickAt(page, box, 130, 300);
+  await waitForData(page, 'undo', 'Add notch');
+
+  await chooseTool(page, 'Circle');
+  await clickAt(page, box, 130, 560);
+  await clickAt(page, box, 170, 560);
+  await waitForData(page, 'undo', 'Add circle or arc');
+
+  // SCREENSHOT names a PNG file to keep what the canvas shows at the end
+  if ((process.env.SCREENSHOT ?? '') !== '') {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await page.screenshot({ path: `${process.env.SCREENSHOT ?? ''}.png` });
+  }
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
-    `Design app: opened, drew ${String(inked)} pixels, added, dragged and undid a point. ${await status(page)}`,
+    `Design app: opened, drew ${String(inked)} pixels; added, dragged and undid a point; drew a line, a rectangle, ` +
+      `a piece, a notch and a circle. ${await status(page)}`,
   );
 } finally {
   await browser.close();

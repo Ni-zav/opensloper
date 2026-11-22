@@ -294,9 +294,7 @@ type
     procedure FocusFormulaRow(const FieldName: string);
   end;
 
-// What a role is called in the app
-function RoleCaption(Role: TEdgeRole): string;
-
+  // What a role is called in the app
 resourcestring
   rsPropNothing = 'Nothing selected';
   rsPropMany = '%d objects selected';
@@ -310,14 +308,6 @@ resourcestring
   rsPropEndsInclude = 'Include the ends';
   rsPropEndsExclude = 'Leave out the ends';
   rsPropChangeEnds = 'Change repeat ends';
-  rsPropConstruction = 'Construction';
-  rsPropOutline = 'Outline';
-  rsPropPlacement = 'Placement';
-  rsPropStitch = 'Stitch';
-  rsPropFoldRole = 'Fold';
-  rsPropCutRole = 'Cut';
-  rsPropSkiveRole = 'Skive line';
-  rsPropEdgeFinishRole = 'Edge finish';
   rsPropMarkedOn = 'Marked on';
   rsPropMarker = 'Marker';
   rsPropMarkerPlain = 'Plain';
@@ -484,21 +474,6 @@ type
     procedure FocusText;
     function TextFocused: boolean;
   end;
-
-function RoleCaption(Role: TEdgeRole): string;
-begin
-  case Role of
-    erConstruction: Result := rsPropConstruction;
-    erOutline: Result := rsPropOutline;
-    erPlacement: Result := rsPropPlacement;
-    erStitch: Result := rsPropStitch;
-    erFold: Result := rsPropFoldRole;
-    erCut: Result := rsPropCutRole;
-    erSkive: Result := rsPropSkiveRole;
-    else
-      Result := rsPropEdgeFinishRole;
-  end;
-end;
 
 const
   // At 96 pixels per inch

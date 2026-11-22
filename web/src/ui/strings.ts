@@ -18,6 +18,7 @@ export const STRINGS = {
   redoStep: (step: string): string => `Redo ${step}`,
   fit: 'Fit',
   fitHint: 'Fit everything in the window',
+  drawRoleHint: 'The role of the lines and shapes drawn next',
   opened: (name: string, objects: number): string => `Opened ${name}: ${String(objects)} objects`,
   needsMeasurements: (file: string): string =>
     `The pattern uses the measurement file ${file}: choose it with Measurements…`,

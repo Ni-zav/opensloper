@@ -39,6 +39,7 @@ type
     function IdOf(const AName: string): integer;
     // A square of four points, A to D, 100 mm a side, with outline edges, made a piece
     procedure AddSquare;
+    function Selected: integer;
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -53,6 +54,16 @@ type
     procedure TestAddPointOnEdge;
     // A click on a point picks it and changes nothing
     procedure TestAddPointOnExistingPoint;
+    procedure TestLineTool;
+    procedure TestLineTooShortIgnored;
+    procedure TestCurveToolCarriesOn;
+    procedure TestShapeTools;
+    // A region with a piece already selects it
+    procedure TestPieceTool;
+    // A click on a notch removes it; on a seam line adds one
+    procedure TestNotchTool;
+    // Pieces' grainlines and notches, and markers, are in the scene
+    procedure TestSceneMarks;
     procedure TestMissingParamRefused;
     // Claude is not offered the editor's methods as tools
     procedure TestNotOfferedAsTools;
@@ -253,33 +264,168 @@ begin
   AssertEquals('everything', 9, Answer.Arrays['objects'].Count);
 end;
 
+// The first ID the last tool click selected
+function TTestEditorServer.Selected: integer;
+begin
+  if Answer.Nulls['select'] or (Answer.Arrays['select'].Count = 0) then
+    Fail('Nothing selected: ' + FReply.AsJSON);
+  Result := Answer.Arrays['select'].Integers[0];
+end;
+
 procedure TTestEditorServer.TestAddPointOnEdge;
 var
   Id: integer;
 begin
   AddSquare;
-  Call('editor_add_point', '{"x": 40, "y": 0.5, "radius": 2}');
-  AssertFalse('made', Answer.Booleans['existing']);
+  Call('editor_tool_click', '{"tool": "point", "x": 40, "y": 0.5, "radius": 2}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Id := Selected;
+  Call('get_object', '{"id": ' + IntToStr(Id) + '}');
   AssertNear('on the edge', 0, Answer.Floats['y'], 0.1);
-  Id := Answer.Integers['id'];
   AssertEquals('a point along the edge', 'alongEdgePoint', Answer.Strings['type']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Add point', Answer.Strings['undo']);
   Call('undo');
   Call('get_object', '{"id": ' + IntToStr(Id) + '}');
   AssertEquals('undone in one step', RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestEditorServer.TestAddPointOnExistingPoint;
+var
+  IdD: integer;
 begin
   AddSquare;
-  Call('editor_add_point', '{"x": 0.5, "y": 99.5, "radius": 2}');
-  AssertTrue('existing', Answer.Booleans['existing']);
-  AssertEquals('D', 'D', Answer.Strings['name']);
+  IdD := IdOf('D');
+  Call('editor_tool_click', '{"tool": "point", "x": 0.5, "y": 99.5, "radius": 2}');
+  AssertFalse('no change', Answer.Booleans['done']);
+  AssertEquals('D selected', IdD, Selected);
   Call('editor_scene');
   AssertEquals('no point added', 4, Answer.Arrays['points'].Count);
   // The last step is still the piece
   Call('undo');
   Call('editor_scene');
   AssertEquals('undo took the piece', 0, Answer.Arrays['pieces'].Count);
+end;
+
+procedure TTestEditorServer.TestLineTool;
+var
+  Line: integer;
+begin
+  Call('editor_tool_click', '{"tool": "line", "x": 0, "y": 0, "radius": 2}');
+  AssertTrue('a first click', Answer.Booleans['started']);
+  AssertFalse('no change yet', Answer.Booleans['done']);
+  Call('editor_scene');
+  AssertEquals('no point yet', 0, Answer.Arrays['points'].Count);
+  Call('editor_tool_click', '{"tool": "line", "x": 100, "y": 0, "radius": 2, "start": {"x": 0, "y": 0, "radius": 2}}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Line := Selected;
+  AssertNear('the next starts at its end', 100, Answer.Objects['end'].Floats['x'], TOLERANCE);
+  Call('get_object', '{"id": ' + IntToStr(Line) + '}');
+  AssertEquals('a line', 'line', Answer.Strings['type']);
+  AssertEquals('outline by default', 'outline', Answer.Strings['role']);
+  AssertNear('its length', 100, Answer.Floats['length'], TOLERANCE);
+  Call('editor_changes');
+  AssertEquals('one step with its points', 'Add line', Answer.Strings['undo']);
+  // Carrying on from the end, which is now a point
+  Call('editor_tool_click', '{"tool": "line", "x": 100, "y": 50, "radius": 2, "start": {"x": 100, "y": 0, "radius": 2}, ' +
+    '"role": "construction"}');
+  Call('editor_scene');
+  AssertEquals('three points, the end shared', 3, Answer.Arrays['points'].Count);
+  // In drawing order, construction lines under the rest
+  AssertEquals('the role given', 'construction', Answer.Arrays['edges'].Objects[0].Strings['role']);
+  Call('undo');
+  Call('undo');
+  Call('editor_scene');
+  AssertEquals('each line one step', 0, Answer.Arrays['points'].Count);
+end;
+
+procedure TTestEditorServer.TestLineTooShortIgnored;
+begin
+  Call('editor_tool_click', '{"tool": "line", "x": 10, "y": 10, "radius": 2, "start": {"x": 10, "y": 10.01, "radius": 2}}');
+  AssertFalse('nothing', Answer.Booleans['done']);
+  AssertEquals('and nothing said', '', Answer.Strings['message']);
+end;
+
+procedure TTestEditorServer.TestCurveToolCarriesOn;
+var
+  Curve: integer;
+begin
+  Call('editor_tool_click', '{"tool": "curve", "x": 100, "y": 0, "radius": 2, "start": {"x": 0, "y": 0, "radius": 2}}');
+  Curve := Answer.Integers['curve'];
+  Call('editor_tool_click', '{"tool": "curve", "x": 200, "y": 50, "radius": 2, "start": {"x": 100, "y": 0, "radius": 2}, ' +
+    '"extend": ' + IntToStr(Curve) + '}');
+  AssertTrue('carried on', Answer.Booleans['done']);
+  AssertEquals('the same path', Curve, Answer.Integers['curve']);
+  Call('editor_scene');
+  AssertEquals('one edge', 1, Answer.Arrays['edges'].Count);
+  Call('editor_changes');
+  AssertEquals('its step', 'Carry curve on', Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestShapeTools;
+var
+  Shape: integer;
+begin
+  Call('editor_tool_click', '{"tool": "circle", "x": 50, "y": 50, "radius": 2}');
+  AssertTrue('a first click', Answer.Booleans['started']);
+  AssertTrue('asks for the rim', Answer.Strings['message'] <> '');
+  Call('editor_tool_snap', '{"tool": "circle", "x": 80, "y": 50, "radius": 2, "start": {"x": 50, "y": 50, "radius": 2}}');
+  AssertTrue('the radius while choosing', Pos('30', Answer.Strings['description']) > 0);
+  AssertNear('where it started', 50, Answer.Objects['start'].Floats['x'], TOLERANCE);
+  Call('editor_tool_click', '{"tool": "circle", "x": 80, "y": 50, "radius": 2, "start": {"x": 50, "y": 50, "radius": 2}}');
+  Shape := Selected;
+  Call('get_object', '{"id": ' + IntToStr(Shape) + '}');
+  AssertEquals('a circle', 'circle', Answer.Strings['type']);
+  Call('editor_tool_click', '{"tool": "rectangle", "x": 300, "y": 200, "radius": 2, "start": {"x": 200, "y": 150, "radius": 2}}');
+  AssertTrue('made', Answer.Booleans['done']);
+  AssertEquals('four edges selected', 4, Answer.Arrays['select'].Count);
+end;
+
+procedure TTestEditorServer.TestPieceTool;
+var
+  Flap: integer;
+begin
+  AddSquare;
+  Flap := IdOf('Flap');
+  Call('editor_tool_click', '{"tool": "piece", "x": 50, "y": 50, "radius": 2}');
+  AssertFalse('there already', Answer.Booleans['done']);
+  AssertTrue('says so', Pos('Flap', Answer.Strings['message']) > 0);
+  AssertEquals('and selects it', Flap, Selected);
+  Call('undo');
+  Call('editor_tool_click', '{"tool": "piece", "x": 50, "y": 50, "radius": 2}');
+  AssertTrue('made again', Answer.Booleans['done']);
+  Call('editor_tool_click', '{"tool": "piece", "x": 500, "y": 500, "radius": 2}');
+  AssertFalse('no outline there', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['message'] <> '');
+end;
+
+procedure TTestEditorServer.TestNotchTool;
+begin
+  AddSquare;
+  Call('editor_tool_click', '{"tool": "notch", "x": 50, "y": 0, "radius": 2}');
+  AssertTrue('added', Answer.Booleans['done']);
+  Call('editor_scene');
+  AssertEquals('drawn: one segment', 4, Answer.Arrays['pieces'].Objects[0].Arrays['notches'].Count);
+  Call('editor_changes');
+  AssertEquals('its step', 'Add notch', Answer.Strings['undo']);
+  Call('editor_tool_click', '{"tool": "notch", "x": 50, "y": 0.5, "radius": 2}');
+  AssertTrue('removed', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Remove notch', Answer.Strings['undo']);
+  Call('editor_tool_click', '{"tool": "notch", "x": 50, "y": 50, "radius": 2}');
+  AssertFalse('no seam line there', Answer.Booleans['done']);
+  AssertTrue('says so', Answer.Strings['message'] <> '');
+end;
+
+procedure TTestEditorServer.TestSceneMarks;
+begin
+  AddSquare;
+  Call('set_marker', '{"name": "A", "marker": "hole", "size": 6}');
+  Answer;
+  Call('editor_scene');
+  AssertTrue('the grainline drawn', Answer.Arrays['pieces'].Objects[0].Arrays['marks'].Count >= 4);
+  AssertEquals('one marker', 1, Answer.Arrays['markers'].Count);
+  AssertTrue('its strokes', Answer.Arrays['markers'].Objects[0].Arrays['strokes'].Count >= 8);
 end;
 
 procedure TTestEditorServer.TestMissingParamRefused;
@@ -609,7 +755,7 @@ begin
   Call('editor_drag_begin', '{"name": "C"}');
   Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
   AssertEquals('an API change', RPC_REFUSED, ErrorCode);
-  Call('editor_add_point', '{"x": 300, "y": 300, "radius": 2}');
+  Call('editor_tool_click', '{"tool": "point", "x": 300, "y": 300, "radius": 2}');
   AssertEquals('an editor change', RPC_REFUSED, ErrorCode);
   Call('undo');
   AssertEquals('undo', RPC_REFUSED, ErrorCode);

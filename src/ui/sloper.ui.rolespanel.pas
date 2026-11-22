@@ -93,7 +93,7 @@ resourcestring
 implementation
 
 uses
-  Math, Sloper.UI.Properties;
+  Math, Sloper.Editor.PropertyText;
 
 const
   GAP = 6;

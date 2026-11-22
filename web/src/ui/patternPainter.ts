@@ -16,6 +16,11 @@ const DIAMOND_SCALE = 1.6;
 const DASH_PIXELS_PER_MILLIMETRE = 2.5;
 // psDash, in line widths
 const CONSTRUCTION_DASH = [3, 1];
+// psDot, for the guide to the point a snap lines up with, in pixels
+const GUIDE_DOTS = [1, 2];
+// A piece's grainline, fold and marking strokes, and its notches, in pixels
+const PIECE_MARK_WIDTH = 1.5;
+const NOTCH_WIDTH = 2;
 // The grid's lines, in mm, drawn while they are at least this many pixels apart
 const GRID_STEP = 10;
 const GRID_MAJOR_EVERY = 10;
@@ -80,9 +85,15 @@ function inkFor(item: SceneObject, normal: Rgba): Rgba {
 
 export type SnapKind = 'free' | 'point' | 'crossing' | 'edge' | 'horizontal' | 'vertical';
 
+// What a two-click tool's second click would make, drawn from its first
+export type SnapPreview = 'line' | 'circle' | 'rectangle';
+
 export interface SnapMarker {
   kind: SnapKind;
   at: Vec2;
+  // The point a horizontal or vertical snap lines up with, model mm
+  guideFrom?: Vec2 | undefined;
+  preview?: { kind: SnapPreview; from: Vec2 } | undefined;
 }
 
 // What the canvas shows besides the pattern itself
@@ -157,25 +168,75 @@ export class PatternPainter {
     this.drawLayer(scene, tables, false);
   }
 
-  // The snap marker: a ring on a point, a cross elsewhere
+  // The snap marker, a guide to the point it lines up with, and what the
+  // second click would make from the first, as the desktop draws them
   drawSnap(): void {
     const snap = this.paintState().snap;
     if (snap === undefined) {
       return;
     }
-    const at = this.paintState().view.toScreen(snap.at);
+    const view = this.paintState().view;
+    const at = view.toScreen(snap.at);
     const context = this.context;
-    context.strokeStyle = css(SNAP_INK);
-    context.lineWidth = 1.5;
+    if (snap.preview !== undefined) {
+      const from = view.toScreen(snap.preview.from);
+      context.strokeStyle = css(SELECTED_INK);
+      context.lineWidth = 1.5;
+      context.setLineDash(CONSTRUCTION_DASH.map((length) => length * context.lineWidth));
+      context.beginPath();
+      if (snap.preview.kind === 'circle') {
+        context.arc(from.x, from.y, Math.hypot(at.x - from.x, at.y - from.y), 0, 2 * Math.PI);
+      } else if (snap.preview.kind === 'rectangle') {
+        context.rect(from.x, from.y, at.x - from.x, at.y - from.y);
+      } else {
+        context.moveTo(from.x, from.y);
+        context.lineTo(at.x, at.y);
+      }
+      context.stroke();
+    }
+    if (snap.guideFrom !== undefined) {
+      const base = view.toScreen(snap.guideFrom);
+      context.strokeStyle = css(SNAP_INK);
+      context.lineWidth = 1;
+      context.setLineDash(GUIDE_DOTS);
+      context.beginPath();
+      context.moveTo(base.x, base.y);
+      context.lineTo(at.x, at.y);
+      context.stroke();
+    }
     context.setLineDash([]);
+    context.strokeStyle = css(SNAP_INK);
+    context.lineWidth = 2;
+    const size = SNAP_MARKER_SIZE;
     context.beginPath();
-    if (snap.kind === 'point') {
-      context.arc(at.x, at.y, SNAP_MARKER_SIZE, 0, 2 * Math.PI);
-    } else {
-      context.moveTo(at.x - SNAP_MARKER_SIZE, at.y);
-      context.lineTo(at.x + SNAP_MARKER_SIZE, at.y);
-      context.moveTo(at.x, at.y - SNAP_MARKER_SIZE);
-      context.lineTo(at.x, at.y + SNAP_MARKER_SIZE);
+    switch (snap.kind) {
+      case 'point':
+        context.arc(at.x, at.y, size, 0, 2 * Math.PI);
+        break;
+      case 'crossing':
+        context.moveTo(at.x - size, at.y - size);
+        context.lineTo(at.x + size, at.y + size);
+        context.moveTo(at.x - size, at.y + size);
+        context.lineTo(at.x + size, at.y - size);
+        break;
+      case 'edge':
+        context.moveTo(at.x, at.y - size);
+        context.lineTo(at.x + size, at.y);
+        context.lineTo(at.x, at.y + size);
+        context.lineTo(at.x - size, at.y);
+        context.closePath();
+        break;
+      case 'horizontal':
+      case 'vertical':
+        context.rect(at.x - size + 1, at.y - size + 1, 2 * size - 2, 2 * size - 2);
+        break;
+      case 'free':
+        context.lineWidth = 1.5;
+        context.moveTo(at.x - size, at.y);
+        context.lineTo(at.x + size, at.y);
+        context.moveTo(at.x, at.y - size);
+        context.lineTo(at.x, at.y + size);
+        break;
     }
     context.stroke();
   }
@@ -223,6 +284,25 @@ export class PatternPainter {
         this.context.lineTo(at.x + shift.x, at.y + shift.y);
       }
     }
+  }
+
+  // Segments as a flat list, x1, y1, x2, y2 for each, in model mm
+  private strokeSegments(segments: number[], color: string, width: number): void {
+    if (segments.length < 4) {
+      return;
+    }
+    const view = this.paintState().view;
+    const context = this.context;
+    context.strokeStyle = color;
+    context.lineWidth = width;
+    context.beginPath();
+    for (let index = 0; index + 3 < segments.length; index += 4) {
+      const first = view.toScreen({ x: segments[index] ?? 0, y: segments[index + 1] ?? 0 });
+      const last = view.toScreen({ x: segments[index + 2] ?? 0, y: segments[index + 3] ?? 0 });
+      context.moveTo(first.x, first.y);
+      context.lineTo(last.x, last.y);
+    }
+    context.stroke();
   }
 
   private drawLayer(scene: Scene, tables: Tables, dimmed: boolean): void {
@@ -283,6 +363,20 @@ export class PatternPainter {
       context.stroke();
     }
     context.setLineDash([]);
+    for (const piece of scene.pieces) {
+      if (piece.dimmed !== dimmed) {
+        continue;
+      }
+      const ink = css(this.isSelected(piece) ? SELECTED_INK : inkFor(piece, CONSTRUCTION_INK));
+      this.strokeSegments(piece.marks, ink, PIECE_MARK_WIDTH);
+      this.strokeSegments(piece.notches, ink, NOTCH_WIDTH);
+    }
+    // A marker shows at its point whether or not it is on a piece yet
+    for (const marker of scene.markers) {
+      if (marker.dimmed === dimmed) {
+        this.strokeSegments(marker.strokes, css(this.isSelected(marker) ? SELECTED_INK : inkFor(marker, INK)), 1);
+      }
+    }
     for (const point of scene.points) {
       if (point.dimmed !== dimmed) {
         continue;

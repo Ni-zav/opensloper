@@ -30,7 +30,7 @@ interface
 uses
   Classes, SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Shortcuts,
   Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter,
-  Sloper.Core.IconSet, Sloper.Editor.Tools;
+  Sloper.Core.IconSet, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits;
 
 type
   // What a tool needs of the canvas
@@ -56,6 +56,8 @@ type
     FHost: TCanvasToolHost;
   protected
     function ModelAt(X, Y: integer): TVec2;
+    // Selects what the edit says and shows its message
+    procedure ApplyEdit(const Edit: TSelectionEdit);
     property Host: TCanvasToolHost read FHost;
   public
     constructor Create(AHost: TCanvasToolHost);
@@ -92,20 +94,6 @@ function CreateCanvasTools(Host: TCanvasToolHost): TCanvasToolHandlers;
 procedure FreeCanvasTools(var Tools: TCanvasToolHandlers);
 
 resourcestring
-  rsToolAddLine = 'Add line';
-  rsToolAddCurve = 'Add curve';
-  rsToolExtendCurve = 'Carry curve on';
-  rsToolAddRound = 'Add circle or arc';
-  rsToolAddRectangle = 'Add rectangle';
-  rsToolCircleRim = 'Click a point on the rim';
-  rsToolRadius = 'Radius %s';
-  rsToolRectangleCorner = 'Click the opposite corner';
-  rsToolRectangleSize = '%s by %s';
-  rsToolAddPiece = 'Add piece';
-  rsToolPieceExists = '%s already covers this region';
-  rsToolAddNotch = 'Add notch';
-  rsToolRemoveNotch = 'Remove notch';
-  rsToolNoSeam = 'There is no piece''s edge here';
   rsToolSeamProgress = 'Side %s: A %s, B %s, difference %s. Tab changes side, Enter makes the seam';
   rsToolSeamSides = 'Pick edges for both sides first';
   rsToolAddSeam = 'Add seam';
@@ -117,13 +105,10 @@ resourcestring
 implementation
 
 uses
-  LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.PieceDetect, Sloper.Editor.Scene;
+  LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Editor.Scene,
+  Sloper.Editor.ToolEdits;
 
 const
-  // A line or curve shorter than this (mm) is ignored
-  MIN_EDGE_LENGTH = 0.05;
-  // Curve handles start this fraction of the way along the chord
-  HANDLE_FRACTION = 1 / 3;
   SEAM_SIDE_NAMES: array[boolean] of string = ('A', 'B');
 
 type
@@ -186,6 +171,7 @@ type
     FLastEdge: string;
     procedure AddEdge;
     procedure ExtendLastEdge;
+    procedure CarryOnFrom(const EndKey, EdgeKey: string);
   protected
     procedure Click; override;
   public
@@ -239,9 +225,6 @@ type
 
   // A click on a notch removes it; one on a piece's edge adds one
   TNotchTool = class(TCanvasToolHandler)
-  private
-    function RemoveNotchesAt(const At: TVec2; Radius: double): boolean;
-    function AddNotchesAt(const At: TVec2; Radius: double): boolean;
   public
     function Hint: string; override;
     procedure Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer); override;
@@ -307,6 +290,14 @@ end;
 function TCanvasToolHandler.ModelAt(X, Y: integer): TVec2;
 begin
   Result := FHost.View.ToModel(Vec2(X, Y));
+end;
+
+procedure TCanvasToolHandler.ApplyEdit(const Edit: TSelectionEdit);
+begin
+  if Edit.Reselect then
+    Host.Select(Edit.Selection);
+  if Edit.Message <> '' then
+    Host.ShowMessage(Edit.Message);
 end;
 
 procedure TCanvasToolHandler.Reset;
@@ -469,23 +460,8 @@ end;
 
 // A click on a point selects it
 procedure TPointTool.Click;
-var
-  Document: TPatternDocument;
-  Key, Reason: string;
 begin
-  if FSnap.Kind = snPoint then
-  begin
-    Host.Select([FSnap.PointKey]);
-    Exit;
-  end;
-  Document := Host.Document;
-  Document.BeginChange(rsToolAddPoint);
-  Key := PointFromSnap(Document.Pattern, FSnap);
-  Reason := Document.Pattern.LastError;
-  if Document.Commit(Key <> '') then
-    Host.Select([Key])
-  else
-    Host.ShowMessage(Reason);
+  ApplyEdit(AddPointFromSnap(Host.Document, FSnap));
 end;
 
 { TEdgeTool }
@@ -521,92 +497,41 @@ end;
 // The second click: both ends and the edge are one change
 procedure TEdgeTool.AddEdge;
 var
-  Document: TPatternDocument;
-  Pattern: TPattern;
-  StartKey, EndKey, Reason, Description: string;
-  StartPos, EndPos: TVec2;
-  Chord: double;
-  Edge: TEdgeObject;
+  Edit: TSelectionEdit;
+  EndKey: string;
 begin
-  Document := Host.Document;
-  Pattern := Document.Pattern;
-  StartPos := FStart.Position;
-  EndPos := FSnap.Position;
-  Chord := Distance(StartPos, EndPos);
-  if Chord < MIN_EDGE_LENGTH then
-    Exit;
-  if FCurve then
-    Description := rsToolAddCurve
-  else
-    Description := rsToolAddLine;
-  Document.BeginChange(Description);
-  Edge := nil;
-  StartKey := PointFromSnap(Pattern, FStart);
-  EndKey := '';
-  if StartKey <> '' then
-    EndKey := PointFromSnap(Pattern, FSnap);
-  if (EndKey <> '') and (EndKey <> StartKey) then
-    if FCurve then
-      Edge := Pattern.AddCurve(StartKey, EndKey, RoundedText(AngleBetween(StartPos, EndPos), DRAG_ANGLE_DECIMALS),
-        RoundLengthFormulaText(Chord * HANDLE_FRACTION, Pattern.Units), RoundedText(AngleBetween(EndPos, StartPos), DRAG_ANGLE_DECIMALS),
-        RoundLengthFormulaText(Chord * HANDLE_FRACTION, Pattern.Units), Host.DrawRole)
-    else
-      Edge := Pattern.AddLine(StartKey, EndKey, Host.DrawRole);
-  Reason := Pattern.LastError;
-  if not Document.Commit(Assigned(Edge)) then
-  begin
-    Host.ShowMessage(Reason);
+  Edit := AddEdgeFromSnaps(Host.Document, FStart, FSnap, FCurve, Host.DrawRole, EndKey);
+  ApplyEdit(Edit);
+  if Edit.Done then
+    CarryOnFrom(EndKey, Edit.Selection[0])
+  else if Edit.Message <> '' then
     FHasStart := False;
-    Exit;
-  end;
-  Host.Select([Edge.Key]);
-  FStart := Default(TSnap);
-  FStart.Kind := snPoint;
-  FStart.PointKey := EndKey;
-  FStart.Position := TPointObject(Document.Pattern.FindNode(EndKey)).Position;
-  FHasStart := True;
-  FLastEdge := '';
-  if FCurve then
-    FLastEdge := Edge.Key;
 end;
 
 // The point, made if need be, and the longer path are one change; the edge
 // keeps its key, so the next Shift+click carries it on again
 procedure TEdgeTool.ExtendLastEdge;
 var
-  Document: TPatternDocument;
-  Pattern: TPattern;
-  Node: TEvalNode;
-  EndKey, Reason: string;
-  Path: TCurvePathObject;
+  Edit: TSelectionEdit;
+  EndKey: string;
 begin
-  Document := Host.Document;
-  Pattern := Document.Pattern;
-  if Distance(FStart.Position, FSnap.Position) < MIN_EDGE_LENGTH then
-    Exit;
-  Node := Pattern.FindNode(FLastEdge);
-  if not (Node is TEdgeObject) then
-  begin
-    FLastEdge := '';
-    AddEdge;
-    Exit;
-  end;
-  Document.BeginChange(rsToolExtendCurve);
-  Path := nil;
-  EndKey := PointFromSnap(Pattern, FSnap);
-  if EndKey <> '' then
-    Path := Pattern.ExtendCurve(TEdgeObject(Node), EndKey);
-  Reason := Pattern.LastError;
-  if not Document.Commit(Assigned(Path)) then
-  begin
-    Host.ShowMessage(Reason);
-    Exit;
-  end;
-  Host.Select([FLastEdge]);
+  Edit := ExtendCurveToSnap(Host.Document, FLastEdge, FStart, FSnap, Host.DrawRole, EndKey);
+  ApplyEdit(Edit);
+  if Edit.Done then
+    CarryOnFrom(EndKey, Edit.Selection[0]);
+end;
+
+// The next edge starts where the last ended; a curve can be carried on
+procedure TEdgeTool.CarryOnFrom(const EndKey, EdgeKey: string);
+begin
   FStart := Default(TSnap);
   FStart.Kind := snPoint;
   FStart.PointKey := EndKey;
-  FStart.Position := TPointObject(Document.Pattern.FindNode(EndKey)).Position;
+  FStart.Position := TPointObject(Host.Document.Pattern.FindNode(EndKey)).Position;
+  FHasStart := True;
+  FLastEdge := '';
+  if FCurve then
+    FLastEdge := EdgeKey;
 end;
 
 { TShapeTool }
@@ -626,17 +551,10 @@ begin
 end;
 
 function TShapeTool.SnapMessage: string;
-var
-  Units: TMeasureUnit;
 begin
   if not FHasStart then
     Exit(inherited SnapMessage);
-  Units := Host.Document.Pattern.Units;
-  if FCircle then
-    Result := Format(rsToolRadius, [LengthWithUnit(Distance(FStart.Position, FSnap.Position), Units)])
-  else
-    Result := Format(rsToolRectangleSize, [LengthWithUnit(Abs(FSnap.Position.X - FStart.Position.X), Units),
-      LengthWithUnit(Abs(FSnap.Position.Y - FStart.Position.Y), Units)]);
+  Result := ShapeSizeText(Host.Document.Pattern, FStart.Position, FSnap.Position, FCircle);
 end;
 
 function TShapeTool.Preview: TSnapPreview;
@@ -667,39 +585,9 @@ end;
 // The first point, made if need be, and the shape are one change. The tool
 // stays on for the next.
 procedure TShapeTool.AddShape;
-var
-  Document: TPatternDocument;
-  Circle: TCircleObject;
-  Edges: TRectangleEdges;
-  Key, Reason: string;
-  Done: boolean;
 begin
-  Document := Host.Document;
   FHasStart := False;
-  Key := '';
-  if FCircle then
-  begin
-    Document.BeginChange(rsToolAddRound);
-    Circle := CircleFromSnap(Document.Pattern, FStart, FSnap.Position, Host.DrawRole);
-    Done := Assigned(Circle);
-    if Done then
-      Key := Circle.Key;
-  end
-  else
-  begin
-    Document.BeginChange(rsToolAddRectangle);
-    Done := RectangleFromSnap(Document.Pattern, FStart, FSnap.Position, Host.DrawRole, Edges);
-  end;
-  Reason := Document.Pattern.LastError;
-  if Document.Commit(Done) then
-  begin
-    if Key <> '' then
-      Host.Select([Key])
-    else
-      Host.Select([Edges[0].Key, Edges[1].Key, Edges[2].Key, Edges[3].Key]);
-  end
-  else
-    Host.ShowMessage(Reason);
+  ApplyEdit(AddShapeFromSnap(Host.Document, FStart, FSnap.Position, FCircle, Host.DrawRole));
   Host.Refresh;
 end;
 
@@ -813,37 +701,9 @@ begin
 end;
 
 procedure TPieceTool.Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer);
-var
-  Document: TPatternDocument;
-  Path: TPiecePath;
-  Reason, Key: string;
-  Existing, Piece: TPieceObject;
 begin
-  if Button <> cbLeft then
-    Exit;
-  Document := Host.Document;
-  if not DetectPiecePath(Document.Pattern, ModelAt(X, Y), Path, Reason) then
-  begin
-    Host.ShowMessage(Reason);
-    Exit;
-  end;
-  Existing := PieceOnPath(Document.Pattern, Path);
-  if Assigned(Existing) then
-  begin
-    Host.ShowMessage(Format(rsToolPieceExists, [Existing.DisplayName]));
-    Host.Select([Existing.Key]);
-    Exit;
-  end;
-  Document.BeginChange(rsToolAddPiece);
-  Piece := Document.Pattern.AddPiece('', Path, DEFAULT_PIECE_ALLOWANCE);
-  Key := '';
-  if Assigned(Piece) then
-    Key := Piece.Key;
-  Reason := Document.Pattern.LastError;
-  if Document.Commit(Assigned(Piece)) then
-    Host.Select([Key])
-  else
-    Host.ShowMessage(Reason);
+  if Button = cbLeft then
+    ApplyEdit(AddPieceAt(Host.Document, ModelAt(X, Y)));
 end;
 
 { TNotchTool }
@@ -854,66 +714,13 @@ begin
 end;
 
 // Every notch here goes, since a notch often sits on two pieces sewn together
-function TNotchTool.RemoveNotchesAt(const At: TVec2; Radius: double): boolean;
-var
-  Pattern: TPattern;
-  Index, Notch: integer;
-  Piece: TPieceObject;
-begin
-  Result := False;
-  Pattern := Host.Document.Pattern;
-  for Index := 0 to Pattern.ObjectCount - 1 do
-    if Pattern.Objects[Index] is TPieceObject then
-    begin
-      Piece := TPieceObject(Pattern.Objects[Index]);
-      for Notch := High(Piece.NotchMarks) downto 0 do
-        if Distance(Piece.NotchMarks[Notch].Seam, At) <= Radius then
-          Result := Pattern.RemoveNotch(Piece, Notch) or Result;
-    end;
-end;
 
 // On every piece that uses the edge, so two sides of a seam get matching notches
-function TNotchTool.AddNotchesAt(const At: TVec2; Radius: double): boolean;
-var
-  Pattern: TPattern;
-  Index: integer;
-  Piece: TPieceObject;
-  Target: TNotchTarget;
-begin
-  Result := False;
-  Pattern := Host.Document.Pattern;
-  if not NotchTargetAt(Pattern, At, Radius, Target) then
-    Exit;
-  for Index := Pattern.ObjectCount - 1 downto 0 do
-    if Pattern.Objects[Index] is TPieceObject then
-    begin
-      Piece := TPieceObject(Pattern.Objects[Index]);
-      if Piece.PathIndexOf(Target.EdgeKey) < 0 then
-        Continue;
-      if Target.PointKey <> '' then
-        Result := Pattern.AddPointNotch(Piece, Pattern.UsePoint(Target.PointKey)) or Result
-      else
-        Result := Pattern.AddEdgeNotch(Piece, Target.EdgeKey, RoundLengthFormulaText(Target.Position, Pattern.Units)) or Result;
-    end;
-end;
 
 procedure TNotchTool.Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer);
-var
-  Document: TPatternDocument;
-  At: TVec2;
-  Radius: double;
 begin
-  if Button <> cbLeft then
-    Exit;
-  Document := Host.Document;
-  At := ModelAt(X, Y);
-  Radius := Host.View.PixelsToMM(SNAP_RADIUS);
-  Document.BeginChange(rsToolRemoveNotch);
-  if Document.Commit(RemoveNotchesAt(At, Radius)) then
-    Exit;
-  Document.BeginChange(rsToolAddNotch);
-  if not Document.Commit(AddNotchesAt(At, Radius)) then
-    Host.ShowMessage(rsToolNoSeam);
+  if Button = cbLeft then
+    ApplyEdit(ToggleNotchAt(Host.Document, ModelAt(X, Y), Host.View.PixelsToMM(SNAP_RADIUS)));
 end;
 
 { TSeamTool }

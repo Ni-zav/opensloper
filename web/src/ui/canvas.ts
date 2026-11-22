@@ -9,7 +9,7 @@ import { EngineError } from '../engine/engine.ts';
 import { booleanField, idsField, numberField, stringField } from '../engine/replies.ts';
 import { EMPTY_SCENE, parseScene, sceneBounds, type Scene, type Tables } from '../editor/scene.ts';
 import { ViewTransform, ZOOM_STEP, type Vec2 } from '../editor/view.ts';
-import { PointTool, SNAP_RADIUS, type CanvasToolHandler, type CanvasToolHost } from './canvasTools.ts';
+import { ClickTool, SNAP_RADIUS, SnapTool, type CanvasToolHandler, type CanvasToolHost } from './canvasTools.ts';
 import { LatestOnly } from './latestOnly.ts';
 import { PatternPainter, type SnapMarker } from './patternPainter.ts';
 
@@ -23,6 +23,12 @@ const FIT_MARGIN = 24;
 const ZOOM_SETTLE_MS = 150;
 const MIDDLE_BUTTON = 1;
 const LEFT_BUTTON = 0;
+const RIGHT_BUTTON = 2;
+
+// The tools that snap, and those that act where they are clicked; the rest
+// of the desktop's (seam, text, callout) follow with notes and seams drawn
+const SNAP_TOOLS = ['point', 'line', 'curve', 'circle', 'rectangle'];
+const CLICK_TOOLS = ['piece', 'notch'];
 
 export const SELECT_TOOL = 'select';
 
@@ -50,6 +56,8 @@ function distance(from: Vec2, to: Vec2): number {
 export class PatternCanvas implements CanvasToolHost {
   readonly document: PatternDocument;
   readonly view = new ViewTransform();
+  // The role of the edges the drawing tools make, as the role box chooses
+  drawRole = 'outline';
   private readonly element: HTMLCanvasElement;
   private readonly painter: PatternPainter;
   private readonly tables: Tables;
@@ -94,7 +102,12 @@ export class PatternCanvas implements CanvasToolHost {
       throw new Error('the browser cannot draw on a canvas');
     }
     this.painter = new PatternPainter(context);
-    this.tools.set('point', new PointTool(this));
+    for (const name of SNAP_TOOLS) {
+      this.tools.set(name, new SnapTool(this, name));
+    }
+    for (const name of CLICK_TOOLS) {
+      this.tools.set(name, new ClickTool(this, name));
+    }
     const fail = (error: unknown): void => {
       this.report(error);
     };
@@ -184,6 +197,10 @@ export class PatternCanvas implements CanvasToolHost {
 
   showMessage(text: string): void {
     this.events.message(text);
+  }
+
+  pointAt(id: string): Vec2 | undefined {
+    return this.scene.points.find((point) => point.id === id);
   }
 
   fail(error: unknown): void {
@@ -306,6 +323,10 @@ export class PatternCanvas implements CanvasToolHost {
     if (event.button === MIDDLE_BUTTON) {
       this.mode = 'panning';
       this.autoFit = false;
+    } else if (event.button === RIGHT_BUTTON) {
+      // Drops a tool's first click, as on the desktop
+      this.tools.get(this.tool)?.cancel();
+      return;
     } else if (event.button === LEFT_BUTTON) {
       this.mode = 'pressed';
       this.pressShift = event.shiftKey;
@@ -369,7 +390,7 @@ export class PatternCanvas implements CanvasToolHost {
           const shift = this.pressShift;
           this.gesture = this.gesture.then(async () => this.clickSelect(shift));
         } else {
-          this.tools.get(this.tool)?.click(at);
+          this.tools.get(this.tool)?.click(at, this.pressShift);
         }
         break;
       case 'starting':

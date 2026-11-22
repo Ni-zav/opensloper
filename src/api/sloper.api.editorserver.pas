@@ -50,7 +50,10 @@ type
     function DoSnap(Params: TJSONObject): TJSONData;
     function DoObjectsAt(Params: TJSONObject): TJSONData;
     function DoObjectsInBox(Params: TJSONObject): TJSONData;
-    function DoAddPoint(Params: TJSONObject): TJSONData;
+    // The snap of a place given as a group of x, y and radius
+    function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
+    function DoToolSnap(Params: TJSONObject): TJSONData;
+    function DoToolClick(Params: TJSONObject): TJSONData;
     function DoComplete(Params: TJSONObject): TJSONData;
     function DoListObjects(Params: TJSONObject): TJSONData;
     function DoListVariables(Params: TJSONObject): TJSONData;
@@ -71,7 +74,9 @@ resourcestring
     'objects never computed are left out; failing ones are at their last good result.';
   rsEditorTolerance = 'How far a curve''s polyline may stray from it, in mm; default 0.1';
   rsEditorSceneReturns = '`isolated`, the piece shown alone or null; `pieces`, each with `id`, `name`, `state`, ' +
-    '`locked`, `dimmed`, `fillColor`, `fillStyle` and its `cutLine`; `edges`, each with `id`, `name`, `role`, ' +
+    '`locked`, `dimmed`, `fillColor`, `fillStyle`, its `cutLine`, `marks` (grainline, fold and marking strokes) and ' +
+    '`notches`, each a flat list of segments x1, y1, x2, y2; `markers`, each with the `id` of its point or edge and ' +
+    'its `strokes`, as marks are; `edges`, each with `id`, `name`, `role`, ' +
     '`state`, `locked`, `dimmed`, `copyOf`, its `line`, and `slot` and `normal` when it lies on another edge; `points`, ' +
     'each with `id`, `name`, `state`, `locked`, `dimmed`, `copyOf`, `x` and `y`. Lines are flat lists x, y, x, y, in ' +
     'mm; `copyOf` is the transform an object is a copy from, or null.';
@@ -94,9 +99,24 @@ resourcestring
   rsEditorMinY = 'Its top, in mm';
   rsEditorMaxX = 'Its right, in mm';
   rsEditorMaxY = 'Its bottom, in mm';
-  rsEditorAddPoint = 'Adds the point a click at a place would make, as editor_snap describes it, with an automatic ' +
-    'name, as one undo step. A click on an existing point makes nothing and gives that point.';
-  rsEditorAddPointReturns = 'The point, as `get_object` gives it, and `existing`, true when it was there already';
+  rsEditorToolSnap = 'Where a click of a canvas tool would snap, and what the status bar says: the snap''s ' +
+    'description, or for a circle or rectangle after its first click the size it would have.';
+  rsEditorTool = 'The tool, as editor_tables names it';
+  rsEditorStart = 'The tool''s first click, for line, curve, circle and rectangle: a group of `x`, `y` and `radius` ' +
+    'as the click gave them. A line or curve lines up with its start first, once that is a point.';
+  rsEditorToolSnapReturns = 'As editor_snap gives it, with `start`, where the first click snapped (`kind`, `x`, `y`), ' +
+    'when given';
+  rsEditorToolClick = 'Does what a click of a canvas tool does, as one undo step: point adds the point it snaps to; ' +
+    'line and curve take a first click, then make the edge with its points, carrying on from its end; circle and ' +
+    'rectangle take a first click, then make the shape; piece makes a piece of the closed outline round the place; ' +
+    'notch removes the notches there, or adds one where a piece''s seam line passes.';
+  rsEditorExtend = 'For the curve tool, the curve or curve path to carry on through the click as one path, as ' +
+    'Shift+click does';
+  rsEditorRole = 'The role of the edges a line, curve, circle or rectangle makes; outline by default';
+  rsEditorToolClickReturns = '`done`, true when it made a change; `started`, true when the click was a first click to ' +
+    'keep as `start`; `select`, the IDs to select, or null to leave the selection; `message` for the status bar; ' +
+    'for line and curve, `end`, where the next one starts (`x`, `y`), and for a curve `curve`, the edge to carry on';
+  rsEditorBusy = 'Finish the drag first';
   rsEditorComplete = 'What to offer while a formula is typed: objects, variables, measurements and functions matching ' +
     'the word at the caret; @, # and a dot after an object narrow the list.';
   rsEditorCompleteTarget = 'The object or variable whose formula it is, by ID or name; left out for a new one';
@@ -156,7 +176,7 @@ resourcestring
   rsEditorTablesReturns = '`tools`, each with `name`, `caption`, `hint`, `icon` and `keys`; `commands`, each with ' +
     '`name`, `icon`, `place`, `menu`, `keys` and `description`; `shortcuts`, each with `command`, `keys`, `kind`, ' +
     '`group` and `description`. Keys are written as Mod+Shift+S, Mod being Ctrl, or Cmd on macOS. `roles`, each edge ' +
-    'role with its `name`, `color` (empty for outline and construction, drawn in ink) and `dashes`, dash and gap ' +
+    'role with its `name`, `caption`, `color` (empty for outline and construction, drawn in ink) and `dashes`, dash and gap ' +
     'lengths in mm, empty for a solid line.';
 
 implementation
@@ -165,13 +185,17 @@ uses
   TypInfo, Sloper.API.Rpc, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
-  Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Core.Note, Sloper.Core.Drag;
+  Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
+  Sloper.Core.Note, Sloper.Core.Drag;
 
 const
   // How finely curves are flattened when the call does not say, in mm
   DEFAULT_TOLERANCE = 0.1;
   // The finest flattening asked for, in mm, so a curve cannot become millions of points
   MIN_TOLERANCE = 0.001;
+  // The tools whose clicks snap, and every tool editor_tool_click takes
+  SNAP_TOOL_NAMES: array[0..4] of string = ('point', 'line', 'curve', 'circle', 'rectangle');
+  CLICK_TOOL_NAMES: array[0..6] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'piece', 'notch');
   SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical');
   OBJECT_FILTER_NAMES: array[TObjectFilter] of string = ('all', 'points', 'edges', 'pieces', 'notes', 'problems');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
@@ -204,11 +228,20 @@ begin
     AddApiParam(Built, 'minY', apNumber, True, rsEditorMinY);
     AddApiParam(Built, 'maxX', apNumber, True, rsEditorMaxX);
     AddApiParam(Built, 'maxY', apNumber, True, rsEditorMaxY);
-    AddApiMethod(Built, 'editor_add_point', rsEditorAddPoint, rsEditorAddPointReturns);
+    AddApiMethod(Built, 'editor_tool_snap', rsEditorToolSnap, rsEditorToolSnapReturns, True);
+    AddApiParam(Built, 'tool', apChoice, True, rsEditorTool, string.Join(', ', SNAP_TOOL_NAMES));
     AddApiParam(Built, 'x', apNumber, True, rsEditorX);
     AddApiParam(Built, 'y', apNumber, True, rsEditorY);
     AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
-    AddApiParam(Built, 'anchor', apReference, False, rsEditorAnchor);
+    AddApiParam(Built, 'start', apGroup, False, rsEditorStart);
+    AddApiMethod(Built, 'editor_tool_click', rsEditorToolClick, rsEditorToolClickReturns);
+    AddApiParam(Built, 'tool', apChoice, True, rsEditorTool, string.Join(', ', CLICK_TOOL_NAMES));
+    AddApiParam(Built, 'x', apNumber, True, rsEditorX);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorY);
+    AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
+    AddApiParam(Built, 'start', apGroup, False, rsEditorStart);
+    AddApiParam(Built, 'extend', apReference, False, rsEditorExtend);
+    AddApiParam(Built, 'role', apChoice, False, rsEditorRole, string.Join(', ', EDGE_ROLE_NAMES));
     AddApiMethod(Built, 'editor_complete', rsEditorComplete, rsEditorCompleteReturns, True);
     AddApiParam(Built, 'id', apTarget, False, rsEditorCompleteTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorCompleteText);
@@ -289,6 +322,45 @@ begin
   end;
 end;
 
+// Line segments as one flat list: x1, y1, x2, y2 for each
+function SegmentsToJSON(const Segments: TLine2Array): TJSONArray;
+var
+  Segment: TLine2;
+begin
+  Result := TJSONArray.Create;
+  for Segment in Segments do
+  begin
+    Result.Add(ReportFloat(Segment.P1.X));
+    Result.Add(ReportFloat(Segment.P1.Y));
+    Result.Add(ReportFloat(Segment.P2.X));
+    Result.Add(ReportFloat(Segment.P2.Y));
+  end;
+end;
+
+// A notch is drawn from where it is cut to its tip
+function NotchSegments(Piece: TPieceObject): TLine2Array;
+var
+  Index: integer;
+begin
+  Result := nil;
+  SetLength(Result, Length(Piece.NotchMarks));
+  for Index := 0 to High(Result) do
+  begin
+    Result[Index].P1 := Piece.NotchMarks[Index].Cut;
+    Result[Index].P2 := Piece.NotchMarks[Index].Tip;
+  end;
+end;
+
+// A marker's strokes at every place it shows
+function MarkerSegments(DraftObject: TDraftObject): TLine2Array;
+var
+  Centre: TVec2;
+begin
+  Result := nil;
+  for Centre in MarkerPositions(DraftObject) do
+    Result := Concat(Result, DraftObject.MarkerStrokesAt(Centre));
+end;
+
 // What every object in the scene has
 function SceneObject(Pattern: TPattern; DraftObject: TDraftObject): TJSONObject;
 var
@@ -344,6 +416,8 @@ begin
         Item.Add('fillColor', Piece.FillColor);
         Item.Add('fillStyle', PIECE_FILL_NAMES[Ord(Piece.FillStyle)]);
         Item.Add('cutLine', LineToJSON(Piece.CutLine));
+        Item.Add('marks', SegmentsToJSON(Concat(Piece.GrainArrow, Piece.FoldArrow, Piece.MarkingStrokes)));
+        Item.Add('notches', SegmentsToJSON(NotchSegments(Piece)));
         List.Add(Item);
       end;
 
@@ -366,6 +440,17 @@ begin
         end;
       List.Add(Item);
     end;
+
+    // A marker shows at its point whether or not it is on a piece yet
+    List := TJSONArray.Create;
+    Scene.Add('markers', List);
+    for DraftObject in ShownObjects(Pattern) do
+      if (DraftObject.Marker <> pmPlain) and DraftObject.HasResult and (DraftObject.MarkerSize > 0) then
+      begin
+        Item := SceneObject(Pattern, DraftObject);
+        Item.Add('strokes', SegmentsToJSON(MarkerSegments(DraftObject)));
+        List.Add(Item);
+      end;
 
     List := TJSONArray.Create;
     Scene.Add('points', List);
@@ -435,27 +520,137 @@ begin
   Result := TJSONObject.Create(['objects', KeysToJSON(ObjectsInBox(Document.Pattern, Box))]);
 end;
 
-function TEditorApiServer.DoAddPoint(Params: TJSONObject): TJSONData;
-var
-  Snap: TSnap;
-  Key: string;
-  Answer: TJSONObject;
-  Existing: boolean;
+// The place a tool's call gives, as a group of x, y and radius
+function TEditorApiServer.SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
 begin
-  Snap := CallSnap(Params);
-  Existing := Snap.Kind = snPoint;
-  if Existing then
-    Answer := NodeToJSON(Document, Document.Pattern.FindNode(Snap.PointKey))
+  Result := FindSnap(Document.Pattern, Vec2(RequireNumber(Group, 'x'), RequireNumber(Group, 'y')), RequireNumber(Group, 'radius'),
+    AnchorKey);
+end;
+
+// The call's start group, or nil when it has none
+function StartGroup(Params: TJSONObject): TJSONObject;
+var
+  Data: TJSONData;
+begin
+  Data := Params.Find('start');
+  if not Assigned(Data) or (Data.JSONType = jtNull) then
+    Exit(nil);
+  if Data.JSONType <> jtObject then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['start']));
+  Result := TJSONObject(Data);
+end;
+
+function SnapToJSON(const Snap: TSnap): TJSONObject;
+begin
+  Result := TJSONObject.Create(['kind', SNAP_KIND_NAMES[Snap.Kind], 'x', ReportFloat(Snap.Position.X), 'y',
+    ReportFloat(Snap.Position.Y)]);
+end;
+
+// A line or curve lines up with its start once that is a point
+function StartAnchor(const Start: TSnap): string;
+begin
+  Result := '';
+  if Start.Kind = snPoint then
+    Result := Start.PointKey;
+end;
+
+function TEditorApiServer.DoToolSnap(Params: TJSONObject): TJSONData;
+var
+  ToolName: string;
+  Group: TJSONObject;
+  Start, Snap: TSnap;
+  Answer: TJSONObject;
+  Description: string;
+begin
+  ToolName := SNAP_TOOL_NAMES[ChoiceParam(Params, 'tool', SNAP_TOOL_NAMES)];
+  Group := StartGroup(Params);
+  Start := Default(TSnap);
+  if Assigned(Group) then
+    Start := SnapOf(Group, '');
+  if Assigned(Group) and ((ToolName = 'line') or (ToolName = 'curve')) then
+    Snap := SnapOf(Params, StartAnchor(Start))
   else
+    Snap := SnapOf(Params, '');
+  if Assigned(Group) and ((ToolName = 'circle') or (ToolName = 'rectangle')) then
+    Description := ShapeSizeText(Document.Pattern, Start.Position, Snap.Position, ToolName = 'circle')
+  else
+    Description := SnapDescription(Document.Pattern, Snap);
+  Answer := SnapToJSON(Snap);
+  Answer.Add('description', Description);
+  Answer.Add('objects', KeysToJSON(SnapObjectKeys(Snap)));
+  if Assigned(Group) then
+    Answer.Add('start', SnapToJSON(Start));
+  Result := Answer;
+end;
+
+function EditToJSON(const Edit: TSelectionEdit): TJSONObject;
+begin
+  Result := TJSONObject.Create(['done', Edit.Done, 'message', Edit.Message]);
+  if Edit.Reselect then
+    Result.Add('select', KeysToJSON(Edit.Selection))
+  else
+    Result.Add('select', TJSONNull.Create);
+end;
+
+function TEditorApiServer.DoToolClick(Params: TJSONObject): TJSONData;
+var
+  ToolName, EndKey, CurveKey: string;
+  Group: TJSONObject;
+  Start, Snap: TSnap;
+  Role: TEdgeRole;
+  Edit: TSelectionEdit;
+  Answer: TJSONObject;
+  EndPoint: TPointObject;
+begin
+  ToolName := CLICK_TOOL_NAMES[ChoiceParam(Params, 'tool', CLICK_TOOL_NAMES)];
+  Role := erOutline;
+  if Assigned(Params.Find('role')) then
+    Role := TEdgeRole(ChoiceParam(Params, 'role', EDGE_ROLE_NAMES));
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Group := StartGroup(Params);
+  Start := Default(TSnap);
+  if Assigned(Group) then
+    Start := SnapOf(Group, '');
+  EndKey := '';
+  // The first click of a two-click tool is kept by the editor; nothing changes yet
+  if not Assigned(Group) and (ToolName <> 'point') and (ToolName <> 'piece') and (ToolName <> 'notch') then
   begin
-    BeginChange(rsToolAddPoint);
-    Key := PointFromSnap(Document.Pattern, Snap);
-    if Key = '' then
-      RefuseChange;
-    EndChange;
-    Answer := NodeToJSON(Document, Document.Pattern.FindNode(Key));
+    Answer := EditToJSON(Default(TSelectionEdit));
+    Answer.Add('started', True);
+    if ToolName = 'circle' then
+      Answer.Strings['message'] := rsToolCircleRim
+    else if ToolName = 'rectangle' then
+      Answer.Strings['message'] := rsToolRectangleCorner;
+    Exit(Answer);
   end;
-  Answer.Add('existing', Existing);
+  case ToolName of
+    'point': Edit := AddPointFromSnap(Document, SnapOf(Params, ''));
+    'line', 'curve':
+    begin
+      Snap := SnapOf(Params, StartAnchor(Start));
+      if (ToolName = 'curve') and Assigned(Params.Find('extend')) then
+        Edit := ExtendCurveToSnap(Document, Reference(Params, 'extend', False), Start, Snap, Role, EndKey)
+      else
+        Edit := AddEdgeFromSnaps(Document, Start, Snap, ToolName = 'curve', Role, EndKey);
+    end;
+    'circle', 'rectangle': Edit := AddShapeFromSnap(Document, Start, SnapOf(Params, '').Position, ToolName = 'circle', Role);
+    'piece': Edit := AddPieceAt(Document, Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y')));
+    'notch': Edit := ToggleNotchAt(Document, Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y')),
+        RequireNumber(Params, 'radius'));
+  end;
+  Answer := EditToJSON(Edit);
+  Answer.Add('started', False);
+  if Edit.Done and (EndKey <> '') then
+  begin
+    EndPoint := TPointObject(Document.Pattern.FindNode(EndKey));
+    Answer.Add('end', TJSONObject.Create(['x', ReportFloat(EndPoint.Position.X), 'y', ReportFloat(EndPoint.Position.Y)]));
+    if ToolName = 'curve' then
+    begin
+      CurveKey := Edit.Selection[0];
+      Answer.Add('curve', KeyToJSON(CurveKey));
+    end;
+  end;
   Result := Answer;
 end;
 
@@ -759,7 +954,8 @@ begin
         Dashes.Add(ReportFloat(DashLength))
       else
         Break;
-    Result.Add(TJSONObject.Create(['name', EDGE_ROLE_NAMES[Role], 'color', ROLE_COLORS[Role], 'dashes', Dashes]));
+    Result.Add(TJSONObject.Create(['name', EDGE_ROLE_NAMES[Role], 'caption', RoleCaption(Role), 'color', ROLE_COLORS[Role],
+      'dashes', Dashes]));
   end;
 end;
 
@@ -770,7 +966,8 @@ begin
     'editor_snap': Result := DoSnap(Params);
     'editor_objects_at': Result := DoObjectsAt(Params);
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
-    'editor_add_point': Result := DoAddPoint(Params);
+    'editor_tool_snap': Result := DoToolSnap(Params);
+    'editor_tool_click': Result := DoToolClick(Params);
     'editor_complete': Result := DoComplete(Params);
     'editor_list_objects': Result := DoListObjects(Params);
     'editor_list_variables': Result := DoListVariables(Params);
@@ -782,7 +979,7 @@ begin
     'editor_drag_end': Result := DoDragEnd(False);
     'editor_drag_cancel': Result := DoDragEnd(True);
     'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON,
-      'roles', RolesToJSON]);
+        'roles', RolesToJSON]);
     else
       Result := inherited DispatchMethod(Method, Params);
   end;

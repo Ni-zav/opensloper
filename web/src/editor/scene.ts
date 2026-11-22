@@ -27,6 +27,15 @@ export interface ScenePiece extends SceneObject {
   fillStyle: string;
   // Model mm, x and y in turn
   cutLine: number[];
+  // Segments, x1, y1, x2, y2 for each: the grainline, fold and marking
+  // strokes, and the notches from where they are cut to their tips
+  marks: number[];
+  notches: number[];
+}
+
+// The marker of a point or edge, as segments as a piece's marks are
+export interface SceneMarker extends SceneObject {
+  strokes: number[];
 }
 
 export interface SceneEdge extends SceneObject {
@@ -49,6 +58,7 @@ export interface Scene {
   isolated: string;
   pieces: ScenePiece[];
   edges: SceneEdge[];
+  markers: SceneMarker[];
   points: ScenePoint[];
 }
 
@@ -62,6 +72,7 @@ export interface ToolInfo {
 
 export interface RoleInfo {
   name: string;
+  caption: string;
   // '' for one drawn in ink
   color: string;
   // Dash and gap lengths in mm; empty for a solid line
@@ -92,7 +103,7 @@ function sceneObject(record: JsonRecord): SceneObject {
   };
 }
 
-export const EMPTY_SCENE: Scene = { isolated: '', pieces: [], edges: [], points: [] };
+export const EMPTY_SCENE: Scene = { isolated: '', pieces: [], edges: [], markers: [], points: [] };
 
 export function parseScene(result: JsonRecord): Scene {
   const pieces = recordsField(result, 'pieces').map((record): ScenePiece => {
@@ -101,6 +112,8 @@ export function parseScene(result: JsonRecord): Scene {
       fillColor: stringField(record, 'fillColor') ?? '',
       fillStyle: stringField(record, 'fillStyle') ?? '',
       cutLine: numbersField(record, 'cutLine') ?? [],
+      marks: numbersField(record, 'marks') ?? [],
+      notches: numbersField(record, 'notches') ?? [],
     });
   });
   const edges = recordsField(result, 'edges').map((record): SceneEdge => {
@@ -120,7 +133,10 @@ export function parseScene(result: JsonRecord): Scene {
       y: numberField(record, 'y') ?? 0,
     }),
   );
-  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, points };
+  const markers = recordsField(result, 'markers').map((record): SceneMarker =>
+    Object.assign(sceneObject(record), { strokes: numbersField(record, 'strokes') ?? [] }),
+  );
+  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, points };
 }
 
 export function parseTables(result: JsonRecord): Tables {
@@ -137,7 +153,12 @@ export function parseTables(result: JsonRecord): Tables {
         const name = stringField(record, 'name') ?? '';
         return [
           name,
-          { name, color: stringField(record, 'color') ?? '', dashes: numbersField(record, 'dashes') ?? [] },
+          {
+            name,
+            caption: stringField(record, 'caption') ?? name,
+            color: stringField(record, 'color') ?? '',
+            dashes: numbersField(record, 'dashes') ?? [],
+          },
         ];
       }),
     ),

@@ -33,8 +33,8 @@ interface
 
 uses
   Classes, SysUtils, Generics.Collections, Controls, StdCtrls, Forms, Graphics, LCLType, Buttons, Sloper.Core.Geometry, Sloper.Core.Draft,
-  Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter, Sloper.UI.FormulaSuggest, Sloper.UI.Suggestion,
-  Sloper.UI.SuggestionGrade;
+  Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter, Sloper.UI.FormulaSuggest, Sloper.Editor.Suggestion,
+  Sloper.Editor.SuggestionGrade;
 
 type
   // One line of text that cuts itself to the label's width with an ellipsis
@@ -383,8 +383,9 @@ implementation
 
 uses
   Math, Spin, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Transform,
-  Sloper.Core.Note, Sloper.Core.Settings, Sloper.UI.GridColumns, Sloper.UI.ObjectList, Sloper.UI.PieceProperties, Sloper.UI.PropertyText, Sloper.UI.Spacing,
-  Sloper.UI.FontBox, Sloper.UI.Completion, Sloper.UI.Icons, Sloper.Core.IconSet, Sloper.Core.Drag;
+  Sloper.Core.Note, Sloper.Core.Settings, Sloper.UI.GridColumns, Sloper.Editor.ObjectList, Sloper.UI.PieceProperties,
+  Sloper.Editor.PropertyText, Sloper.UI.Spacing,
+  Sloper.UI.FontBox, Sloper.Editor.Completion, Sloper.UI.Icons, Sloper.Core.IconSet, Sloper.Core.Drag;
 
 type
   // Rows every object has: type, name and formula fields first; what made a

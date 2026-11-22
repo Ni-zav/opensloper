@@ -32,7 +32,7 @@ interface
 
 uses
   Classes, SysUtils, Controls, Forms, StdCtrls, ExtCtrls, Graphics, LCLType, Sloper.Document.PatternDocument,
-  Sloper.UI.MaterialGrid, Sloper.UI.PanelEdits;
+  Sloper.UI.MaterialGrid, Sloper.Editor.PanelEdits;
 
 type
   TMaterialsDialog = class(TForm)

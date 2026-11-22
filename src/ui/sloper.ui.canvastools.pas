@@ -30,7 +30,7 @@ interface
 
 uses
   Classes, SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Shortcuts,
-  Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter, Sloper.Core.IconSet;
+  Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter, Sloper.Core.IconSet;
 
 type
   // ctSelect selects and drags; ctZoom zooms to a box, or in or out a step
@@ -163,7 +163,7 @@ const
 implementation
 
 uses
-  LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.PieceDetect, Sloper.UI.Scene;
+  LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.PieceDetect, Sloper.Editor.Scene;
 
 const
   // A line or curve shorter than this (mm) is ignored

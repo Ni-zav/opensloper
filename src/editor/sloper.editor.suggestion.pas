@@ -20,7 +20,7 @@
 // plain number, such as @waist/4 for a dx of 175 mm. A brute-force search over
 // a few shapes of formula, ranked by how close each lands and how simple it
 // is. Kept free of the LCL so it can be unit-tested.
-unit Sloper.UI.Suggestion;
+unit Sloper.Editor.Suggestion;
 
 {$mode ObjFPC}{$H+}
 

@@ -217,9 +217,9 @@
         <UnitName Value="Sloper.UI.Icons"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.view.pas"/>
+        <Filename Value="../editor/sloper.editor.view.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.View"/>
+        <UnitName Value="Sloper.Editor.View"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.canvasinput.pas"/>
@@ -232,9 +232,9 @@
         <UnitName Value="Sloper.UI.CanvasTools"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.selectionedits.pas"/>
+        <Filename Value="../editor/sloper.editor.selectionedits.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.SelectionEdits"/>
+        <UnitName Value="Sloper.Editor.SelectionEdits"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.patternpainter.pas"/>
@@ -242,9 +242,9 @@
         <UnitName Value="Sloper.UI.PatternPainter"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.scene.pas"/>
+        <Filename Value="../editor/sloper.editor.scene.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.Scene"/>
+        <UnitName Value="Sloper.Editor.Scene"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.canvas.pas"/>
@@ -252,9 +252,9 @@
         <UnitName Value="Sloper.UI.Canvas"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.snap.pas"/>
+        <Filename Value="../editor/sloper.editor.snap.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.Snap"/>
+        <UnitName Value="Sloper.Editor.Snap"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.properties.pas"/>
@@ -277,9 +277,9 @@
         <UnitName Value="Sloper.UI.GridColumns"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.objectlist.pas"/>
+        <Filename Value="../editor/sloper.editor.objectlist.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.ObjectList"/>
+        <UnitName Value="Sloper.Editor.ObjectList"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.objectspanel.pas"/>
@@ -287,9 +287,9 @@
         <UnitName Value="Sloper.UI.ObjectsPanel"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.completion.pas"/>
+        <Filename Value="../editor/sloper.editor.completion.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.Completion"/>
+        <UnitName Value="Sloper.Editor.Completion"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.formulacompleter.pas"/>
@@ -297,9 +297,9 @@
         <UnitName Value="Sloper.UI.FormulaCompleter"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.suggestion.pas"/>
+        <Filename Value="../editor/sloper.editor.suggestion.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.Suggestion"/>
+        <UnitName Value="Sloper.Editor.Suggestion"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.formulasuggest.pas"/>
@@ -307,9 +307,9 @@
         <UnitName Value="Sloper.UI.FormulaSuggest"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.suggestiongrade.pas"/>
+        <Filename Value="../editor/sloper.editor.suggestiongrade.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.SuggestionGrade"/>
+        <UnitName Value="Sloper.Editor.SuggestionGrade"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.listpanel.pas"/>
@@ -352,9 +352,9 @@
         <UnitName Value="Sloper.UI.PieceProperties"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.propertytext.pas"/>
+        <Filename Value="../editor/sloper.editor.propertytext.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.PropertyText"/>
+        <UnitName Value="Sloper.Editor.PropertyText"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.sidetabs.pas"/>
@@ -382,9 +382,9 @@
         <UnitName Value="Sloper.UI.MaterialDialog"/>
       </Unit>
       <Unit>
-        <Filename Value="../ui/sloper.ui.paneledits.pas"/>
+        <Filename Value="../editor/sloper.editor.paneledits.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="Sloper.UI.PanelEdits"/>
+        <UnitName Value="Sloper.Editor.PanelEdits"/>
       </Unit>
       <Unit>
         <Filename Value="../ui/sloper.ui.rolespanel.pas"/>
@@ -400,7 +400,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../core;../document;../ui;../output;../output/thirdparty;../api;../assistant"/>
+      <OtherUnitFiles Value="../core;../document;../editor;../ui;../output;../output/thirdparty;../api;../assistant"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Linking>

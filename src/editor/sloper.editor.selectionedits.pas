@@ -21,7 +21,7 @@
 // makes its change as one undo step through the document, and says what to
 // select and show afterwards; the canvas only applies that. Kept free of the
 // LCL so it can be unit-tested.
-unit Sloper.UI.SelectionEdits;
+unit Sloper.Editor.SelectionEdits;
 
 {$mode ObjFPC}{$H+}
 
@@ -140,7 +140,7 @@ resourcestring
 implementation
 
 uses
-  StrUtils, Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Note, Sloper.Core.Transform, Sloper.UI.Scene;
+  StrUtils, Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Note, Sloper.Core.Transform, Sloper.Editor.Scene;
 
 const
   // A new arc's sweep, as a starting point for typing the real values; its

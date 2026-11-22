@@ -100,7 +100,7 @@ implementation
 uses
   Sloper.Core.Arrange, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Geometry, Sloper.Core.Names, Sloper.Core.PatternFile,
   Sloper.Document.PatternDocument,
-  Sloper.UI.ObjectList, Sloper.UI.Scene;
+  Sloper.Editor.ObjectList, Sloper.Editor.Scene;
 
 const
   REPEAT_PATTERN_HEAD = '{"format": "pattern", "version": 1, "units": "mm", "objects": [' +

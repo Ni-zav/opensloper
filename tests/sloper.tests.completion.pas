@@ -24,7 +24,7 @@ interface
 
 uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Evaluator, Sloper.Core.Measurements, Sloper.Core.Pattern,
-  Sloper.UI.Completion;
+  Sloper.Editor.Completion;
 
 type
   TTestCompletion = class(TOSTestCase)

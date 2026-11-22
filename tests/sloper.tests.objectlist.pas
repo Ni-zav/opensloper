@@ -67,7 +67,7 @@ type
 implementation
 
 uses
-  Sloper.Core.EvalTypes, Sloper.Core.Draft, Sloper.Core.Measurements, Sloper.UI.ObjectList;
+  Sloper.Core.EvalTypes, Sloper.Core.Draft, Sloper.Core.Measurements, Sloper.Editor.ObjectList;
 
 procedure TTestObjectList.SetUp;
 begin

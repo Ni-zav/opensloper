@@ -20,7 +20,7 @@
 // the document, so each is one undo step. Measurements belong to their file,
 // so the Measurements tab holds its edits as pending changes until Save
 // writes them all at once. Kept free of the LCL so the tests can make them.
-unit Sloper.UI.PanelEdits;
+unit Sloper.Editor.PanelEdits;
 
 {$mode ObjFPC}{$H+}
 
@@ -129,7 +129,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.Evaluator, Sloper.Core.Variables, Sloper.Core.Names, Sloper.Core.Materials, Sloper.Core.JSON, Sloper.UI.ObjectList;
+  Sloper.Core.Evaluator, Sloper.Core.Variables, Sloper.Core.Names, Sloper.Core.Materials, Sloper.Core.JSON, Sloper.Editor.ObjectList;
 
 const
   MAX_MEASUREMENT_VALUE = 1e12;

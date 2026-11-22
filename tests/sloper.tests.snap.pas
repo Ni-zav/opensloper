@@ -26,7 +26,7 @@ unit Sloper.Tests.Snap;
 interface
 
 uses
-  fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Pattern, Sloper.UI.Snap;
+  fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Pattern, Sloper.Editor.Snap;
 
 type
   TTestSnap = class(TOSTestCase)

@@ -103,7 +103,7 @@ implementation
 
 uses
   Math, Sloper.Core.Draft, Sloper.Core.PatternCheck, Sloper.Core.PatternFile, Sloper.Core.PieceDetect, Sloper.Core.Settings,
-  Sloper.Document.PatternDocument, Sloper.Output.DraftSVG, Sloper.UI.ObjectList, Sloper.Core.PatternMaterials, Sloper.Core.Units;
+  Sloper.Document.PatternDocument, Sloper.Output.DraftSVG, Sloper.Editor.ObjectList, Sloper.Core.PatternMaterials, Sloper.Core.Units;
 
 const
   SQUARE_SIZE = 100;

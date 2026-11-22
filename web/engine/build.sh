@@ -22,7 +22,7 @@ cd "$HERE"
 # before src/output, and src/output/thirdparty is left out.
 compile() {
   "$COMPILER" -n -Twasip1 -Pwasm32 -MObjFPC -Sh -FcUTF8 -O2 -Xs -XX -CX -vewn \
-    -Fustubs -Fu"$ROOT/src/core" -Fu"$ROOT/src/document" -Fu"$ROOT/src/api" -Fu"$ROOT/src/output" \
+    -Fustubs -Fu"$ROOT/src/core" -Fu"$ROOT/src/document" -Fu"$ROOT/src/editor" -Fu"$ROOT/src/api" -Fu"$ROOT/src/output" \
     -Fu"$CLIPPER" -Fi"$CLIPPER" "${PACKAGE_UNITS[@]}" -FUout -FEout "${EXTRA[@]}" "$1"
 }
 EXTRA=("$@")

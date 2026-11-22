@@ -53,7 +53,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.UI.ObjectList;
+  Sloper.Editor.ObjectList;
 
 constructor TObjectsPanel.Create(AOwner: TComponent);
 begin

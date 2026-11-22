@@ -21,14 +21,14 @@
 // Ticks are as close as stays readable at the zoom; inches divide in halves
 // down to sixteenths, the metric units in 1, 2 and 5. Kept free of the LCL
 // so it can be unit-tested.
-unit Sloper.UI.RulerTicks;
+unit Sloper.Editor.RulerTicks;
 
 {$mode ObjFPC}{$H+}
 
 interface
 
 uses
-  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.UI.View;
+  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Editor.View;
 
 const
   // Closest ticks and numbers may come, in pixels

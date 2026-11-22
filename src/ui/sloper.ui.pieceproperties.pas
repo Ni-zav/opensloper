@@ -140,7 +140,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.UI.MaterialGrid, Sloper.UI.ObjectList, Sloper.UI.PropertyText;
+  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.UI.MaterialGrid, Sloper.Editor.ObjectList, Sloper.Editor.PropertyText;
 
 const
   MAX_CUT_COUNT = 99;

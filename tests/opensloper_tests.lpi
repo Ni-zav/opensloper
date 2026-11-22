@@ -489,7 +489,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../src/core;../src/document;../src/api;../src/assistant;../src/output;../src/output/thirdparty;../src/ui;../src/cli;../src/docs;../src/packages/console-tools"/>
+      <OtherUnitFiles Value="../src/core;../src/document;../src/api;../src/assistant;../src/output;../src/output/thirdparty;../src/editor;../src/ui;../src/cli;../src/docs;../src/packages/console-tools"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>

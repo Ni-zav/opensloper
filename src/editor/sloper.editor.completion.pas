@@ -18,7 +18,7 @@
 
 // Autocomplete for formula fields: what to offer at the caret, in the display
 // form the user types. Kept free of the LCL so it can be unit-tested.
-unit Sloper.UI.Completion;
+unit Sloper.Editor.Completion;
 
 {$mode ObjFPC}{$H+}
 
@@ -66,7 +66,7 @@ implementation
 
 uses
   SysUtils, Sloper.Core.EvalTypes, Sloper.Core.Measurements, Sloper.Core.Names, Sloper.Core.Variables, Sloper.Core.Draft,
-  Sloper.Core.Drag, Sloper.Core.Units, Sloper.UI.ObjectList, Math;
+  Sloper.Core.Drag, Sloper.Core.Units, Sloper.Editor.ObjectList, Math;
 
 const
   PROPERTY_NAMES: array[0..5] of string = ('x', 'y', 'length', 'angle', 'angle1', 'angle2');

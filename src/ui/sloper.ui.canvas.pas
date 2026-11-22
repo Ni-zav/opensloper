@@ -31,8 +31,8 @@ uses
   Classes, SysUtils, Controls, StdCtrls, Menus, Graphics, LCLType, LMessages, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.Pattern, Sloper.Core.Transform, Sloper.Core.Settings,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.TextFields, Sloper.Core.Fragment,
-  Sloper.Core.PatternCheck, Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.UI.Snap,
-  Sloper.UI.Scene, Sloper.UI.CanvasInput, Sloper.UI.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools, Sloper.UI.SuggestionGrade;
+  Sloper.Core.PatternCheck, Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap,
+  Sloper.Editor.Scene, Sloper.UI.CanvasInput, Sloper.Editor.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools, Sloper.Editor.SuggestionGrade;
 
 type
   TCursorMoveEvent = procedure(Sender: TObject; const ModelPos: TVec2) of object;
@@ -304,7 +304,7 @@ implementation
 
 uses
   Math, Forms, StrUtils, LCLIntf, Sloper.UI.Commands, Sloper.Core.Bounds, Sloper.Core.EvalTypes, Sloper.Core.Evaluator,
-  Sloper.UI.ObjectList;
+  Sloper.Editor.ObjectList;
 
 const
   // Between an object's problems in the status bar
@@ -875,33 +875,33 @@ end;
 procedure TPatternCanvas.DeleteSelection;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.DeleteSelection(FDocument, FSelection, rsSelectionDelete));
+    ApplyEdit(Sloper.Editor.SelectionEdits.DeleteSelection(FDocument, FSelection, rsSelectionDelete));
 end;
 
 function TPatternCanvas.CopySelection: TFragmentCopy;
 begin
   Result := Default(TFragmentCopy);
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.CopySelection(FDocument, FSelection, Result));
+    ApplyEdit(Sloper.Editor.SelectionEdits.CopySelection(FDocument, FSelection, Result));
 end;
 
 function TPatternCanvas.CutSelection: TFragmentCopy;
 begin
   Result := Default(TFragmentCopy);
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.CutSelection(FDocument, FSelection, Result));
+    ApplyEdit(Sloper.Editor.SelectionEdits.CutSelection(FDocument, FSelection, Result));
 end;
 
 procedure TPatternCanvas.PasteFragmentText(const FragmentText: string);
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.PasteFragmentText(FDocument, FragmentText));
+    ApplyEdit(Sloper.Editor.SelectionEdits.PasteFragmentText(FDocument, FragmentText));
 end;
 
 procedure TPatternCanvas.SplitSelection;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.SplitSelection(FDocument, FSelection));
+    ApplyEdit(Sloper.Editor.SelectionEdits.SplitSelection(FDocument, FSelection));
 end;
 
 { Transforms }
@@ -924,43 +924,43 @@ end;
 procedure TPatternCanvas.OffsetSelection(Side: TOffsetSide);
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.OffsetSelection(FDocument, FSelection, Side));
+    ApplyEdit(Sloper.Editor.SelectionEdits.OffsetSelection(FDocument, FSelection, Side));
 end;
 
 procedure TPatternCanvas.OffsetSelectionInPiece(Inside: boolean);
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.OffsetSelectionInPiece(FDocument, FSelection, Inside));
+    ApplyEdit(Sloper.Editor.SelectionEdits.OffsetSelectionInPiece(FDocument, FSelection, Inside));
 end;
 
 procedure TPatternCanvas.ConvertSelection(ToCurve: boolean);
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.ConvertSelection(FDocument, FSelection, ToCurve));
+    ApplyEdit(Sloper.Editor.SelectionEdits.ConvertSelection(FDocument, FSelection, ToCurve));
 end;
 
 procedure TPatternCanvas.MergeSelection;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.MergeSelection(FDocument, FSelection));
+    ApplyEdit(Sloper.Editor.SelectionEdits.MergeSelection(FDocument, FSelection));
 end;
 
 procedure TPatternCanvas.AddRepeatAtSelection;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.AddRepeatAtSelection(FDocument, FSelection));
+    ApplyEdit(Sloper.Editor.SelectionEdits.AddRepeatAtSelection(FDocument, FSelection));
 end;
 
 procedure TPatternCanvas.BreakSelection;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.BreakSelection(FDocument, FSelection));
+    ApplyEdit(Sloper.Editor.SelectionEdits.BreakSelection(FDocument, FSelection));
 end;
 
 procedure TPatternCanvas.LockSelection(Lock: boolean);
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.LockSelection(FDocument, FSelection, Lock));
+    ApplyEdit(Sloper.Editor.SelectionEdits.LockSelection(FDocument, FSelection, Lock));
 end;
 
 procedure TPatternCanvas.GoToSource;
@@ -969,7 +969,7 @@ var
 begin
   if not Assigned(FDocument) then
     Exit;
-  Edit := Sloper.UI.SelectionEdits.GoToSource(FDocument, FSelection);
+  Edit := Sloper.Editor.SelectionEdits.GoToSource(FDocument, FSelection);
   ApplyEdit(Edit);
   if Edit.Done then
     RevealSelection;
@@ -978,19 +978,19 @@ end;
 procedure TPatternCanvas.RoundSelectedCorner;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.RoundSelectedCorner(FDocument, FSelection));
+    ApplyEdit(Sloper.Editor.SelectionEdits.RoundSelectedCorner(FDocument, FSelection));
 end;
 
 procedure TPatternCanvas.MarkSelection(Kind: TMarkingKind);
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.MarkSelection(FDocument, FSelection, Kind));
+    ApplyEdit(Sloper.Editor.SelectionEdits.MarkSelection(FDocument, FSelection, Kind));
 end;
 
 procedure TPatternCanvas.UnmarkSelection;
 begin
   if Assigned(FDocument) then
-    ApplyEdit(Sloper.UI.SelectionEdits.UnmarkSelection(FDocument, FSelection));
+    ApplyEdit(Sloper.Editor.SelectionEdits.UnmarkSelection(FDocument, FSelection));
 end;
 
 procedure TPatternCanvas.StartTransform(Kind: TTransformKind);

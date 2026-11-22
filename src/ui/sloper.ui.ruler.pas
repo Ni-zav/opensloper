@@ -19,7 +19,7 @@
 // The rulers along the top and left of the drafting canvas, as in Inkscape,
 // and the corner between them, which names the unit. Each ruler starts where
 // the canvas does, so its pixels line up with the canvas's; the cursor shows
-// as a line across it. Ticks come from Sloper.UI.RulerTicks.
+// as a line across it. Ticks come from Sloper.Editor.RulerTicks.
 unit Sloper.UI.Ruler;
 
 {$mode ObjFPC}{$H+}
@@ -27,7 +27,7 @@ unit Sloper.UI.Ruler;
 interface
 
 uses
-  Classes, Controls, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.UI.View;
+  Classes, Controls, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Editor.View;
 
 type
   TCanvasRuler = class(TCustomControl)
@@ -74,7 +74,7 @@ function RulerThickness(Control: TControl): integer;
 implementation
 
 uses
-  SysUtils, Math, Graphics, Sloper.UI.RulerTicks;
+  SysUtils, Math, Graphics, Sloper.Editor.RulerTicks;
 
 const
   THICKNESS_AT96 = 22;

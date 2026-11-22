@@ -22,7 +22,7 @@
 // coincidence at the size shown is easy to spot. It works on copies of the
 // pattern, one for each size, so the pattern itself is never changed. Kept
 // free of the LCL so it can be unit-tested.
-unit Sloper.UI.SuggestionGrade;
+unit Sloper.Editor.SuggestionGrade;
 
 {$mode ObjFPC}{$H+}
 
@@ -30,7 +30,7 @@ interface
 
 uses
   SysUtils, Generics.Collections, Sloper.Core.Geometry, Sloper.Core.Evaluator, Sloper.Core.Measurements, Sloper.Core.Pattern, Sloper.Core.Units,
-  Sloper.UI.Suggestion;
+  Sloper.Editor.Suggestion;
 
 type
   TPolylineArray = array of TVec2Array;

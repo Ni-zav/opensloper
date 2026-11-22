@@ -104,9 +104,9 @@ type
 implementation
 
 uses
-  StrUtils, Sloper.UI.Snap, Sloper.Core.Geometry, Sloper.Core.Bounds, Sloper.Core.Draft, Sloper.Core.Drag, Sloper.Core.PieceDetect,
-  Sloper.Core.Settings, Sloper.Core.Transform, Sloper.UI.View,
-  Sloper.UI.Scene;
+  StrUtils, Sloper.Editor.Snap, Sloper.Core.Geometry, Sloper.Core.Bounds, Sloper.Core.Draft, Sloper.Core.Drag, Sloper.Core.PieceDetect,
+  Sloper.Core.Settings, Sloper.Core.Transform, Sloper.Editor.View,
+  Sloper.Editor.Scene;
 
 function MakeRect(MinX, MinY, MaxX, MaxY: double): TRect2;
 begin

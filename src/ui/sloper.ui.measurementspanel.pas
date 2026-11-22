@@ -37,7 +37,7 @@ interface
 
 uses
   Classes, SysUtils, System.UITypes, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls, Dialogs, LCLType, Sloper.UI.ListPanel,
-  Sloper.UI.PanelEdits;
+  Sloper.Editor.PanelEdits;
 
 type
   TMeasurementsPanel = class(TListPanel)
@@ -122,7 +122,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.EvalTypes, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.UI.ObjectList, Sloper.UI.Spacing;
+  Sloper.Core.EvalTypes, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Editor.ObjectList, Sloper.UI.Spacing;
 
 const
   // Test size steps, in percent either way

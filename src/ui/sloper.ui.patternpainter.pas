@@ -28,8 +28,8 @@ interface
 
 uses
   Classes, SysUtils, Graphics, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam,
-  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.LabelPlacement, Sloper.UI.View,
-  Sloper.UI.SuggestionGrade, Sloper.UI.Snap, Sloper.UI.Scene;
+  Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.LabelPlacement, Sloper.Editor.View,
+  Sloper.Editor.SuggestionGrade, Sloper.Editor.Snap, Sloper.Editor.Scene;
 
 type
   // What a drawing tool's second click would make, drawn from its first
@@ -126,7 +126,7 @@ implementation
 
 uses
   Math, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Transform,
-  Sloper.Core.Materials, Sloper.UI.RulerTicks;
+  Sloper.Core.Materials, Sloper.Editor.RulerTicks;
 
 const
   // How much of the paper covers what an isolated piece does not use

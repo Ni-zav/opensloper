@@ -31,7 +31,7 @@ interface
 uses
   Classes, SysUtils, Controls, StdCtrls, Graphics, LCLType, BGRABitmap, BGRABitmapTypes, Sloper.Core.Materials, Sloper.Core.Geometry, Sloper.Core.Note,
   Sloper.Core.TextFields, Sloper.Output.Layout,
-  Sloper.Output.LayoutDocument, Sloper.Output.Preview, Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.UI.View;
+  Sloper.Output.LayoutDocument, Sloper.Output.Preview, Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Editor.View;
 
 type
   // pmZoomPressed and pmZoomBoxing: Zoom Area's click, and its box being drawn

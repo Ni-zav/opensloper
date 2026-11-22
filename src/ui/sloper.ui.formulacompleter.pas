@@ -27,7 +27,7 @@ unit Sloper.UI.FormulaCompleter;
 interface
 
 uses
-  Classes, SysUtils, Controls, StdCtrls, Forms, LCLType, Math, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.UI.Completion;
+  Classes, SysUtils, Controls, StdCtrls, Forms, LCLType, Math, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Editor.Completion;
 
 type
   TFormulaCompleter = class(TComponent)

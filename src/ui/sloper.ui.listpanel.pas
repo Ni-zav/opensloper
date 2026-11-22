@@ -172,7 +172,7 @@ resourcestring
 implementation
 
 uses
-  Forms, Sloper.UI.ObjectList, Sloper.UI.Spacing;
+  Forms, Sloper.Editor.ObjectList, Sloper.UI.Spacing;
 
 const
   PROBLEM_INK = TColor($2020C0);

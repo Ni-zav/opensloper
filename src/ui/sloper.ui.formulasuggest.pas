@@ -27,7 +27,7 @@ unit Sloper.UI.FormulaSuggest;
 interface
 
 uses
-  Classes, SysUtils, Controls, StdCtrls, Graphics, LCLType, Sloper.Core.Units, Sloper.UI.Suggestion, Sloper.UI.SuggestionGrade;
+  Classes, SysUtils, Controls, StdCtrls, Graphics, LCLType, Sloper.Core.Units, Sloper.Editor.Suggestion, Sloper.Editor.SuggestionGrade;
 
 type
   // Index is a row of the list, or -1 when the pointer is on none

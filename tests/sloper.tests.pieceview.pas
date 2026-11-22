@@ -66,7 +66,7 @@ type
 implementation
 
 uses
-  Sloper.Core.Geometry, Sloper.Core.Note, Sloper.Core.PatternFile, Sloper.Core.Garment, Sloper.Output.DraftSVG, Sloper.UI.Scene;
+  Sloper.Core.Geometry, Sloper.Core.Note, Sloper.Core.PatternFile, Sloper.Core.Garment, Sloper.Output.DraftSVG, Sloper.Editor.Scene;
 
 procedure TTestPieceView.SetUp;
 begin

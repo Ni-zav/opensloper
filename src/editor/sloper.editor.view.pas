@@ -18,7 +18,7 @@
 
 // The canvas view: how model millimetres map to screen pixels, both y down,
 // with zoom and pan. Kept free of the LCL so it can be unit-tested.
-unit Sloper.UI.View;
+unit Sloper.Editor.View;
 
 {$mode ObjFPC}{$H+}
 {$modeswitch advancedrecords}

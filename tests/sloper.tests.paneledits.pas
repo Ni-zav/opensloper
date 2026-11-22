@@ -27,7 +27,7 @@ interface
 
 uses
   fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Measurements, Sloper.Document.PatternDocument,
-  Sloper.UI.PanelEdits;
+  Sloper.Editor.PanelEdits;
 
 type
   TTestPanelEdits = class(TOSTestCase)

@@ -61,7 +61,7 @@ type
 implementation
 
 uses
-  Sloper.Core.Note, Sloper.UI.PropertyText;
+  Sloper.Core.Note, Sloper.Editor.PropertyText;
 
 procedure TTestPropertyText.SetUp;
 begin

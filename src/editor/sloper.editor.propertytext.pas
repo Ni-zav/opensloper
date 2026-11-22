@@ -19,7 +19,7 @@
 // Text the properties panel works out from the pattern: the pieces a marking
 // is on, what a note hangs from, an edge allowance's caption, and a note's
 // text as typed. Kept free of the LCL so it can be unit-tested.
-unit Sloper.UI.PropertyText;
+unit Sloper.Editor.PropertyText;
 
 {$mode ObjFPC}{$H+}
 

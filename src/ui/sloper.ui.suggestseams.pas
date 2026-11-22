@@ -35,7 +35,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Sloper.UI.ObjectList, Sloper.UI.Spacing;
+  SysUtils, Sloper.Editor.ObjectList, Sloper.UI.Spacing;
 
 const
   DIALOG_WIDTH = 560;

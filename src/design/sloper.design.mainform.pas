@@ -27,7 +27,7 @@ interface
 uses
   Classes, SysUtils, StrUtils, Forms, Controls, Menus, Dialogs, ComCtrls, ExtCtrls, StdCtrls, LCLType, ActnList, Sloper.Core.Geometry, Sloper.Core.Draft,
   Sloper.Core.Piece,
-  Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties, Sloper.UI.SuggestionGrade,
+  Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Canvas, Sloper.UI.CanvasTools, Sloper.UI.Properties, Sloper.Editor.SuggestionGrade,
   Sloper.UI.ListPanel, Sloper.UI.ObjectsPanel, Sloper.UI.VariablesPanel,
   Sloper.UI.MeasurementsPanel, Sloper.UI.SuggestSeams, Sloper.UI.ConvertUnits, Sloper.UI.RecentMenu, Sloper.UI.SavePrompt, Sloper.UI.Ruler,
   Sloper.UI.MaterialPanel, Sloper.UI.FeaturesPanel, Sloper.UI.MaterialDialog, Sloper.UI.RolesPanel, Sloper.Core.IconSet,
@@ -264,7 +264,7 @@ var
 implementation
 
 uses
-  Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.UI.ObjectList, Sloper.Core.JSON, Sloper.Output.DraftSVG,
+  Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.Editor.ObjectList, Sloper.Core.JSON, Sloper.Output.DraftSVG,
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Core.Evaluator, Sloper.Core.Variables,

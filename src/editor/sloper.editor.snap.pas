@@ -21,7 +21,7 @@
 // intersect point, a place on an edge a point along it, a spot level with or
 // square to a point an offset from it, and anything else a free point.
 // Kept free of the LCL so it can be unit-tested.
-unit Sloper.UI.Snap;
+unit Sloper.Editor.Snap;
 
 {$mode ObjFPC}{$H+}
 
@@ -116,7 +116,7 @@ resourcestring
 implementation
 
 uses
-  Math, Sloper.Core.Evaluator, Sloper.Core.EvalTypes, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.Units, Sloper.UI.Scene;
+  Math, Sloper.Core.Evaluator, Sloper.Core.EvalTypes, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.Units, Sloper.Editor.Scene;
 
 const
   NEARER_WINS = 1e-6;

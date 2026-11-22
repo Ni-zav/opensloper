@@ -55,7 +55,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.Evaluator, Sloper.Core.Variables, Sloper.UI.ObjectList, Sloper.UI.PanelEdits, Sloper.UI.Spacing;
+  Sloper.Core.Evaluator, Sloper.Core.Variables, Sloper.Editor.ObjectList, Sloper.Editor.PanelEdits, Sloper.UI.Spacing;
 
 const
   NEW_VARIABLE_FORMULA = '0';

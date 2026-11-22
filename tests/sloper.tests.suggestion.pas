@@ -25,7 +25,7 @@ interface
 
 uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Evaluator, Sloper.Core.Measurements, Sloper.Core.Pattern,
-  Sloper.Core.Draft, Sloper.UI.Suggestion;
+  Sloper.Core.Draft, Sloper.Editor.Suggestion;
 
 type
   TTestSuggestion = class(TOSTestCase)
@@ -82,7 +82,7 @@ type
 implementation
 
 uses
-  Math, Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units, Sloper.Core.Note, Sloper.UI.SuggestionGrade;
+  Math, Sloper.Core.Geometry, Sloper.Core.Drag, Sloper.Core.Units, Sloper.Core.Note, Sloper.Editor.SuggestionGrade;
 
 procedure TTestSuggestion.SetUp;
 begin

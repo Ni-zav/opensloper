@@ -21,7 +21,7 @@
 // that are failing are shown at their last good result; objects never
 // computed are not shown. Also which labels to draw. Kept free of the LCL so
 // it can be unit-tested.
-unit Sloper.UI.Scene;
+unit Sloper.Editor.Scene;
 
 {$mode ObjFPC}{$H+}
 

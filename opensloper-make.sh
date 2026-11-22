@@ -1144,13 +1144,14 @@ my %thirdparty = map { lc($_) => 1 } qw(BGRABitmap BGRABitmapTypes BGRASVG);
 my %allowed = (
   'src/core'     => [qw(Core)],
   'src/document' => [qw(Core Document)],
-  'src/api'      => [qw(Core Document Output API)],
+  'src/editor'   => [qw(Core Document Editor)],
+  'src/api'      => [qw(Core Document Editor Output API)],
   'src/output'   => [qw(Core Output)],
   'src/cli'      => [qw(Core Document Output API Assistant CLI Docs)],
   'src/docs'     => [qw(Core API CLI Docs)],
   'src/assistant' => [qw(Core API Assistant)],
 );
-my %no_lcl = map { $_ => 1 } qw(src/core src/document src/api src/output src/cli src/docs src/assistant web/engine web/engine/stubs);
+my %no_lcl = map { $_ => 1 } qw(src/core src/document src/editor src/api src/output src/cli src/docs src/assistant web/engine web/engine/stubs);
 
 # Units where single-letter names match the maths (coding-standards.md)
 my %math = map { $_ => 1 } qw(

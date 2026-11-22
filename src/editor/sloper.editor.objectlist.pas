@@ -20,7 +20,7 @@
 // by a filter and a search, and how clicks change the selection. Also the captions
 // the panels share for object types and formula fields. Kept free of the LCL
 // so it can be unit-tested.
-unit Sloper.UI.ObjectList;
+unit Sloper.Editor.ObjectList;
 
 {$mode ObjFPC}{$H+}
 

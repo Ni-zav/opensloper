@@ -101,7 +101,8 @@ implementation
 
 uses
   Sloper.Core.PatternFile, Sloper.Core.PatternCheck, Sloper.Core.PieceDetect, Sloper.Core.Drag, Sloper.Core.Bounds, Sloper.Core.TextFields,
-  Sloper.Core.Measurements, Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.UI.Snap, Sloper.UI.Scene, Sloper.UI.ObjectList, Sloper.Output.DraftSVG;
+  Sloper.Core.Measurements, Sloper.Core.Settings, Sloper.Document.PatternDocument, Sloper.Editor.Snap, Sloper.Editor.Scene,
+  Sloper.Editor.ObjectList, Sloper.Output.DraftSVG;
 
 const
   ANCHOR_PATTERN_HEAD = '{"format": "pattern", "version": 1, "objects": [{"id": 1, "type": "freePoint", "name": "A", "x": "0", "y": "0"}, ';

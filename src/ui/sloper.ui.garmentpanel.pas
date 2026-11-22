@@ -29,7 +29,7 @@ interface
 
 uses
   Classes, SysUtils, Controls, StdCtrls, ExtCtrls, Graphics, Dialogs, Menus, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry,
-  Sloper.Core.Garment, Sloper.Document.PatternDocument, Sloper.UI.View, Sloper.Output.GarmentPNG;
+  Sloper.Core.Garment, Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Output.GarmentPNG;
 
 type
   TGarmentPieceEvent = procedure(Sender: TObject; const PieceKey: string) of object;

@@ -26,7 +26,7 @@ interface
 
 uses
   SysUtils, fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece,
-  Sloper.Core.Pattern, Sloper.Core.Fragment, Sloper.Document.PatternDocument, Sloper.UI.SelectionEdits;
+  Sloper.Core.Pattern, Sloper.Core.Fragment, Sloper.Document.PatternDocument, Sloper.Editor.SelectionEdits;
 
 type
   TTestSelectionEdits = class(TOSTestCase)

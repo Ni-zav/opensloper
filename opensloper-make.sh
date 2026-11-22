@@ -34,9 +34,12 @@ Commands:
                          not run); e.g. build cli design,
                          build --build-mode=Release
   check [FILE...]        check the coding standards the formatter cannot
-                         (errors fail, warnings advise; run before every commit)
+                         (errors fail, warnings advise; run before every commit);
+                         with no files, also tsc, Oxlint and Prettier on the
+                         TypeScript in web/engine/browser
   format [--check] [FILE...]
-                         format the sources with jcfsettings.cfg; --check lists
+                         format the sources with jcfsettings.cfg, and with no
+                         files the TypeScript with Prettier; --check lists
                          the files that need it and changes nothing
   pr-check               format, check, test and build, as before a pull
                          request; stops at the first that fails, and lists
@@ -235,6 +238,31 @@ cmd_build() {
   done
 }
 
+# The TypeScript in web/engine/browser, through the npm script named in $1 of
+# its package.json (see the TypeScript section of documents/coding-standards.md).
+# Skipped with a note where there is no such folder, no npm, or its packages
+# are not installed; npm is looked for on the PATH, then in venv/bin, where
+# nodeenv puts it.
+typescript_step() {
+  local dir=web/engine/browser npm=""
+  [ -f "$dir/package.json" ] || return 0
+  if command -v npm > /dev/null; then
+    npm="$(command -v npm)"
+  elif [ -x venv/bin/npm ]; then
+    npm="$PWD/venv/bin/npm"
+  fi
+  if [ -z "$npm" ]; then
+    echo "Note: npm not found, so the TypeScript in $dir is not checked (see web/engine/README.md)" >&2
+    return 0
+  fi
+  if [ ! -d "$dir/node_modules" ]; then
+    echo "Note: run npm ci in $dir first, so its TypeScript is checked" >&2
+    return 0
+  fi
+  echo "TypeScript in $dir: npm run $1" >&2
+  PATH="$(dirname "$npm"):$PATH" "$npm" --prefix "$dir" run --silent "$1"
+}
+
 # check: the coding standards that the formatter cannot enforce (see
 # documents/coding-standards.md and CLAUDE.md), by the Perl program at the end
 # of this file. CI runs it on every pull request. Errors fail the check (exit
@@ -245,6 +273,8 @@ cmd_check() {
   local files=("$@")
   if [ ${#files[@]} -eq 0 ]; then
     mapfile -t files < <(source_files)
+    # Types, lint and layout of the TypeScript, when checking everything
+    typescript_step check || exit 1
   fi
   exec perl -x "$SELF" "${files[@]}"
 }
@@ -284,8 +314,9 @@ format_file() {
   rm -f "$log"
 }
 
-# format: the Pascal sources, with the project settings in jcfsettings.cfg
-# (see documents/coding-standards.md)
+# format: the Pascal sources, with the project settings in jcfsettings.cfg,
+# and, when given no files, the TypeScript with Prettier (see
+# documents/coding-standards.md)
 cmd_format() {
   JCF="${JCF:-lib/jcf/jcf}"
   LAZARUS_DIR="$(dirname "$(realpath "$(command -v "$LAZBUILD")")")"
@@ -300,8 +331,10 @@ cmd_format() {
     shift
   fi
   files=("$@")
+  local everything=0
   if [ ${#files[@]} -eq 0 ]; then
     mapfile -t files < <(source_files)
+    everything=1
   fi
 
   if [ "$check" -eq 1 ]; then
@@ -316,6 +349,9 @@ cmd_format() {
         needed=1
       fi
     done
+    if [ "$everything" -eq 1 ]; then
+      typescript_step format:check || needed=1
+    fi
     exit "$needed"
   fi
 
@@ -323,6 +359,9 @@ cmd_format() {
     format_file "$f"
   done
   echo "Formatted ${#files[@]} files."
+  if [ "$everything" -eq 1 ]; then
+    typescript_step format
+  fi
 }
 
 # Each source file's content hash and path, to see what formatting changed;
@@ -1056,7 +1095,7 @@ my %allowed = (
   'src/docs'     => [qw(Core API CLI Docs)],
   'src/assistant' => [qw(Core API Assistant)],
 );
-my %no_lcl = map { $_ => 1 } qw(src/core src/document src/api src/output src/cli src/docs src/assistant);
+my %no_lcl = map { $_ => 1 } qw(src/core src/document src/api src/output src/cli src/docs src/assistant web/engine web/engine/stubs);
 
 # Units where single-letter names match the maths (coding-standards.md)
 my %math = map { $_ => 1 } qw(
@@ -1113,9 +1152,16 @@ for my $file (@ARGV) {
     (my $base = $file) =~ s{.*/}{};
     report('error', $file, line_of($code, $-[0]), "unit $unit should be in a file named " . lc($unit) . '.pas')
       unless lc($unit) . '.pas' eq $base;
-    my ($area) = $dir =~ m{^(?:src/)?([^/]+)$};
-    report('error', $file, line_of($code, $-[0]), "unit $unit should be named Sloper.<Area>.<Name> for folder $dir")
-      unless defined $area && $unit =~ /^Sloper\.\Q$area\E\./i;
+    if ($dir =~ m{/stubs$}) {
+      # A stand-in for a unit a build leaves out (web/engine/stubs): it keeps
+      # that unit's name, so the unit must exist
+      report('error', $file, line_of($code, $-[0]), "unit $unit stands in for no unit under src/")
+        unless grep { -e "$_/$base" } glob('src/*'), glob('src/*/thirdparty');
+    } else {
+      my ($area) = $dir =~ m{^(?:src/)?([^/]+)$};
+      report('error', $file, line_of($code, $-[0]), "unit $unit should be named Sloper.<Area>.<Name> for folder $dir")
+        unless defined $area && $unit =~ /^Sloper\.\Q$area\E\./i;
+    }
   }
 
   # Uses clauses: layering and Sloper.Core.CodePage first in programs

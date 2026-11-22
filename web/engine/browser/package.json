@@ -1,0 +1,31 @@
+{
+  "name": "opensloper-web-engine-spike",
+  "private": true,
+  "description": "The web engine in a browser page, for the spike: a Web Worker running the Wasm engine through a WASI shim",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "tsc --noEmit && oxlint && prettier --check .",
+    "build": "npm run check && esbuild main.ts worker.ts --bundle --format=esm --target=es2022 --outdir=../out/browser && cp index.html ../out/browser/",
+    "measure": "node measure.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "oxlint": "^1.94.0",
+    "oxlint-tsgolint": "^7.0.2007",
+    "prettier": "^3.10.1",
+    "puppeteer-core": "^25.18.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.4.2"
+  },
+  "allowScripts": {
+    "esbuild": false
+  }
+}

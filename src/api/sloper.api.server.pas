@@ -79,10 +79,7 @@ type
     function ShownMeasurementPath: string;
     // Text that may name the measurement file, with it taken out
     function WithoutMeasurementPath(const Text: string): string;
-    // Refuses a method that reads or writes measurement values
-    procedure CheckMeasurementsShared;
     function DoWindowState: TJSONData;
-    function FindTarget(Params: TJSONObject): TEvalNode;
     function DocumentInfo: TJSONObject;
     function ProblemsResult(WithReport: boolean): TJSONObject;
     // Cancels the open change and raises the pattern's reason for refusing it
@@ -169,6 +166,10 @@ type
     // The key of the object a parameter names by ID or name. With Use, a
     // repeat's point without an ID gets one, in the call's change.
     function Reference(Params: TJSONObject; const AName: string; Use: boolean = True): string;
+    // Refuses, when measurements are withheld, a method that reads or writes measurement values
+    procedure CheckMeasurementsShared;
+    // The object or variable the call names by "id" or "name"
+    function FindTarget(Params: TJSONObject): TEvalNode;
     // Runs the method by name, for CallMethod
     function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; virtual;
   public

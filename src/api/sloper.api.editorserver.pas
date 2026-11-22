@@ -40,6 +40,11 @@ type
     function DoObjectsAt(Params: TJSONObject): TJSONData;
     function DoObjectsInBox(Params: TJSONObject): TJSONData;
     function DoAddPoint(Params: TJSONObject): TJSONData;
+    function DoComplete(Params: TJSONObject): TJSONData;
+    function DoListObjects(Params: TJSONObject): TJSONData;
+    function DoListVariables(Params: TJSONObject): TJSONData;
+    function DoListMeasurements(Params: TJSONObject): TJSONData;
+    function DoSuggest(Params: TJSONObject): TJSONData;
   protected
     function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; override;
   end;
@@ -78,13 +83,49 @@ resourcestring
   rsEditorAddPoint = 'Adds the point a click at a place would make, as editor_snap describes it, with an automatic ' +
     'name, as one undo step. A click on an existing point makes nothing and gives that point.';
   rsEditorAddPointReturns = 'The point, as `get_object` gives it, and `existing`, true when it was there already';
-  rsEditorAddPointChange = 'Add point';
+  rsEditorComplete = 'What to offer while a formula is typed: objects, variables, measurements and functions matching ' +
+    'the word at the caret; @, # and a dot after an object narrow the list.';
+  rsEditorCompleteTarget = 'The object or variable whose formula it is, by ID or name; left out for a new one';
+  rsEditorCompleteText = 'The formula as typed, with names';
+  rsEditorCaret = 'Where the caret is, in characters from 0';
+  rsEditorExplicit = 'The user asked for the list, so an empty word offers everything';
+  rsEditorCompleteReturns = '`from` and `upto`, the characters of the word an item replaces, and `items`, each with ' +
+    '`name`, `insert` (the text that replaces the word) and `detail`';
+  rsEditorListObjects = 'The rows of the Objects tab: the objects passing the filter whose name, operation or formulas ' +
+    'contain the search, in pattern order.';
+  rsEditorFilter = 'Which objects; all by default';
+  rsEditorSearch = 'Text to look for, ignoring case; empty for all';
+  rsEditorListObjectsReturns = '`rows`, each with `id`, `name`, `operation`, `value`, `formulas`, `state` and ' +
+    '`stateText`';
+  rsEditorListVariables = 'The rows of the Variables tab: the variables whose name, formula or description contain the ' +
+    'search.';
+  rsEditorListVariablesReturns = '`rows`, each with `id`, `name`, `formula`, `value`, `description`, `state` and ' +
+    '`stateText`';
+  rsEditorListMeasurements = 'The rows of the Measurements tab: the measurement file''s measurements whose key or ' +
+    'description contain the search, then those the pattern uses that the file lacks.';
+  rsEditorListMeasurementsReturns = '`rows`, each with `key`, `value`, `description` and `missing`';
+  rsEditorSuggest = 'Formulas that give about the value of an object''s field, from its measurements, variables and ' +
+    'the objects it may read, best first.';
+  rsEditorSuggestTarget = 'The object, by ID or name';
+  rsEditorField = 'The field, such as length or angle';
+  rsEditorSuggestValue = 'The value to match, in mm, degrees or a ratio, as while dragging; the field''s own value ' +
+    'when left out';
+  rsEditorSuggestReturns = '`kind` (length, angle or ratio), `tolerance` in words, `items` within it, each with ' +
+    '`text`, `value`, `valueText`, `delta` and `deltaText`, and `nearest`, the closest of all, or null';
+  rsEditorCannotSuggest = 'No formula can be suggested for the %s of %s';
+  rsEditorTables = 'The design app''s tables the editor reads instead of copying: its canvas tools, its commands with ' +
+    'their icons and menus, and its keys and mouse actions.';
+  rsEditorTablesReturns = '`tools`, each with `name`, `caption`, `hint`, `icon` and `keys`; `commands`, each with ' +
+    '`name`, `icon`, `place`, `menu`, `keys` and `description`; `shortcuts`, each with `command`, `keys`, `kind`, ' +
+    '`group` and `description`. Keys are written as Mod+Shift+S, Mod being Ctrl, or Cmd on macOS.';
 
 implementation
 
 uses
-  Sloper.API.Rpc, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform,
-  Sloper.Core.PatternCheck, Sloper.Core.Materials, Sloper.Editor.Scene;
+  TypInfo, Sloper.API.Rpc, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
+  Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
+  Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
+  Sloper.Editor.Suggestion, Sloper.Editor.Tools;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -92,6 +133,10 @@ const
   // The finest flattening asked for, in mm, so a curve cannot become millions of points
   MIN_TOLERANCE = 0.001;
   SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical');
+  OBJECT_FILTER_NAMES: array[TObjectFilter] of string = ('all', 'points', 'edges', 'pieces', 'notes', 'problems');
+  SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
+  ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
+  SHORTCUT_KIND_NAMES: array[TShortcutKind] of string = ('command', 'fixed', 'mouse');
 
 var
   Built: TApiMethodArray = nil;
@@ -122,6 +167,23 @@ begin
     AddApiParam(Built, 'y', apNumber, True, rsEditorY);
     AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
     AddApiParam(Built, 'anchor', apReference, False, rsEditorAnchor);
+    AddApiMethod(Built, 'editor_complete', rsEditorComplete, rsEditorCompleteReturns, True);
+    AddApiParam(Built, 'id', apTarget, False, rsEditorCompleteTarget);
+    AddApiParam(Built, 'text', apText, True, rsEditorCompleteText);
+    AddApiParam(Built, 'caret', apWhole, True, rsEditorCaret);
+    AddApiParam(Built, 'explicit', apFlag, False, rsEditorExplicit);
+    AddApiMethod(Built, 'editor_list_objects', rsEditorListObjects, rsEditorListObjectsReturns, True);
+    AddApiParam(Built, 'filter', apChoice, False, rsEditorFilter, string.Join(', ', OBJECT_FILTER_NAMES));
+    AddApiParam(Built, 'search', apText, False, rsEditorSearch);
+    AddApiMethod(Built, 'editor_list_variables', rsEditorListVariables, rsEditorListVariablesReturns, True);
+    AddApiParam(Built, 'search', apText, False, rsEditorSearch);
+    AddApiMethod(Built, 'editor_list_measurements', rsEditorListMeasurements, rsEditorListMeasurementsReturns, True);
+    AddApiParam(Built, 'search', apText, False, rsEditorSearch);
+    AddApiMethod(Built, 'editor_suggest', rsEditorSuggest, rsEditorSuggestReturns, True);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
+    AddApiParam(Built, 'field', apText, True, rsEditorField);
+    AddApiParam(Built, 'value', apNumber, False, rsEditorSuggestValue);
+    AddApiMethod(Built, 'editor_tables', rsEditorTables, rsEditorTablesReturns, True);
   end;
   Result := Built;
 end;
@@ -131,6 +193,16 @@ begin
   Result := 0;
   if not OptionalNumber(Params, AName, Result) then
     raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+end;
+
+function RequireWhole(Params: TJSONObject; const AName: string): integer;
+var
+  Value: double;
+begin
+  Value := RequireNumber(Params, AName);
+  if (Frac(Value) <> 0) or (Value < 0) or (Value > MaxInt) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+  Result := Trunc(Value);
 end;
 
 // An object's ID as the API gives it: a number, or the key of a repeat's point
@@ -325,7 +397,7 @@ begin
     Answer := NodeToJSON(Document, Document.Pattern.FindNode(Snap.PointKey))
   else
   begin
-    BeginChange(rsEditorAddPointChange);
+    BeginChange(rsToolAddPoint);
     Key := PointFromSnap(Document.Pattern, Snap);
     if Key = '' then
       RefuseChange;
@@ -336,6 +408,165 @@ begin
   Result := Answer;
 end;
 
+function TEditorApiServer.DoComplete(Params: TJSONObject): TJSONData;
+var
+  Node: TEvalNode;
+  Text: string;
+  Caret: integer;
+  Completion: TCompletion;
+  Item: TCompletionItem;
+  Items: TJSONArray;
+begin
+  Node := nil;
+  if Assigned(Params.Find('id')) or Assigned(Params.Find('name')) then
+    Node := FindTarget(Params);
+  Text := RequireString(Params, 'text');
+  Caret := RequireWhole(Params, 'caret');
+  Completion := FormulaCompletion(Document.Pattern, Node, Text, CaretBytes(Text, Caret), BooleanParam(Params, 'explicit'));
+  Items := TJSONArray.Create;
+  for Item in Completion.Items do
+    Items.Add(TJSONObject.Create(['name', Item.Name, 'insert', Item.Insert, 'detail', Item.Detail]));
+  Result := TJSONObject.Create(['from', CaretChars(Text, Completion.From), 'upto', CaretChars(Text, Completion.Upto),
+    'items', Items]);
+end;
+
+function TEditorApiServer.DoListObjects(Params: TJSONObject): TJSONData;
+var
+  Filter: TObjectFilter;
+  Row: TObjectRow;
+  Rows: TJSONArray;
+begin
+  Filter := TObjectFilter(ChoiceParam(Params, 'filter', OBJECT_FILTER_NAMES));
+  Rows := TJSONArray.Create;
+  for Row in ObjectRows(Document.Pattern, Filter, OptionalString(Params, 'search')) do
+    Rows.Add(TJSONObject.Create(['id', KeyToJSON(Row.Key), 'name', Row.Name, 'operation', Row.Operation, 'value', Row.Value,
+      'formulas', Row.Formulas, 'state', StateName(Row.State), 'stateText', Row.StateText]));
+  Result := TJSONObject.Create(['rows', Rows]);
+end;
+
+function TEditorApiServer.DoListVariables(Params: TJSONObject): TJSONData;
+var
+  Row: TVariableRow;
+  Rows: TJSONArray;
+begin
+  Rows := TJSONArray.Create;
+  for Row in VariableRows(Document.Pattern, OptionalString(Params, 'search')) do
+    Rows.Add(TJSONObject.Create(['id', KeyToJSON(Row.Key), 'name', Row.Name, 'formula', Row.Formula, 'value', Row.Value,
+      'description', Row.Description, 'state', StateName(Row.State), 'stateText', Row.StateText]));
+  Result := TJSONObject.Create(['rows', Rows]);
+end;
+
+function TEditorApiServer.DoListMeasurements(Params: TJSONObject): TJSONData;
+var
+  Row: TMeasurementRow;
+  Rows: TJSONArray;
+begin
+  CheckMeasurementsShared;
+  Rows := TJSONArray.Create;
+  for Row in MeasurementRows(Document.Pattern, Document.Measurements, OptionalString(Params, 'search')) do
+    Rows.Add(TJSONObject.Create(['key', Row.Key, 'value', Row.Value, 'description', Row.Description, 'missing', Row.Missing]));
+  Result := TJSONObject.Create(['rows', Rows]);
+end;
+
+function SuggestionToJSON(const Suggestion: TSuggestion; Kind: TSuggestionKind; Pattern: TPattern): TJSONObject;
+begin
+  Result := TJSONObject.Create(['text', Suggestion.Text, 'value', ReportFloat(Suggestion.Value), 'valueText',
+    SuggestionValueText(Suggestion.Value, Kind, Pattern.Units), 'delta', ReportFloat(Suggestion.Delta), 'deltaText',
+    SuggestionDeltaText(Suggestion.Delta, Kind, Pattern.Units)]);
+end;
+
+function TEditorApiServer.DoSuggest(Params: TJSONObject): TJSONData;
+var
+  Pattern: TPattern;
+  Node: TEvalNode;
+  FieldName: string;
+  Target: double;
+  Source: TSuggestionSource;
+  Found: TSuggestions;
+  Suggestion: TSuggestion;
+  Items: TJSONArray;
+  Answer: TJSONObject;
+begin
+  Pattern := Document.Pattern;
+  Node := FindTarget(Params);
+  FieldName := RequireString(Params, 'field');
+  if not CanSuggest(Pattern, Node, FieldName) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsEditorCannotSuggest, [FieldName, Node.DisplayName]));
+  if not OptionalNumber(Params, 'value', Target) then
+    SuggestionTarget(Pattern, Node, FieldName, Target);
+  Source := TSuggestionSource.Create(Pattern, Node, FieldName);
+  try
+    Found := Source.Match(Target);
+    Answer := TJSONObject.Create;
+    Answer.Add('kind', SUGGESTION_KIND_NAMES[Source.Kind]);
+    Answer.Add('tolerance', SuggestionToleranceText(Source.Kind, Pattern.Units));
+    Items := TJSONArray.Create;
+    Answer.Add('items', Items);
+    for Suggestion in Found.Items do
+      Items.Add(SuggestionToJSON(Suggestion, Source.Kind, Pattern));
+    if Found.HasNearest then
+      Answer.Add('nearest', SuggestionToJSON(Found.Nearest, Source.Kind, Pattern))
+    else
+      Answer.Add('nearest', TJSONNull.Create);
+    Result := Answer;
+  finally
+    FreeAndNil(Source);
+  end;
+end;
+
+// An enumeration's value as the API names it: without its prefix, starting
+// in lower case, as kcToolPoint gives toolPoint
+function EnumName(Info: PTypeInfo; Value, PrefixLength: integer): string;
+begin
+  Result := Copy(GetEnumName(Info, Value), PrefixLength + 1, MaxInt);
+  if Result <> '' then
+    Result[1] := LowerCase(Result[1]);
+end;
+
+function ToolsToJSON: TJSONArray;
+var
+  Tool: TCanvasTool;
+  Info: TCanvasToolInfo;
+begin
+  Result := TJSONArray.Create;
+  for Tool := Low(TCanvasTool) to High(TCanvasTool) do
+  begin
+    Info := CanvasToolInfo(Tool);
+    Result.Add(TJSONObject.Create(['name', CANVAS_TOOL_NAMES[Tool], 'caption', Info.Caption, 'hint', Info.Hint, 'icon',
+      APP_ICON_NAMES[Info.Icon], 'keys', ShortcutInfo(Info.Command).Keys]));
+  end;
+end;
+
+function CommandsToJSON: TJSONArray;
+var
+  Command: TIconCommand;
+begin
+  Result := TJSONArray.Create;
+  for Command in IconCommands do
+    if Command.App = saDesign then
+      Result.Add(TJSONObject.Create(['name', Command.Name, 'icon', APP_ICON_NAMES[Command.Icon], 'place',
+        ICON_PLACE_NAMES[Command.Place], 'menu', Command.Menu, 'keys', Command.Keys, 'description', Command.Description]));
+end;
+
+function ShortcutsToJSON: TJSONArray;
+const
+  // kc and sg
+  PREFIX_LENGTH = 2;
+var
+  Command: TKeyCommand;
+  Info: TShortcutInfo;
+begin
+  Result := TJSONArray.Create;
+  for Command := Low(TKeyCommand) to High(TKeyCommand) do
+  begin
+    Info := ShortcutInfo(Command);
+    if saDesign in Info.Apps then
+      Result.Add(TJSONObject.Create(['command', EnumName(TypeInfo(TKeyCommand), Ord(Command), PREFIX_LENGTH), 'keys', Info.Keys,
+        'kind', SHORTCUT_KIND_NAMES[Info.Kind], 'group', EnumName(TypeInfo(TShortcutGroup), Ord(Info.Group), PREFIX_LENGTH),
+        'description', Info.Description]));
+  end;
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -344,6 +575,12 @@ begin
     'editor_objects_at': Result := DoObjectsAt(Params);
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
     'editor_add_point': Result := DoAddPoint(Params);
+    'editor_complete': Result := DoComplete(Params);
+    'editor_list_objects': Result := DoListObjects(Params);
+    'editor_list_variables': Result := DoListVariables(Params);
+    'editor_list_measurements': Result := DoListMeasurements(Params);
+    'editor_suggest': Result := DoSuggest(Params);
+    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON]);
     else
       Result := inherited DispatchMethod(Method, Params);
   end;

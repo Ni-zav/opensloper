@@ -32,7 +32,8 @@ uses
   Sloper.Core.Draft, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.Pattern, Sloper.Core.Transform, Sloper.Core.Settings,
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.TextFields, Sloper.Core.Fragment,
   Sloper.Core.PatternCheck, Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap,
-  Sloper.Editor.Scene, Sloper.UI.CanvasInput, Sloper.Editor.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools, Sloper.Editor.SuggestionGrade;
+  Sloper.Editor.Scene, Sloper.UI.CanvasInput, Sloper.Editor.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools,
+  Sloper.Editor.Tools, Sloper.Editor.SuggestionGrade;
 
 type
   TCursorMoveEvent = procedure(Sender: TObject; const ModelPos: TVec2) of object;

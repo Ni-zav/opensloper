@@ -58,6 +58,16 @@ type
     procedure TestNotOfferedAsTools;
     // The Automation API's methods still answer
     procedure TestApiMethodsStillServed;
+    procedure TestComplete;
+    // The caret and the word's place count characters, not UTF-8 bytes
+    procedure TestCompleteCountsCharacters;
+    procedure TestCompleteForObject;
+    procedure TestListObjects;
+    procedure TestListVariables;
+    procedure TestListMeasurements;
+    procedure TestSuggest;
+    procedure TestSuggestRefused;
+    procedure TestTables;
   end;
 
 implementation
@@ -294,6 +304,161 @@ begin
   Answer;
   Call('no_such_method');
   AssertEquals('unknown', RPC_METHOD_NOT_FOUND, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestComplete;
+var
+  Items: TJSONArray;
+begin
+  Call('add_variable', '{"name": "width", "formula": "100"}');
+  Call('editor_complete', '{"text": "wi", "caret": 2}');
+  AssertEquals('from', 0, Answer.Integers['from']);
+  AssertEquals('upto', 2, Answer.Integers['upto']);
+  Items := Answer.Arrays['items'];
+  AssertTrue('offered', Items.Count > 0);
+  AssertEquals('the variable', 'width', Items.Objects[0].Strings['name']);
+  Call('editor_complete', '{"text": "", "caret": 0}');
+  AssertEquals('nothing unasked', 0, Answer.Arrays['items'].Count);
+  Call('editor_complete', '{"text": "", "caret": 0, "explicit": true}');
+  AssertTrue('everything when asked', Answer.Arrays['items'].Count > 0);
+end;
+
+procedure TTestEditorServer.TestCompleteCountsCharacters;
+begin
+  Call('add_variable', '{"name": "width", "formula": "100"}');
+  Call('editor_complete', '{"text": "2×wi", "caret": 4}');
+  AssertEquals('from, after the ×', 2, Answer.Integers['from']);
+  AssertEquals('upto', 4, Answer.Integers['upto']);
+  AssertEquals('the variable', 'width', Answer.Arrays['items'].Objects[0].Strings['name']);
+end;
+
+procedure TTestEditorServer.TestCompleteForObject;
+var
+  Items: TJSONArray;
+  Index: integer;
+begin
+  AddSquare;
+  Call('editor_complete', '{"name": "A", "text": "A", "caret": 1}');
+  Items := Answer.Arrays['items'];
+  for Index := 0 to Items.Count - 1 do
+    AssertFalse('a formula cannot read its own object', Items.Objects[Index].Strings['name'] = 'A');
+  Call('editor_complete', '{"name": "Nothing", "text": "A", "caret": 1}');
+  AssertEquals('unknown target', RPC_REFUSED, ErrorCode);
+  Call('editor_complete', '{"text": "A", "caret": 1.5}');
+  AssertEquals('caret a whole number', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestListObjects;
+var
+  Rows: TJSONArray;
+begin
+  AddSquare;
+  Call('editor_list_objects');
+  Rows := Answer.Arrays['rows'];
+  AssertEquals('every object', 9, Rows.Count);
+  AssertEquals('first', 'A', Rows.Objects[0].Strings['name']);
+  AssertEquals('state', 'valid', Rows.Objects[0].Strings['state']);
+  AssertTrue('operation', Rows.Objects[0].Strings['operation'] <> '');
+  Call('editor_list_objects', '{"filter": "points"}');
+  AssertEquals('points', 4, Answer.Arrays['rows'].Count);
+  Call('editor_list_objects', '{"filter": "pieces", "search": "fla"}');
+  AssertEquals('found by name', 1, Answer.Arrays['rows'].Count);
+  Call('editor_list_objects', '{"filter": "curves"}');
+  AssertEquals('unknown filter', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestListVariables;
+var
+  Rows: TJSONArray;
+begin
+  Call('add_variable', '{"name": "ease", "formula": "5 * 2", "description": "Some ease"}');
+  Call('add_variable', '{"name": "width", "formula": "100"}');
+  Call('editor_list_variables', '{"search": "some"}');
+  Rows := Answer.Arrays['rows'];
+  AssertEquals('found by description', 1, Rows.Count);
+  AssertEquals('name', 'ease', Rows.Objects[0].Strings['name']);
+  AssertEquals('formula', '5 * 2', Rows.Objects[0].Strings['formula']);
+  AssertTrue('value', Pos('10', Rows.Objects[0].Strings['value']) > 0);
+end;
+
+procedure TTestEditorServer.TestListMeasurements;
+var
+  Path: string;
+  Rows: TJSONArray;
+begin
+  Path := ConcatPaths([ExtractFileDir(ExpandFileName(ParamStr(0))), 'patterns', 'skirt-pieces.sloper']);
+  Call('open', '{"path": "' + StringToJSONString(Path) + '"}');
+  Answer;
+  Call('editor_list_measurements', '{"search": "waist"}');
+  Rows := Answer.Arrays['rows'];
+  AssertTrue('found', Rows.Count > 0);
+  AssertTrue('by key or description', Pos('waist', LowerCase(Rows.Objects[0].Strings['key'] + Rows.Objects[0].Strings['description'])) > 0);
+  AssertFalse('in the file', Rows.Objects[0].Booleans['missing']);
+  AssertTrue('with its value', Rows.Objects[0].Strings['value'] <> '');
+end;
+
+procedure TTestEditorServer.TestSuggest;
+var
+  Items: TJSONArray;
+  Index: integer;
+  Found: boolean;
+begin
+  Call('add_variable', '{"name": "width", "formula": "100"}');
+  AddSquare;
+  Call('editor_suggest', '{"name": "B", "field": "x", "value": 100.3}');
+  AssertEquals('kind', 'length', Answer.Strings['kind']);
+  AssertTrue('tolerance', Answer.Strings['tolerance'] <> '');
+  Items := Answer.Arrays['items'];
+  Found := False;
+  for Index := 0 to Items.Count - 1 do
+    if Items.Objects[Index].Strings['text'] = '#width' then
+    begin
+      Found := True;
+      AssertNear('value', 100, Items.Objects[Index].Floats['value'], TOLERANCE);
+      AssertNear('delta', -0.3, Items.Objects[Index].Floats['delta'], TOLERANCE);
+    end;
+  AssertTrue('the variable is suggested', Found);
+  AssertFalse('nearest', Answer.Nulls['nearest']);
+end;
+
+procedure TTestEditorServer.TestSuggestRefused;
+begin
+  AddSquare;
+  Call('editor_suggest', '{"name": "B", "field": "colour"}');
+  AssertEquals('no such field', RPC_REFUSED, ErrorCode);
+  Call('editor_suggest', '{"name": "B"}');
+  AssertEquals('no field', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestTables;
+var
+  Tools, Commands, Shortcuts: TJSONArray;
+  Index: integer;
+  Found: boolean;
+begin
+  Call('editor_tables');
+  Tools := Answer.Arrays['tools'];
+  AssertEquals('every tool', 12, Tools.Count);
+  AssertEquals('first', 'select', Tools.Objects[0].Strings['name']);
+  AssertEquals('point tool', 'point', Tools.Objects[2].Strings['name']);
+  AssertEquals('its caption', 'Point', Tools.Objects[2].Strings['caption']);
+  AssertTrue('its hint', Tools.Objects[2].Strings['hint'] <> '');
+  AssertEquals('its icon', 'point', Tools.Objects[2].Strings['icon']);
+  AssertTrue('its keys', Tools.Objects[2].Strings['keys'] <> '');
+  Commands := Answer.Arrays['commands'];
+  AssertTrue('commands', Commands.Count > 0);
+  AssertTrue('a command has a place', Commands.Objects[0].Strings['place'] <> '');
+  Shortcuts := Answer.Arrays['shortcuts'];
+  Found := False;
+  for Index := 0 to Shortcuts.Count - 1 do
+    if Shortcuts.Objects[Index].Strings['command'] = 'undo' then
+    begin
+      Found := True;
+      AssertEquals('undo is a command', 'command', Shortcuts.Objects[Index].Strings['kind']);
+      AssertEquals('in the edit group', 'edit', Shortcuts.Objects[Index].Strings['group']);
+      AssertEquals('its keys', 'Mod+Z', Shortcuts.Objects[Index].Strings['keys']);
+    end;
+  AssertTrue('undo listed', Found);
 end;
 
 initialization

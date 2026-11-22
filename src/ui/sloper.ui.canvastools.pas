@@ -20,8 +20,7 @@
 // does, what the tool snaps to and labels, what it draws over the pattern and
 // the state it keeps between clicks. The canvas keeps pan, zoom, the gesture
 // rules and the select tool's drags and boxes, and hands the rest to the tool
-// in use. The table of tools (key, icon, caption) is here too, so the canvas
-// and the main form list them from one place.
+// in use. The table of tools is Sloper.Editor.Tools.
 unit Sloper.UI.CanvasTools;
 
 {$mode ObjFPC}{$H+}
@@ -30,25 +29,10 @@ interface
 
 uses
   Classes, SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Shortcuts,
-  Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter, Sloper.Core.IconSet;
+  Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap, Sloper.UI.CanvasInput, Sloper.UI.PatternPainter,
+  Sloper.Core.IconSet, Sloper.Editor.Tools;
 
 type
-  // ctSelect selects and drags; ctZoom zooms to a box, or in or out a step
-  // at a click; ctPoint, ctLine and ctCurve add objects where
-  // the snap points; ctPiece makes a piece of the region clicked; ctNotch adds
-  // or removes a notch on a piece's seam line; ctSeam picks the edges of the
-  // two sides of a seam; ctText places a note, hung from what it snaps to;
-  // ctCallout takes what its tip points at, then where its text goes
-  TCanvasTool = (ctSelect, ctZoom, ctPoint, ctLine, ctCurve, ctCircle, ctRectangle, ctPiece, ctNotch, ctSeam, ctText, ctCallout);
-
-  // How the tool is offered: its key in Sloper.Core.Shortcuts, its toolbar
-  // icon and its menu caption
-  TCanvasToolInfo = record
-    Command: TKeyCommand;
-    Icon: TAppIcon;
-    Caption: string;
-  end;
-
   // What a tool needs of the canvas
   TCanvasToolHost = class
   public
@@ -103,37 +87,11 @@ type
 
   TCanvasToolHandlers = array[TCanvasTool] of TCanvasToolHandler;
 
-function CanvasToolInfo(Tool: TCanvasTool): TCanvasToolInfo;
 // One of each tool, all working with Host; the caller frees them
 function CreateCanvasTools(Host: TCanvasToolHost): TCanvasToolHandlers;
 procedure FreeCanvasTools(var Tools: TCanvasToolHandlers);
 
 resourcestring
-  rsToolSelect = 'Select';
-  rsToolZoom = 'Zoom';
-  rsToolPoint = 'Point';
-  rsToolLine = 'Line';
-  rsToolCurve = 'Curve';
-  rsToolCircle = 'Circle';
-  rsToolRectangle = 'Rectangle';
-  rsToolPiece = 'Piece';
-  rsToolNotch = 'Notch';
-  rsToolSeam = 'Seam';
-  rsToolText = 'Text';
-  rsToolCallout = 'Callout';
-  rsToolSelectHint = 'Select: click to select, drag a point to move it';
-  rsToolZoomHint = 'Zoom: drag a box to zoom to it, click to zoom in, Shift+click to zoom out';
-  rsToolPointHint = 'Point: click to add a point where it snaps';
-  rsToolLineHint = 'Line: click the start, then the end; Escape stops';
-  rsToolCurveHint = 'Curve: click the start, then the end; Shift+click carries it on as one path; Escape stops';
-  rsToolCircleHint = 'Circle: click the centre, then a point on the rim; Escape stops';
-  rsToolRectangleHint = 'Rectangle: click one corner, then the opposite one; Escape stops';
-  rsToolPieceHint = 'Piece: click inside a closed outline';
-  rsToolNotchHint = 'Notch: click a piece''s edge to add a notch, or a notch to remove it';
-  rsToolSeamHint = 'Seam: click edges for side A, Tab moves to side B, Enter makes the seam';
-  rsToolTextHint = 'Text: click to place a note; it hangs from the point, edge or piece it snaps to';
-  rsToolCalloutHint = 'Callout: click what it points at, then where its text goes; Escape stops';
-  rsToolAddPoint = 'Add point';
   rsToolAddLine = 'Add line';
   rsToolAddCurve = 'Add curve';
   rsToolExtendCurve = 'Carry curve on';
@@ -155,10 +113,6 @@ resourcestring
   rsToolNewNoteText = 'Text';
   rsToolCalloutBox = 'Click where the callout''s text goes';
   rsToolAddCallout = 'Add callout';
-
-const
-  // Screen pixels around the pointer that a tool snaps to or picks from
-  SNAP_RADIUS = 8;
 
 implementation
 
@@ -311,32 +265,6 @@ type
     procedure ObjectsReplaced; override;
     procedure AddToPaintState(var State: TPaintState); override;
   end;
-
-function CanvasToolInfo(Tool: TCanvasTool): TCanvasToolInfo;
-
-  function Info(Command: TKeyCommand; Icon: TAppIcon; const ACaption: string): TCanvasToolInfo;
-  begin
-    Result.Command := Command;
-    Result.Icon := Icon;
-    Result.Caption := ACaption;
-  end;
-
-begin
-  case Tool of
-    ctSelect: Result := Info(kcToolSelect, aiSelect, rsToolSelect);
-    ctZoom: Result := Info(kcToolZoom, aiZoomArea, rsToolZoom);
-    ctPoint: Result := Info(kcToolPoint, aiPoint, rsToolPoint);
-    ctLine: Result := Info(kcToolLine, aiLine, rsToolLine);
-    ctCurve: Result := Info(kcToolCurve, aiCurve, rsToolCurve);
-    ctCircle: Result := Info(kcToolCircle, aiCircle, rsToolCircle);
-    ctRectangle: Result := Info(kcToolRectangle, aiRectangle, rsToolRectangle);
-    ctPiece: Result := Info(kcToolPiece, aiPiece, rsToolPiece);
-    ctNotch: Result := Info(kcToolNotch, aiNotch, rsToolNotch);
-    ctSeam: Result := Info(kcToolSeam, aiSeam, rsToolSeam);
-    ctText: Result := Info(kcToolText, aiText, rsToolText);
-    ctCallout: Result := Info(kcToolCallout, aiCallout, rsToolCallout);
-  end;
-end;
 
 function CreateCanvasTools(Host: TCanvasToolHost): TCanvasToolHandlers;
 begin

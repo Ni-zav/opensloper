@@ -287,10 +287,7 @@ type
   end;
 
 resourcestring
-  rsCanvasMovePoint = 'Move point';
-  rsCanvasMoveNote = 'Move note';
   rsCanvasMoveTip = 'Move callout tip';
-  rsCanvasMoveHandle = 'Move curve handle';
   rsCanvasPickPivot = 'Rotate Copy: click the point to turn about; Escape cancels';
   rsCanvasPickAxis = 'Mirror Copy: click a straight edge, or the first of two points; Escape cancels';
   rsCanvasPickSecond = 'Mirror Copy: click the second point; Escape cancels';
@@ -717,7 +714,7 @@ begin
       Exit;
     end;
     FDragOffset := TNoteObject(Node).Position - ModelAt(FPressPos.X, FPressPos.Y);
-    FDocument.BeginChange(rsCanvasMoveNote);
+    FDocument.BeginChange(rsToolMoveNote);
     FInput.Mode := cmDragging;
     Exit;
   end;
@@ -730,7 +727,7 @@ begin
     Exit;
   end;
   FDragOffset := Point.Position - ModelAt(FPressPos.X, FPressPos.Y);
-  FDocument.BeginChange(rsCanvasMovePoint);
+  FDocument.BeginChange(rsToolMovePoint);
   FInput.Mode := cmDragging;
 end;
 
@@ -745,7 +742,7 @@ begin
     Exit;
   end;
   FDragOffset := FHandle.Position - ModelAt(FPressPos.X, FPressPos.Y);
-  FDocument.BeginChange(rsCanvasMoveHandle);
+  FDocument.BeginChange(rsToolMoveHandle);
   FDraggingHandle := True;
   FInput.Mode := cmDragging;
 end;

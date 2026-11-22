@@ -68,6 +68,18 @@ type
     procedure TestSuggest;
     procedure TestSuggestRefused;
     procedure TestTables;
+    // What changed since last asked, as the desktop document tells its panels
+    procedure TestChanges;
+    procedure TestChangesAfterUndo;
+    procedure TestChangesOnOpen;
+    // A drag is one undo step, with the pattern worked out on every move
+    procedure TestDragPoint;
+    procedure TestDragCancel;
+    procedure TestDragOneField;
+    procedure TestDragNote;
+    // While a drag is open, other changes wait
+    procedure TestDragBlocksChanges;
+    procedure TestDragRefusals;
   end;
 
 implementation
@@ -459,6 +471,167 @@ begin
       AssertEquals('its keys', 'Mod+Z', Shortcuts.Objects[Index].Strings['keys']);
     end;
   AssertTrue('undo listed', Found);
+end;
+
+// The changes editor_changes names, joined by spaces
+function ChangeNames(Answer: TJSONObject): string;
+var
+  Index: integer;
+begin
+  Result := '';
+  for Index := 0 to Answer.Arrays['changes'].Count - 1 do
+    Result := Trim(Result + ' ' + Answer.Arrays['changes'].Strings[Index]);
+end;
+
+procedure TTestEditorServer.TestChanges;
+begin
+  Call('editor_changes');
+  AssertEquals('nothing yet', '', ChangeNames(Answer));
+  AssertFalse('nothing to undo', Answer.Booleans['canUndo']);
+  Call('add_point', '{"type": "freePoint", "name": "A", "x": 0, "y": 0}');
+  Call('editor_changes');
+  AssertEquals('an edit', 'pattern history file', ChangeNames(Answer));
+  AssertTrue('can undo', Answer.Booleans['canUndo']);
+  AssertTrue('its name', Answer.Strings['undo'] <> '');
+  AssertFalse('nothing to redo', Answer.Booleans['canRedo']);
+  AssertTrue('modified', Answer.Booleans['modified']);
+  Call('editor_changes');
+  AssertEquals('told once', '', ChangeNames(Answer));
+  Call('editor_scene');
+  Call('editor_snap', '{"x": 1, "y": 1, "radius": 2}');
+  Call('editor_changes');
+  AssertEquals('reading changes nothing', '', ChangeNames(Answer));
+  Call('add_point', '{"type": "freePoint", "name": "B", "x": 10, "y": 0}');
+  Call('add_point', '{"type": "freePoint", "name": "C", "x": 20, "y": 0}');
+  Call('editor_changes');
+  AssertEquals('gathered', 'pattern history', ChangeNames(Answer));
+end;
+
+procedure TTestEditorServer.TestChangesAfterUndo;
+begin
+  Call('add_point', '{"type": "freePoint", "name": "A", "x": 0, "y": 0}');
+  Call('editor_changes');
+  Call('undo');
+  Call('editor_changes');
+  AssertTrue('new objects', Pos('objectsReplaced', ChangeNames(Answer)) > 0);
+  AssertTrue('history', Pos('history', ChangeNames(Answer)) > 0);
+  AssertTrue('can redo', Answer.Booleans['canRedo']);
+  AssertFalse('not modified', Answer.Booleans['modified']);
+end;
+
+procedure TTestEditorServer.TestChangesOnOpen;
+var
+  Generation: integer;
+begin
+  Call('editor_changes');
+  Generation := Answer.Integers['generation'];
+  Call('add_point', '{"type": "freePoint", "name": "A", "x": 0, "y": 0}');
+  Call('save', '{"text": true}');
+  Call('open', '{"text": "' + StringToJSONString(Answer.Strings['text']) + '"}');
+  Call('editor_changes');
+  AssertEquals('another pattern', Generation + 1, Answer.Integers['generation']);
+  AssertEquals('everything', 'pattern objectsReplaced measurements history file', ChangeNames(Answer));
+  AssertFalse('no history', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestEditorServer.TestDragPoint;
+begin
+  AddSquare;
+  Call('editor_changes');
+  Call('editor_drag_begin', '{"name": "C"}');
+  AssertNear('starts where it is', 100, Answer.Floats['x'], TOLERANCE);
+  Call('editor_drag_to', '{"x": 120, "y": 110}');
+  AssertTrue('moved', Answer.Booleans['moved']);
+  AssertNear('there', 120, Answer.Floats['x'], TOLERANCE);
+  Call('editor_drag_to', '{"x": 130, "y": 140}');
+  Call('editor_changes');
+  AssertEquals('worked out while dragging', 'pattern', ChangeNames(Answer));
+  Call('editor_scene');
+  AssertNear('the scene follows', 140, Answer.Arrays['points'].Objects[2].Floats['y'], TOLERANCE);
+  Call('editor_drag_end');
+  AssertTrue('changed', Answer.Booleans['changed']);
+  Call('editor_changes');
+  AssertEquals('one step', 'Move point', Answer.Strings['undo']);
+  Call('undo');
+  Call('get_object', '{"name": "C"}');
+  AssertNear('undone at once', 100, Answer.Floats['x'], TOLERANCE);
+  Call('editor_changes');
+  AssertTrue('the piece next', Answer.Strings['undo'] <> 'Move point');
+end;
+
+procedure TTestEditorServer.TestDragCancel;
+begin
+  AddSquare;
+  Call('editor_drag_begin', '{"name": "C"}');
+  Call('editor_drag_to', '{"x": 150, "y": 150}');
+  Call('editor_drag_cancel');
+  AssertFalse('nothing', Answer.Booleans['changed']);
+  Call('get_object', '{"name": "C"}');
+  AssertNear('back', 100, Answer.Floats['x'], TOLERANCE);
+  Call('editor_drag_begin', '{"name": "C"}');
+  Call('editor_drag_end');
+  AssertFalse('ended where it began', Answer.Booleans['changed']);
+end;
+
+procedure TTestEditorServer.TestDragOneField;
+begin
+  AddSquare;
+  Call('editor_drag_begin', '{"name": "C", "field": "x"}');
+  Call('editor_drag_to', '{"x": 130, "y": 160}');
+  AssertNear('across', 130, Answer.Floats['x'], TOLERANCE);
+  AssertNear('not down', 100, Answer.Floats['y'], TOLERANCE);
+  Call('editor_drag_end');
+  Call('editor_drag_begin', '{"name": "C", "field": "colour"}');
+  AssertEquals('no such field', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestDragNote;
+begin
+  Call('add_note', '{"text": "Cut 2", "x": 10, "y": 20}');
+  Answer;
+  Call('editor_drag_begin', '{"name": "' + Answer.Strings['name'] + '"}');
+  AssertNear('top left', 10, Answer.Floats['x'], TOLERANCE);
+  Call('editor_drag_to', '{"x": 40, "y": 50}');
+  AssertNear('moved', 40, Answer.Floats['x'], TOLERANCE);
+  Call('editor_drag_end');
+  Call('editor_changes');
+  AssertEquals('its step', 'Move note', Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestDragBlocksChanges;
+begin
+  AddSquare;
+  Call('editor_drag_begin', '{"name": "C"}');
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
+  AssertEquals('an API change', RPC_REFUSED, ErrorCode);
+  Call('editor_add_point', '{"x": 300, "y": 300, "radius": 2}');
+  AssertEquals('an editor change', RPC_REFUSED, ErrorCode);
+  Call('undo');
+  AssertEquals('undo', RPC_REFUSED, ErrorCode);
+  Call('editor_drag_begin', '{"name": "B"}');
+  AssertEquals('a second drag', RPC_REFUSED, ErrorCode);
+  Call('editor_scene');
+  Answer;
+  Call('editor_drag_end');
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
+  Answer;
+end;
+
+procedure TTestEditorServer.TestDragRefusals;
+begin
+  AddSquare;
+  Call('editor_drag_to', '{"x": 1, "y": 1}');
+  AssertEquals('no drag', RPC_REFUSED, ErrorCode);
+  Call('editor_drag_end');
+  AssertEquals('none to end', RPC_REFUSED, ErrorCode);
+  Call('editor_drag_begin', '{"name": "Flap"}');
+  AssertEquals('a piece', RPC_REFUSED, ErrorCode);
+  Call('set_locked', '{"name": "C", "locked": true}');
+  Call('editor_drag_begin', '{"name": "C"}');
+  AssertEquals('locked', RPC_REFUSED, ErrorCode);
+  // No change was left open
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
+  Answer;
 end;
 
 initialization

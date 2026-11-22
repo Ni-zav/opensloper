@@ -18,7 +18,8 @@
 
 // The table of the canvas's tools: each one's key, icon, caption and hint,
 // so the desktop canvas, its main form and the web editor list them from one
-// place. What the tools do is in Sloper.UI.CanvasTools.
+// place, with the names of the undo steps both canvases make. What the tools
+// do is in Sloper.UI.CanvasTools.
 unit Sloper.Editor.Tools;
 
 {$mode ObjFPC}{$H+}
@@ -80,8 +81,11 @@ resourcestring
   rsToolTextHint = 'Text: click to place a note; it hangs from the point, edge or piece it snaps to';
   rsToolCallout = 'Callout';
   rsToolCalloutHint = 'Callout: click what it points at, then where its text goes; Escape stops';
-  // The undo step of the Point tool's click
+  // The undo steps of the Point tool's click and of drags on the canvas
   rsToolAddPoint = 'Add point';
+  rsToolMovePoint = 'Move point';
+  rsToolMoveNote = 'Move note';
+  rsToolMoveHandle = 'Move curve handle';
 
 implementation
 

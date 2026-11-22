@@ -28,11 +28,22 @@ unit Sloper.API.EditorServer;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Editor.Snap;
+  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Editor.Snap;
 
 type
   TEditorApiServer = class(TApiServer)
   private
+    // What the document has said changed since editor_changes last answered
+    FChanges: TDocumentChanges;
+    // The point or note being dragged, and the one field a point's drag
+    // changes, or '' for all it can; '' when no drag is open
+    FDragKey, FDragField: string;
+    procedure RequireDrag;
+    function DoDragBegin(Params: TJSONObject): TJSONData;
+    function DoDragTo(Params: TJSONObject): TJSONData;
+    function DoDragEnd(Cancel: boolean): TJSONData;
+    procedure DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
+    function DoChanges: TJSONData;
     // The snap for the call's place, radius and anchor
     function CallSnap(Params: TJSONObject): TSnap;
     function DoScene(Params: TJSONObject): TJSONData;
@@ -47,6 +58,9 @@ type
     function DoSuggest(Params: TJSONObject): TJSONData;
   protected
     function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; override;
+  public
+    procedure AfterConstruction; override;
+    destructor Destroy; override;
   end;
 
 // The editor's methods, documented as the API's are
@@ -113,6 +127,30 @@ resourcestring
   rsEditorSuggestReturns = '`kind` (length, angle or ratio), `tolerance` in words, `items` within it, each with ' +
     '`text`, `value`, `valueText`, `delta` and `deltaText`, and `nearest`, the closest of all, or null';
   rsEditorCannotSuggest = 'No formula can be suggested for the %s of %s';
+  rsEditorChanges = 'What changed since this was last asked, as the desktop document tells its panels, with what ' +
+    'undo and redo would do and whether the pattern is modified. The editor asks after each call that may change ' +
+    'something, and updates what the changes name.';
+  rsEditorChangesReturns = '`changes`, any of pattern (definitions or results), objectsReplaced (every object is new, ' +
+    'as after undo or open), measurements (another set), history, file and view; `generation`, which grows when ' +
+    'another pattern is opened; `canUndo`, `canRedo`, `undo` and `redo`, the steps'' names; `modified`';
+  rsEditorDragBegin = 'Starts dragging a point or a note, as one undo step: editor_drag_to moves it, editor_drag_end ' +
+    'keeps the step and editor_drag_cancel puts everything back. Other changes are refused until it ends.';
+  rsEditorDragTarget = 'The point or note, by ID or name';
+  rsEditorDragField = 'For a point, the one field to change, as while formula suggestions are open on it; by default ' +
+    'every field a drag sets';
+  rsEditorDragBeginReturns = '`x` and `y`, where the point or the note''s top left is now, in mm';
+  rsEditorDragTo = 'Moves the object being dragged as near the place as its operation allows; a point along an edge ' +
+    'stays on the edge.';
+  rsEditorDragX = 'Where the point, or the note''s top left, goes across, in mm';
+  rsEditorDragY = 'Where it goes down, in mm';
+  rsEditorDragToReturns = '`x` and `y`, where it now is, and `moved`, false with the `reason` when it could not move';
+  rsEditorDragEnd = 'Ends the drag, keeping what it did as one undo step.';
+  rsEditorDragEndReturns = '`changed`, false when it ended where it began, which makes no step';
+  rsEditorDragCancel = 'Ends the drag, putting the object back where it was.';
+  rsEditorDragCancelReturns = '`changed`, false';
+  rsEditorNotDraggable = '%s is not a point or a note';
+  rsEditorNoDrag = 'No drag is open: call editor_drag_begin first';
+  rsEditorDragOpen = 'A drag is already open';
   rsEditorTables = 'The design app''s tables the editor reads instead of copying: its canvas tools, its commands with ' +
     'their icons and menus, and its keys and mouse actions.';
   rsEditorTablesReturns = '`tools`, each with `name`, `caption`, `hint`, `icon` and `keys`; `commands`, each with ' +
@@ -125,7 +163,7 @@ uses
   TypInfo, Sloper.API.Rpc, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
-  Sloper.Editor.Suggestion, Sloper.Editor.Tools;
+  Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Core.Note, Sloper.Core.Drag;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -137,6 +175,8 @@ const
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
   ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
   SHORTCUT_KIND_NAMES: array[TShortcutKind] of string = ('command', 'fixed', 'mouse');
+  DOCUMENT_CHANGE_NAMES: array[TDocumentChange] of string = ('pattern', 'objectsReplaced', 'measurements', 'history', 'file',
+    'view');
 
 var
   Built: TApiMethodArray = nil;
@@ -184,6 +224,15 @@ begin
     AddApiParam(Built, 'field', apText, True, rsEditorField);
     AddApiParam(Built, 'value', apNumber, False, rsEditorSuggestValue);
     AddApiMethod(Built, 'editor_tables', rsEditorTables, rsEditorTablesReturns, True);
+    AddApiMethod(Built, 'editor_changes', rsEditorChanges, rsEditorChangesReturns, True);
+    AddApiMethod(Built, 'editor_drag_begin', rsEditorDragBegin, rsEditorDragBeginReturns);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorDragTarget);
+    AddApiParam(Built, 'field', apText, False, rsEditorDragField);
+    AddApiMethod(Built, 'editor_drag_to', rsEditorDragTo, rsEditorDragToReturns);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorDragX);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorDragY);
+    AddApiMethod(Built, 'editor_drag_end', rsEditorDragEnd, rsEditorDragEndReturns);
+    AddApiMethod(Built, 'editor_drag_cancel', rsEditorDragCancel, rsEditorDragCancelReturns);
   end;
   Result := Built;
 end;
@@ -567,6 +616,131 @@ begin
   end;
 end;
 
+procedure TEditorApiServer.AfterConstruction;
+begin
+  inherited AfterConstruction;
+  Document.AddListener(@DocumentChanged);
+end;
+
+destructor TEditorApiServer.Destroy;
+begin
+  if Assigned(Document) then
+    Document.RemoveListener(@DocumentChanged);
+  inherited Destroy;
+end;
+
+procedure TEditorApiServer.DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
+begin
+  FChanges := FChanges + Changes;
+end;
+
+function TEditorApiServer.DoChanges: TJSONData;
+var
+  Change: TDocumentChange;
+  Names: TJSONArray;
+begin
+  Names := TJSONArray.Create;
+  for Change in FChanges do
+    Names.Add(DOCUMENT_CHANGE_NAMES[Change]);
+  FChanges := [];
+  Result := TJSONObject.Create(['changes', Names, 'generation', Document.Generation, 'canUndo', Document.CanUndo, 'canRedo',
+    Document.CanRedo, 'undo', Document.UndoDescription, 'redo', Document.RedoDescription, 'modified', Document.Modified]);
+end;
+
+// Where the dragged object is: a point's place, or a note's top left
+function DragPosition(Node: TEvalNode): TJSONObject;
+var
+  At: TVec2;
+begin
+  if Node is TNoteObject then
+    At := TNoteObject(Node).Position
+  else
+    At := TPointObject(Node).Position;
+  Result := TJSONObject.Create(['x', ReportFloat(At.X), 'y', ReportFloat(At.Y)]);
+end;
+
+procedure TEditorApiServer.RequireDrag;
+begin
+  if FDragKey = '' then
+    raise EApiError.Create(RPC_REFUSED, rsEditorNoDrag);
+end;
+
+function TEditorApiServer.DoDragBegin(Params: TJSONObject): TJSONData;
+var
+  Node: TEvalNode;
+  FieldName, Reason: string;
+  Allowed: boolean;
+begin
+  if FDragKey <> '' then
+    raise EApiError.Create(RPC_REFUSED, rsEditorDragOpen);
+  Node := FindTarget(Params);
+  FieldName := OptionalString(Params, 'field');
+  if Node is TNoteObject then
+    Allowed := CanDragNote(TNoteObject(Node), Reason)
+  else if not (Node is TPointObject) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsEditorNotDraggable, [Node.DisplayName]))
+  else if FieldName <> '' then
+    Allowed := CanDragField(Document.Pattern, TPointObject(Node), FieldName, Reason)
+  else
+    Allowed := CanDrag(Document.Pattern, TPointObject(Node), Reason);
+  if not Allowed then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  if Node is TNoteObject then
+    BeginChange(rsToolMoveNote)
+  else
+    BeginChange(rsToolMovePoint);
+  FDragKey := Node.Key;
+  FDragField := FieldName;
+  Result := DragPosition(Node);
+end;
+
+function TEditorApiServer.DoDragTo(Params: TJSONObject): TJSONData;
+var
+  Pattern: TPattern;
+  Node: TEvalNode;
+  Target: TVec2;
+  Reason: string;
+  Moved: boolean;
+  Answer: TJSONObject;
+begin
+  RequireDrag;
+  Target := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
+  Pattern := Document.Pattern;
+  Node := Pattern.FindNode(FDragKey);
+  if Node is TNoteObject then
+    Moved := DragNote(Pattern, TNoteObject(Node), Target, Reason)
+  else if FDragField <> '' then
+    Moved := DragPointField(Pattern, TPointObject(Node), FDragField, Target, Reason)
+  else
+    Moved := DragPoint(Pattern, TPointObject(Node), Target, Reason);
+  if Moved then
+    Document.LiveUpdate;
+  Answer := DragPosition(Pattern.FindNode(FDragKey));
+  Answer.Add('moved', Moved);
+  if not Moved then
+    Answer.Add('reason', Reason);
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoDragEnd(Cancel: boolean): TJSONData;
+var
+  Changed: boolean;
+begin
+  RequireDrag;
+  FDragKey := '';
+  FDragField := '';
+  Changed := False;
+  if Cancel then
+    Document.CancelChange
+  else
+  begin
+    Changed := Document.EndChange;
+    if Document.ChangeRefused then
+      raise EApiError.Create(RPC_REFUSED, Document.Pattern.LastError);
+  end;
+  Result := TJSONObject.Create(['changed', Changed]);
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -580,6 +754,11 @@ begin
     'editor_list_variables': Result := DoListVariables(Params);
     'editor_list_measurements': Result := DoListMeasurements(Params);
     'editor_suggest': Result := DoSuggest(Params);
+    'editor_changes': Result := DoChanges;
+    'editor_drag_begin': Result := DoDragBegin(Params);
+    'editor_drag_to': Result := DoDragTo(Params);
+    'editor_drag_end': Result := DoDragEnd(False);
+    'editor_drag_cancel': Result := DoDragEnd(True);
     'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON]);
     else
       Result := inherited DispatchMethod(Method, Params);

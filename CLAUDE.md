@@ -36,6 +36,7 @@ git submodule update --init --recursive
 ./opensloper-make.sh test --suite=TTestFacing  # one suite (runner options pass through)
 ./opensloper-make.sh build    # GUI apps and CLI, into release/ (not in git)
 ./opensloper-make.sh build cli tests  # only those (cli, design, publish, measurements, drape, tests), for a quick check
+./opensloper-make.sh web      # the web engine for Wasm into web/engine/out, with FPC trunk (web/engine/README.md); --strip-names drops the function names
 ./opensloper-make.sh package  # pack the built apps and installer for this platform into release/dist, with the offline guide from docs --offline (the release workflow runs it)
 ./opensloper-make.sh release  # a release's notes: APP_VERSION's CHANGELOG.md section, else its commits since the last release
 ./opensloper-make.sh bump minor  # next version (major|minor|patch|X.Y.Z): sets APP_VERSION, starts its CHANGELOG.md section; commits nothing

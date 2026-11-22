@@ -33,6 +33,11 @@ Commands:
                          measurements, drape, or tests (the test program,
                          not run); e.g. build cli design,
                          build --build-mode=Release
+  web [--strip-names] [FPC OPTIONS]
+                         build the web engine for wasm32-wasip1 into
+                         web/engine/out with the FPC trunk cross-compiler
+                         (see web/engine/README.md); --strip-names takes
+                         the function names out of the .wasm files
   check [FILE...]        check the coding standards the formatter cannot
                          (errors fail, warnings advise; run before every commit);
                          with no files, also tsc, Oxlint and Prettier on the
@@ -236,6 +241,55 @@ cmd_build() {
       *) "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" "src/$app/opensloper_$app.lpi" "$@" ;;
     esac
   done
+}
+
+# web: the web engine, through web/engine/build.sh. With --strip-names the
+# .wasm files lose their name section, which the compiler's -Xs leaves in:
+# about a tenth of the file, kept by default while the engine is young, as
+# the names make a stack trace readable. See Engine size in
+# documents/design/web-version.md.
+cmd_web() {
+  local strip=0
+  if [ "${1:-}" = "--strip-names" ]; then
+    strip=1
+    shift
+  fi
+  web/engine/build.sh "$@"
+  if [ "$strip" -eq 1 ]; then
+    strip_wasm_names web/engine/out/engine_serve.wasm web/engine/out/browser/engine_lib.wasm
+  fi
+}
+
+# Rewrites each .wasm file without its custom sections (id 0), where the
+# names are; every other section is copied as it is
+strip_wasm_names() {
+  perl -e '
+    use strict;
+    for my $file (@ARGV) {
+      open(my $in, "<:raw", $file) or die "$file: $!\n";
+      my $data = do { local $/; <$in> };
+      close $in;
+      die "$file: not a WebAssembly module\n" unless substr($data, 0, 4) eq "\0asm";
+      my ($out, $pos) = (substr($data, 0, 8), 8);
+      while ($pos < length $data) {
+        my $start = $pos;
+        my $id = ord substr($data, $pos++, 1);
+        my ($size, $shift) = (0, 0);
+        while (1) {
+          my $byte = ord substr($data, $pos++, 1);
+          $size |= ($byte & 0x7f) << $shift;
+          $shift += 7;
+          last if $byte < 0x80;
+        }
+        $pos += $size;
+        $out .= substr($data, $start, $pos - $start) if $id != 0;
+      }
+      open(my $outfile, ">:raw", $file) or die "$file: $!\n";
+      print $outfile $out;
+      close $outfile;
+      printf "%s: %d bytes, %d without names\n", $file, length $data, length $out;
+    }
+  ' "$@"
 }
 
 # The TypeScript in web/engine/browser, through the npm script named in $1 of
@@ -1045,6 +1099,7 @@ COMMAND="${1:-}"
 case "$COMMAND" in
   test) cmd_test "$@" ;;
   build) cmd_build "$@" ;;
+  web) cmd_web "$@" ;;
   check) cmd_check "$@" ;;
   format) cmd_format "$@" ;;
   pr-check) cmd_pr_check "$@" ;;

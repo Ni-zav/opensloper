@@ -18,7 +18,7 @@ say what it showed. It is built twice from the same units:
 | `engine_lib.lpr` | The library: `TApiServer` behind `engine_handle` |
 | `browser/` | A page that runs the library in a Web Worker and times it (TypeScript) |
 | `stubs/` | Stand-ins for `Sloper.Output.DraftPNG` and `Sloper.Output.GarmentPNG` with the same interface, without BGRABitmap; PNG is refused |
-| `build.sh` | Builds `out/engine_serve.wasm` and `out/browser/engine_lib.wasm` |
+| `build.sh` | Builds `out/engine_serve.wasm` and `out/browser/engine_lib.wasm`; run it through `./opensloper-make.sh web` |
 | `run.mjs` | Runs it under Node's WASI, with a folder mounted as `/data` |
 | `compare.py` | Runs every regression case through the desktop CLI and the engine, and compares the answers |
 | `fpc-wasi-fexpand.patch` | The fix to FPC trunk's WASI `ExpandFileName` the engine needs |
@@ -51,7 +51,7 @@ the RTL, build from clean (`make distclean`) rather than over the old build.
 
 ```
 ./opensloper-make.sh build      # the desktop CLI, which compare.py runs too
-web/engine/build.sh
+./opensloper-make.sh web        # --strip-names takes the function names out of the .wasm files
 python3 web/engine/compare.py   # every case, with the time each took
 ```
 
@@ -85,7 +85,7 @@ source venv/bin/activate && nodeenv -p --prebuilt --node=lts
 Then, with `venv` active:
 
 ```
-web/engine/build.sh                        # also writes out/browser/engine_lib.wasm
+./opensloper-make.sh web                   # also writes out/browser/engine_lib.wasm
 cd web/engine/browser && npm ci && npm run build
 cd ../../.. && python3 -m http.server 8765 --bind 127.0.0.1 &
 cd web/engine/browser && npm run measure -- --pattern bodice-block.sloper --measurements bodice-small.slm

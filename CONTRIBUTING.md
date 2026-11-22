@@ -30,6 +30,7 @@ It runs these four in turn and stops at the first that fails:
 ./opensloper-make.sh check   # rules the formatter cannot check
 ./opensloper-make.sh test    # tests, with the heaptrc leak check
 ./opensloper-make.sh build   # the GUI apps and the CLI
+./opensloper-make.sh build cli design  # only the apps named, while you work
 ```
 
 Formatting changes files in place, so when all four pass, `pr-check` lists the files it reformatted: commit them with your change.

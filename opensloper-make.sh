@@ -27,9 +27,12 @@ Usage: ./opensloper-make.sh COMMAND [OPTIONS]
 Commands:
   test [RUNNER OPTIONS]  build and run the tests, with the heaptrc leak check
                          (run before every commit)
-  build [LAZBUILD OPTIONS]
-                         build the GUI apps and the CLI into release/,
-                         e.g. build --build-mode=Release
+  build [APP...] [LAZBUILD OPTIONS]
+                         build the GUI apps and the CLI into release/, or
+                         only the APPs named: cli, design, publish,
+                         measurements, drape, or tests (the test program,
+                         not run); e.g. build cli design,
+                         build --build-mode=Release
   check [FILE...]        check the coding standards the formatter cannot
                          (errors fail, warnings advise; run before every commit)
   format [--check] [FILE...]
@@ -185,11 +188,27 @@ has_qt6pas() {
     compgen -G '/usr/local/lib*/libQt6Pas.so*' >/dev/null
 }
 
-# build: the GUI apps and the command-line tool. On Linux the widgetset is qt6
-# when libQt6Pas is installed, else qt5; it is cocoa on macOS and win32 on
-# Windows (run from Git Bash). LCL_WIDGETSET chooses another.
+# build: the GUI apps and the command-line tool, or only the apps named
+# before any lazbuild options, which a quick check of one change can use. On
+# Linux the widgetset is qt6 when libQt6Pas is installed, else qt5; it is cocoa
+# on macOS and win32 on Windows (run from Git Bash). LCL_WIDGETSET chooses
+# another.
 cmd_build() {
-  local ws
+  local ws app
+  local apps=()
+  while [ $# -gt 0 ] && [[ "$1" != -* ]]; do
+    case "$1" in
+      cli | design | publish | measurements | drape | tests) apps+=("$1") ;;
+      *)
+        echo "Unknown app to build: $1 (cli, design, publish, measurements, drape or tests)" >&2
+        exit 1
+        ;;
+    esac
+    shift
+  done
+  if [ ${#apps[@]} -eq 0 ]; then
+    apps=(cli design publish measurements drape)
+  fi
   case "$(uname -s)" in
     Darwin) ws="${LCL_WIDGETSET:-cocoa}" ;;
     MINGW* | MSYS* | CYGWIN*) ws="${LCL_WIDGETSET:-win32}" ;;
@@ -203,15 +222,17 @@ cmd_build() {
       fi
       ;;
   esac
-  echo "Building GUI apps with the $ws widgetset"
+  echo "Building ${apps[*]}, GUI apps with the $ws widgetset"
 
   git submodule update --init --recursive
 
-  "$LAZBUILD" "${PCP_ARGS[@]}" -q src/cli/opensloper_cli.lpi "$@"
-  "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/design/opensloper_design.lpi "$@"
-  "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/publish/opensloper_publish.lpi "$@"
-  "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/measurements/opensloper_measurements.lpi "$@"
-  "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" src/drape/opensloper_drape.lpi "$@"
+  for app in "${apps[@]}"; do
+    case "$app" in
+      cli) "$LAZBUILD" "${PCP_ARGS[@]}" -q src/cli/opensloper_cli.lpi "$@" ;;
+      tests) "$LAZBUILD" "${PCP_ARGS[@]}" -q tests/opensloper_tests.lpi "$@" ;;
+      *) "$LAZBUILD" "${PCP_ARGS[@]}" -q --ws="$ws" "src/$app/opensloper_$app.lpi" "$@" ;;
+    esac
+  done
 }
 
 # check: the coding standards that the formatter cannot enforce (see

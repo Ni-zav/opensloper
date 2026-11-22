@@ -32,7 +32,7 @@ type
   TStartingLength = (slPieceAllowance, slSeamTolerance, slArcRadius, slOffsetDistance, slCornerRadius, slStitchSpacing,
     slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch,
     slLapStitch, slFlyExtension, slFlyStitch, slFlyShieldWidth, slFlyShieldExtra, slFeatureGap, slDartWidth, slDartDepth,
-    slDartHoleInset, slHemDepth, slNarrowHemDepth, slHemTurnUnder, slHemStitchBack);
+    slDartHoleInset, slHemDepth, slNarrowHemDepth, slHemTurnUnder, slHemStitchBack, slFacingWidth);
 
 const
   MEASURE_UNIT_NAMES: array[TMeasureUnit] of string = ('mm', 'cm', 'in');
@@ -67,7 +67,8 @@ const
     ('40', '4', '1.5'),       // a hem's depth
     ('6', '0.6', '0.25'),     // a narrow hem's depth
     ('10', '1', '0.375'),     // a double hem's turn-under
-    ('3', '0.3', '0.125'));   // how far a hem's topstitching is back from its depth
+    ('3', '0.3', '0.125'),    // how far a hem's topstitching is back from its depth
+    ('60', '6', '2.5'));      // a facing's width
 
 // The unit with this name (mm, cm or in, any case)
 function MeasureUnitFromName(const AName: string; out AUnit: TMeasureUnit): boolean;

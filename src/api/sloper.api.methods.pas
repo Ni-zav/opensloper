@@ -211,6 +211,20 @@ resourcestring
   rsApiHemTurnUnder = 'How much a double or narrow hem turns under besides its depth. Default 10 mm';
   rsApiHemStitch = 'How far the topstitching is from the hem''s fold. Default 3 mm short of the depth';
   rsApiHemNotches = 'Whether to notch the neighbouring edges where the hem turns up. Default true';
+  rsApiInsertFacing = 'Faces pieces along their edges, as the Features tab does, in one undo step, such as a neckline, an ' +
+    'armhole or a front opening: on each piece an inner edge at the facing''s width, meeting the edges either side, which ' +
+    'are split there; a facing piece, Facing_ and the piece''s name, cut as the piece is (material, grain, count, fold); a ' +
+    'seam joining it to the piece; the piece''s notches along it; seams between facings where their pieces are seamed, as ' +
+    'at the shoulder; and an interfacing piece if asked for. They are ordinary objects. The width starts as #facing_width, ' +
+    'a variable the first facing adds, so every facing shares it.';
+  rsApiFacingReturns = '`facings`, `interfacings` (those made), `inner` (each facing''s inner edge) and `seams` (joining ' +
+    'each facing to its piece, then the facings to one another) as `get_object` gives them, and `pieces`, the IDs of the ' +
+    'pieces faced';
+  rsApiFacingEdges = 'The edges to face, on one or more pieces; each piece''s must run end to end, and not all round it';
+  rsApiFacingWidth = 'How wide the facing is, in from the edges. Default #facing_width, 60 mm to start with';
+  rsApiFacingAside = 'Whether to draw the facing beside its piece, as Move Copy does, rather than over it. Default false';
+  rsApiFacingInterfacing = 'The name of a material to cut an interfacing from, the facing''s shape; a name no material has ' +
+    'adds one. Default none';
   rsApiSetAllowanceEnd = 'Sets how an edge''s seam allowance ends where it meets its neighbours: plain, where their ' +
     'cutting lines meet, or mirror, their allowance reflected in the edge, as a hem''s ends are so it lies flat turned up.';
   rsApiAllowanceEndEdge = 'An edge of the piece';
@@ -597,6 +611,11 @@ begin
   P('turnUnder', apFormula, False, rsApiHemTurnUnder);
   P('stitchDistance', apFormula, False, rsApiHemStitch);
   P('notches', apFlag, False, rsApiHemNotches);
+  Method('feature_facing', agFeatures, rsApiInsertFacing, rsApiFacingReturns);
+  P('edges', apReferences, True, rsApiFacingEdges);
+  P('width', apFormula, False, rsApiFacingWidth);
+  P('aside', apFlag, False, rsApiFacingAside);
+  P('interfacing', apText, False, rsApiFacingInterfacing);
   Method('convert_edge', agDrafting, rsApiConvertEdge, rsApiReturnsObject);
   Target;
   P('to', apChoice, True, rsApiConvertEdgeTo, 'line, curve');

@@ -257,6 +257,8 @@ Formulas can read: `.length`, `.angle1`, `.angle2`.
 | `edges[].reversed` | true or false | Whether the run follows it from its end to its start |
 | `side` | one of: `left`, `right` | Which side, going along the run |
 | `distance` | length formula | How far from the run |
+| `startLimit` | edge ID | An edge the start is trimmed back or carried on straight to, as a facing's inner edge meets the edge beside it; left out for none |
+| `endLimit` | edge ID | An edge the end is trimmed back or carried on straight to; left out for none |
 
 ### Part of a split edge (`splitPart`)
 

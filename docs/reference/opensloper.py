@@ -699,6 +699,44 @@ class OpenSloper:
             "notches": notches,
         })
 
+    def feature_facing(
+        self,
+        edges: list[int | str],
+        *,
+        width: str | float | None = None,
+        aside: bool | None = None,
+        interfacing: str | None = None,
+    ) -> Any:
+        """Faces pieces along their edges, as the Features tab does, in one undo step, such as a
+        neckline, an armhole or a front opening: on each piece an inner edge at the facing's width,
+        meeting the edges either side, which are split there; a facing piece, Facing_ and the
+        piece's name, cut as the piece is (material, grain, count, fold); a seam joining it to the
+        piece; the piece's notches along it; seams between facings where their pieces are seamed, as
+        at the shoulder; and an interfacing piece if asked for. They are ordinary objects. The width
+        starts as #facing_width, a variable the first facing adds, so every facing shares it.
+
+        Args:
+            edges: The edges to face, on one or more pieces; each piece's must run end to end, and
+                not all round it.
+            width: How wide the facing is, in from the edges. Default #facing_width, 60 mm to start
+                with.
+            aside: Whether to draw the facing beside its piece, as Move Copy does, rather than over
+                it. Default false.
+            interfacing: The name of a material to cut an interfacing from, the facing's shape; a
+                name no material has adds one. Default none.
+
+        Returns:
+            `facings`, `interfacings` (those made), `inner` (each facing's inner edge) and `seams`
+            (joining each facing to its piece, then the facings to one another) as `get_object`
+            gives them, and `pieces`, the IDs of the pieces faced.
+        """
+        return self._send("feature_facing", {
+            "edges": edges,
+            "width": width,
+            "aside": aside,
+            "interfacing": interfacing,
+        })
+
     def convert_edge(self, target: int | str, to: Literal["line", "curve"]) -> Any:
         """Changes an edge to a line or a curve in place, keeping its ID.
 

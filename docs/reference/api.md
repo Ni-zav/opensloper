@@ -691,6 +691,19 @@ Hems pieces along their edges, as the Features tab does, in one undo step: on ea
 
 Returns: `edges` and `stitching` (the topstitching) as `get_object` gives them, `notches` (each with its `piece` and `edge` IDs), `pieces` the IDs of the pieces hemmed, and `problems`, what is worth checking though it was done, such as a hem deeper than its piece.
 
+### `feature_facing`
+
+Faces pieces along their edges, as the Features tab does, in one undo step, such as a neckline, an armhole or a front opening: on each piece an inner edge at the facing's width, meeting the edges either side, which are split there; a facing piece, Facing_ and the piece's name, cut as the piece is (material, grain, count, fold); a seam joining it to the piece; the piece's notches along it; seams between facings where their pieces are seamed, as at the shoulder; and an interfacing piece if asked for. They are ordinary objects. The width starts as #facing_width, a variable the first facing adds, so every facing shares it.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `edges` | list of IDs or names | yes | The edges to face, on one or more pieces; each piece's must run end to end, and not all round it |
+| `width` | formula |  | How wide the facing is, in from the edges. Default #facing_width, 60 mm to start with |
+| `aside` | true or false |  | Whether to draw the facing beside its piece, as Move Copy does, rather than over it. Default false |
+| `interfacing` | text |  | The name of a material to cut an interfacing from, the facing's shape; a name no material has adds one. Default none |
+
+Returns: `facings`, `interfacings` (those made), `inner` (each facing's inner edge) and `seams` (joining each facing to its piece, then the facings to one another) as `get_object` gives them, and `pieces`, the IDs of the pieces faced.
+
 ## Notes
 
 ### `add_note`

@@ -33,6 +33,18 @@ Changed, Fixed and Removed under each version.
   the Automation API (#73).
 - A tutorial, Adding a hem, hems the skirt block's front and back from the
   Features tab in one step (#73).
+- A facing in the Features tab: select a neckline, an armhole or an
+  opening, on one piece or several, and Apply adds the facing's inner edge
+  at its width, the facing piece cut as the piece is, a seam joining it to
+  the piece, the piece's notches along it and a seam between facings where
+  their pieces are seamed, such as at the shoulder, in one undo step. The
+  facing can be drawn over the piece or beside it, with an interfacing if
+  you like. The width is `#facing_width`, which every facing shares.
+  `feature_facing` does the same in the Automation API (#74).
+- An offset edge's ends can be limited by edges: each is cut back to where
+  it crosses its edge, or carried on straight to it (#74).
+- A tutorial, Adding a facing, faces the bodice block's front and back
+  necklines from the Features tab in one step (#74).
 - A tutorial, Adding a dart, puts a second dart in the skirt block's back
   from the Features tab and caps every dart (#72).
 

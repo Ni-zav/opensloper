@@ -201,6 +201,9 @@ resourcestring
   rsMemberRunReversed = 'Whether the run follows it from its end to its start';
   rsMemberSide = 'Which side, going along the run';
   rsMemberDistance = 'How far from the run';
+  rsMemberStartLimit = 'An edge the start is trimmed back or carried on straight to, as a facing''s inner edge meets ' +
+    'the edge beside it; left out for none';
+  rsMemberEndLimit = 'An edge the end is trimmed back or carried on straight to; left out for none';
   rsOpSplitPart = 'Part of a split edge';
   rsOpSplitPartSummary = 'One of the two parts an edge is split into at a point on it; made by Split Edge, for darts and ' +
     'slash and spread.';
@@ -460,6 +463,8 @@ begin
   M('edges[].reversed', mkFlag, rsMemberRunReversed);
   M('side', mkChoice, rsMemberSide, 'left, right');
   M('distance', mkLength, rsMemberDistance);
+  M('startLimit', mkEdge, rsMemberStartLimit);
+  M('endLimit', mkEdge, rsMemberEndLimit);
   Op('splitPart', rsOpSplitPart, ogEdge, rsOpSplitPartSummary, 'length, angle1, angle2, angle (when straight)');
   M('edge', mkEdge, rsMemberSplitEdge);
   M('point', mkPoint, rsMemberSplitPoint);

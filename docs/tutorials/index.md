@@ -13,6 +13,9 @@ can open it and compare.
   the Features tab, and a cap on every dart's seam allowance.
 - [Adding a hem](hem.md): the skirt block's front and back hems in one step
   from the Features tab, sharing their depth, with ends that lie flat.
+- [Adding a facing](facing.md): the bodice block's front and back neck
+  facings in one step from the Features tab, seamed at the shoulder, with
+  an interfacing.
 
 For finished patterns without the steps, see
 [Example patterns](../getting-started/examples.md).

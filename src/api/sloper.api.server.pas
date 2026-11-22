@@ -125,6 +125,7 @@ type
     function DoFeatureZip(Params: TJSONObject): TJSONData;
     function DoFeatureDart(Params: TJSONObject): TJSONData;
     function DoFeatureHem(Params: TJSONObject): TJSONData;
+    function DoFeatureFacing(Params: TJSONObject): TJSONData;
     function DoSetAllowanceEnd(Params: TJSONObject): TJSONData;
     function DoSetDartCap(Params: TJSONObject): TJSONData;
     function DoCreatePiece(Params: TJSONObject): TJSONData;
@@ -231,6 +232,7 @@ resourcestring
   rsApiInsertDartChange = 'Insert Dart';
   rsApiDartCapChange = 'Change dart cap';
   rsApiInsertHemChange = 'Insert Hem';
+  rsApiInsertFacingChange = 'Insert Facing';
   rsApiAllowanceEndChange = 'Change allowance ends';
   rsApiUnknownType = 'There is no type "%s"; use one of: %s';
   rsApiBadChoice = 'Parameter "%s" must be one of: %s';
@@ -1844,6 +1846,58 @@ begin
   end;
 end;
 
+// The Features tab's facing, as one undo step
+function TApiServer.DoFeatureFacing(Params: TJSONObject): TJSONData;
+var
+  Spec: TFacingSpec;
+  Made: TFacingMade;
+  Text: string;
+  Answer: TJSONObject;
+
+  procedure AddList(const AName: string; const Keys: array of string);
+  var
+    List: TJSONArray;
+    Key: string;
+  begin
+    List := TJSONArray.Create;
+    Answer.Add(AName, List);
+    for Key in Keys do
+      if Key <> '' then
+        List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+  end;
+
+var
+  Pieces: TJSONArray;
+  Key: string;
+begin
+  Spec := DefaultFacing(FDocument.Pattern, ReferenceList(Params, 'edges', False));
+  Text := OptionalFormula(Params, 'width');
+  if Text <> '' then
+    Spec.Width := Text;
+  if Assigned(Params.Find('aside')) then
+    Spec.Aside := BooleanParam(Params, 'aside');
+  Spec.Interfacing := Trim(OptionalString(Params, 'interfacing'));
+  BeginChange(rsApiInsertFacingChange);
+  if not InsertFacing(FDocument.Pattern, Spec, Made) then
+    RefuseChange;
+  EndChange;
+  Answer := TJSONObject.Create;
+  try
+    AddList('facings', Made.FacingKeys);
+    AddList('interfacings', Made.InterfacingKeys);
+    AddList('inner', Made.InnerKeys);
+    AddList('seams', Concat(Made.SeamKeys, Made.JoinKeys));
+    Pieces := TJSONArray.Create;
+    Answer.Add('pieces', Pieces);
+    for Key in Made.PieceKeys do
+      Pieces.Add(StrToInt(Key));
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
 function TApiServer.DoSetAllowanceEnd(Params: TJSONObject): TJSONData;
 var
   Piece: TPieceObject;
@@ -2854,6 +2908,7 @@ begin
     'feature_zip': Result := DoFeatureZip(Params);
     'feature_dart': Result := DoFeatureDart(Params);
     'feature_hem': Result := DoFeatureHem(Params);
+    'feature_facing': Result := DoFeatureFacing(Params);
     'set_allowance_end': Result := DoSetAllowanceEnd(Params);
     'set_dart_cap': Result := DoSetDartCap(Params);
     'create_piece': Result := DoCreatePiece(Params);

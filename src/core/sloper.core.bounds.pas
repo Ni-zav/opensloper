@@ -42,6 +42,8 @@ procedure IncludeObject(var Bounds: TRect2; var Empty: boolean; DraftObject: TDr
 // number in the pattern's unit rounded up to a round one. Other objects in
 // Keys are left out; with nothing computed it is the gap alone.
 function MoveAsideText(Pattern: TPattern; const Keys: TStringArray): string;
+// How far Move Copy moves something Width mm wide, as MoveAsideText works it out
+function MoveAsideWidthText(Pattern: TPattern; Width: double): string;
 
 implementation
 
@@ -113,7 +115,6 @@ var
   Bounds: TRect2;
   Empty: boolean;
   Width: double;
-  Step: integer;
 begin
   Bounds := Default(TRect2);
   Empty := True;
@@ -126,6 +127,13 @@ begin
   Width := 0;
   if not Empty then
     Width := Bounds.MaxX - Bounds.MinX;
+  Result := MoveAsideWidthText(Pattern, Width);
+end;
+
+function MoveAsideWidthText(Pattern: TPattern; Width: double): string;
+var
+  Step: integer;
+begin
   Step := MOVE_ASIDE_STEPS[Pattern.Units];
   // Less a hair, so a distance that is already round is not taken up a step
   Result := IntToStr(Ceil((Width + MOVE_ASIDE_GAP) / MILLIMETRES_PER_UNIT[Pattern.Units] / Step - 1e-9) * Step);

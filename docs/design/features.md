@@ -7,8 +7,8 @@ edges, notches and allowances you could draw yourself, so afterwards you can
 change any of them as you like. One **Undo** takes the whole feature off
 again.
 
-The tab has three features, the zip, the dart and the hem. More are planned,
-such as buttons and buttonholes, pockets and facings.
+The tab has four features, the zip, the dart, the hem and the facing. More
+are planned, such as buttons and buttonholes and pockets.
 
 ## Zip
 
@@ -182,11 +182,68 @@ that do not run end to end is refused, and the status bar says why. A hem
 deeper than its piece is tall above it is made, as it can work as a facing,
 and the status bar says so.
 
+## Facing
+
+A facing finishes a neckline, an armhole or a front opening from the inside:
+a band of fabric the shape of the edge, sewn to it right sides together and
+turned in. It goes along one or more edges, on one piece or on several at
+once, such as the front's and the back's necklines. The tutorial
+[Adding a facing](../tutorials/facing.md) faces a bodice's neckline step by
+step.
+
+1. Open the **Features** tab and choose **Facing**.
+2. Click the edge on the canvas, and ++shift++ and click any more: the
+   back's neck as well as the front's, or the neck and the centre front of
+   an opening. The tab says **Along** and the edges' names. On each piece
+   the edges must run end to end.
+3. Check the settings, then click **Apply**.
+
+| Setting | What it does |
+| --- | --- |
+| Width | How wide the facing is, in from the edges. It starts as `#facing_width`, a [variable](formulas.md) that the first facing adds at 6 cm, so the front's and back's facings match |
+| Placement | **In place, over the piece**: the facing is drawn over the piece, as you would trace it. **Moved aside, beside the piece**: it is drawn to the right of the piece, clear of it |
+| Interfacing, cut from | Ticked, an interfacing piece the facing's shape is added too, cut from the material chosen or typed. A name the pattern has no material for adds one |
+
+**Apply** then, on each piece:
+
+- adds the facing's inner edge, the width in from the edges, running on or
+  cut back so it meets the edges either side of them, such as the shoulder
+  and the centre front;
+- splits those edges where the inner edge meets them, so the facing can use
+  part of them; the piece keeps its shape, and a seam on them takes both
+  parts;
+- adds the facing, a piece named **Facing_** and the piece's name, round the
+  edges, the parts beside them and the inner edge. It is cut as the piece
+  is: the same material, grainline, number and mirroring, and on the fold
+  when the edges run to the piece's fold;
+- adds a [seam](pieces.md#seams), **FacingSeam**, joining the facing to the
+  piece along the edges, so you can check they match;
+- copies the piece's notches along the edges to the facing;
+- where the pieces are seamed to each other along the edges beside, as the
+  front and back are at the shoulder, joins their facings with a seam there
+  too;
+- adds the interfacing, **Interfacing_** and the piece's name, if you asked
+  for one.
+
+Moved aside, the facing is made of copies of those edges (see
+[Move Copy](shaping.md)), and the inner edge on the piece becomes a
+construction line, which shows where the facing lies. The copies follow the
+piece, so the facing still changes with the pattern.
+
+Change `#facing_width` under Variables and every facing made with it
+follows.
+
+Edges in no piece, or of one piece that do not run end to end, are refused,
+as are edges that take in the piece's fold or go all round it (that is a
+lining). A facing wider than the piece where its inner edge would meet the
+edge beside it is refused too. The status bar says why.
+
 ## In scripts and with Claude
 
 Each feature is a method of the [Automation API](../scripting/index.md),
 named `feature_` and the feature: `feature_zip` puts a zip along an edge,
-`feature_dart` a dart in one and `feature_hem` a hem along some, with the
+`feature_dart` a dart in one, `feature_hem` a hem along some and
+`feature_facing` a facing along them, with the
 same settings as the tab, so the Claude tab and other assistants can add
 them too. `set_dart_cap` gives a dart drawn by hand its cap, and
 `set_allowance_end` mirrors any edge's allowance ends. See the

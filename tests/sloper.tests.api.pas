@@ -58,6 +58,7 @@ type
     procedure TestInsertZip;
     procedure TestInsertDart;
     procedure TestInsertHem;
+    procedure TestInsertFacing;
     procedure TestMarkings;
     procedure TestSetRole;
     procedure TestSetMarker;
@@ -614,6 +615,37 @@ begin
     Call('undo', '{}');
     Call('undo', '{}');
     Call('get_object', Format('{"name": "%s"}', [Stitch]));
+    AssertTrue('one undo takes it all off', ErrorCode <> 0);
+  finally
+    FreeAndNil(Edges);
+  end;
+end;
+
+procedure TTestAPI.TestInsertFacing;
+var
+  Edges: TJSONArray;
+  Top, Facing: string;
+begin
+  Call('add_point', '{"type": "freePoint", "name": "O", "x": 0, "y": 0}');
+  Call('add_rectangle', '{"corner": "O", "width": 100, "height": 300, "role": "outline"}');
+  Edges := TJSONArray(FReply.Find('result').Clone);
+  try
+    Top := Edges.Objects[0].Get('name', '');
+    Call('create_piece', '{"x": 50, "y": 150, "name": "Front"}');
+    Call('feature_facing', '{"edges": ["Nowhere"]}');
+    AssertTrue('no such edge', ErrorCode <> 0);
+    Call('feature_facing', Format('{"edges": ["%s"], "width": 50, "interfacing": "Interfacing"}', [Top]));
+    AssertEquals('one piece faced', 1, TJSONArray(Answer.Find('pieces')).Count);
+    AssertEquals('one facing', 1, TJSONArray(Answer.Find('facings')).Count);
+    AssertEquals('one interfacing', 1, TJSONArray(Answer.Find('interfacings')).Count);
+    AssertEquals('one inner edge', 1, TJSONArray(Answer.Find('inner')).Count);
+    AssertEquals('seamed to the piece', 1, TJSONArray(Answer.Find('seams')).Count);
+    Facing := TJSONArray(Answer.Find('facings')).Objects[0].Get('name', '');
+    AssertEquals('Facing_Front', Facing);
+    Call('get_object', Format('{"name": "%s"}', [Facing]));
+    AssertEquals('valid', Answer.Get('state', ''));
+    Call('undo', '{}');
+    Call('get_object', Format('{"name": "%s"}', [Facing]));
     AssertTrue('one undo takes it all off', ErrorCode <> 0);
   finally
     FreeAndNil(Edges);

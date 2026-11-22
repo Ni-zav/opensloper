@@ -227,7 +227,7 @@ A line with a marking role or a point with a marker joins every piece it lies in
 
 Any number of edges can join the same two points, each with its own role (`Line_A_B2`). Coinciding edges are drawn 3 px apart on screen only. A click picks points first, then the nearest edge (highest role on top), then the smallest piece; clicking again or Alt-click cycles through what is there, and a right-click lists it (`ObjectsAt`, `CoincidentEdges`, `NextKey`).
 
-**Offset edge.** Topstitching runs a fixed distance from an edge, so an offset edge makes it from one edge or a run joined end to end, following its sources. Outer corners mitre as allowance does, inner corners trim. Inside or outside a piece is worked out once and stored as left or right, so the offset reads only its edges, never the piece (which would be circular). Tools → Offset → Inside Piece makes a stitch line that joins the piece.
+**Offset edge.** Topstitching runs a fixed distance from an edge, so an offset edge makes it from one edge or a run joined end to end, following its sources. Outer corners mitre as allowance does, inner corners trim. Inside or outside a piece is worked out once and stored as left or right, so the offset reads only its edges, never the piece (which would be circular). Tools → Offset → Inside Piece makes a stitch line that joins the piece. Either end can be **limited** by an edge (`startLimit`, `endLimit`): the offset is cut back to where it crosses that edge, or carried on straight along its end's direction to it, the crossing nearest that end, and its end is moved exactly onto the crossing so a point there can split the limit. A facing's inner edge meets the shoulder and centre front this way whatever the width or the angle at the corner; a limit it cannot reach makes it invalid.
 
 A fold on the piece's own edge is not a line but the piece's `foldEdge`.
 
@@ -301,7 +301,7 @@ Fashion drawing is left to Inkscape and Krita; hardware sizes are variables.
 
 ## Features
 
-The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips, darts and hems now; buttons, pockets and facings later) in one step. **A feature is not an object**: Apply adds ordinary objects through the pattern's own methods, in one undo step, and nothing is saved as a feature, so the file format, evaluator and API stay as they are and the objects are the user's to edit. Changing a feature means undoing and applying it again; a feature kept as one editable object may follow once it is clear which settings people change. The features are in the LCL-free `Sloper.Core.Features`.
+The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips, darts, hems and facings now; buttons and pockets later) in one step. **A feature is not an object**: Apply adds ordinary objects through the pattern's own methods, in one undo step, and nothing is saved as a feature, so the file format, evaluator and API stay as they are and the objects are the user's to edit. Changing a feature means undoing and applying it again; a feature kept as one editable object may follow once it is clear which settings people change. The features are in the LCL-free `Sloper.Core.Features`.
 
 **Dart** (`InsertDart`, `TDartSpec`, `DefaultDart`) in one selected outline edge of one piece, optionally to a selected point:
 
@@ -320,13 +320,24 @@ The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips, 
 - A hem at least as deep as the piece is tall above the line between its ends is made but reported (`THemMade.Problems`), since a deep hem can be a facing.
 - A double hem's inner fold is not marked: it lies in the allowance, outside the piece, where markings cannot go, and the allowance already includes the turn-under.
 
+**Facing** (`InsertFacing`, `TFacingSpec`, `DefaultFacing`) along one or more selected edges, on one or more pieces, such as a neckline, an armhole or a front opening:
+
+- Each piece's selected edges are one run (`PieceRun`); edges in no piece, edges that do not join end to end, a run with the piece's fold in it, one all round the piece (a lining) and one with the same edge at both ends are refused.
+- The inner edge is an outline offset run inside the piece at the width, limited by the edges before and after the run in the path. An Along edge point at each end splits those edges (`FollowSplit`), so the piece keeps its shape and its seams take both parts. An inner edge that cannot reach a neighbour, or reaches it at its far end, is refused as wider than the piece there.
+- The facing piece, `Facing_` and the piece's name, runs along the run, the part of the edge after it, the inner edge back and the part of the edge before it. It takes the piece's allowance (and its edges' own), grain (an angle, or the angle between grain points as a formula), material, cut count and mirroring, and is cut on the fold along the fold's part when a neighbour is the piece's fold.
+- A `FacingSeam` joins the run on the piece to the run on the facing, both along their paths (`Reversed`), and where a seam joins neighbouring parts of two faced pieces (the shoulder), a seam joins the facings' parts too. The piece's notches on the facing's edges are copied.
+- The width is `#facing_width`, a variable the first facing adds at 60 mm, 6 cm or 2.5 in, so the front's and back's match.
+- **Moved aside**, the facing's edges and notch points are copied by a Move Copy the piece's cutting line's width and a gap to the right (`MoveAsideWidthText`), the facing is made of the copies, and the inner edge on the piece becomes construction, showing where the facing goes.
+- An **interfacing**, `Interfacing_` and the piece's name, has the facing's path and is cut from the material named, which is added if the pattern has none of that name.
+- The run is not a detected face: the facing is a piece path given outright, so an outline edge inside the garment does not change it.
+
 **Zip** (`InsertZip`, `TZipSpec`) along one selected edge of one or more pieces, in four styles, each with its own starting widths (`DefaultZip`):
 
 - It adds `ZipStop` at the zip's length from the chosen end, splits the edge there (`FollowSplit`), gives the opening its own allowance, notches the stop, and adds the style's stitching inside each piece (`PieceRun`, `AddOffsetRun`).
 - The length is `#zip_length`, a variable the first zip adds, so both sides of a seam share it.
 - **Centred** stitches round the opening, **invisible** has none, **lapped** is the opening's offset plus a line across to the stop, and **fly front** a J (an offset at the fly's width with a curve into the stop, square to the opening) plus a **FlyShield** piece cut on the fold, following `#zip_length`.
 - A zip as long as its edge is refused. When the edge is sewn to one without a zip, the status bar says the other side needs one too.
-- In the Automation API features are methods named `feature_` and the feature (`feature_zip`, `feature_dart`, `feature_hem`), in a Features group; `set_dart_cap` caps a dart drawn by hand and `set_allowance_end` mirrors any edge's allowance ends.
+- In the Automation API features are methods named `feature_` and the feature (`feature_zip`, `feature_dart`, `feature_hem`, `feature_facing`), in a Features group; `set_dart_cap` caps a dart drawn by hand and `set_allowance_end` mirrors any edge's allowance ends.
 
 ## Garment view
 

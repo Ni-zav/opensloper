@@ -60,7 +60,7 @@ Outside the roadmap; each is taken up only when the core is solid or the communi
 
 | Idea | Notes |
 | --- | --- |
-| Notions library | More features for the Features tab: buttons and buttonholes by Repeat, hooks and eyes, snaps, eyelets, elastic, pockets and facings, with rules (buttonhole = button diameter + thickness) and a notions list for the information block |
+| Notions library | More features for the Features tab: buttons and buttonholes by Repeat, hooks and eyes, snaps, eyelets, elastic and pockets, with rules (buttonhole = button diameter + thickness) and a notions list for the information block |
 | Multi-size output | Nested sizes on one sheet for published patterns, evaluating the pattern once per size, with a screen-only overlay for checking grading |
 | Scaled body figure | The measurements app's figure scaled to the entered values, so unusual proportions and typos stand out |
 | ISO 8559-1 check | Check catalogue definitions against the standard and add clause references |
@@ -70,3 +70,4 @@ Outside the roadmap; each is taken up only when the core is solid or the communi
 | Materials app | An app like the measurements app keeping a list of materials and their specifications for the design and publish apps |
 | Assembly instructions | An exploded arrangement of the pieces (the drape app's placements are a starting point), a list of sewing steps, and printed instructions in the manner of flat-pack furniture: a parts list, an overview and numbered line-art steps. The full plan is in commit `183e011`'s `documents/design-3d-preview-in-blender.md` |
 | A feature as one object | A feature kept editable, with its settings, once the first features show which settings people change |
+| More facings | An all-in-one neck and armhole facing (two runs, one piece) and understitching lines, when people ask for them |

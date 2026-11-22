@@ -44,6 +44,8 @@ git submodule update --init --recursive
 ./venv/bin/python check-schemas.py  # check example and regression files against the file schemas (opensloper-make.sh docs runs it)
 ```
 
+Always build, test, format, check and make docs through `./opensloper-make.sh`, even for a quick check: never call `lazbuild`, the compiler or `tests/opensloper_tests` directly, as the script sets the flags (`-B`, heaptrc, the widgetset) and checks the results.
+
 Toolchain overrides (`LAZBUILD`, `LAZARUS_PCP`, `LCL_WIDGETSET`, `JCF_SOURCE`, `PASDOC`) go in the gitignored `build.local.sh`; see `build.local.sh.example`.
 
 Requires FPC 3.2.0 or later; CI (`.github/workflows/ci.yml`) uses the release Lazarus 4.8 with FPC 3.2.2, and its formatter is the reference. Linux uses the Qt5/Qt6 widgetset; macOS uses Cocoa. Run `opensloper-make.sh test` and `opensloper-make.sh check` before every commit. Pull request rules are in `CONTRIBUTING.md`.

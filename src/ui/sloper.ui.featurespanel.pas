@@ -17,8 +17,8 @@
 }
 
 // The Features tab: sewing details to apply to the pattern in one step: a
-// zip along the selected edge of a piece, a dart in it, or a hem along the
-// selected edges. Apply adds
+// zip along the selected edge of a piece, a dart in it, or a hem or a facing
+// along the selected edges. Apply adds
 // ordinary objects, as one undo step (Sloper.Core.Features).
 unit Sloper.UI.FeaturesPanel;
 
@@ -61,6 +61,12 @@ type
     FHemDepthEdit, FHemTurnEdit, FHemStitchEdit: TEdit;
     FHemNotchBox: TCheckBox;
     FHemApply: TButton;
+    FFacingGroup: TGroupBox;
+    FFacingEdgeLabel, FFacingWidthLabel: TLabel;
+    FFacingWidthEdit: TEdit;
+    FFacingPlaceBox, FFacingMaterialBox: TComboBox;
+    FFacingInterfacingBox: TCheckBox;
+    FFacingApply: TButton;
     // The depth the topstitching's distance was last worked out from
     FHemDepth: string;
     FOnMessage: TFeaturesMessageEvent;
@@ -76,6 +82,10 @@ type
     procedure BuildZip;
     procedure BuildDart;
     procedure BuildHem;
+    procedure BuildFacing;
+    procedure RefreshFacing;
+    procedure FacingInterfacingClick(Sender: TObject);
+    procedure FacingApplyClick(Sender: TObject);
     procedure HemStartingValues;
     procedure RefreshHem;
     function EdgeNames: string;
@@ -157,6 +167,19 @@ resourcestring
   rsFeaturesUndoHem = 'Insert Hem';
   rsFeaturesHemDone = 'Hem added along %s';
   rsFeaturesHemProblem = '%s; %s';
+  rsFeaturesFacingChoose = 'Select the edges to face on the canvas, such as a neckline: one or more on each piece, ' +
+    'running end to end.';
+  rsFeaturesFacingWidth = 'Width (%s)';
+  rsFeaturesFacingPlace = 'Placement';
+  rsFeaturesFacingInPlace = 'In place, over the piece';
+  rsFeaturesFacingAside = 'Moved aside, beside the piece';
+  rsFeaturesFacingInterfacing = 'Interfacing, cut from';
+  rsFeaturesFacingMaterial = 'Interfacing';
+  rsFeaturesFacingNote = 'Apply adds the facing''s inner edge, splits the edges either side where it meets them, and ' +
+    'adds the facing piece, cut as the piece is, seamed to it and to the facing beside it, with an interfacing if you ' +
+    'like. They are ordinary objects, to change as you like; one Undo takes them all off.';
+  rsFeaturesUndoFacing = 'Insert Facing';
+  rsFeaturesFacingDone = 'Facing added along %s';
 
 implementation
 
@@ -169,6 +192,7 @@ const
   KIND_ZIP = 0;
   KIND_DART = 1;
   KIND_HEM = 2;
+  KIND_FACING = 3;
 
 constructor TFeaturesPanel.Create(AOwner: TComponent);
 begin
@@ -183,12 +207,14 @@ begin
   FKinds.Items.Add(rsFeatureZip);
   FKinds.Items.Add(rsFeatureDart);
   FKinds.Items.Add(rsFeatureHem);
+  FKinds.Items.Add(rsFeatureFacing);
   FKinds.ItemIndex := KIND_ZIP;
   FKinds.Height := Scale96ToScreen(KIND_LIST_HEIGHT96);
   FKinds.OnClick := @KindClick;
   BuildZip;
   BuildDart;
   BuildHem;
+  BuildFacing;
   KindClick(nil);
 end;
 
@@ -350,11 +376,39 @@ begin
   AddNote(FHemApply, rsFeaturesHemNote);
 end;
 
+procedure TFeaturesPanel.BuildFacing;
+begin
+  FFacingGroup := AddGroup(rsFeatureFacing);
+  FFacingEdgeLabel := AddLabel('');
+  FFacingEdgeLabel.Font.Style := [fsBold];
+  FFacingEdgeLabel.WordWrap := True;
+  FFacingWidthLabel := AddLabel('');
+  FFacingWidthEdit := AddEdit;
+  AddLabel(rsFeaturesFacingPlace);
+  FFacingPlaceBox := AddChoices;
+  FFacingPlaceBox.Items.Add(rsFeaturesFacingInPlace);
+  FFacingPlaceBox.Items.Add(rsFeaturesFacingAside);
+  FFacingPlaceBox.ItemIndex := 0;
+  FFacingInterfacingBox := TCheckBox.Create(Self);
+  FFacingInterfacingBox.Caption := rsFeaturesFacingInterfacing;
+  FFacingInterfacingBox.OnClick := @FacingInterfacingClick;
+  Place(FFacingInterfacingBox);
+  // A material of the pattern, or a new one's name typed in
+  FFacingMaterialBox := TComboBox.Create(Self);
+  FFacingMaterialBox.Style := csDropDown;
+  Place(FFacingMaterialBox);
+  FFacingMaterialBox.Text := rsFeaturesFacingMaterial;
+  FFacingMaterialBox.Enabled := False;
+  FFacingApply := AddApply(FFacingMaterialBox, @FacingApplyClick);
+  AddNote(FFacingApply, rsFeaturesFacingNote);
+end;
+
 procedure TFeaturesPanel.KindClick(Sender: TObject);
 begin
   FZipGroup.Visible := FKinds.ItemIndex = KIND_ZIP;
   FDartGroup.Visible := FKinds.ItemIndex = KIND_DART;
   FHemGroup.Visible := FKinds.ItemIndex = KIND_HEM;
+  FFacingGroup.Visible := FKinds.ItemIndex = KIND_FACING;
 end;
 
 procedure TFeaturesPanel.SetDocument(ADocument: TPatternDocument);
@@ -428,6 +482,7 @@ begin
   FDartDepthEdit.Text := Dart.Depth;
   FDartHoleEdit.Text := Dart.HoleInset;
   HemStartingValues;
+  FFacingWidthEdit.Text := DefaultFacing(FDocument.Pattern, []).Width;
   FGeneration := FDocument.Generation;
   ShowStyle;
 end;
@@ -475,6 +530,7 @@ begin
   FHemDepthLabel.Caption := Format(rsFeaturesHemDepth, [UnitText]);
   FHemTurnLabel.Caption := Format(rsFeaturesHemTurnUnder, [UnitText]);
   FHemStitchLabel.Caption := Format(rsFeaturesHemStitch, [UnitText]);
+  FFacingWidthLabel.Caption := Format(rsFeaturesFacingWidth, [UnitText]);
   FHemTurnEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) in [hsDouble, hsNarrow];
   FHemTurnLabel.Enabled := FHemTurnEdit.Enabled;
   FHemStitchEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) <> hsBlind;
@@ -523,6 +579,7 @@ begin
   RefreshZip(Edge);
   RefreshDart(Edge);
   RefreshHem;
+  RefreshFacing;
 end;
 
 // The selected edges' names, in the order selected
@@ -546,6 +603,63 @@ begin
     FHemEdgeLabel.Caption := Format(rsFeaturesAlong, [EdgeNames])
   else
     FHemEdgeLabel.Caption := rsFeaturesHemChoose;
+end;
+
+// The selected edges, and the pattern's materials to cut an interfacing from
+procedure TFeaturesPanel.RefreshFacing;
+var
+  Index: integer;
+  Typed: string;
+begin
+  FFacingApply.Enabled := Assigned(FDocument) and (Length(FEdgeKeys) > 0);
+  if FFacingApply.Enabled then
+    FFacingEdgeLabel.Caption := Format(rsFeaturesAlong, [EdgeNames])
+  else
+    FFacingEdgeLabel.Caption := rsFeaturesFacingChoose;
+  if not Assigned(FDocument) then
+    Exit;
+  Typed := FFacingMaterialBox.Text;
+  FFacingMaterialBox.Items.Clear;
+  for Index := 0 to FDocument.Pattern.MaterialCount - 1 do
+    FFacingMaterialBox.Items.Add(FDocument.Pattern.Materials[Index].Name);
+  FFacingMaterialBox.Text := Typed;
+end;
+
+procedure TFeaturesPanel.FacingInterfacingClick(Sender: TObject);
+begin
+  FFacingMaterialBox.Enabled := FFacingInterfacingBox.Checked;
+end;
+
+// One undo step, or none when the facing cannot go there
+procedure TFeaturesPanel.FacingApplyClick(Sender: TObject);
+var
+  Spec: TFacingSpec;
+  Made: TFacingMade;
+  Done: string;
+begin
+  if not Assigned(FDocument) or FDocument.ChangeOpen then
+    Exit;
+  Spec := DefaultFacing(FDocument.Pattern, FEdgeKeys);
+  Spec.Width := Trim(FFacingWidthEdit.Text);
+  Spec.Aside := FFacingPlaceBox.ItemIndex = 1;
+  if FFacingInterfacingBox.Checked then
+    Spec.Interfacing := Trim(FFacingMaterialBox.Text);
+  Done := Format(rsFeaturesFacingDone, [EdgeNames]);
+  FDocument.BeginChange(rsFeaturesUndoFacing);
+  if not InsertFacing(FDocument.Pattern, Spec, Made) then
+  begin
+    Done := FDocument.Pattern.LastError;
+    FDocument.CancelChange;
+    Say(Done);
+    Exit;
+  end;
+  FDocument.EndChange;
+  if FDocument.ChangeRefused then
+  begin
+    Say(FDocument.Pattern.LastError);
+    Exit;
+  end;
+  Say(Done);
 end;
 
 // A style starts with its own depth: a narrow hem is much smaller

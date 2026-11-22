@@ -1665,6 +1665,16 @@
         "distance": {
           "description": "How far from the run",
           "type": "string"
+        },
+        "startLimit": {
+          "description": "An edge the start is trimmed back or carried on straight to, as a facing's inner edge meets the edge beside it; left out for none",
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLimit": {
+          "description": "An edge the end is trimmed back or carried on straight to; left out for none",
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": [

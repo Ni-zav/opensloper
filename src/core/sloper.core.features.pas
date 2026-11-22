@@ -17,7 +17,7 @@
 }
 
 // Features: sewing details applied to a pattern in one step, such as a zip
-// in a seam, a dart in a piece's edge or a hem. Each is made of ordinary objects, points, split edges,
+// in a seam, a dart in a piece's edge, a hem or a facing. Each is made of ordinary objects, points, split edges,
 // allowances, notches and lines, which the user can then change as if they
 // had drawn them. Nothing here is saved as a feature.
 unit Sloper.Core.Features;
@@ -30,7 +30,7 @@ uses
   Sloper.Core.Pattern;
 
 type
-  TFeatureKind = (fkZip, fkDart, fkHem);
+  TFeatureKind = (fkZip, fkDart, fkHem, fkFacing);
 
   // Centred: topstitched either side of the seam. Invisible: sewn from the
   // inside, so nothing shows. Lapped: one side laps over the zip, stitched
@@ -121,9 +121,35 @@ type
     Problems: array of string;
   end;
 
+  TFacingSpec = record
+    // Outline edges of one or more pieces; each piece's must run end to end
+    EdgeKeys: array of string;
+    // A formula in the pattern's unit, with names: how wide the facing is
+    Width: string;
+    // Drawn beside the piece, as Move Copy draws it, rather than over it
+    Aside: boolean;
+    // The material of an interfacing cut as the facing is, '' for none; a
+    // name no material has yet adds one
+    Interfacing: string;
+  end;
+
+  TFacingMade = record
+    // On each piece faced, in pattern order: the piece, its facing, the
+    // facing's inner edge, its interfacing ('' for none) and the seam
+    // joining the facing to the piece
+    PieceKeys, FacingKeys, InnerKeys, InterfacingKeys, SeamKeys: array of string;
+    // Seams between facings where their pieces are seamed, as at the shoulder
+    JoinKeys: array of string;
+  end;
+
 const
   ZIP_LENGTH_VARIABLE = 'zip_length';
   HEM_DEPTH_VARIABLE = 'hem_depth';
+  FACING_WIDTH_VARIABLE = 'facing_width';
+  // A facing and an interfacing are named for the piece: Facing_Front
+  FACING_PREFIX = 'Facing_';
+  INTERFACING_PREFIX = 'Interfacing_';
+  FACING_SEAM_NAME = 'FacingSeam';
   ZIP_STOP_NAME = 'ZipStop';
   FLY_SHIELD_NAME = 'FlyShield';
   DART_MID_NAME = 'DartMid';
@@ -161,6 +187,15 @@ function HemStitchDistance(Pattern: TPattern; const Depth: string): string;
 // neighbouring edges', the topstitching inside the piece, and a notch at
 // each end in the neighbouring edge
 function InsertHem(Pattern: TPattern; const Spec: THemSpec; out Made: THemMade): boolean;
+// A facing along the edges, in place, its width the facing_width variable,
+// which InsertFacing adds when it is missing, with no interfacing
+function DefaultFacing(Pattern: TPattern; const EdgeKeys: array of string): TFacingSpec;
+// Adds a facing on each piece and evaluates, as InsertZip does: the inner
+// edge at the width, meeting the edges either side, which are split there;
+// the facing piece round the run, cut as the piece is; the seam joining it
+// to the piece; the piece's notches along it; seams between facings where
+// their pieces are seamed; and an interfacing if asked for
+function InsertFacing(Pattern: TPattern; const Spec: TFacingSpec; out Made: TFacingMade): boolean;
 
 resourcestring
   rsFeatureZip = 'Zip';
@@ -187,12 +222,22 @@ resourcestring
   rsFeatureHemPieceProblem = '%s has a problem to put right first: %s';
   rsFeatureHemNoDepth = 'A hem needs a depth above 0';
   rsFeatureHemTooDeep = 'The hem, %s deep, is deeper than %s is tall above it (%s)';
+  rsFeatureFacing = 'Facing';
+  rsFeatureFacingWidth = 'The width of the facings';
+  rsFeatureNoFacingEdge = 'Choose one or more edges of pieces for the facing';
+  rsFeatureFacingNotInPiece = '%s is in no piece; a facing goes along a piece''s edge';
+  rsFeatureFacingFold = '%s is the fold of %s, which cannot be faced';
+  rsFeatureFacingPieceProblem = '%s has a problem to put right first: %s';
+  rsFeatureFacingWhole = 'The edges go all round %s; that is a lining, not a facing';
+  rsFeatureFacingOneNeighbour = 'Only %s is left of %s beside the edges; a facing needs an edge at each end of them';
+  rsFeatureFacingNoWidth = 'A facing needs a width above 0';
+  rsFeatureFacingTooWide = 'The facing is wider than %s there: %s';
 
 implementation
 
 uses
   SysUtils, Math, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.EvalTypes, Sloper.Core.Units,
-  Sloper.Core.Geometry;
+  Sloper.Core.Geometry, Sloper.Core.Transform, Sloper.Core.Bounds, Sloper.Core.Materials;
 
 const
   RIGHT_ANGLE = 90;
@@ -1064,6 +1109,528 @@ begin
     Stitch := TDraftObject(Pattern.FindNode(Made.StitchKeys[Index]));
     if Stitch.State <> esValid then
       Exit(Pattern.Refuse(Stitch.Message));
+  end;
+  Result := True;
+end;
+
+function DefaultFacing(Pattern: TPattern; const EdgeKeys: array of string): TFacingSpec;
+var
+  Index: integer;
+begin
+  Result := Default(TFacingSpec);
+  SetLength(Result.EdgeKeys, Length(EdgeKeys));
+  for Index := 0 to High(EdgeKeys) do
+    Result.EdgeKeys[Index] := EdgeKeys[Index];
+  Result.Width := '#' + FACING_WIDTH_VARIABLE;
+end;
+
+type
+  // One piece's facing as it is worked out
+  TFacingPlan = record
+    Piece: TPieceObject;
+    // The edges faced, as the piece's path runs, and the side inside it
+    Run: TRunEdgeArray;
+    Side: TOffsetSide;
+    // The edges of the piece's path before and after the run, as they were
+    BeforeKey, AfterKey: string;
+    BeforeReversed, AfterReversed: boolean;
+    // The facing's inner edge, the neighbours' parts beside the run, and the
+    // facing's path round them all
+    InnerKey, BeforePart, AfterPart: string;
+    // The neighbours' other parts
+    BeforeFar, AfterFar: string;
+    Path: TPiecePath;
+    // What the facing uses for each object of Path and its notches: the
+    // object itself, or its copy when the facing is moved aside
+    Sources, Copies: TStringArray;
+    FacingKey: string;
+  end;
+
+  TFacingPlans = array of TFacingPlan;
+
+// The facing's key for one of the piece's objects
+function FacingKeyFor(const Plan: TFacingPlan; const Key: string): string;
+var
+  Index: integer;
+begin
+  for Index := 0 to High(Plan.Sources) do
+    if Plan.Sources[Index] = Key then
+      Exit(Plan.Copies[Index]);
+  Result := Key;
+end;
+
+// The facing_width variable the starting formula names, when it is missing
+function AddFacingVariable(Pattern: TPattern; const Spec: TFacingSpec): boolean;
+begin
+  Result := True;
+  if (Pos(LowerCase('#' + FACING_WIDTH_VARIABLE), LowerCase(Spec.Width)) > 0) and not Assigned(Pattern.FindVariable(FACING_WIDTH_VARIABLE)) then
+    Result := Assigned(Pattern.AddVariable(FACING_WIDTH_VARIABLE, STARTING_LENGTHS[slFacingWidth, Pattern.Units], rsFeatureFacingWidth));
+end;
+
+// One piece's run and the edges either side of it, checked before anything
+// is added
+function PlanFacing(Pattern: TPattern; Piece: TPieceObject; const Keys: TStringArray; out Plan: TFacingPlan): boolean;
+var
+  Count, Before, After: integer;
+  Item: TRunEdge;
+begin
+  Plan := Default(TFacingPlan);
+  Plan.Piece := Piece;
+  if Piece.State <> esValid then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingPieceProblem, [Piece.DisplayName, Piece.Message])));
+  Count := Length(Piece.Path);
+  if Length(Keys) >= Count then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingWhole, [Piece.DisplayName])));
+  if not Pattern.PieceRun(Piece, Keys, True, Plan.Run, Plan.Side) then
+    Exit(False);
+  for Item in Plan.Run do
+    if Item.EdgeKey = Piece.FoldEdgeKey then
+      Exit(Pattern.Refuse(Format(rsFeatureFacingFold, [Pattern.FindNode(Item.EdgeKey).DisplayName, Piece.DisplayName])));
+  Before := (Piece.PathIndexOf(Plan.Run[0].EdgeKey) + Count - 1) mod Count;
+  After := (Piece.PathIndexOf(Plan.Run[High(Plan.Run)].EdgeKey) + 1) mod Count;
+  if Before = After then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingOneNeighbour, [Pattern.FindNode(Piece.Path[Before].EdgeKey).DisplayName,
+      Piece.DisplayName])));
+  Plan.BeforeKey := Piece.Path[Before].EdgeKey;
+  Plan.BeforeReversed := Piece.Path[Before].Reversed;
+  Plan.AfterKey := Piece.Path[After].EdgeKey;
+  Plan.AfterReversed := Piece.Path[After].Reversed;
+  Result := True;
+end;
+
+// The pieces the edges are on, in pattern order, each with its plan
+function FacingPlans(Pattern: TPattern; const Spec: TFacingSpec; out Plans: TFacingPlans): boolean;
+var
+  Key: string;
+  Node: TObject;
+  Piece: TPieceObject;
+  Keys: TStringArray;
+begin
+  Plans := nil;
+  if Length(Spec.EdgeKeys) = 0 then
+    Exit(Pattern.Refuse(rsFeatureNoFacingEdge));
+  for Key in Spec.EdgeKeys do
+  begin
+    Node := Pattern.FindNode(Key);
+    if not (Node is TEdgeObject) then
+      Exit(Pattern.Refuse(rsFeatureNoFacingEdge));
+    if Length(PiecesOn(Pattern, Key)) = 0 then
+      Exit(Pattern.Refuse(Format(rsFeatureFacingNotInPiece, [TEdgeObject(Node).DisplayName])));
+  end;
+  Pattern.Evaluate;
+  for Piece in Pattern.PieceList do
+  begin
+    Keys := nil;
+    for Key in Spec.EdgeKeys do
+      if (Piece.PathIndexOf(Key) >= 0) and not HasKey(Keys, Key) then
+        Insert(Key, Keys, Length(Keys));
+    if Length(Keys) = 0 then
+      Continue;
+    SetLength(Plans, Length(Plans) + 1);
+    if not PlanFacing(Pattern, Piece, Keys, Plans[High(Plans)]) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+// The part of a neighbouring edge, split at the point, that runs to the run:
+// the path runs along the edge before the run to its far end, and along the
+// edge after it from its near end
+function SplitNeighbour(Pattern: TPattern; const EdgeKey, PointKey: string; NearStart: boolean; out PartKey, FarKey: string): boolean;
+var
+  First, Second: TSplitPart;
+begin
+  PartKey := '';
+  FarKey := '';
+  if not Pattern.SplitEdge(EdgeKey, PointKey, First, Second) then
+    Exit(False);
+  PartKey := Second.Key;
+  FarKey := First.Key;
+  if NearStart then
+  begin
+    PartKey := First.Key;
+    FarKey := Second.Key;
+  end;
+  Result := True;
+end;
+
+procedure AddPathEntry(var Path: TPiecePath; const EdgeKey: string; Reversed: boolean);
+begin
+  SetLength(Path, Length(Path) + 1);
+  Path[High(Path)] := Default(TPieceEdge);
+  Path[High(Path)].EdgeKey := EdgeKey;
+  Path[High(Path)].Reversed := Reversed;
+end;
+
+// The inner edge at the width, meeting the edges either side of the run,
+// which are split where it meets them; and the facing's path: the run, the
+// part of the edge after it, the inner edge back and the part of the edge
+// before it
+function AddFacingInner(Pattern: TPattern; const Spec: TFacingSpec; var Plan: TFacingPlan): boolean;
+var
+  Inner: TOffsetEdge;
+  StartPoint, EndPoint: TDraftObject;
+  Before, After: TEdgeObject;
+  Item: TRunEdge;
+begin
+  Inner := Pattern.AddOffsetRun(Plan.Run, Spec.Width, Plan.Side, erOutline, '', Plan.BeforeKey, Plan.AfterKey);
+  if not Assigned(Inner) then
+    Exit(False);
+  Plan.InnerKey := Inner.Key;
+  Pattern.Evaluate;
+  if Inner.State <> esValid then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, Inner.Message])));
+  StartPoint := Pattern.AddAlongEdgePoint('', Inner.Key, False, amLength, '0');
+  EndPoint := Pattern.AddAlongEdgePoint('', Inner.Key, True, amLength, '0');
+  if not Assigned(StartPoint) or not Assigned(EndPoint) then
+    Exit(False);
+  // The run starts at the far end of the edge before it, as the path goes
+  if not SplitNeighbour(Pattern, Plan.BeforeKey, StartPoint.Key, Plan.BeforeReversed, Plan.BeforePart, Plan.BeforeFar) or
+    not SplitNeighbour(Pattern, Plan.AfterKey, EndPoint.Key, not Plan.AfterReversed, Plan.AfterPart, Plan.AfterFar) then
+    Exit(False);
+  Pattern.Evaluate;
+  Before := TEdgeObject(Pattern.FindNode(Plan.BeforePart));
+  After := TEdgeObject(Pattern.FindNode(Plan.AfterPart));
+  if Before.State <> esValid then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, Before.Message])));
+  if After.State <> esValid then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, After.Message])));
+  Plan.Path := nil;
+  for Item in Plan.Run do
+    AddPathEntry(Plan.Path, Item.EdgeKey, Item.Reversed);
+  AddPathEntry(Plan.Path, Plan.AfterPart, Plan.AfterReversed);
+  AddPathEntry(Plan.Path, Plan.InnerKey, True);
+  AddPathEntry(Plan.Path, Plan.BeforePart, Plan.BeforeReversed);
+  Result := True;
+end;
+
+// Whether a point lies on one of the facing's edges, as drawn on the piece
+function OnFacingPath(Pattern: TPattern; const Plan: TFacingPlan; const PointKey: string): boolean;
+var
+  Node: TObject;
+  Entry: TPieceEdge;
+  Position, Offset: double;
+begin
+  Node := Pattern.FindNode(PointKey);
+  if not (Node is TPointObject) or not TPointObject(Node).HasResult then
+    Exit(False);
+  for Entry in Plan.Path do
+  begin
+    TEdgeObject(Pattern.FindNode(Entry.EdgeKey)).Locate(TPointObject(Node).Position, Position, Offset);
+    if Offset <= NOTCH_POINT_TOLERANCE then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+// How wide the piece's cutting line is, in mm
+function CutLineWidth(Piece: TPieceObject): double;
+var
+  Point: TVec2;
+  Left, Right: double;
+begin
+  if Length(Piece.CutLine) = 0 then
+    Exit(0);
+  Left := Piece.CutLine[0].X;
+  Right := Left;
+  for Point in Piece.CutLine do
+  begin
+    Left := Min(Left, Point.X);
+    Right := Max(Right, Point.X);
+  end;
+  Result := Right - Left;
+end;
+
+// Moved aside: the facing's edges, and the points its notches are at, copied
+// to the right of the piece, and the copies noted for the facing to use. The
+// inner edge on the piece becomes construction, to show where the facing goes.
+function MoveFacingAside(Pattern: TPattern; var Plan: TFacingPlan): boolean;
+var
+  Spec: TTransformSpec;
+  Transform: TTransformObject;
+  Entry: TPieceEdge;
+  Notch: TPieceNotch;
+  Copied: TDraftObject;
+  Sources: TStringArray;
+begin
+  Sources := nil;
+  for Entry in Plan.Path do
+    Insert(Entry.EdgeKey, Sources, Length(Sources));
+  for Notch in Plan.Piece.Notches do
+    if (Notch.PointKey <> '') and not (Pattern.FindNode(Notch.PointKey) is TRepeatPoint) and not HasKey(Sources, Notch.PointKey) and
+      OnFacingPath(Pattern, Plan, Notch.PointKey) then
+      Insert(Notch.PointKey, Sources, Length(Sources));
+  Spec := Default(TTransformSpec);
+  Spec.Kind := tkMove;
+  Spec.Sources := Sources;
+  // Clear of the piece's cutting line, so their allowances do not meet
+  Spec.DX := MoveAsideWidthText(Pattern, CutLineWidth(Plan.Piece));
+  Spec.DY := '0';
+  Transform := Pattern.AddTransform(Spec);
+  if not Assigned(Transform) then
+    Exit(False);
+  Plan.Sources := nil;
+  Plan.Copies := nil;
+  for Copied in Pattern.CopiesOf(Transform) do
+  begin
+    if Copied is TEdgeCopy then
+      Insert(TEdgeCopy(Copied).Source, Plan.Sources, Length(Plan.Sources))
+    else if Copied is TPointCopy then
+      Insert(TPointCopy(Copied).Source, Plan.Sources, Length(Plan.Sources))
+    else
+      Continue;
+    Insert(Copied.Key, Plan.Copies, Length(Plan.Copies));
+  end;
+  Result := Pattern.SetEdgeRole(TEdgeObject(Pattern.FindNode(Plan.InnerKey)), erConstruction);
+end;
+
+// The facing's path, with the copies when it is moved aside
+function FacingPath(const Plan: TFacingPlan): TPiecePath;
+var
+  Index: integer;
+begin
+  Result := Copy(Plan.Path);
+  for Index := 0 to High(Result) do
+    Result[Index].EdgeKey := FacingKeyFor(Plan, Result[Index].EdgeKey);
+end;
+
+// A piece cut as the faced piece is: on its grain, from its material unless
+// given another, as many times and mirrored as it is, and on the fold when
+// the facing runs to the piece's fold
+function AddFacingPiece(Pattern: TPattern; const Plan: TFacingPlan; const AName: string; Material: TPatternMaterial): TPieceObject;
+var
+  Garment: TPieceObject;
+  Grain: string;
+  Index, GarmentIndex: integer;
+begin
+  Garment := Plan.Piece;
+  Result := Pattern.AddPiece(FreeName(Pattern, AName + Garment.Name), FacingPath(Plan), Pattern.FormulaText(Garment,
+    PIECE_ALLOWANCE_FIELD));
+  if not Assigned(Result) then
+    Exit;
+  // The piece's own allowances on the edges it shares with the facing
+  for Index := 0 to High(Plan.Path) do
+  begin
+    GarmentIndex := Garment.PathIndexOf(Plan.Path[Index].EdgeKey);
+    if (GarmentIndex >= 0) and Garment.HasOverride(GarmentIndex) then
+      if not Pattern.SetEdgeAllowance(Result, Index, Pattern.FormulaText(Garment, Garment.OverrideField(GarmentIndex))) then
+        Exit(nil);
+  end;
+  case Garment.GrainKind of
+    gkAngle:
+      Grain := Pattern.FormulaText(Garment, GRAIN_ANGLE_FIELD);
+    gkPoints:
+      // The angle of the piece's grainline, through the facing's middle
+      Grain := Format('atan2(%0:s.y - %1:s.y, %1:s.x - %0:s.x)', [Pattern.FindNode(Garment.GrainStartKey).DisplayName,
+        Pattern.FindNode(Garment.GrainEndKey).DisplayName]);
+    else
+      Grain := '';
+  end;
+  if Grain = '' then
+    Pattern.ClearGrain(Result)
+  else if not Pattern.SetGrainAngle(Result, Grain) then
+    Exit(nil);
+  if not Assigned(Material) then
+    Material := Pattern.MaterialOf(Garment);
+  Pattern.SetPieceMaterial(Result, Material);
+  if not Pattern.SetCut(Result, Garment.CutCount, Garment.Mirrored) then
+    Exit(nil);
+  if (Garment.FoldEdgeKey <> '') and (Garment.FoldEdgeKey = Plan.BeforeKey) then
+    if not Pattern.SetFoldEdge(Result, FacingKeyFor(Plan, Plan.BeforePart)) then
+      Exit(nil);
+  if (Garment.FoldEdgeKey <> '') and (Garment.FoldEdgeKey = Plan.AfterKey) then
+    if not Pattern.SetFoldEdge(Result, FacingKeyFor(Plan, Plan.AfterPart)) then
+      Exit(nil);
+end;
+
+// The piece's notches that lie on the facing's edges, on the facing too
+function CopyFacingNotches(Pattern: TPattern; const Plan: TFacingPlan; Facing: TPieceObject): boolean;
+var
+  Index: integer;
+  Notch: TPieceNotch;
+  Key: string;
+  Aside: boolean;
+begin
+  Aside := Length(Plan.Copies) > 0;
+  for Index := 0 to High(Plan.Piece.Notches) do
+  begin
+    Notch := Plan.Piece.Notches[Index];
+    if Notch.PointKey <> '' then
+    begin
+      // Moved aside, a point that could not be copied, as a repeat's, is left out
+      Key := FacingKeyFor(Plan, Notch.PointKey);
+      if OnFacingPath(Pattern, Plan, Notch.PointKey) and (not Aside or (Key <> Notch.PointKey)) and not Pattern.AddPointNotch(Facing, Key) then
+        Exit(False);
+    end
+    else if Facing.PathIndexOf(FacingKeyFor(Plan, Notch.EdgeKey)) >= 0 then
+      if not Pattern.AddEdgeNotch(Facing, FacingKeyFor(Plan, Notch.EdgeKey), Pattern.FormulaText(Plan.Piece,
+        Plan.Piece.NotchField(Index))) then
+        Exit(False);
+  end;
+  Result := True;
+end;
+
+// The seam between the facing's run and the piece's, both running the way
+// their paths do, as the facing is turned over onto the piece
+function AddFacingSeam(Pattern: TPattern; const Plan: TFacingPlan; var Made: TFacingMade): boolean;
+var
+  SideA, SideB: TSeamSide;
+  Item: TRunEdge;
+  Seam: TSeamObject;
+begin
+  SideA := nil;
+  SideB := nil;
+  for Item in Plan.Run do
+  begin
+    SetLength(SideA, Length(SideA) + 1);
+    SideA[High(SideA)].PieceKey := Plan.Piece.Key;
+    SideA[High(SideA)].EdgeKey := Item.EdgeKey;
+    SetLength(SideB, Length(SideB) + 1);
+    SideB[High(SideB)].PieceKey := Plan.FacingKey;
+    SideB[High(SideB)].EdgeKey := FacingKeyFor(Plan, Item.EdgeKey);
+  end;
+  Seam := Pattern.AddSeam(FreeName(Pattern, FACING_SEAM_NAME), SideA, SideB);
+  if not Assigned(Seam) then
+    Exit(False);
+  Seam.Reversed := True;
+  Insert(Seam.Key, Made.SeamKeys, Length(Made.SeamKeys));
+  Result := True;
+end;
+
+// The facing's entries for those of a seam's side that are a neighbouring
+// part of a faced piece
+function FacingSide(const Plans: TFacingPlans; const Side: TSeamSide; out Owner: integer): TSeamSide;
+var
+  Entry: TSeamEntry;
+  Index: integer;
+begin
+  Result := nil;
+  Owner := -1;
+  for Entry in Side do
+    for Index := 0 to High(Plans) do
+      if (Entry.PieceKey = Plans[Index].Piece.Key) and ((Entry.EdgeKey = Plans[Index].BeforePart) or
+        (Entry.EdgeKey = Plans[Index].AfterPart)) then
+      begin
+        SetLength(Result, Length(Result) + 1);
+        Result[High(Result)].PieceKey := Plans[Index].FacingKey;
+        Result[High(Result)].EdgeKey := FacingKeyFor(Plans[Index], Entry.EdgeKey);
+        Owner := Index;
+      end;
+end;
+
+// Where the pieces are seamed along edges both facings now share part of,
+// such as the shoulder, the facings are seamed there too
+function JoinFacings(Pattern: TPattern; const Plans: TFacingPlans; var Made: TFacingMade): boolean;
+var
+  Index, OwnerA, OwnerB: integer;
+  Seam, Join: TSeamObject;
+  SideA, SideB: TSeamSide;
+begin
+  for Index := 0 to Pattern.ObjectCount - 1 do
+  begin
+    if not (Pattern.Objects[Index] is TSeamObject) or HasKey(Made.SeamKeys, Pattern.Objects[Index].Key) or
+      HasKey(Made.JoinKeys, Pattern.Objects[Index].Key) then
+      Continue;
+    Seam := TSeamObject(Pattern.Objects[Index]);
+    SideA := FacingSide(Plans, Seam.SideA, OwnerA);
+    SideB := FacingSide(Plans, Seam.SideB, OwnerB);
+    if (Length(SideA) = 0) or (Length(SideB) = 0) or (OwnerA = OwnerB) then
+      Continue;
+    Join := Pattern.AddSeam(FreeName(Pattern, FACING_SEAM_NAME), SideA, SideB);
+    if not Assigned(Join) then
+      Exit(False);
+    Join.Reversed := Seam.Reversed;
+    Insert(Join.Key, Made.JoinKeys, Length(Made.JoinKeys));
+  end;
+  Result := True;
+end;
+
+// The interfacing's material: the one named, or a new one by that name
+function InterfacingMaterial(Pattern: TPattern; const AName: string; out Material: TPatternMaterial): boolean;
+begin
+  Material := Pattern.FindMaterialNamed(Trim(AName));
+  if not Assigned(Material) then
+    Material := Pattern.AddMaterial(Trim(AName));
+  Result := Assigned(Material);
+end;
+
+// A neighbour's part in no piece becomes construction rather than an outline
+// that does not print: a fold's, since the piece keeps its whole fold, and
+// one a facing moved aside has a copy of
+function KeepPartOutOfPrint(Pattern: TPattern; const PartKey: string): boolean;
+begin
+  Result := True;
+  if Length(PiecesOn(Pattern, PartKey)) = 0 then
+    Result := Pattern.SetEdgeRole(TEdgeObject(Pattern.FindNode(PartKey)), erConstruction);
+end;
+
+// On one piece: the facing and its interfacing, with the seam joining the
+// facing to the piece and the piece's notches along it
+function FaceOnePiece(Pattern: TPattern; const Spec: TFacingSpec; Material: TPatternMaterial; var Plan: TFacingPlan;
+  var Made: TFacingMade): boolean;
+var
+  Facing, Interfacing: TPieceObject;
+  InterfacingKey: string;
+begin
+  if not AddFacingInner(Pattern, Spec, Plan) then
+    Exit(False);
+  if Spec.Aside and not MoveFacingAside(Pattern, Plan) then
+    Exit(False);
+  Pattern.Evaluate;
+  Facing := AddFacingPiece(Pattern, Plan, FACING_PREFIX, nil);
+  if not Assigned(Facing) then
+    Exit(False);
+  Plan.FacingKey := Facing.Key;
+  InterfacingKey := '';
+  if Assigned(Material) then
+  begin
+    Interfacing := AddFacingPiece(Pattern, Plan, INTERFACING_PREFIX, Material);
+    if not Assigned(Interfacing) then
+      Exit(False);
+    InterfacingKey := Interfacing.Key;
+  end;
+  Pattern.Evaluate;
+  if not CopyFacingNotches(Pattern, Plan, Facing) or not AddFacingSeam(Pattern, Plan, Made) or not KeepPartOutOfPrint(Pattern, Plan.BeforeFar) or
+    not KeepPartOutOfPrint(Pattern, Plan.AfterFar) or not KeepPartOutOfPrint(Pattern, Plan.BeforePart) or not KeepPartOutOfPrint(Pattern, Plan.AfterPart) then
+    Exit(False);
+  Insert(Plan.Piece.Key, Made.PieceKeys, Length(Made.PieceKeys));
+  Insert(Facing.Key, Made.FacingKeys, Length(Made.FacingKeys));
+  Insert(FacingKeyFor(Plan, Plan.InnerKey), Made.InnerKeys, Length(Made.InnerKeys));
+  Insert(InterfacingKey, Made.InterfacingKeys, Length(Made.InterfacingKeys));
+  Result := True;
+end;
+
+function InsertFacing(Pattern: TPattern; const Spec: TFacingSpec; out Made: TFacingMade): boolean;
+var
+  Plans: TFacingPlans;
+  Material: TPatternMaterial;
+  Width: double;
+  Index: integer;
+  Key: string;
+  Piece: TDraftObject;
+begin
+  Made := Default(TFacingMade);
+  if not FacingPlans(Pattern, Spec, Plans) or not AddFacingVariable(Pattern, Spec) then
+    Exit(False);
+  Pattern.Evaluate;
+  if not Pattern.EvaluateText(Spec.Width, Width) then
+    Exit(False);
+  if Width * MILLIMETRES_PER_UNIT[Pattern.Units] <= DEFAULT_TOLERANCE then
+    Exit(Pattern.Refuse(rsFeatureFacingNoWidth));
+  Material := nil;
+  if (Trim(Spec.Interfacing) <> '') and not InterfacingMaterial(Pattern, Spec.Interfacing, Material) then
+    Exit(False);
+  for Index := 0 to High(Plans) do
+    if not FaceOnePiece(Pattern, Spec, Material, Plans[Index], Made) then
+      Exit(False);
+  if not JoinFacings(Pattern, Plans, Made) then
+    Exit(False);
+  Pattern.Evaluate;
+  for Key in Concat(Made.PieceKeys, Made.FacingKeys) do
+  begin
+    Piece := TDraftObject(Pattern.FindNode(Key));
+    if Piece.State <> esValid then
+      Exit(Pattern.Refuse(Format(rsFeatureFacingPieceProblem, [Piece.DisplayName, Piece.Message])));
   end;
   Result := True;
 end;

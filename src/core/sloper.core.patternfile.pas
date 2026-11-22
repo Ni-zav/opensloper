@@ -659,6 +659,10 @@ begin
       else
         Result.Add('edges', SaveRun(TOffsetEdge(DraftObject).Run));
       Result.Add('side', OFFSET_SIDE_NAMES[TOffsetEdge(DraftObject).Side]);
+      if TOffsetEdge(DraftObject).StartLimit <> '' then
+        Result.Add('startLimit', JSONId(TOffsetEdge(DraftObject).StartLimit));
+      if TOffsetEdge(DraftObject).EndLimit <> '' then
+        Result.Add('endLimit', JSONId(TOffsetEdge(DraftObject).EndLimit));
     end
     else if DraftObject is TRoundEdge then
       Result.Add('centre', JSONId(TRoundEdge(DraftObject).Centre))
@@ -1979,8 +1983,16 @@ begin
   end
   else if TypeText = TYPE_OFFSET_EDGE then
   begin
-    if ReadRun(Item, Run) and ReadChoice(Item, 'side', OFFSET_SIDE_NAMES, Choice) then
+    // Each end limited by an edge only when it says so
+    Second := '';
+    Third := '';
+    if ReadRun(Item, Run) and ReadChoice(Item, 'side', OFFSET_SIDE_NAMES, Choice) and
+      (not Assigned(Item.Find('startLimit')) or ReadInput(Item, 'startLimit', True, Second)) and
+      (not Assigned(Item.Find('endLimit')) or ReadInput(Item, 'endLimit', True, Third)) then
+    begin
       Result := TOffsetEdge.Create(FId, Run, RunStartKey(Run), RunEndKey(Run), TOffsetSide(Choice));
+      TOffsetEdge(Result).SetLimits(Second, Third);
+    end;
   end
   else if TypeText = TYPE_CORNER_ARC then
   begin

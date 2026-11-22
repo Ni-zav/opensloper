@@ -17,7 +17,8 @@
 }
 
 // Offset edges along a run of edges: mitred and trimmed corners, inside and
-// outside a piece, and failing when the offset collapses.
+// outside a piece, failing when the offset collapses, and ends limited by
+// edges.
 unit Sloper.Tests.OffsetRun;
 
 {$mode ObjFPC}{$H+}
@@ -32,8 +33,6 @@ type
   TTestOffsetRun = class(TOSTestCase)
   private
     FPattern, FLoaded: TPattern;
-    function Pt(const AName: string; X: double = 0; Y: double = 0): string;
-    function Line(const A, B: string): string;
     function Run(const Keys: array of string; const Reversed: array of boolean): TRunEdgeArray;
     // A (0, 0) to B (100, 0) to C (100, 100): right, then down the screen
     function Corner(out First, Second: string): TRunEdgeArray;
@@ -42,6 +41,9 @@ type
   protected
     procedure SetUp; override;
     procedure TearDown; override;
+  public
+    function Pt(const AName: string; X: double = 0; Y: double = 0): string;
+    function Line(const A, B: string): string;
   published
     procedure TestOuterCornerMitres;
     procedure TestInnerCornerTrims;
@@ -65,6 +67,11 @@ type
     procedure TestInsideStitchJoinsItsPiece;
     procedure TestRunRoundTrip;
     procedure TestSingleEdgeWrittenAsBefore;
+    procedure TestLimitsTrimTheEnds;
+    procedure TestLimitsCarryTheEndsOn;
+    procedure TestLimitOnASlant;
+    procedure TestLimitMissedIsInvalid;
+    procedure TestLimitsRoundTrip;
   end;
 
 implementation
@@ -439,6 +446,87 @@ procedure TTestOffsetRun.TestSingleEdgeWrittenAsBefore;
 begin
   FPattern.AddOffsetEdge(Line(Pt('A'), Pt('B', 100, 0)), '10', osLeft);
   AssertEquals(0, Pos('"edges"', SavePatternToText(FPattern)));
+end;
+
+// A vertical line at X from Top to Bottom
+function VerticalLimit(Test: TTestOffsetRun; X, Top, Bottom: double): string;
+begin
+  Result := Test.Line(Test.Pt('', X, Top), Test.Pt('', X, Bottom));
+end;
+
+procedure TTestOffsetRun.TestLimitsTrimTheEnds;
+var
+  Edge: TOffsetEdge;
+begin
+  Edge := FPattern.AddOffsetRun(Run([Line(Pt('A'), Pt('B', 100, 0))], [False]), '10', osLeft, erOutline, '',
+    VerticalLimit(Self, 20, -50, 50), VerticalLimit(Self, 80, -50, 50));
+  AssertNotNull(FPattern.LastError, Edge);
+  FPattern.Evaluate;
+  AssertTrue(Edge.Message, Edge.State = esValid);
+  AssertNear('trimmed at both ends', 60, Edge.Length);
+  AssertNear('starts on the start limit', 20, Edge.PointAtLength(0).X);
+  AssertNear('ends on the end limit', 80, Edge.PointAtLength(Edge.Length).X);
+end;
+
+procedure TTestOffsetRun.TestLimitsCarryTheEndsOn;
+var
+  Edge: TOffsetEdge;
+begin
+  Edge := FPattern.AddOffsetRun(Run([Line(Pt('A'), Pt('B', 100, 0))], [False]), '10', osLeft, erOutline, '',
+    VerticalLimit(Self, -20, -50, 50), VerticalLimit(Self, 130, -50, 50));
+  FPattern.Evaluate;
+  AssertTrue(Edge.Message, Edge.State = esValid);
+  AssertNear('carried on at both ends', 150, Edge.Length);
+  AssertNear('back to the start limit', -20, Edge.PointAtLength(0).X);
+  AssertNear('on to the end limit', 130, Edge.PointAtLength(Edge.Length).X);
+  AssertTrue('still straight', Edge.IsStraight);
+end;
+
+// The end is exactly on the limit, so a point there can split it
+procedure TTestOffsetRun.TestLimitOnASlant;
+var
+  Edge: TOffsetEdge;
+  Limit: TEdgeObject;
+  Source: string;
+  Position, Offset: double;
+begin
+  Source := Line(Pt('A'), Pt('B', 100, 0));
+  Limit := TEdgeObject(FPattern.FindNode(Line(Pt('', 90, -50), Pt('', 120, 50))));
+  Edge := FPattern.AddOffsetRun(Run([Source], [False]), '10', osLeft, erOutline, '', '', Limit.Key);
+  FPattern.Evaluate;
+  AssertTrue(Edge.Message, Edge.State = esValid);
+  Limit.Locate(Edge.PointAtLength(Edge.Length), Position, Offset);
+  AssertTrue('on the limit', Offset < 1e-6);
+  AssertNear('the start as it was', 0, Edge.PointAtLength(0).X);
+end;
+
+procedure TTestOffsetRun.TestLimitMissedIsInvalid;
+var
+  Edge: TOffsetEdge;
+begin
+  Edge := FPattern.AddOffsetRun(Run([Line(Pt('A'), Pt('B', 100, 0))], [False]), '10', osLeft, erOutline, '', '',
+    VerticalLimit(Self, 130, 30, 50));
+  FPattern.Evaluate;
+  AssertTrue('invalid', Edge.State = esInvalid);
+  AssertTrue(Edge.Message, Pos('does not reach', Edge.Message) > 0);
+end;
+
+procedure TTestOffsetRun.TestLimitsRoundTrip;
+var
+  Reason: string;
+  Edge, Back: TOffsetEdge;
+begin
+  Edge := FPattern.AddOffsetRun(Run([Line(Pt('A'), Pt('B', 100, 0))], [False]), '10', osLeft, erOutline, '',
+    VerticalLimit(Self, 20, -50, 50), VerticalLimit(Self, 80, -50, 50));
+  FPattern.Evaluate;
+  FLoaded := TPattern.Create;
+  AssertTrue(Reason, LoadPatternFromText(FLoaded, SavePatternToText(FPattern), Reason));
+  FLoaded.Evaluate;
+  Back := TOffsetEdge(FLoaded.FindNode(Edge.Key));
+  AssertEquals('start limit', Edge.StartLimit, Back.StartLimit);
+  AssertEquals('end limit', Edge.EndLimit, Back.EndLimit);
+  AssertNear('the same length', Edge.Length, Back.Length);
+  AssertEquals(SavePatternToText(FPattern), SavePatternToText(FLoaded));
 end;
 
 initialization

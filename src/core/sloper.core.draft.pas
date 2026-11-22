@@ -482,15 +482,21 @@ type
   // the left or right of the direction of travel. Corners are mitred, or
   // bevelled when the mitre would reach more than MITRE_LIMIT distances out,
   // and trimmed on the inner side. Inside and outside of a piece are worked
-  // out when it is made (see TPattern.PieceRun).
+  // out when it is made (see TPattern.PieceRun). An end can be limited by an
+  // edge: it is trimmed back to where it crosses that edge, or carried on
+  // straight to it, as a facing's inner edge meets the shoulder.
   TOffsetEdge = class(TEdgeObject)
   private
     FRun: TRunEdgeArray;
     FSide: TOffsetSide;
     FStraight: boolean;
+    FStartLimit, FEndLimit: string;
     function GetSource: string;
+    function ApplyLimits(Context: TEvalContext): TEvalState;
   public
     constructor Create(const AKey: string; const ARun: TRunEdgeArray; const AStartKey, AEndKey: string; ASide: TOffsetSide);
+    // The edges its start and end are trimmed or carried on to; '' for none
+    procedure SetLimits(const AStartLimit, AEndLimit: string);
     function InputKeys: TStringArray; override;
     function TypeName: string; override;
     function NamePrefix: string; override;
@@ -500,6 +506,8 @@ type
     // The first edge of the run
     property Source: string read GetSource;
     property Side: TOffsetSide read FSide;
+    property StartLimit: string read FStartLimit;
+    property EndLimit: string read FEndLimit;
   end;
 
   // The arc that rounds the corner where two straight edges meet at Vertex,
@@ -628,6 +636,9 @@ resourcestring
   rsDraftNegativeOffset = 'An offset cannot be negative; choose the other side';
   rsDraftRunGap = '%s and %s do not join, so they cannot be offset as one run';
   rsDraftOffsetCollapses = 'The offset is more than %s allows; it would fold over itself';
+  rsDraftOffsetStartMisses = 'The offset''s start does not reach %s';
+  rsDraftOffsetEndMisses = 'The offset''s end does not reach %s';
+  rsDraftOffsetLimitsCross = 'The offset''s ends, limited by %s and %s, pass each other';
   rsDraftCornerStraight = 'The edges do not make a corner to round';
   rsDraftCornerTooBig = 'This radius is too big for the edges at this corner';
   rsDraftNoFoot = 'No perpendicular from %s meets %s';
@@ -1987,6 +1998,12 @@ begin
   Result := FRun[0].EdgeKey;
 end;
 
+procedure TOffsetEdge.SetLimits(const AStartLimit, AEndLimit: string);
+begin
+  FStartLimit := AStartLimit;
+  FEndLimit := AEndLimit;
+end;
+
 function TOffsetEdge.InputKeys: TStringArray;
 var
   Index: integer;
@@ -1995,6 +2012,10 @@ begin
   SetLength(Result, System.Length(FRun));
   for Index := 0 to High(FRun) do
     Result[Index] := FRun[Index].EdgeKey;
+  if FStartLimit <> '' then
+    System.Insert(FStartLimit, Result, System.Length(Result));
+  if FEndLimit <> '' then
+    System.Insert(FEndLimit, Result, System.Length(Result));
 end;
 
 function TOffsetEdge.TypeName: string;
@@ -2274,6 +2295,104 @@ begin
     if (Index < Count - 1) or Closed then
       for Segment in Joins[Index] do
         AddSegment(FSegments, Segment);
+  end;
+  Result := ApplyLimits(Context);
+end;
+
+procedure MoveSegmentStart(var Segment: TEdgeSegment; const At: TVec2);
+begin
+  if Segment.Kind = skLine then
+    Segment.Line.P1 := At
+  else
+    Segment.Curve.P0 := At;
+end;
+
+procedure MoveSegmentEnd(var Segment: TEdgeSegment; const At: TVec2);
+begin
+  if Segment.Kind = skLine then
+    Segment.Line.P2 := At
+  else
+    Segment.Curve.P3 := At;
+end;
+
+// Where the offset, carried on straight past its ends, crosses the limit
+// nearest the end it limits. Position is along the offset from its start:
+// below 0 or past its length where it is carried on.
+function LimitCrossing(Offset, Limit: TEdgeObject; AtEnd: boolean; out Crossing: TEdgeCrossing): boolean;
+var
+  Item: TEdgeCrossing;
+  Target, Total: double;
+begin
+  Total := Offset.Length;
+  Target := 0;
+  if AtEnd then
+    Target := Total;
+  Result := False;
+  Crossing := Default(TEdgeCrossing);
+  for Item in CrossEdges(Offset, True, Limit, False) do
+  begin
+    // The end is not limited back past the start, nor the start on past the end
+    if (AtEnd and (Item.Position <= 0)) or (not AtEnd and (Item.Position >= Total)) then
+      Continue;
+    if not Result or (Abs(Item.Position - Target) < Abs(Crossing.Position - Target)) then
+      Crossing := Item;
+    Result := True;
+  end;
+end;
+
+function TOffsetEdge.ApplyLimits(Context: TEvalContext): TEvalState;
+var
+  StartEdge, EndEdge: TEdgeObject;
+  StartHit, EndHit: TEdgeCrossing;
+  First, Second: TEdgeSegmentArray;
+begin
+  if (FStartLimit = '') and (FEndLimit = '') then
+    Exit(esValid);
+  StartEdge := nil;
+  EndEdge := nil;
+  StartHit := Default(TEdgeCrossing);
+  EndHit := Default(TEdgeCrossing);
+  if FStartLimit <> '' then
+  begin
+    StartEdge := InputEdge(Context, FStartLimit);
+    if not Assigned(StartEdge) then
+      Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FStartLimit)])));
+    if not LimitCrossing(Self, StartEdge, False, StartHit) then
+      Exit(Fail(esInvalid, Format(rsDraftOffsetStartMisses, [StartEdge.DisplayName])));
+  end;
+  if FEndLimit <> '' then
+  begin
+    EndEdge := InputEdge(Context, FEndLimit);
+    if not Assigned(EndEdge) then
+      Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FEndLimit)])));
+    if not LimitCrossing(Self, EndEdge, True, EndHit) then
+      Exit(Fail(esInvalid, Format(rsDraftOffsetEndMisses, [EndEdge.DisplayName])));
+  end;
+  if Assigned(StartEdge) and Assigned(EndEdge) and (StartHit.Position >= EndHit.Position - DEFAULT_TOLERANCE) then
+    Exit(Fail(esInvalid, Format(rsDraftOffsetLimitsCross, [StartEdge.DisplayName, EndEdge.DisplayName])));
+  // The end first, which leaves positions from the start as they were
+  if Assigned(EndEdge) then
+  begin
+    if EndHit.Position > Length + DEFAULT_TOLERANCE then
+      AddSegment(FSegments, LineSegment(Line2(SegmentEnd(FSegments[High(FSegments)]), EndHit.Point)))
+    else if EndHit.Position < Length - DEFAULT_TOLERANCE then
+    begin
+      SplitAt(EndHit.Position, First, Second);
+      FSegments := First;
+    end;
+    // Exactly on the limit, as a point there must be to split it
+    MoveSegmentEnd(FSegments[High(FSegments)], EndHit.Point);
+  end;
+  if Assigned(StartEdge) then
+  begin
+    if StartHit.Position < -DEFAULT_TOLERANCE then
+      System.Insert(LineSegment(Line2(StartHit.Point, SegmentStart(FSegments[0]))), FSegments, 0)
+    else if StartHit.Position > DEFAULT_TOLERANCE then
+    begin
+      SplitAt(StartHit.Position, First, Second);
+      FSegments := Second;
+    end;
+    MoveSegmentStart(FSegments[0], StartHit.Point);
   end;
   Result := esValid;
 end;

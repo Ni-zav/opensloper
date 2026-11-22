@@ -143,7 +143,6 @@ type
     function GetMaterialCount: integer;
     function GetMaterial(Index: integer): TPatternMaterial;
     function DeleteTransform(Transform: TTransformObject): boolean;
-    function CopiesOf(Transform: TTransformObject): TDraftObjectArray;
     function ExpandedSources(const Sources: TStringArray; out Expanded: TStringArray): boolean;
     function FreeCopyName(const SourceName, Suffix: string): string;
     function NextSuffix(Kind: TTransformKind): string;
@@ -238,9 +237,10 @@ type
     // down. The height is held in one place, the point below the corner.
     function AddRectangle(const CornerId, Width, Height: string; Role: TEdgeRole; out Edges: TRectangleEdges): boolean;
     function AddOffsetEdge(const EdgeId, Distance: string; Side: TOffsetSide; Role: TEdgeRole = erOutline; const AName: string = ''): TOffsetEdge;
-    // A parallel copy of a connected run of edges (see TOffsetEdge)
+    // A parallel copy of a connected run of edges (see TOffsetEdge), its
+    // start and end limited by the edges StartLimit and EndLimit if given
     function AddOffsetRun(const Run: TRunEdgeArray; const Distance: string; Side: TOffsetSide; Role: TEdgeRole = erOutline;
-      const AName: string = ''): TOffsetEdge;
+      const AName: string = ''; const StartLimit: string = ''; const EndLimit: string = ''): TOffsetEdge;
     // The edges in order along one connected run, each turned to follow it,
     // from computed positions. False with the reason when they branch, leave
     // a gap or are not edges.
@@ -445,6 +445,8 @@ type
     // A transform and a copy of each source, as one change. The copies start
     // where the formulas put them. Nil with LastError set when refused.
     function AddTransform(const Spec: TTransformSpec): TTransformObject;
+    // The copies a transform made, in the order of its sources
+    function CopiesOf(Transform: TTransformObject): TDraftObjectArray;
     // Materials. Changing them returns False when refused, with the reason in
     // LastError. An empty name or colour takes the next free one.
     function AddMaterial(const AName: string = ''; const AColor: string = ''; AFill: TMaterialFill = ffTint): TPatternMaterial;
@@ -1877,7 +1879,7 @@ begin
 end;
 
 function TPattern.AddOffsetRun(const Run: TRunEdgeArray; const Distance: string; Side: TOffsetSide; Role: TEdgeRole;
-  const AName: string): TOffsetEdge;
+  const AName, StartLimit, EndLimit: string): TOffsetEdge;
 var
   Item: TRunEdge;
   First, Last: TEdgeObject;
@@ -1892,6 +1894,8 @@ begin
   for Item in Run do
     if not CheckEdgeTarget(Item.EdgeKey) then
       Exit;
+  if ((StartLimit <> '') and not CheckEdgeTarget(StartLimit)) or ((EndLimit <> '') and not CheckEdgeTarget(EndLimit)) then
+    Exit;
   First := TEdgeObject(FindNode(Run[0].EdgeKey));
   Last := TEdgeObject(FindNode(Run[High(Run)].EdgeKey));
   StartKey := First.StartKey;
@@ -1901,6 +1905,7 @@ begin
   if Run[High(Run)].Reversed then
     EndKey := Last.StartKey;
   Result := TOffsetEdge.Create(TakeId, Run, StartKey, EndKey, Side);
+  Result.SetLimits(StartLimit, EndLimit);
   if not AddEdgeObject(Result, AName, Role, ['distance'], [Distance]) then
     Result := nil;
 end;

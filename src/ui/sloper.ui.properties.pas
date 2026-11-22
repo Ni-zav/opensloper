@@ -324,6 +324,7 @@ resourcestring
   rsPropMarkerHole = 'Hole';
   rsPropMarkerButton = 'Button';
   rsPropMarkerMatch = 'Match dot';
+  rsPropMarkerButtonhole = 'Buttonhole';
   rsPropChangeMarker = 'Change marker';
   rsPropPosition = 'Position';
   rsPropNoteText = 'Text';
@@ -1884,16 +1885,17 @@ begin
   if Place <> spRows then
     Exit;
   // In the order of TPointMarker
-  FMarkerBox := Panel.AddChoiceRow(rsPropMarker, [rsPropMarkerPlain, rsPropMarkerHole, rsPropMarkerButton, rsPropMarkerMatch], @MarkerChange);
+  FMarkerBox := Panel.AddChoiceRow(rsPropMarker, [rsPropMarkerPlain, rsPropMarkerHole, rsPropMarkerButton, rsPropMarkerMatch,
+    rsPropMarkerButtonhole], @MarkerChange);
   for Index := 0 to Node.FieldCount - 1 do
-    if Node.Fields[Index].Name = MARKER_SIZE_FIELD then
-      Panel.AddEditRow(FieldCaption(MARKER_SIZE_FIELD), frFormula, MARKER_SIZE_FIELD);
+    if OwnsField(Node, Node.Fields[Index].Name) then
+      Panel.AddEditRow(FieldCaption(Node.Fields[Index].Name), frFormula, Node.Fields[Index].Name);
   FMarkedOnText := Panel.AddTextRow(rsPropMarkedOn, '');
 end;
 
 function TMarkerSection.OwnsField(Node: TEvalNode; const FieldName: string): boolean;
 begin
-  Result := FieldName = MARKER_SIZE_FIELD;
+  Result := (FieldName = MARKER_SIZE_FIELD) or (FieldName = MARKER_ANGLE_FIELD) or (FieldName = MARKER_OFFSET_FIELD);
 end;
 
 procedure TMarkerSection.Refresh(Node: TEvalNode);

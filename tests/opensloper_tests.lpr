@@ -88,6 +88,7 @@ uses
   Sloper.Tests.Nesting,
   Sloper.Tests.Features,
   Sloper.Tests.Facing,
+  Sloper.Tests.Buttons,
   Sloper.Tests.Printing,
   Sloper.Tests.MeasurementDocument,
   Sloper.Tests.Catalogue,

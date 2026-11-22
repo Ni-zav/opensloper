@@ -668,7 +668,8 @@ end;
 
 const
   // pmPlain has no size; the entry is never used
-  MARKER_STARTING_LENGTHS: array[TPointMarker] of TStartingLength = (slHoleSize, slHoleSize, slButtonSize, slMatchSize);
+  MARKER_STARTING_LENGTHS: array[TPointMarker] of TStartingLength = (slHoleSize, slHoleSize, slButtonSize, slMatchSize,
+    slButtonholeLength);
   // Not translated: a name has to keep to the name rules
   NEW_VARIABLE_BASE_NAME = 'variable';
   NEW_PIECE_BASE_NAME = 'Piece';
@@ -2506,16 +2507,29 @@ function TPattern.SetMarker(const Id: string; AMarker: TPointMarker; const Size:
 var
   Target: TDraftObject;
   OldMarker: TPointMarker;
-  OldSize: string;
+  OldSize, OldAngle, OldOffset: string;
 begin
   if not CheckMarkerTarget(Id) then
     Exit(False);
   Target := TDraftObject(FindNode(Id));
   OldMarker := Target.Marker;
   OldSize := '';
+  OldAngle := '';
+  OldOffset := '';
   if OldMarker <> pmPlain then
     OldSize := Target.Field(MARKER_SIZE_FIELD).StoredText;
+  if OldMarker = pmButtonhole then
+  begin
+    OldAngle := Target.Field(MARKER_ANGLE_FIELD).StoredText;
+    OldOffset := Target.Field(MARKER_OFFSET_FIELD).StoredText;
+  end;
   Target.SetMarker(AMarker);
+  // A new buttonhole lies across, centred on the point
+  if (AMarker = pmButtonhole) and (OldMarker <> pmButtonhole) then
+  begin
+    SetStoredFormula(Target, MARKER_ANGLE_FIELD, '0');
+    SetStoredFormula(Target, MARKER_OFFSET_FIELD, '0');
+  end;
   if AMarker = pmPlain then
   begin
     DetachMarking(Id);
@@ -2532,6 +2546,11 @@ begin
     Target.SetMarker(OldMarker);
     if OldMarker <> pmPlain then
       SetStoredFormula(Target, MARKER_SIZE_FIELD, OldSize);
+    if OldMarker = pmButtonhole then
+    begin
+      SetStoredFormula(Target, MARKER_ANGLE_FIELD, OldAngle);
+      SetStoredFormula(Target, MARKER_OFFSET_FIELD, OldOffset);
+    end;
     Exit;
   end;
   if OldMarker = pmPlain then

@@ -25,7 +25,9 @@ Points and repeats also have:
 
 | Member | Value | Description |
 | --- | --- | --- |
-| `markerSize` | length formula | The marker's size, when it has one |
+| `markerSize` | length formula | The marker's size, when it has one; a buttonhole's length |
+| `markerAngle` | angle formula | A buttonhole's angle, the way its slot runs |
+| `markerOffset` | length formula | How far along its angle a buttonhole's middle is from the point |
 | `locked` | true or false | Locked: it cannot be moved, edited or deleted, but its formulas still run; left out when not |
 
 ## Points

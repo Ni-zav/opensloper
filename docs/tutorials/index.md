@@ -16,6 +16,9 @@ can open it and compare.
 - [Adding a facing](facing.md): the bodice block's front and back neck
   facings in one step from the Features tab, seamed at the shoulder, with
   an interfacing.
+- [Adding buttons](buttons.md): the bodice block's front opened and
+  buttoned in one step from the Features tab, with buttonholes and an
+  extension that follow the number of buttons.
 
 For finished patterns without the steps, see
 [Example patterns](../getting-started/examples.md).

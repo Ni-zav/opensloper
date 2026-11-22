@@ -17,8 +17,8 @@
 }
 
 // The Features tab: sewing details to apply to the pattern in one step: a
-// zip along the selected edge of a piece, a dart in it, or a hem or a facing
-// along the selected edges. Apply adds
+// zip along the selected edge of a piece, a dart in it, a hem or a facing
+// along the selected edges, or buttons down a front. Apply adds
 // ordinary objects, as one undo step (Sloper.Core.Features).
 unit Sloper.UI.FeaturesPanel;
 
@@ -67,6 +67,12 @@ type
     FFacingPlaceBox, FFacingMaterialBox: TComboBox;
     FFacingInterfacingBox: TCheckBox;
     FFacingApply: TButton;
+    FButtonsGroup: TGroupBox;
+    FButtonsEdgeLabel, FButtonSizeLabel, FButtonThicknessLabel, FButtonFirstLabel, FButtonLastLabel: TLabel;
+    FButtonSizeEdit, FButtonThicknessEdit, FButtonCountEdit, FButtonFirstEdit, FButtonLastEdit, FButtonExtensionEdit: TEdit;
+    FButtonDirectionBox: TComboBox;
+    FButtonExtensionBox: TCheckBox;
+    FButtonsApply: TButton;
     // The depth the topstitching's distance was last worked out from
     FHemDepth: string;
     FOnMessage: TFeaturesMessageEvent;
@@ -86,6 +92,10 @@ type
     procedure RefreshFacing;
     procedure FacingInterfacingClick(Sender: TObject);
     procedure FacingApplyClick(Sender: TObject);
+    procedure BuildButtons;
+    procedure RefreshButtons;
+    procedure ButtonExtensionClick(Sender: TObject);
+    procedure ButtonsApplyClick(Sender: TObject);
     procedure HemStartingValues;
     procedure RefreshHem;
     function EdgeNames: string;
@@ -180,6 +190,26 @@ resourcestring
     'like. They are ordinary objects, to change as you like; one Undo takes them all off.';
   rsFeaturesUndoFacing = 'Insert Facing';
   rsFeaturesFacingDone = 'Facing added along %s';
+  rsFeaturesButtonsChoose = 'Select the opening''s edge on the canvas, such as a centre front, and the other front''s ' +
+    'edge too if the fronts are separate pieces.';
+  rsFeaturesButtonsHoles = 'Buttonholes along %s';
+  rsFeaturesButtonsBoth = 'Buttonholes along %s, buttons along %s';
+  rsFeaturesButtonSize = 'Button size (%s)';
+  rsFeaturesButtonThickness = 'Button thickness (%s)';
+  rsFeaturesButtonCount = 'How many';
+  rsFeaturesButtonFirst = 'First from the %s end (%s)';
+  rsFeaturesButtonLast = 'Last from the %s end (%s)';
+  rsFeaturesButtonStart = 'start';
+  rsFeaturesButtonEnd = 'end';
+  rsFeaturesButtonDirection = 'Buttonholes';
+  rsFeaturesButtonHorizontal = 'Horizontal, square to the edge';
+  rsFeaturesButtonVertical = 'Vertical, along the edge';
+  rsFeaturesButtonExtension = 'Add an extension this wide';
+  rsFeaturesButtonsNote = 'Apply adds the first and last buttons'' points, a repeat of buttonholes and one of buttons ' +
+    'between them, and an extension past the edge if you like, the edge staying as a placement line. They are ordinary ' +
+    'objects: change #button_count and the buttons follow. One Undo takes them all off.';
+  rsFeaturesUndoButtons = 'Insert Buttons';
+  rsFeaturesButtonsDone = 'Buttons added along %s';
 
 implementation
 
@@ -193,6 +223,7 @@ const
   KIND_DART = 1;
   KIND_HEM = 2;
   KIND_FACING = 3;
+  KIND_BUTTONS = 4;
 
 constructor TFeaturesPanel.Create(AOwner: TComponent);
 begin
@@ -208,6 +239,7 @@ begin
   FKinds.Items.Add(rsFeatureDart);
   FKinds.Items.Add(rsFeatureHem);
   FKinds.Items.Add(rsFeatureFacing);
+  FKinds.Items.Add(rsFeatureButtons);
   FKinds.ItemIndex := KIND_ZIP;
   FKinds.Height := Scale96ToScreen(KIND_LIST_HEIGHT96);
   FKinds.OnClick := @KindClick;
@@ -215,6 +247,7 @@ begin
   BuildDart;
   BuildHem;
   BuildFacing;
+  BuildButtons;
   KindClick(nil);
 end;
 
@@ -403,12 +436,45 @@ begin
   AddNote(FFacingApply, rsFeaturesFacingNote);
 end;
 
+procedure TFeaturesPanel.BuildButtons;
+begin
+  FButtonsGroup := AddGroup(rsFeatureButtons);
+  FButtonsEdgeLabel := AddLabel('');
+  FButtonsEdgeLabel.Font.Style := [fsBold];
+  FButtonsEdgeLabel.WordWrap := True;
+  FButtonSizeLabel := AddLabel('');
+  FButtonSizeEdit := AddEdit;
+  FButtonThicknessLabel := AddLabel('');
+  FButtonThicknessEdit := AddEdit;
+  AddLabel(rsFeaturesButtonCount);
+  FButtonCountEdit := AddEdit;
+  FButtonFirstLabel := AddLabel('');
+  FButtonFirstEdit := AddEdit;
+  FButtonLastLabel := AddLabel('');
+  FButtonLastEdit := AddEdit;
+  AddLabel(rsFeaturesButtonDirection);
+  FButtonDirectionBox := AddChoices;
+  // In the order of TButtonDirection
+  FButtonDirectionBox.Items.Add(rsFeaturesButtonHorizontal);
+  FButtonDirectionBox.Items.Add(rsFeaturesButtonVertical);
+  FButtonDirectionBox.ItemIndex := 0;
+  FButtonExtensionBox := TCheckBox.Create(Self);
+  FButtonExtensionBox.Caption := rsFeaturesButtonExtension;
+  FButtonExtensionBox.OnClick := @ButtonExtensionClick;
+  Place(FButtonExtensionBox);
+  FButtonExtensionEdit := AddEdit;
+  FButtonExtensionEdit.Enabled := False;
+  FButtonsApply := AddApply(FButtonExtensionEdit, @ButtonsApplyClick);
+  AddNote(FButtonsApply, rsFeaturesButtonsNote);
+end;
+
 procedure TFeaturesPanel.KindClick(Sender: TObject);
 begin
   FZipGroup.Visible := FKinds.ItemIndex = KIND_ZIP;
   FDartGroup.Visible := FKinds.ItemIndex = KIND_DART;
   FHemGroup.Visible := FKinds.ItemIndex = KIND_HEM;
   FFacingGroup.Visible := FKinds.ItemIndex = KIND_FACING;
+  FButtonsGroup.Visible := FKinds.ItemIndex = KIND_BUTTONS;
 end;
 
 procedure TFeaturesPanel.SetDocument(ADocument: TPatternDocument);
@@ -470,6 +536,7 @@ procedure TFeaturesPanel.StartingValues;
 var
   Spec: TZipSpec;
   Dart: TDartSpec;
+  Buttons: TButtonsSpec;
 begin
   Spec := DefaultZip(FDocument.Pattern, '', TZipStyle(Max(FStyleBox.ItemIndex, 0)));
   FLengthEdit.Text := Spec.Length;
@@ -483,6 +550,13 @@ begin
   FDartHoleEdit.Text := Dart.HoleInset;
   HemStartingValues;
   FFacingWidthEdit.Text := DefaultFacing(FDocument.Pattern, []).Width;
+  Buttons := DefaultButtons(FDocument.Pattern, '');
+  FButtonSizeEdit.Text := Buttons.Size;
+  FButtonThicknessEdit.Text := Buttons.Thickness;
+  FButtonCountEdit.Text := Buttons.Count;
+  FButtonFirstEdit.Text := Buttons.First;
+  FButtonLastEdit.Text := Buttons.Last;
+  FButtonExtensionEdit.Text := Buttons.Size;
   FGeneration := FDocument.Generation;
   ShowStyle;
 end;
@@ -531,6 +605,8 @@ begin
   FHemTurnLabel.Caption := Format(rsFeaturesHemTurnUnder, [UnitText]);
   FHemStitchLabel.Caption := Format(rsFeaturesHemStitch, [UnitText]);
   FFacingWidthLabel.Caption := Format(rsFeaturesFacingWidth, [UnitText]);
+  FButtonSizeLabel.Caption := Format(rsFeaturesButtonSize, [UnitText]);
+  FButtonThicknessLabel.Caption := Format(rsFeaturesButtonThickness, [UnitText]);
   FHemTurnEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) in [hsDouble, hsNarrow];
   FHemTurnLabel.Enabled := FHemTurnEdit.Enabled;
   FHemStitchEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) <> hsBlind;
@@ -580,6 +656,7 @@ begin
   RefreshDart(Edge);
   RefreshHem;
   RefreshFacing;
+  RefreshButtons;
 end;
 
 // The selected edges' names, in the order selected
@@ -659,6 +736,80 @@ begin
     Say(FDocument.Pattern.LastError);
     Exit;
   end;
+  Say(Done);
+end;
+
+// One edge for both, or the holes' edge and then the buttons', with the ends
+// the first and last buttons are measured from
+procedure TFeaturesPanel.RefreshButtons;
+var
+  UnitText, StartName, EndName: string;
+  Edge: TEdgeObject;
+begin
+  FButtonsApply.Enabled := Assigned(FDocument) and (Length(FEdgeKeys) in [1, 2]);
+  UnitText := MEASURE_UNIT_NAMES[muMillimetre];
+  StartName := rsFeaturesButtonStart;
+  EndName := rsFeaturesButtonEnd;
+  if Assigned(FDocument) then
+    UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
+  if not FButtonsApply.Enabled then
+    FButtonsEdgeLabel.Caption := rsFeaturesButtonsChoose
+  else
+  begin
+    if Length(FEdgeKeys) = 1 then
+      FButtonsEdgeLabel.Caption := Format(rsFeaturesButtonsHoles, [PointName(FDocument, FEdgeKeys[0])])
+    else
+      FButtonsEdgeLabel.Caption := Format(rsFeaturesButtonsBoth, [PointName(FDocument, FEdgeKeys[0]), PointName(FDocument, FEdgeKeys[1])]);
+    Edge := TEdgeObject(FDocument.Pattern.FindNode(FEdgeKeys[0]));
+    StartName := PointName(FDocument, Edge.StartKey);
+    EndName := PointName(FDocument, Edge.EndKey);
+  end;
+  FButtonFirstLabel.Caption := Format(rsFeaturesButtonFirst, [StartName, UnitText]);
+  FButtonLastLabel.Caption := Format(rsFeaturesButtonLast, [EndName, UnitText]);
+end;
+
+procedure TFeaturesPanel.ButtonExtensionClick(Sender: TObject);
+begin
+  FButtonExtensionEdit.Enabled := FButtonExtensionBox.Checked;
+end;
+
+// One undo step, or none when the buttons cannot go there
+procedure TFeaturesPanel.ButtonsApplyClick(Sender: TObject);
+var
+  Spec: TButtonsSpec;
+  Made: TButtonsMade;
+  Done, Problem: string;
+begin
+  if not Assigned(FDocument) or FDocument.ChangeOpen or not (Length(FEdgeKeys) in [1, 2]) then
+    Exit;
+  Spec := DefaultButtons(FDocument.Pattern, FEdgeKeys[0]);
+  if Length(FEdgeKeys) = 2 then
+    Spec.ButtonsEdgeKey := FEdgeKeys[1];
+  Spec.Size := Trim(FButtonSizeEdit.Text);
+  Spec.Thickness := Trim(FButtonThicknessEdit.Text);
+  Spec.Count := Trim(FButtonCountEdit.Text);
+  Spec.First := Trim(FButtonFirstEdit.Text);
+  Spec.Last := Trim(FButtonLastEdit.Text);
+  Spec.Direction := TButtonDirection(Max(FButtonDirectionBox.ItemIndex, 0));
+  if FButtonExtensionBox.Checked then
+    Spec.Extension := Trim(FButtonExtensionEdit.Text);
+  Done := Format(rsFeaturesButtonsDone, [EdgeNames]);
+  FDocument.BeginChange(rsFeaturesUndoButtons);
+  if not InsertButtons(FDocument.Pattern, Spec, Made) then
+  begin
+    Done := FDocument.Pattern.LastError;
+    FDocument.CancelChange;
+    Say(Done);
+    Exit;
+  end;
+  FDocument.EndChange;
+  if FDocument.ChangeRefused then
+  begin
+    Say(FDocument.Pattern.LastError);
+    Exit;
+  end;
+  for Problem in Made.Problems do
+    Done := Format(rsFeaturesHemProblem, [Done, Problem]);
   Say(Done);
 end;
 

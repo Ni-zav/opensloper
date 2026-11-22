@@ -17,7 +17,7 @@
 }
 
 // Features: sewing details applied to a pattern in one step, such as a zip
-// in a seam, a dart in a piece's edge, a hem or a facing. Each is made of ordinary objects, points, split edges,
+// in a seam, a dart in a piece's edge, a hem, a facing or buttons. Each is made of ordinary objects, points, split edges,
 // allowances, notches and lines, which the user can then change as if they
 // had drawn them. Nothing here is saved as a feature.
 unit Sloper.Core.Features;
@@ -30,7 +30,7 @@ uses
   Sloper.Core.Pattern;
 
 type
-  TFeatureKind = (fkZip, fkDart, fkHem, fkFacing);
+  TFeatureKind = (fkZip, fkDart, fkHem, fkFacing, fkButtons);
 
   // Centred: topstitched either side of the seam. Invisible: sewn from the
   // inside, so nothing shows. Lapped: one side laps over the zip, stitched
@@ -142,6 +142,38 @@ type
     JoinKeys: array of string;
   end;
 
+  // Horizontal buttonholes run square to the opening, as on shirts and coats;
+  // vertical ones along it, as on a placket
+  TButtonDirection = (bdHorizontal, bdVertical);
+
+  TButtonsSpec = record
+    // The opening's edge on a piece, such as a centre front, along which the
+    // buttonholes go, and the buttons too unless ButtonsEdgeKey is given
+    EdgeKey: string;
+    // The matching edge of another piece the buttons go along, as on
+    // separate left and right fronts; '' puts them on EdgeKey, for one piece
+    // cut twice
+    ButtonsEdgeKey: string;
+    // Formulas in the pattern's unit, with names: the button's size and
+    // thickness, how many buttons there are (a number), how far the first
+    // and last are from the edge's start and end, and the extension's width
+    // ('' for none)
+    Size, Thickness, Count, First, Last, Extension: string;
+    Direction: TButtonDirection;
+  end;
+
+  TButtonsMade = record
+    // The first and last buttonholes' points, and the buttons' (the same
+    // points on one piece)
+    TopKey, BottomKey, ButtonTopKey, ButtonBottomKey: string;
+    // The repeats of buttonholes and buttons, and the pieces they are on
+    HolesKey, ButtonsKey, HolesPieceKey, ButtonsPieceKey: string;
+    // Each extension's lines and offset, in the order the paths run
+    ExtensionKeys: array of string;
+    // What is worth checking, though it was done: a narrow extension
+    Problems: array of string;
+  end;
+
 const
   ZIP_LENGTH_VARIABLE = 'zip_length';
   HEM_DEPTH_VARIABLE = 'hem_depth';
@@ -150,6 +182,16 @@ const
   FACING_PREFIX = 'Facing_';
   INTERFACING_PREFIX = 'Interfacing_';
   FACING_SEAM_NAME = 'FacingSeam';
+  BUTTON_SIZE_VARIABLE = 'button_size';
+  BUTTON_THICKNESS_VARIABLE = 'button_thickness';
+  BUTTON_COUNT_VARIABLE = 'button_count';
+  // A number, not a length, so the same in every unit
+  STARTING_BUTTON_COUNT = '5';
+  BUTTON_TOP_NAME = 'ButtonTop';
+  BUTTON_BOTTOM_NAME = 'ButtonBottom';
+  BUTTON_NAME = 'Button';
+  BUTTONHOLE_NAME = 'Buttonhole';
+  BUTTON_DIRECTION_NAMES: array[TButtonDirection] of string = ('horizontal', 'vertical');
   ZIP_STOP_NAME = 'ZipStop';
   FLY_SHIELD_NAME = 'FlyShield';
   DART_MID_NAME = 'DartMid';
@@ -196,6 +238,16 @@ function DefaultFacing(Pattern: TPattern; const EdgeKeys: array of string): TFac
 // to the piece; the piece's notches along it; seams between facings where
 // their pieces are seamed; and an interfacing if asked for
 function InsertFacing(Pattern: TPattern; const Spec: TFacingSpec; out Made: TFacingMade): boolean;
+// Buttons along the edge, on one piece cut twice, with horizontal holes and
+// no extension: their size, thickness and count the button_size,
+// button_thickness and button_count variables, which InsertButtons adds
+// when they are missing
+function DefaultButtons(Pattern: TPattern; const EdgeKey: string): TButtonsSpec;
+// Adds the buttons and evaluates, as InsertZip does: ButtonTop and
+// ButtonBottom along the edge, a repeat of buttonholes between them and one
+// of buttons (on the other piece's edge when there is one), and the
+// extension if asked for, the edge becoming a placement line
+function InsertButtons(Pattern: TPattern; const Spec: TButtonsSpec; out Made: TButtonsMade): boolean;
 
 resourcestring
   rsFeatureZip = 'Zip';
@@ -232,6 +284,18 @@ resourcestring
   rsFeatureFacingOneNeighbour = 'Only %s is left of %s beside the edges; a facing needs an edge at each end of them';
   rsFeatureFacingNoWidth = 'A facing needs a width above 0';
   rsFeatureFacingTooWide = 'The facing is wider than %s there: %s';
+  rsFeatureButtons = 'Buttons';
+  rsFeatureButtonSize = 'The size of the buttons, across';
+  rsFeatureButtonThickness = 'The thickness of the buttons, which a buttonhole is longer by';
+  rsFeatureButtonCount = 'How many buttons there are';
+  rsFeatureNoButtonEdge = 'Choose an edge of a piece for the buttons, such as a centre front';
+  rsFeatureButtonsNotInPiece = '%s is in no piece; buttons go along a piece''s edge';
+  rsFeatureButtonsPieces = '%s is in more than one piece; buttons go along one';
+  rsFeatureButtonsFold = '%s is the fold of %s, where buttons cannot go';
+  rsFeatureButtonsSamePiece = 'The buttons'' edge is on %s too; choose the other front''s edge, or none';
+  rsFeatureButtonsNoCount = 'There must be at least one button';
+  rsFeatureButtonsNoRoom = 'The first button %s from one end and the last %s from the other leave no room along %s (%s long)';
+  rsFeatureButtonsNarrow = 'The extension, %s wide, is narrower than half a button';
 
 implementation
 
@@ -1631,6 +1695,293 @@ begin
     Piece := TDraftObject(Pattern.FindNode(Key));
     if Piece.State <> esValid then
       Exit(Pattern.Refuse(Format(rsFeatureFacingPieceProblem, [Piece.DisplayName, Piece.Message])));
+  end;
+  Result := True;
+end;
+
+function DefaultButtons(Pattern: TPattern; const EdgeKey: string): TButtonsSpec;
+begin
+  Result := Default(TButtonsSpec);
+  Result.EdgeKey := EdgeKey;
+  Result.Size := '#' + BUTTON_SIZE_VARIABLE;
+  Result.Thickness := '#' + BUTTON_THICKNESS_VARIABLE;
+  Result.Count := '#' + BUTTON_COUNT_VARIABLE;
+  Result.First := STARTING_LENGTHS[slButtonEnd, Pattern.Units];
+  Result.Last := STARTING_LENGTHS[slButtonEnd, Pattern.Units];
+end;
+
+type
+  // One side of the opening: its edge, its piece, and the ends its first and
+  // last buttons are measured from
+  TButtonSide = record
+    Edge: TEdgeObject;
+    Piece: TPieceObject;
+    // The first button is measured from the edge's end, as the edge runs the
+    // other way to the holes' edge
+    FromEnd: boolean;
+    TopKey, BottomKey: string;
+  end;
+
+// The variables the starting formulas name, when they are missing
+function AddButtonVariables(Pattern: TPattern; const Spec: TButtonsSpec): boolean;
+var
+  Formulas: string;
+
+  function Need(const AName, Formula, Description: string): boolean;
+  begin
+    Result := True;
+    if (Pos(LowerCase('#' + AName), Formulas) > 0) and not Assigned(Pattern.FindVariable(AName)) then
+      Result := Assigned(Pattern.AddVariable(AName, Formula, Description));
+  end;
+
+begin
+  Formulas := LowerCase(string.Join(' ', [Spec.Size, Spec.Thickness, Spec.Count, Spec.First, Spec.Last, Spec.Extension]));
+  Result := Need(BUTTON_SIZE_VARIABLE, STARTING_LENGTHS[slButtonSize, Pattern.Units], rsFeatureButtonSize) and
+    Need(BUTTON_THICKNESS_VARIABLE, STARTING_LENGTHS[slButtonThickness, Pattern.Units], rsFeatureButtonThickness) and
+    Need(BUTTON_COUNT_VARIABLE, STARTING_BUTTON_COUNT, rsFeatureButtonCount);
+end;
+
+// The edge and its one piece, checked before anything is added
+function ButtonSide(Pattern: TPattern; const EdgeKey: string; out Side: TButtonSide): boolean;
+var
+  Node: TObject;
+  Pieces: TPieceObjectArray;
+begin
+  Side := Default(TButtonSide);
+  Node := Pattern.FindNode(EdgeKey);
+  if not (Node is TEdgeObject) or TEdgeObject(Node).IsClosed then
+    Exit(Pattern.Refuse(rsFeatureNoButtonEdge));
+  Side.Edge := TEdgeObject(Node);
+  Pieces := PiecesOn(Pattern, EdgeKey);
+  if Length(Pieces) = 0 then
+    Exit(Pattern.Refuse(Format(rsFeatureButtonsNotInPiece, [Side.Edge.DisplayName])));
+  if Length(Pieces) > 1 then
+    Exit(Pattern.Refuse(Format(rsFeatureButtonsPieces, [Side.Edge.DisplayName])));
+  Side.Piece := Pieces[0];
+  if Side.Piece.FoldEdgeKey = EdgeKey then
+    Exit(Pattern.Refuse(Format(rsFeatureButtonsFold, [Side.Edge.DisplayName, Side.Piece.DisplayName])));
+  if Side.Piece.State <> esValid then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingPieceProblem, [Side.Piece.DisplayName, Side.Piece.Message])));
+  Result := True;
+end;
+
+// The count, at least 1, and room for it between the first and last buttons
+function CheckButtonRoom(Pattern: TPattern; const Spec: TButtonsSpec; const Side: TButtonSide): boolean;
+var
+  Count, First, Last, Scale: double;
+begin
+  Scale := MILLIMETRES_PER_UNIT[Pattern.Units];
+  if not Pattern.EvaluateText(Spec.Count, Count) or not Pattern.EvaluateText(Spec.First, First) or not Pattern.EvaluateText(Spec.Last, Last) then
+    Exit(False);
+  if Round(Count) < 1 then
+    Exit(Pattern.Refuse(rsFeatureButtonsNoCount));
+  if (First < 0) or (Last < 0) or ((First + Last) * Scale >= Side.Edge.Length - DEFAULT_TOLERANCE) then
+    Exit(Pattern.Refuse(Format(rsFeatureButtonsNoRoom, [LengthWithUnit(First * Scale, Pattern.Units),
+      LengthWithUnit(Last * Scale, Pattern.Units), Side.Edge.DisplayName, LengthWithUnit(Side.Edge.Length, Pattern.Units)])));
+  Result := True;
+end;
+
+// The first and last buttons' points along the side's edge
+function AddButtonEnds(Pattern: TPattern; const Spec: TButtonsSpec; var Side: TButtonSide): boolean;
+var
+  Top, Bottom: TDraftObject;
+begin
+  Top := Pattern.AddAlongEdgePoint(FreeName(Pattern, BUTTON_TOP_NAME), Side.Edge.Key, Side.FromEnd, amLength, Spec.First);
+  Bottom := Pattern.AddAlongEdgePoint(FreeName(Pattern, BUTTON_BOTTOM_NAME), Side.Edge.Key, not Side.FromEnd, amLength, Spec.Last);
+  if not Assigned(Top) or not Assigned(Bottom) then
+    Exit(False);
+  Side.TopKey := Top.Key;
+  Side.BottomKey := Bottom.Key;
+  Result := True;
+end;
+
+// The edge of the buttons' piece runs the same way as the holes' edge, or the
+// other way, as on a mirrored copy
+function RunsBackwards(Holes, Buttons: TEdgeObject): boolean;
+var
+  Start, Along: TVec2;
+begin
+  Start := Holes.PointAtLength(0);
+  Along := Holes.PointAtLength(Holes.Length) - Start;
+  Result := Dot(Buttons.PointAtLength(0) - Start, Along) > Dot(Buttons.PointAtLength(Buttons.Length) - Start, Along);
+end;
+
+// The extension: the edge offset outwards at the width, with lines out to it
+// at its ends, in its place in the piece's path; the edge stays as a
+// placement line, the centre front the buttons are on
+function AddExtension(Pattern: TPattern; const Spec: TButtonsSpec; const Side: TButtonSide; var Made: TButtonsMade): boolean;
+var
+  Run: TRunEdgeArray;
+  Outside: TOffsetSide;
+  Offset: TOffsetEdge;
+  OutStart, OutEnd: TDraftObject;
+  Into, OutOf: TLineObject;
+  StartKey, EndKey: string;
+  Path: TPiecePath;
+  Index: integer;
+begin
+  if not Pattern.PieceRun(Side.Piece, [Side.Edge.Key], False, Run, Outside) then
+    Exit(False);
+  Offset := Pattern.AddOffsetRun(Run, Spec.Extension, Outside, erOutline);
+  if not Assigned(Offset) then
+    Exit(False);
+  OutStart := Pattern.AddAlongEdgePoint('', Offset.Key, False, amLength, '0');
+  OutEnd := Pattern.AddAlongEdgePoint('', Offset.Key, True, amLength, '0');
+  if not Assigned(OutStart) or not Assigned(OutEnd) then
+    Exit(False);
+  // Where the path reaches the edge and leaves it
+  StartKey := Side.Edge.StartKey;
+  EndKey := Side.Edge.EndKey;
+  if Run[0].Reversed then
+  begin
+    StartKey := Side.Edge.EndKey;
+    EndKey := Side.Edge.StartKey;
+  end;
+  Into := Pattern.AddLine(StartKey, OutStart.Key, erOutline);
+  OutOf := Pattern.AddLine(OutEnd.Key, EndKey, erOutline);
+  if not Assigned(Into) or not Assigned(OutOf) then
+    Exit(False);
+  Path := nil;
+  AddPathEntry(Path, Into.Key, False);
+  AddPathEntry(Path, Offset.Key, False);
+  AddPathEntry(Path, OutOf.Key, False);
+  if not Pattern.ReplaceInPath(Side.Piece, Side.Edge.Key, Path, False) or not Pattern.SetEdgeRole(Side.Edge, erPlacement) then
+    Exit(False);
+  for Index := 0 to High(Path) do
+    Insert(Path[Index].EdgeKey, Made.ExtensionKeys, Length(Made.ExtensionKeys));
+  Result := True;
+end;
+
+// A buttonhole's angle: along the opening for a vertical hole, else square to
+// it into the piece
+function ButtonholeAngle(Pattern: TPattern; const Spec: TButtonsSpec; const Side: TButtonSide): string;
+var
+  Top, Bottom: TPointObject;
+  Along: double;
+  Inward: boolean;
+begin
+  Top := TPointObject(Pattern.FindNode(Side.TopKey));
+  Bottom := TPointObject(Pattern.FindNode(Side.BottomKey));
+  Result := Format('atan2(%0:s.y - %1:s.y, %1:s.x - %0:s.x)', [Top.DisplayName, Bottom.DisplayName]);
+  Along := AngleBetween(Top.Position, Bottom.Position);
+  Inward := PointInPolygon(PolarPoint(Top.Position, PROBE_DISTANCE, Along + RIGHT_ANGLE), Side.Piece.Outline);
+  if Spec.Direction = bdVertical then
+    Exit;
+  if Inward then
+    Result := Format('%s + %d', [Result, RIGHT_ANGLE])
+  else
+    Result := Format('%s - %d', [Result, RIGHT_ANGLE]);
+end;
+
+// The buttonholes: a repeat between the holes' ends, each a slot the button's
+// size and thickness long, a horizontal one starting just past the centre
+// front and running into the piece
+function AddButtonholes(Pattern: TPattern; const Spec: TButtonsSpec; const Side: TButtonSide; const Angle: string;
+  var Made: TButtonsMade): boolean;
+var
+  Holes: TRepeatObject;
+  Length, Offset: string;
+begin
+  Holes := Pattern.AddRepeatBetween(FreeName(Pattern, BUTTONHOLE_NAME), Side.TopKey, Side.BottomKey, Spec.Count, True);
+  if not Assigned(Holes) then
+    Exit(False);
+  Made.HolesKey := Holes.Key;
+  Length := Format('%s + %s', [Term(Spec.Size), Term(Spec.Thickness)]);
+  Offset := '0';
+  if Spec.Direction = bdHorizontal then
+    Offset := Format('(%s) / 2 - %s', [Length, STARTING_LENGTHS[slButtonholeBack, Pattern.Units]]);
+  Result := Pattern.SetMarker(Holes.Key, pmButtonhole, Length) and Pattern.SetFormula(Holes, MARKER_ANGLE_FIELD, Angle) and
+    Pattern.SetFormula(Holes, MARKER_OFFSET_FIELD, Offset);
+end;
+
+function AddButtonMarkers(Pattern: TPattern; const Spec: TButtonsSpec; const Side: TButtonSide; var Made: TButtonsMade): boolean;
+var
+  Buttons: TRepeatObject;
+begin
+  Buttons := Pattern.AddRepeatBetween(FreeName(Pattern, BUTTON_NAME), Side.TopKey, Side.BottomKey, Spec.Count, True);
+  if not Assigned(Buttons) then
+    Exit(False);
+  Made.ButtonsKey := Buttons.Key;
+  Result := Pattern.SetMarker(Buttons.Key, pmButton, Spec.Size);
+end;
+
+// Markings join every piece they lie in; on separate pieces that overlap,
+// the holes are taken off the buttons' piece and the buttons off the holes'
+function KeepMarkingOn(Pattern: TPattern; const Key: string; Piece: TPieceObject): boolean;
+var
+  Other: TPieceObject;
+begin
+  for Other in Pattern.PiecesWithMarking(Key) do
+    if (Other <> Piece) and not Pattern.RemoveMarking(Other, Other.PointMarkingOf(Key)) then
+      Exit(False);
+  Result := True;
+end;
+
+function InsertButtons(Pattern: TPattern; const Spec: TButtonsSpec; out Made: TButtonsMade): boolean;
+var
+  Holes, Buttons: TButtonSide;
+  Separate: boolean;
+  Angle: string;
+  Extension, Size: double;
+  Key: string;
+  Keys: TStringArray;
+  Node: TDraftObject;
+begin
+  Made := Default(TButtonsMade);
+  if not ButtonSide(Pattern, Spec.EdgeKey, Holes) then
+    Exit(False);
+  Separate := (Spec.ButtonsEdgeKey <> '') and (Spec.ButtonsEdgeKey <> Spec.EdgeKey);
+  Buttons := Holes;
+  if Separate then
+  begin
+    if not ButtonSide(Pattern, Spec.ButtonsEdgeKey, Buttons) then
+      Exit(False);
+    if Buttons.Piece = Holes.Piece then
+      Exit(Pattern.Refuse(Format(rsFeatureButtonsSamePiece, [Holes.Piece.DisplayName])));
+    Buttons.FromEnd := RunsBackwards(Holes.Edge, Buttons.Edge);
+  end;
+  if not AddButtonVariables(Pattern, Spec) then
+    Exit(False);
+  Pattern.Evaluate;
+  if not CheckButtonRoom(Pattern, Spec, Holes) or (Separate and not CheckButtonRoom(Pattern, Spec, Buttons)) then
+    Exit(False);
+  if not AddButtonEnds(Pattern, Spec, Holes) or (Separate and not AddButtonEnds(Pattern, Spec, Buttons)) then
+    Exit(False);
+  if not Separate then
+    Buttons := Holes;
+  Pattern.Evaluate;
+  // Which way is into the piece is found before an extension widens it
+  Angle := ButtonholeAngle(Pattern, Spec, Holes);
+  if Trim(Spec.Extension) <> '' then
+  begin
+    if not AddExtension(Pattern, Spec, Holes, Made) or (Separate and not AddExtension(Pattern, Spec, Buttons, Made)) then
+      Exit(False);
+    if Pattern.EvaluateText(Spec.Extension, Extension) and Pattern.EvaluateText(Spec.Size, Size) and (Extension < Size / 2) then
+      Insert(Format(rsFeatureButtonsNarrow, [LengthWithUnit(Extension * MILLIMETRES_PER_UNIT[Pattern.Units], Pattern.Units)]),
+        Made.Problems, Length(Made.Problems));
+  end;
+  if not AddButtonholes(Pattern, Spec, Holes, Angle, Made) or not AddButtonMarkers(Pattern, Spec, Buttons, Made) then
+    Exit(False);
+  Pattern.Evaluate;
+  if Separate and (not KeepMarkingOn(Pattern, Made.HolesKey, Holes.Piece) or not KeepMarkingOn(Pattern, Made.ButtonsKey, Buttons.Piece)) then
+    Exit(False);
+  Pattern.Evaluate;
+  Made.TopKey := Holes.TopKey;
+  Made.BottomKey := Holes.BottomKey;
+  Made.ButtonTopKey := Buttons.TopKey;
+  Made.ButtonBottomKey := Buttons.BottomKey;
+  Made.HolesPieceKey := Holes.Piece.Key;
+  Made.ButtonsPieceKey := Buttons.Piece.Key;
+  Keys := nil;
+  Insert(Made.HolesKey, Keys, 0);
+  Insert(Made.ButtonsKey, Keys, 1);
+  Insert(Holes.Piece.Key, Keys, 2);
+  Insert(Buttons.Piece.Key, Keys, 3);
+  for Key in Keys do
+  begin
+    Node := TDraftObject(Pattern.FindNode(Key));
+    if Node.State <> esValid then
+      Exit(Pattern.Refuse(Format(rsFeatureFacingPieceProblem, [Node.DisplayName, Node.Message])));
   end;
   Result := True;
 end;

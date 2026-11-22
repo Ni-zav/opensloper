@@ -53,6 +53,10 @@ marked on the piece. It follows its edges when they move. Outer corners are
 mitred and inner ones trimmed where the offsets cross, and it is invalid when
 a curve bends more tightly than the distance.
 
+An offset can also end on another edge: cut back where it crosses it, or
+carried on straight to it. A [facing's](features.md#facing) inner edge ends on
+the shoulder and the centre front this way, whatever the width.
+
 ## Rounded corners
 
 Select two straight edges that meet at a point and choose Tools → Edge → Round
@@ -120,7 +124,9 @@ count drops, anything that used a point that has gone shows an error instead of
 moving to another point; when the count rises again, the point comes back.
 
 Select the first point of a repeat to edit the repeat. Give it a marker, such
-as Button, and every point in the row gets it and is marked on the piece.
+as Button or Buttonhole, and every point in the row gets it and is marked on
+the piece. The [Features tab](features.md#buttons) makes the buttons and
+buttonholes of an opening this way in one step.
 
 To make one, select two points, or one line or curve, and choose Tools →
 Points → Repeat Points. The new repeat has three points, the first and last on

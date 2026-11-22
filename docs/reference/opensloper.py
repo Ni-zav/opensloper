@@ -737,6 +737,62 @@ class OpenSloper:
             "interfacing": interfacing,
         })
 
+    def feature_buttons(
+        self,
+        edge: int | str,
+        *,
+        buttonsEdge: int | str | None = None,
+        size: str | float | None = None,
+        thickness: str | float | None = None,
+        count: str | float | None = None,
+        first: str | float | None = None,
+        last: str | float | None = None,
+        extension: str | float | None = None,
+        direction: Literal["horizontal", "vertical"] | None = None,
+    ) -> Any:
+        """Puts buttons and buttonholes along a front opening, as the Features tab does, in one undo
+        step: ButtonTop and ButtonBottom along the edge at first and last from its ends, a
+        Buttonhole repeat between them with the buttonhole marker, a slot the button's size and
+        thickness long, and a Button repeat with the button marker, on the same piece or along the
+        other front's edge, and an extension if asked for, the edge becoming a placement line. They
+        are ordinary objects, so changing #button_count moves and adds holes. The size, thickness
+        and count start as #button_size, #button_thickness and #button_count, variables the first
+        buttons add.
+
+        Args:
+            edge: The opening's edge on a piece, such as a centre front, for the buttonholes, and
+                the buttons too unless `buttonsEdge` is given.
+            buttonsEdge: The other front's matching edge, for the buttons, when the fronts are
+                separate pieces.
+            size: The button's size, across. Default #button_size, 15 mm to start with.
+            thickness: The button's thickness, which a buttonhole is longer by. Default
+                #button_thickness, 3 mm.
+            count: How many buttons. Default #button_count, 5 to start with.
+            first: How far the first button is from the edge's start. Default 20 mm.
+            last: How far the last button is from the edge's end. Default 20 mm.
+            extension: The width of an extension added past the edge, such as #button_size. Default
+                none.
+            direction: horizontal: buttonholes square to the edge, starting 3 mm past it; vertical:
+                along it, centred on the buttons. Default horizontal.
+
+        Returns:
+            `top` and `bottom` (the first and last buttonholes' points), `holes` and `buttons` (the
+            repeats) and `extension` (its edges) as `get_object` gives them, `holesPiece` and
+            `buttonsPiece` (IDs), and `problems`, what is worth checking though it was done, such as
+            an extension narrower than half a button.
+        """
+        return self._send("feature_buttons", {
+            "edge": edge,
+            "buttonsEdge": buttonsEdge,
+            "size": size,
+            "thickness": thickness,
+            "count": count,
+            "first": first,
+            "last": last,
+            "extension": extension,
+            "direction": direction,
+        })
+
     def convert_edge(self, target: int | str, to: Literal["line", "curve"]) -> Any:
         """Changes an edge to a line or a curve in place, keeping its ID.
 
@@ -907,16 +963,22 @@ class OpenSloper:
     def set_marker(
         self,
         target: int | str,
-        marker: Literal["plain", "hole", "button", "match"],
+        marker: Literal["plain", "hole", "button", "match", "buttonhole"],
         *,
         size: str | float | None = None,
+        angle: str | float | None = None,
+        offset: str | float | None = None,
     ) -> Any:
         """Gives a point or repeat a marker; it is marked on the pieces it lies in.
 
         Args:
             target: The object, by its ID or its name.
             marker: The marker.
-            size: Its size; by default a size for the marker and the pattern's unit.
+            size: Its size, a buttonhole's length; by default a size for the marker and the
+                pattern's unit.
+            angle: A buttonhole's angle, the way its slot runs. Default 0, across.
+            offset: How far along its angle a buttonhole's middle is from the point. Default 0,
+                centred on it.
 
         Returns:
             The edge, as `get_object` gives it, with the `pieces` it is marked on.
@@ -924,6 +986,8 @@ class OpenSloper:
         return self._send("set_marker", _target(target), {
             "marker": marker,
             "size": size,
+            "angle": angle,
+            "offset": offset,
         })
 
     def create_piece(

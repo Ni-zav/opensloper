@@ -422,7 +422,7 @@ begin
     for Hole in Marking.Holes do
       Writer.PointAt(LAYER_HOLE, Up(Hole));
     for Hole in Marking.Centres do
-      for Stroke in MarkerStrokes(Marking.Marker, Hole, Marking.HoleSize) do
+      for Stroke in MarkerStrokes(Marking.Marker, Hole, Marking.HoleSize, Marking.MarkerAngle, Marking.MarkerOffset) do
         Writer.Line(LAYER_INTERNAL, UpLine(Stroke));
   end;
   At := Up(Piece.Middle);

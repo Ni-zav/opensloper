@@ -126,6 +126,7 @@ type
     function DoFeatureDart(Params: TJSONObject): TJSONData;
     function DoFeatureHem(Params: TJSONObject): TJSONData;
     function DoFeatureFacing(Params: TJSONObject): TJSONData;
+    function DoFeatureButtons(Params: TJSONObject): TJSONData;
     function DoSetAllowanceEnd(Params: TJSONObject): TJSONData;
     function DoSetDartCap(Params: TJSONObject): TJSONData;
     function DoCreatePiece(Params: TJSONObject): TJSONData;
@@ -233,6 +234,7 @@ resourcestring
   rsApiDartCapChange = 'Change dart cap';
   rsApiInsertHemChange = 'Insert Hem';
   rsApiInsertFacingChange = 'Insert Facing';
+  rsApiInsertButtonsChange = 'Insert Buttons';
   rsApiAllowanceEndChange = 'Change allowance ends';
   rsApiUnknownType = 'There is no type "%s"; use one of: %s';
   rsApiBadChoice = 'Parameter "%s" must be one of: %s';
@@ -261,6 +263,7 @@ resourcestring
   rsApiFold = 'Change fold';
   rsApiRole = 'Change role';
   rsApiMarker = 'Change marker';
+  rsApiMarkerNoAngle = 'Only a buttonhole has an angle and an offset';
   rsApiAddMarking = 'Add marking';
   rsApiRemoveMarking = 'Remove marking';
   rsApiMaterials = 'Change materials';
@@ -1898,6 +1901,65 @@ begin
   end;
 end;
 
+// The Features tab's buttons, as one undo step
+function TApiServer.DoFeatureButtons(Params: TJSONObject): TJSONData;
+var
+  Spec: TButtonsSpec;
+  Made: TButtonsMade;
+  Text, Key: string;
+  Answer: TJSONObject;
+  List: TJSONArray;
+
+  procedure Optional(const AName: string; var Formula: string);
+  begin
+    Text := OptionalFormula(Params, AName);
+    if Text <> '' then
+      Formula := Text;
+  end;
+
+  procedure AddNode(const AName, NodeKey: string);
+  begin
+    Answer.Add(AName, NodeToJSON(FDocument, FDocument.Pattern.FindNode(NodeKey)));
+  end;
+
+begin
+  Spec := DefaultButtons(FDocument.Pattern, Reference(Params, 'edge'));
+  if Assigned(Params.Find('buttonsEdge')) then
+    Spec.ButtonsEdgeKey := Reference(Params, 'buttonsEdge');
+  Optional('size', Spec.Size);
+  Optional('thickness', Spec.Thickness);
+  Optional('count', Spec.Count);
+  Optional('first', Spec.First);
+  Optional('last', Spec.Last);
+  Spec.Extension := OptionalFormula(Params, 'extension');
+  Spec.Direction := TButtonDirection(ChoiceParam(Params, 'direction', BUTTON_DIRECTION_NAMES));
+  BeginChange(rsApiInsertButtonsChange);
+  if not InsertButtons(FDocument.Pattern, Spec, Made) then
+    RefuseChange;
+  EndChange;
+  Answer := TJSONObject.Create;
+  try
+    AddNode('top', Made.TopKey);
+    AddNode('bottom', Made.BottomKey);
+    AddNode('holes', Made.HolesKey);
+    AddNode('buttons', Made.ButtonsKey);
+    List := TJSONArray.Create;
+    Answer.Add('extension', List);
+    for Key in Made.ExtensionKeys do
+      List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+    Answer.Add('holesPiece', StrToInt(Made.HolesPieceKey));
+    Answer.Add('buttonsPiece', StrToInt(Made.ButtonsPieceKey));
+    List := TJSONArray.Create;
+    Answer.Add('problems', List);
+    for Text in Made.Problems do
+      List.Add(Text);
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
 function TApiServer.DoSetAllowanceEnd(Params: TJSONObject): TJSONData;
 var
   Piece: TPieceObject;
@@ -2469,6 +2531,17 @@ begin
   BeginChange(rsApiMarker);
   if not FDocument.Pattern.SetMarker(Target.Key, Marker, Size) then
     RefuseChange;
+  // A buttonhole's angle and offset, which only it has
+  if (Assigned(Params.Find('angle')) or Assigned(Params.Find('offset'))) and (Marker <> pmButtonhole) then
+  begin
+    FDocument.Pattern.Refuse(rsApiMarkerNoAngle);
+    RefuseChange;
+  end;
+  if Assigned(Params.Find('angle')) and not FDocument.Pattern.SetFormula(Target, MARKER_ANGLE_FIELD, FormulaParam(Params, 'angle')) then
+    RefuseChange;
+  if Assigned(Params.Find('offset')) and not FDocument.Pattern.SetFormula(Target, MARKER_OFFSET_FIELD, FormulaParam(Params,
+    'offset')) then
+    RefuseChange;
   Result := AddedNode(Target);
   Pieces := TJSONArray.Create;
   TJSONObject(Result).Add('pieces', Pieces);
@@ -2909,6 +2982,7 @@ begin
     'feature_dart': Result := DoFeatureDart(Params);
     'feature_hem': Result := DoFeatureHem(Params);
     'feature_facing': Result := DoFeatureFacing(Params);
+    'feature_buttons': Result := DoFeatureButtons(Params);
     'set_allowance_end': Result := DoSetAllowanceEnd(Params);
     'set_dart_cap': Result := DoSetDartCap(Params);
     'create_piece': Result := DoCreatePiece(Params);

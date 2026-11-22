@@ -225,6 +225,26 @@ resourcestring
   rsApiFacingAside = 'Whether to draw the facing beside its piece, as Move Copy does, rather than over it. Default false';
   rsApiFacingInterfacing = 'The name of a material to cut an interfacing from, the facing''s shape; a name no material has ' +
     'adds one. Default none';
+  rsApiInsertButtons = 'Puts buttons and buttonholes along a front opening, as the Features tab does, in one undo step: ' +
+    'ButtonTop and ButtonBottom along the edge at first and last from its ends, a Buttonhole repeat between them with ' +
+    'the buttonhole marker, a slot the button''s size and thickness long, and a Button repeat with the button marker, on ' +
+    'the same piece or along the other front''s edge, and an extension if asked for, the edge becoming a placement line. ' +
+    'They are ordinary objects, so changing #button_count moves and adds holes. The size, thickness and count start as ' +
+    '#button_size, #button_thickness and #button_count, variables the first buttons add.';
+  rsApiButtonsReturns = '`top` and `bottom` (the first and last buttonholes'' points), `holes` and `buttons` (the repeats) ' +
+    'and `extension` (its edges) as `get_object` gives them, `holesPiece` and `buttonsPiece` (IDs), and `problems`, ' +
+    'what is worth checking though it was done, such as an extension narrower than half a button';
+  rsApiButtonsEdge = 'The opening''s edge on a piece, such as a centre front, for the buttonholes, and the buttons too unless ' +
+    '`buttonsEdge` is given';
+  rsApiButtonsOtherEdge = 'The other front''s matching edge, for the buttons, when the fronts are separate pieces';
+  rsApiButtonsSize = 'The button''s size, across. Default #button_size, 15 mm to start with';
+  rsApiButtonsThickness = 'The button''s thickness, which a buttonhole is longer by. Default #button_thickness, 3 mm';
+  rsApiButtonsCount = 'How many buttons. Default #button_count, 5 to start with';
+  rsApiButtonsFirst = 'How far the first button is from the edge''s start. Default 20 mm';
+  rsApiButtonsLast = 'How far the last button is from the edge''s end. Default 20 mm';
+  rsApiButtonsExtension = 'The width of an extension added past the edge, such as #button_size. Default none';
+  rsApiButtonsDirection = 'horizontal: buttonholes square to the edge, starting 3 mm past it; vertical: along it, centred on ' +
+    'the buttons. Default horizontal';
   rsApiSetAllowanceEnd = 'Sets how an edge''s seam allowance ends where it meets its neighbours: plain, where their ' +
     'cutting lines meet, or mirror, their allowance reflected in the edge, as a hem''s ends are so it lies flat turned up.';
   rsApiAllowanceEndEdge = 'An edge of the piece';
@@ -279,7 +299,9 @@ resourcestring
   rsApiSetRoleReturns = 'The edge, as `get_object` gives it, with the `pieces` it is marked on';
   rsApiSetMarker = 'Gives a point or repeat a marker; it is marked on the pieces it lies in.';
   rsApiMarker = 'The marker';
-  rsApiMarkerSize = 'Its size; by default a size for the marker and the pattern''s unit';
+  rsApiMarkerSize = 'Its size, a buttonhole''s length; by default a size for the marker and the pattern''s unit';
+  rsApiMarkerAngle = 'A buttonhole''s angle, the way its slot runs. Default 0, across';
+  rsApiMarkerOffset = 'How far along its angle a buttonhole''s middle is from the point. Default 0, centred on it';
 
   rsApiCreatePiece = 'Makes a piece from the closed outline around a place.';
   rsApiPieceX = 'Across, in mm, inside the outline';
@@ -616,6 +638,16 @@ begin
   P('width', apFormula, False, rsApiFacingWidth);
   P('aside', apFlag, False, rsApiFacingAside);
   P('interfacing', apText, False, rsApiFacingInterfacing);
+  Method('feature_buttons', agFeatures, rsApiInsertButtons, rsApiButtonsReturns);
+  P('edge', apReference, True, rsApiButtonsEdge);
+  P('buttonsEdge', apReference, False, rsApiButtonsOtherEdge);
+  P('size', apFormula, False, rsApiButtonsSize);
+  P('thickness', apFormula, False, rsApiButtonsThickness);
+  P('count', apFormula, False, rsApiButtonsCount);
+  P('first', apFormula, False, rsApiButtonsFirst);
+  P('last', apFormula, False, rsApiButtonsLast);
+  P('extension', apFormula, False, rsApiButtonsExtension);
+  P('direction', apChoice, False, rsApiButtonsDirection, string.Join(', ', BUTTON_DIRECTION_NAMES));
   Method('convert_edge', agDrafting, rsApiConvertEdge, rsApiReturnsObject);
   Target;
   P('to', apChoice, True, rsApiConvertEdgeTo, 'line, curve');
@@ -657,6 +689,8 @@ begin
   Target;
   P('marker', apChoice, True, rsApiMarker, Joined(POINT_MARKER_NAMES));
   P('size', apFormula, False, rsApiMarkerSize);
+  P('angle', apFormula, False, rsApiMarkerAngle);
+  P('offset', apFormula, False, rsApiMarkerOffset);
   // Pieces
   Method('create_piece', agPieces, rsApiCreatePiece, rsApiReturnsPiece);
   P('x', apNumber, True, rsApiPieceX);

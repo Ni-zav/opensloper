@@ -131,6 +131,11 @@
         <UnitName Value="Sloper.Tests.Facing"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.buttons.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.Buttons"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.printing.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.Printing"/>

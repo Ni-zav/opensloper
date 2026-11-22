@@ -39,8 +39,9 @@ type
   TProjectDirection = (pdPerpendicular, pdAngle);
   TOffsetSide = (osLeft, osRight);
   // How a point prints (see Point markers in the design document): pmHole is
-  // cut, pmButton marks a button's size and pmMatch is a dot for matching
-  TPointMarker = (pmPlain, pmHole, pmButton, pmMatch);
+  // cut, pmButton marks a button's size, pmMatch is a dot for matching and
+  // pmButtonhole a slot its size long, at an angle and moved along it
+  TPointMarker = (pmPlain, pmHole, pmButton, pmMatch, pmButtonhole);
 
   TSegmentKind = (skLine, skCurve);
 
@@ -53,9 +54,16 @@ const
   // pieces are made from
   HIDEABLE_ROLES = [erConstruction] + MARKING_ROLES;
   // As written in pattern files and the Automation API
-  POINT_MARKER_NAMES: array[TPointMarker] of string = ('plain', 'hole', 'button', 'match');
+  POINT_MARKER_NAMES: array[TPointMarker] of string = ('plain', 'hole', 'button', 'match', 'buttonhole');
   // The formula field of a marker's size, across in mm, and what it starts at
   MARKER_SIZE_FIELD = 'markerSize';
+  // A buttonhole's fields: the angle its slot runs at, and how far along that
+  // its middle is from the point, so a horizontal hole can start just past
+  // the centre front
+  MARKER_ANGLE_FIELD = 'markerAngle';
+  MARKER_OFFSET_FIELD = 'markerOffset';
+  // The bar tack across each end of a buttonhole as drawn, in mm
+  BUTTONHOLE_BAR = 3;
   // As written in pattern files and the Automation API
   EDGE_ROLE_NAMES: array[TEdgeRole] of string = ('construction', 'outline', 'placement', 'stitch', 'fold', 'cut', 'skive', 'edgeFinish');
   // The class of each role's group in the publish app's SVG
@@ -112,17 +120,19 @@ type
   private
     FName: string;
     FMarker: TPointMarker;
-    FMarkerSize: double;
+    FMarkerSize, FMarkerAngle, FMarkerOffset: double;
     FLocked: boolean;
   public
     function DisplayName: string; override;
     // By the field's name, as points, edges and transforms use them
     function FieldUnitKind(const AName: string): TFieldUnitKind; override;
-    // Evaluates the marker's size
+    // Evaluates the marker's size, and a buttonhole's angle and offset
     function ComputeExtras(Context: TEvalContext): TEvalState; override;
-    // Adds or removes the size field; only points and repeats take one (see
-    // TPattern.SetMarker)
+    // Adds or removes the size field, and a buttonhole's angle and offset;
+    // only points and repeats take them (see TPattern.SetMarker)
     procedure SetMarker(AMarker: TPointMarker);
+    // How the marker is drawn at Centre, one of its positions
+    function MarkerStrokesAt(const Centre: TVec2): TLine2Array;
     function TypeName: string; virtual; abstract;
     // Readable properties in formulas, such as x or length (lower case)
     function HasProperty(const Prop: string): boolean; virtual; abstract;
@@ -136,8 +146,11 @@ type
     // TPattern.SetLocked); a repeat's points follow the repeat
     property Locked: boolean read FLocked write FLocked;
     property Marker: TPointMarker read FMarker;
-    // Last good size, across in mm
+    // Last good size, across in mm; a buttonhole's length
     property MarkerSize: double read FMarkerSize;
+    // A buttonhole's last good angle, in degrees, and offset in mm
+    property MarkerAngle: double read FMarkerAngle;
+    property MarkerOffset: double read FMarkerOffset;
   end;
 
   TPointObject = class(TDraftObject)
@@ -597,7 +610,11 @@ function CrossCircleEdge(const Centre: TVec2; Radius: double; Edge: TEdgeObject;
 
 // Strokes that draw a marker: a hole as a circle, a button as a circle with
 // a cross, and a match dot as rings that read as a filled dot
-function MarkerStrokes(AMarker: TPointMarker; const Centre: TVec2; Size: double): TLine2Array;
+// A buttonhole's Angle and Offset place its slot; other markers have neither
+function MarkerStrokes(AMarker: TPointMarker; const Centre: TVec2; Size: double; Angle: double = 0; Offset: double = 0): TLine2Array;
+// The slot a buttonhole is cut as: Size long at Angle, its middle Offset along
+// from Centre
+function ButtonholeSlot(const Centre: TVec2; Size, Angle, Offset: double): TLine2;
 // Where a point's or repeat's marker goes: the point, or every point of the
 // repeat; empty for anything else
 function MarkerPositions(DraftObject: TDraftObject): TVec2Array;
@@ -685,9 +702,10 @@ end;
 function TDraftObject.FieldUnitKind(const AName: string): TFieldUnitKind;
 begin
   case AName of
-    'x', 'y', 'length', 'dx', 'dy', 'length1', 'length2', 'radius', 'radiusA', 'radiusB', 'distance', MARKER_SIZE_FIELD:
+    'x', 'y', 'length', 'dx', 'dy', 'length1', 'length2', 'radius', 'radiusA', 'radiusB', 'distance', MARKER_SIZE_FIELD,
+    MARKER_OFFSET_FIELD:
       Result := fkLength;
-    'angle', 'angle1', 'angle2', 'rotate':
+    'angle', 'angle1', 'angle2', 'rotate', MARKER_ANGLE_FIELD:
       Result := fkAngle;
     else
       // A curve path's node fields: node1.angle, node1.lengthIn, node1.lengthOut
@@ -731,6 +749,10 @@ begin
   if Size <= 0 then
     Exit(Fail(esInvalid, rsDraftMarkerSize));
   FMarkerSize := Size;
+  FMarkerAngle := 0;
+  FMarkerOffset := 0;
+  if (FMarker = pmButtonhole) and (not EvalField(Context, MARKER_ANGLE_FIELD, FMarkerAngle) or not EvalLength(Context, MARKER_OFFSET_FIELD, FMarkerOffset)) then
+    Exit(esError);
   Result := esValid;
 end;
 
@@ -740,7 +762,22 @@ begin
     AddField(MARKER_SIZE_FIELD)
   else if (FMarker <> pmPlain) and (AMarker = pmPlain) then
     RemoveField(MARKER_SIZE_FIELD);
+  if (FMarker <> pmButtonhole) and (AMarker = pmButtonhole) then
+  begin
+    AddField(MARKER_ANGLE_FIELD);
+    AddField(MARKER_OFFSET_FIELD);
+  end
+  else if (FMarker = pmButtonhole) and (AMarker <> pmButtonhole) then
+  begin
+    RemoveField(MARKER_ANGLE_FIELD);
+    RemoveField(MARKER_OFFSET_FIELD);
+  end;
   FMarker := AMarker;
+end;
+
+function TDraftObject.MarkerStrokesAt(const Centre: TVec2): TLine2Array;
+begin
+  Result := MarkerStrokes(FMarker, Centre, FMarkerSize, FMarkerAngle, FMarkerOffset);
 end;
 
 procedure TDraftObject.RedirectPoint(const OldKey, NewKey: string);
@@ -818,10 +855,16 @@ begin
   end;
 end;
 
-function MarkerStrokes(AMarker: TPointMarker; const Centre: TVec2; Size: double): TLine2Array;
+function ButtonholeSlot(const Centre: TVec2; Size, Angle, Offset: double): TLine2;
+begin
+  Result := Line2(PolarPoint(Centre, Offset - Size / 2, Angle), PolarPoint(Centre, Offset + Size / 2, Angle));
+end;
+
+function MarkerStrokes(AMarker: TPointMarker; const Centre: TVec2; Size, Angle, Offset: double): TLine2Array;
 var
   Radius: double;
   Ring: integer;
+  Slot: TLine2;
 
   procedure Add(const From, Target: TVec2);
   begin
@@ -851,6 +894,14 @@ begin
     pmMatch:
       for Ring := 1 to MARKER_RINGS do
         AddCircle(Radius * Ring / MARKER_RINGS);
+    pmButtonhole:
+    begin
+      // The slot, with a bar tack across each end
+      Slot := ButtonholeSlot(Centre, Size, Angle, Offset);
+      Add(Slot.P1, Slot.P2);
+      Add(PolarPoint(Slot.P1, BUTTONHOLE_BAR / 2, Angle + 90), PolarPoint(Slot.P1, BUTTONHOLE_BAR / 2, Angle - 90));
+      Add(PolarPoint(Slot.P2, BUTTONHOLE_BAR / 2, Angle + 90), PolarPoint(Slot.P2, BUTTONHOLE_BAR / 2, Angle - 90));
+    end;
   end;
 end;
 

@@ -7,8 +7,8 @@ edges, notches and allowances you could draw yourself, so afterwards you can
 change any of them as you like. One **Undo** takes the whole feature off
 again.
 
-The tab has four features, the zip, the dart, the hem and the facing. More
-are planned, such as buttons and buttonholes and pockets.
+The tab has five features, the zip, the dart, the hem, the facing and
+buttons. More are planned, such as pockets.
 
 ## Zip
 
@@ -238,12 +238,65 @@ as are edges that take in the piece's fold or go all round it (that is a
 lining). A facing wider than the piece where its inner edge would meet the
 edge beside it is refused too. The status bar says why.
 
+## Buttons
+
+Buttons and buttonholes go down a front opening, a cuff's end or a
+waistband's end, evenly spaced between a first and a last. The tutorial
+[Adding buttons](../tutorials/buttons.md) buttons a bodice front step by step.
+
+1. Open the **Features** tab and choose **Buttons**.
+2. Click the opening's edge on the canvas, such as the centre front. If the
+   left and right fronts are separate pieces, ++shift++ and click the other
+   front's edge too: the buttonholes go on the first, the buttons on the
+   second. The tab says which.
+3. Check the settings, then click **Apply**.
+
+| Setting | What it does |
+| --- | --- |
+| Button size | Across the button. It starts as `#button_size`, a [variable](formulas.md) that the first buttons add at 15 mm |
+| Button thickness | A buttonhole is the button's size and its thickness long, so the button goes through: `#button_thickness`, 3 mm to start with |
+| How many | `#button_count`, 5 to start with. Change the variable and the buttons and holes follow |
+| First from the … end, last from the … end | How far the top and bottom buttons are from the ends of the edge: 2 cm each to start with |
+| Buttonholes | **Horizontal, square to the edge**, as on shirts and coats: each starts 3 mm past the centre front and runs into the piece, so the button sits on the centre front when buttoned. **Vertical, along the edge**, as on a placket: centred on each button |
+| Add an extension this wide | Ticked, the edge is moved out by this width, the overlap the buttons need, and the old edge stays as a placement line: the centre front, where the buttons are. It starts at `#button_size`, the usual rule |
+
+**Apply** then:
+
+- adds **ButtonTop** and **ButtonBottom** on the edge, at the first and last
+  distances;
+- adds a **Buttonhole** [repeat](shaping.md#repeats) between them, `#button_count`
+  points with the buttonhole marker, and a **Button** repeat with the button
+  marker, on the same piece or along the other front's edge. Their points are
+  [marked](pieces.md#markings) on the pieces they lie in;
+- adds the extension if you asked for one: two short lines out from the
+  edge's ends and a line the width out, in the edge's place in the outline,
+  on both fronts if there are two. The edge becomes a placement line.
+
+A piece cut twice, mirrored, carries both the holes and the buttons, as
+commercial patterns do: you sew buttonholes on the side that laps over.
+
+An extension narrower than half a button is made, and the status bar says
+it is narrow.
+
+An edge in no piece, or that is a fold, is refused, as are no buttons and a
+first and last that leave no room between them.
+
+### The buttonhole marker
+
+A buttonhole is a point [marker](pieces.md#markings), as a hole or a button is. It is
+drawn as a slot its size long, with a bar tack across each end; a cutting
+machine cuts it as a slit. Besides its size it has an **angle**, the way it
+runs, and an **offset**, how far along that its middle is from the point.
+Set on a point by hand, it starts across and centred. Select the point or
+repeat to change them.
+
 ## In scripts and with Claude
 
 Each feature is a method of the [Automation API](../scripting/index.md),
 named `feature_` and the feature: `feature_zip` puts a zip along an edge,
-`feature_dart` a dart in one, `feature_hem` a hem along some and
-`feature_facing` a facing along them, with the
+`feature_dart` a dart in one, `feature_hem` a hem along some,
+`feature_facing` a facing along them and `feature_buttons` buttons down
+one, with the
 same settings as the tab, so the Claude tab and other assistants can add
 them too. `set_dart_cap` gives a dart drawn by hand its cap, and
 `set_allowance_end` mirrors any edge's allowance ends. See the

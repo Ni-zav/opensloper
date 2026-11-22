@@ -91,8 +91,10 @@ resourcestring
   rsMemberType = 'The kind of object, as in the headings on this page';
   rsMemberName = 'The name shown and used in formulas; an edge named after its ends leaves it out';
   rsMemberRole = 'What the edge is: an outline makes pieces, the others are drawn and printed in their own style';
-  rsMemberMarker = 'A marker drawn at the point: a hole, a button or a match dot';
-  rsMemberMarkerSize = 'The marker''s size, when it has one';
+  rsMemberMarker = 'A marker drawn at the point: a hole, a button, a match dot or a buttonhole';
+  rsMemberMarkerSize = 'The marker''s size, when it has one; a buttonhole''s length';
+  rsMemberMarkerAngle = 'A buttonhole''s angle, the way its slot runs';
+  rsMemberMarkerOffset = 'How far along its angle a buttonhole''s middle is from the point';
   rsMemberLocked = 'Locked: it cannot be moved, edited or deleted, but its formulas still run; left out when not';
 
   rsOpFreePoint = 'Free point';
@@ -586,6 +588,8 @@ begin
   begin
     Insert(NewMember('marker', mkChoice, rsMemberMarker, Joined(POINT_MARKER_NAMES)), Result, Length(Result));
     Insert(NewMember(MARKER_SIZE_FIELD, mkLength, rsMemberMarkerSize), Result, Length(Result));
+    Insert(NewMember(MARKER_ANGLE_FIELD, mkAngle, rsMemberMarkerAngle), Result, Length(Result));
+    Insert(NewMember(MARKER_OFFSET_FIELD, mkLength, rsMemberMarkerOffset), Result, Length(Result));
   end;
   Insert(NewMember('locked', mkFlag, rsMemberLocked), Result, Length(Result));
 end;

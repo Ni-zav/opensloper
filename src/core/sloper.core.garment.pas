@@ -598,7 +598,10 @@ begin
           else if Mark.Role = erFold then
             AddBoth(Result.Folds, Mark.Line, Piece.Markings[Index].EdgeKey, '', False);
         mkStitchHoles: AddMarkers(Mark.Holes, Mark.HoleSize, pmHole);
-        mkPoint: AddMarkers(Mark.Centres, Mark.HoleSize, Mark.Marker);
+        // A buttonhole lies under its button once the garment is closed
+        mkPoint:
+          if Mark.Marker <> pmButtonhole then
+            AddMarkers(Mark.Centres, Mark.HoleSize, Mark.Marker);
       end;
     end;
   finally

@@ -59,6 +59,7 @@ type
     procedure TestInsertDart;
     procedure TestInsertHem;
     procedure TestInsertFacing;
+    procedure TestInsertButtons;
     procedure TestMarkings;
     procedure TestSetRole;
     procedure TestSetMarker;
@@ -646,6 +647,39 @@ begin
     AssertEquals('valid', Answer.Get('state', ''));
     Call('undo', '{}');
     Call('get_object', Format('{"name": "%s"}', [Facing]));
+    AssertTrue('one undo takes it all off', ErrorCode <> 0);
+  finally
+    FreeAndNil(Edges);
+  end;
+end;
+
+procedure TTestAPI.TestInsertButtons;
+var
+  Edges: TJSONArray;
+  Left, Holes: string;
+begin
+  Call('add_point', '{"type": "freePoint", "name": "O", "x": 0, "y": 0}');
+  Call('add_rectangle', '{"corner": "O", "width": 200, "height": 400, "role": "outline"}');
+  Edges := TJSONArray(FReply.Find('result').Clone);
+  try
+    Left := Edges.Objects[3].Get('name', '');
+    Call('create_piece', '{"x": 100, "y": 200, "name": "Front"}');
+    Call('feature_buttons', '{"edge": "Nowhere"}');
+    AssertTrue('no such edge', ErrorCode <> 0);
+    Call('feature_buttons', Format('{"edge": "%s", "count": 6, "extension": 15, "direction": "vertical"}', [Left]));
+    AssertEquals('extended', 3, TJSONArray(Answer.Find('extension')).Count);
+    AssertEquals('no problems', 0, TJSONArray(Answer.Find('problems')).Count);
+    Holes := TJSONObject(Answer.Find('holes')).Get('name', '');
+    AssertEquals('Buttonhole', Holes);
+    Call('get_object', Format('{"name": "%s"}', [Holes]));
+    AssertEquals('buttonhole', Answer.Get('marker', ''));
+    Call('set_marker', Format('{"name": "%s", "marker": "buttonhole", "angle": 45, "offset": 2}', [Holes]));
+    AssertEquals('valid', Answer.Get('state', ''));
+    Call('set_marker', Format('{"name": "%s", "marker": "button", "angle": 45}', [Holes]));
+    AssertTrue('only a buttonhole has an angle', ErrorCode <> 0);
+    Call('undo', '{}');
+    Call('undo', '{}');
+    Call('get_object', Format('{"name": "%s"}', [Holes]));
     AssertTrue('one undo takes it all off', ErrorCode <> 0);
   finally
     FreeAndNil(Edges);

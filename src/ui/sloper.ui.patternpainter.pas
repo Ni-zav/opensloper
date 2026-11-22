@@ -1032,7 +1032,7 @@ begin
   if IsSelected(DraftObject.Key) then
     LineColor := SelectedInk;
   for Centre in MarkerPositions(DraftObject) do
-    for Stroke in MarkerStrokes(DraftObject.Marker, Centre, DraftObject.MarkerSize) do
+    for Stroke in DraftObject.MarkerStrokesAt(Centre) do
     begin
       First := FState.View.ToScreen(Stroke.P1);
       Last := FState.View.ToScreen(Stroke.P2);

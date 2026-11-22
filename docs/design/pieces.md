@@ -80,7 +80,7 @@ material with no fabric set drapes as cotton.
 ## Markings
 
 Points and lines inside a piece can be marked on it: a point with a marker
-(hole, button or match dot) and a line drawn as a placement, stitch, fold, cut,
+(hole, button, match dot or buttonhole) and a line drawn as a placement, stitch, fold, cut,
 skive or edge-finish line are added to the pieces they lie in. Tools → Markings
 adds them by hand, and stitch holes along an edge.
 

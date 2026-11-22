@@ -1245,12 +1245,12 @@ var
         if not (pkStitchHoles in Profile.PieceMarks) then
           Exit;
     end;
-    // Paper draws holes, buttons and match dots as strokes
+    // Paper draws holes, buttons, match dots and buttonholes as strokes
     for Hole in Marking.Holes do
       for Stroke in MarkerStrokes(pmHole, Hole, Marking.HoleSize) do
         AddTo(Result.Marks, Stroke);
     for Hole in Marking.Centres do
-      for Stroke in MarkerStrokes(Marking.Marker, Hole, Marking.HoleSize) do
+      for Stroke in MarkerStrokes(Marking.Marker, Hole, Marking.HoleSize, Marking.MarkerAngle, Marking.MarkerOffset) do
         AddTo(Result.Marks, Stroke);
     if Length(Marking.Line) > 1 then
       AddWholeLine(Marking.Role, Marking.Line);
@@ -1271,10 +1271,13 @@ var
       if Mirroring and not OnTheFold(Hole) then
         AddHole(Mirror(Hole), Marking.HoleSize);
     end;
-    // Buttons and match dots are drawn, not cut
+    // Buttons and match dots are drawn, not cut; a buttonhole is cut as a slot
     for Hole in Marking.Centres do
-      for Stroke in MarkerStrokes(Marking.Marker, Hole, Marking.HoleSize) do
-        AddTo(Result.MarkLines, Stroke);
+      if Marking.Marker = pmButtonhole then
+        AddTo(Result.SlitLines, ButtonholeSlot(Hole, Marking.HoleSize, Marking.MarkerAngle, Marking.MarkerOffset))
+      else
+        for Stroke in MarkerStrokes(Marking.Marker, Hole, Marking.HoleSize) do
+          AddTo(Result.MarkLines, Stroke);
   end;
 
 var

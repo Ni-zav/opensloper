@@ -138,6 +138,8 @@ resourcestring
   rsFieldRadiusB = 'Radius from B';
   rsFieldDistance = 'Distance';
   rsFieldMarkerSize = 'Marker size';
+  rsFieldMarkerAngle = 'Buttonhole angle';
+  rsFieldMarkerOffset = 'Buttonhole offset';
   rsFieldMarkingSpacing = 'Marking %s spacing';
   rsFieldMarkingSize = 'Marking %s hole size';
   rsFieldAllowance = 'Seam allowance';
@@ -257,6 +259,8 @@ begin
     'formula': Result := rsFieldFormula;
     NOTE_POSITION_FIELD: Result := rsFieldPosition;
     MARKER_SIZE_FIELD: Result := rsFieldMarkerSize;
+    MARKER_ANGLE_FIELD: Result := rsFieldMarkerAngle;
+    MARKER_OFFSET_FIELD: Result := rsFieldMarkerOffset;
     else
       Result := FieldName;
   end;

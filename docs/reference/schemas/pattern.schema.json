@@ -652,16 +652,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -700,16 +709,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -768,16 +786,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -831,16 +858,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -892,16 +928,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -954,16 +999,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -1016,16 +1070,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -1078,16 +1141,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -1143,16 +1215,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -1227,16 +1308,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {
@@ -1276,16 +1366,25 @@
           "type": "string"
         },
         "marker": {
-          "description": "A marker drawn at the point: a hole, a button or a match dot",
+          "description": "A marker drawn at the point: a hole, a button, a match dot or a buttonhole",
           "enum": [
             "plain",
             "hole",
             "button",
-            "match"
+            "match",
+            "buttonhole"
           ]
         },
         "markerSize": {
-          "description": "The marker's size, when it has one",
+          "description": "The marker's size, when it has one; a buttonhole's length",
+          "type": "string"
+        },
+        "markerAngle": {
+          "description": "A buttonhole's angle, the way its slot runs",
+          "type": "string"
+        },
+        "markerOffset": {
+          "description": "How far along its angle a buttonhole's middle is from the point",
           "type": "string"
         },
         "locked": {

@@ -126,7 +126,8 @@ type
   TDartPress = (dpNone, dpFirst, dpSecond);
 
   // A marking worked out: Line for a line, Holes for holes of diameter
-  // HoleSize, and Centres for buttons and match dots of that size
+  // HoleSize, and Centres for buttons, match dots and buttonholes of that
+  // size, a buttonhole's slot at MarkerAngle and MarkerOffset along it
   TMarkingMark = record
     Kind: TMarkingKind;
     // How an mkLine is drawn: its edge's marking role
@@ -136,7 +137,7 @@ type
     Line: TVec2Array;
     Holes: TVec2Array;
     Centres: TVec2Array;
-    HoleSize: double;
+    HoleSize, MarkerAngle, MarkerOffset: double;
   end;
 
   TMarkingMarkArray = array of TMarkingMark;
@@ -640,6 +641,8 @@ begin
     else
       Mark.Centres := Positions;
     Mark.HoleSize := TDraftObject(Node).MarkerSize;
+    Mark.MarkerAngle := TDraftObject(Node).MarkerAngle;
+    Mark.MarkerOffset := TDraftObject(Node).MarkerOffset;
     Exit(esValid);
   end;
   Node := Context.FindNode(Marking.EdgeKey);
@@ -681,7 +684,7 @@ begin
     for Centre in Mark.Holes do
       Result := Concat(Result, MarkerStrokes(pmHole, Centre, Mark.HoleSize));
     for Centre in Mark.Centres do
-      Result := Concat(Result, MarkerStrokes(Mark.Marker, Centre, Mark.HoleSize));
+      Result := Concat(Result, MarkerStrokes(Mark.Marker, Centre, Mark.HoleSize, Mark.MarkerAngle, Mark.MarkerOffset));
   end;
 end;
 

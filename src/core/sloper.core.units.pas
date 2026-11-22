@@ -32,7 +32,8 @@ type
   TStartingLength = (slPieceAllowance, slSeamTolerance, slArcRadius, slOffsetDistance, slCornerRadius, slStitchSpacing,
     slStitchSize, slHoleSize, slButtonSize, slMatchSize, slZipLength, slZipAllowance, slZipStitch,
     slLapStitch, slFlyExtension, slFlyStitch, slFlyShieldWidth, slFlyShieldExtra, slFeatureGap, slDartWidth, slDartDepth,
-    slDartHoleInset, slHemDepth, slNarrowHemDepth, slHemTurnUnder, slHemStitchBack, slFacingWidth);
+    slDartHoleInset, slHemDepth, slNarrowHemDepth, slHemTurnUnder, slHemStitchBack, slFacingWidth,
+    slButtonholeLength, slButtonThickness, slButtonholeBack, slButtonEnd);
 
 const
   MEASURE_UNIT_NAMES: array[TMeasureUnit] of string = ('mm', 'cm', 'in');
@@ -68,7 +69,11 @@ const
     ('6', '0.6', '0.25'),     // a narrow hem's depth
     ('10', '1', '0.375'),     // a double hem's turn-under
     ('3', '0.3', '0.125'),    // how far a hem's topstitching is back from its depth
-    ('60', '6', '2.5'));      // a facing's width
+    ('60', '6', '2.5'),       // a facing's width
+    ('18', '1.8', '0.75'),    // a buttonhole's length: a 15 mm button and its 3 mm thickness
+    ('3', '0.3', '0.125'),    // a button's thickness
+    ('3', '0.3', '0.125'),    // how far a horizontal buttonhole starts past the centre front
+    ('20', '2', '0.75'));     // how far the first and last buttons are from the ends of the opening
 
 // The unit with this name (mm, cm or in, any case)
 function MeasureUnitFromName(const AName: string; out AUnit: TMeasureUnit): boolean;

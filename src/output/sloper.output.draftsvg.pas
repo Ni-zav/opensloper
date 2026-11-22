@@ -326,7 +326,7 @@ begin
   PathText := '';
   if DraftObject.MarkerSize > 0 then
     for Centre in MarkerPositions(DraftObject) do
-      for Stroke in MarkerStrokes(DraftObject.Marker, Centre, DraftObject.MarkerSize) do
+      for Stroke in DraftObject.MarkerStrokesAt(Centre) do
         PathText := PathText + 'M ' + Coord(Stroke.P1) + ' L ' + Coord(Stroke.P2) + ' ';
   Result := '';
   if PathText <> '' then

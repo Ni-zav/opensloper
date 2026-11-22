@@ -16,7 +16,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 }
 
-// Point markers: holes, buttons and match dots on points and repeats,
+// Point markers: holes, buttons, match dots and buttonholes on points and repeats,
 // assigned to the pieces they lie in (see Point markers in the design).
 unit Sloper.Tests.Markers;
 
@@ -59,6 +59,10 @@ type
     procedure TestMarkerRoundTrip;
     procedure TestOldHoleBecomesMarker;
     procedure TestMarkerStrokes;
+    procedure TestButtonholeStartsAcross;
+    procedure TestButtonholeSlotFollowsAngleAndOffset;
+    procedure TestButtonholeFieldsGoWithIt;
+    procedure TestButtonholeRoundTrip;
   end;
 
 implementation
@@ -429,6 +433,73 @@ begin
   AssertEquals(0, Length(MarkerStrokes(pmPlain, Vec2(0, 0), 4)));
   AssertEquals(16, Length(MarkerStrokes(pmHole, Vec2(0, 0), 4)));
   AssertPointsNear('on the circle', Vec2(2, 0), MarkerStrokes(pmHole, Vec2(0, 0), 4)[0].P1);
+end;
+
+procedure TTestMarkers.TestButtonholeStartsAcross;
+var
+  Key: string;
+  Point: TDraftObject;
+begin
+  Key := Pt('A', 50, 50);
+  AssertTrue(FPattern.LastError, FPattern.SetMarker(Key, pmButtonhole));
+  FPattern.Evaluate;
+  Point := TDraftObject(FPattern.FindNode(Key));
+  AssertTrue(Point.Message, Point.State = esValid);
+  AssertNear('a 15 mm button and its thickness', 18, Point.MarkerSize);
+  AssertNear('across', 0, Point.MarkerAngle);
+  AssertNear('centred', 0, Point.MarkerOffset);
+  AssertEquals('a slot and two bar tacks', 3, Length(Point.MarkerStrokesAt(Vec2(50, 50))));
+  AssertPointsNear('from the left', Vec2(41, 50), Point.MarkerStrokesAt(Vec2(50, 50))[0].P1);
+  AssertPointsNear('to the right', Vec2(59, 50), Point.MarkerStrokesAt(Vec2(50, 50))[0].P2);
+end;
+
+// Angles go anticlockwise as seen on screen, so 90 runs up
+procedure TTestMarkers.TestButtonholeSlotFollowsAngleAndOffset;
+var
+  Slot: TLine2;
+begin
+  Slot := ButtonholeSlot(Vec2(0, 0), 20, 90, 4);
+  AssertPointsNear('starts below', Vec2(0, 6), Slot.P1);
+  AssertPointsNear('ends above, moved up', Vec2(0, -14), Slot.P2);
+  AssertNear('the bar tacks across', BUTTONHOLE_BAR, Distance(MarkerStrokes(pmButtonhole, Vec2(0, 0), 20, 90, 4)[1].P1,
+    MarkerStrokes(pmButtonhole, Vec2(0, 0), 20, 90, 4)[1].P2));
+end;
+
+procedure TTestMarkers.TestButtonholeFieldsGoWithIt;
+var
+  Key: string;
+  Point: TDraftObject;
+begin
+  Key := Pt('A', 50, 50);
+  AssertTrue(FPattern.SetMarker(Key, pmButtonhole));
+  Point := TDraftObject(FPattern.FindNode(Key));
+  AssertTrue(FPattern.LastError, FPattern.SetFormula(Point, MARKER_ANGLE_FIELD, '45'));
+  AssertTrue(FPattern.SetMarker(Key, pmButton));
+  AssertNull('no angle on a button', Point.Field(MARKER_ANGLE_FIELD));
+  AssertNull('nor offset', Point.Field(MARKER_OFFSET_FIELD));
+  AssertNotNull('the size stays', Point.Field(MARKER_SIZE_FIELD));
+  AssertTrue(FPattern.SetMarker(Key, pmButtonhole));
+  AssertEquals('starts across again', '0', FPattern.FormulaText(Point, MARKER_ANGLE_FIELD));
+end;
+
+procedure TTestMarkers.TestButtonholeRoundTrip;
+var
+  Holes: TRepeatObject;
+  Piece, Back: TPieceObject;
+begin
+  Rectangle;
+  Piece := PieceAt(50, 50);
+  Holes := FPattern.AddRepeatBetween('Holes', Pt('T', 20, 10), Pt('U', 20, 90), '3', True);
+  AssertTrue(FPattern.SetMarker(Holes.Key, pmButtonhole, '20'));
+  AssertTrue(FPattern.SetFormula(Holes, MARKER_ANGLE_FIELD, '90'));
+  AssertTrue(FPattern.SetFormula(Holes, MARKER_OFFSET_FIELD, '7'));
+  FPattern.Evaluate;
+  AssertEquals('three holes', 3, Length(Piece.MarkingMarks[0].Centres));
+  AssertNear('the angle reaches the piece', 90, Piece.MarkingMarks[0].MarkerAngle);
+  Back := TPieceObject(Reloaded.FindNode(Piece.Key));
+  AssertTrue(Back.Message, Back.State = esValid);
+  AssertNear('the offset reloaded', 7, TDraftObject(FLoaded.FindNode(Holes.Key)).MarkerOffset);
+  AssertEquals(SavePatternToText(FPattern), SavePatternToText(FLoaded));
 end;
 
 initialization

@@ -119,6 +119,7 @@ type
     procedure TestStandardProfileAlwaysThere;
     procedure TestLayoutSavesProfileName;
     procedure TestPlainSVGHasNoProfileMarks;
+    procedure TestPlacedButtonholeIsASlit;
     procedure TestMachineSVGColours;
     procedure TestMachineSVGCutsLast;
     procedure TestMachineSVGHolesAreCircles;
@@ -624,6 +625,34 @@ begin
     if Distance(Stroke.P1, Vec2(80, 70)) < 5.01 then
       Inc(Near);
   AssertEquals('a circle and a cross, as marks', 18, Near);
+end;
+
+// Drawn as a slot and bar tacks on paper, cut as a slit by a machine
+procedure TTestLayoutExports.TestPlacedButtonholeIsASlit;
+var
+  Pattern: TPattern;
+  Key: string;
+  Shape: TPlacedPiece;
+  Stroke: TLine2;
+  Near, Slits: integer;
+begin
+  AddMarkedPattern('a.sloper');
+  Pattern := FLayout.Sources[0].Pattern;
+  Key := Pattern.AddFreePoint('', '70', '-40').Key;
+  AssertTrue(Pattern.LastError, Pattern.SetMarker(Key, pmButtonhole, '18'));
+  Pattern.Evaluate;
+  FLayout.PlaceNewPieces;
+  Shape := FLayout.PlacedPieces[0];
+  Near := 0;
+  for Stroke in Shape.Marks do
+    if Distance(Stroke.P1, Vec2(80, 70)) < 10 then
+      Inc(Near);
+  AssertEquals('a slot and two bar tacks on paper', 3, Near);
+  Slits := 0;
+  for Stroke in Shape.SlitLines do
+    if Abs(Stroke.Length - 18) < 0.01 then
+      Inc(Slits);
+  AssertEquals('one slit to cut', 1, Slits);
 end;
 
 // Skive and edge finish lines join the piece and print as marks, in their

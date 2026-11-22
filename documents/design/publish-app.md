@@ -104,7 +104,7 @@ Laser cutters, plotters and cutters such as Cricut treat line types differently,
 
 | Line type | What | Usual SVG colour |
 | --- | --- | --- |
-| Cut | Cutting line and cut-role lines | Red |
+| Cut | Cutting line, cut-role lines and buttonholes (a slit each) | Red |
 | Score | Fold-role lines | Blue |
 | Mark | Placement and stitch lines, seam line, notches, grainline, fold bracket, buttons, match dots | Black |
 | Engrave | Labels and text | Green |

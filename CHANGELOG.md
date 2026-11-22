@@ -45,6 +45,19 @@ Changed, Fixed and Removed under each version.
   it crosses its edge, or carried on straight to it (#74).
 - A tutorial, Adding a facing, faces the bodice block's front and back
   necklines from the Features tab in one step (#74).
+- Buttons in the Features tab: select a front opening's edge, and the other
+  front's too if they are separate pieces, and Apply adds the first and
+  last buttons' points, a repeat of buttonholes and one of buttons between
+  them, and an extension past the edge if you like, the edge staying as a
+  placement line, in one undo step. The size, thickness and count are
+  `#button_size`, `#button_thickness` and `#button_count`, so changing the
+  count moves and adds buttons and holes. `feature_buttons` does the same
+  in the Automation API (#75).
+- A buttonhole point marker: a slot its size long with bar tacks, at an
+  angle and moved along it by an offset, cut as a slit by machines
+  (#75).
+- A tutorial, Adding buttons, opens the bodice block's front and buttons
+  it from the Features tab (#75).
 - A tutorial, Adding a dart, puts a second dart in the skirt block's back
   from the Features tab and caps every dart (#72).
 

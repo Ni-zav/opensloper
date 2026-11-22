@@ -216,8 +216,9 @@ Roles are a fixed list, like KiCad's technical layers, so output settings can re
 | Hole | Dart points, pocket corners, rivets, snaps, eyelets | A circle, cut as a hole | 4 mm |
 | Button | Button and buttonhole positions | A circle with a cross | 15 mm |
 | Match dot | Matching points between pieces | A small dot | 3 mm |
+| Buttonhole | Buttonholes | A slot its size long with a bar tack across each end; cut as a slit by machines; hidden under its button in the Garment tab | 18 mm |
 
-The marker and its size (`markerSize`, a formula) belong to the point, not its pieces. A repeat's marker applies to all its points; a copy keeps its source's. A hole on a fold line makes the piece invalid.
+The marker and its size (`markerSize`, a formula) belong to the point, not its pieces. A buttonhole also has `markerAngle`, the way its slot runs, and `markerOffset`, how far along that its middle is from the point, so a horizontal hole can start just past the centre front; both are formulas, start at 0 (across, centred) and exist only while the marker is a buttonhole. Buttonholes are a marker rather than an edge role so that a repeat carries them, and the number of buttons stays a formula. A repeat's marker applies to all its points; a copy keeps its source's. A hole on a fold line makes the piece invalid.
 
 ### Automatic piece assignment
 
@@ -301,7 +302,7 @@ Fashion drawing is left to Inkscape and Krita; hardware sizes are variables.
 
 ## Features
 
-The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips, darts, hems and facings now; buttons and pockets later) in one step. **A feature is not an object**: Apply adds ordinary objects through the pattern's own methods, in one undo step, and nothing is saved as a feature, so the file format, evaluator and API stay as they are and the objects are the user's to edit. Changing a feature means undoing and applying it again; a feature kept as one editable object may follow once it is clear which settings people change. The features are in the LCL-free `Sloper.Core.Features`.
+The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips, darts, hems, facings and buttons now; pockets later) in one step. **A feature is not an object**: Apply adds ordinary objects through the pattern's own methods, in one undo step, and nothing is saved as a feature, so the file format, evaluator and API stay as they are and the objects are the user's to edit. Changing a feature means undoing and applying it again; a feature kept as one editable object may follow once it is clear which settings people change. The features are in the LCL-free `Sloper.Core.Features`.
 
 **Dart** (`InsertDart`, `TDartSpec`, `DefaultDart`) in one selected outline edge of one piece, optionally to a selected point:
 
@@ -331,13 +332,22 @@ The **Features** tab (`Sloper.UI.FeaturesPanel`) applies a sewing detail (zips, 
 - An **interfacing**, `Interfacing_` and the piece's name, has the facing's path and is cut from the material named, which is added if the pattern has none of that name.
 - The run is not a detected face: the facing is a piece path given outright, so an outline edge inside the garment does not change it.
 
+**Buttons** (`InsertButtons`, `TButtonsSpec`, `DefaultButtons`) along an opening's edge, on one piece cut twice or on two fronts:
+
+- `ButtonTop` and `ButtonBottom` along the edge at `first` from its start and `last` from its end; a **Buttonhole** repeat between them, ends included, with the buttonhole marker, its length the size plus the thickness; and a **Button** repeat with the button marker at the size. The count is a formula, so changing `#button_count` moves and adds both with no new apply.
+- Horizontal holes run square to the line from `ButtonTop` to `ButtonBottom`, into the piece (tried before an extension widens it), their middle `length / 2 - 3 mm` along so they start 3 mm past the centre front; vertical holes run along it, centred.
+- `#button_size`, `#button_thickness` and `#button_count` (15 mm, 3 mm, 5) are variables the first buttons add.
+- With a **buttons edge** on another piece, the buttons go along it, measured from whichever end lies nearer the holes' first (`RunsBackwards`), as on a mirrored copy; each repeat is then taken off the other piece if they overlap. Both pieces get the extension.
+- An **extension** offsets the edge outwards at its width, joins it with lines at the ends and puts the three in the edge's place in the path (`ReplaceInPath`, seams leaving it out); the edge becomes a Placement line, so the centre front still prints, with the buttons on it. One narrower than half a button is made and reported (`TButtonsMade.Problems`).
+- Refused: an edge in no piece or in more than one, a fold, a count under 1, and first and last leaving no room.
+
 **Zip** (`InsertZip`, `TZipSpec`) along one selected edge of one or more pieces, in four styles, each with its own starting widths (`DefaultZip`):
 
 - It adds `ZipStop` at the zip's length from the chosen end, splits the edge there (`FollowSplit`), gives the opening its own allowance, notches the stop, and adds the style's stitching inside each piece (`PieceRun`, `AddOffsetRun`).
 - The length is `#zip_length`, a variable the first zip adds, so both sides of a seam share it.
 - **Centred** stitches round the opening, **invisible** has none, **lapped** is the opening's offset plus a line across to the stop, and **fly front** a J (an offset at the fly's width with a curve into the stop, square to the opening) plus a **FlyShield** piece cut on the fold, following `#zip_length`.
 - A zip as long as its edge is refused. When the edge is sewn to one without a zip, the status bar says the other side needs one too.
-- In the Automation API features are methods named `feature_` and the feature (`feature_zip`, `feature_dart`, `feature_hem`, `feature_facing`), in a Features group; `set_dart_cap` caps a dart drawn by hand and `set_allowance_end` mirrors any edge's allowance ends.
+- In the Automation API features are methods named `feature_` and the feature (`feature_zip`, `feature_dart`, `feature_hem`, `feature_facing`, `feature_buttons`), in a Features group; `set_dart_cap` caps a dart drawn by hand and `set_allowance_end` mirrors any edge's allowance ends.
 
 ## Garment view
 

@@ -67,6 +67,9 @@ type
     procedure TestFacingAllRoundIsRefused;
     procedure TestFacingTooWideIsRefused;
     procedure TestFacingOnAFoldIsRefused;
+    // Behind a button extension: the step out to it at the neck is left out
+    // of the inner edge, which runs down to the waist past the step back in
+    procedure TestFacingBehindButtons;
   end;
 
 implementation
@@ -496,8 +499,10 @@ var
 begin
   Bodice(0, False, 'Front', Edges);
   Spec := DefaultFacing(FPattern, [Edges.Neck]);
-  Spec.Width := '150';
-  AssertFalse('wider than the shoulder', InsertFacing(FPattern, Spec, Made));
+  // Wider than the bodice: nothing beside the neck is short enough to take
+  // whole, nor does the inner edge meet anything
+  Spec.Width := '400';
+  AssertFalse('wider than the bodice', InsertFacing(FPattern, Spec, Made));
   AssertTrue(FPattern.LastError, Pos('wider than Front', FPattern.LastError) > 0);
 end;
 
@@ -512,6 +517,47 @@ begin
   FPattern.Evaluate;
   AssertFalse('a fold', Face([Edges.Neck, Edges.CentreFront], Made));
   AssertTrue(FPattern.LastError, Pos('fold', FPattern.LastError) > 0);
+end;
+
+procedure TTestFacing.TestFacingBehindButtons;
+var
+  Edges: TBodiceEdges;
+  Piece: TPieceObject;
+  Buttons: TButtonsSpec;
+  ButtonsMade: TButtonsMade;
+  Made: TFacingMade;
+  Key, Step, StepBack: string;
+  Edge: TEdgeObject;
+  Waist: TEdgeObject;
+  Position, Offset: double;
+begin
+  Piece := Bodice(0, False, 'Front', Edges);
+  Buttons := DefaultButtons(FPattern, Edges.CentreFront);
+  Buttons.Extension := '15';
+  AssertTrue(FPattern.LastError, InsertButtons(FPattern, Buttons, ButtonsMade));
+  // The step out at the neck, and the one back in at the waist
+  Step := '';
+  StepBack := '';
+  for Key in ButtonsMade.ExtensionKeys do
+  begin
+    Edge := TEdgeObject(FPattern.FindNode(Key));
+    if not Edge.IsStraight or (Edge.Length > 20) then
+      Continue;
+    if PointsNear(Edge.PointAtLength(0), Vec2(0, 80)) or PointsNear(Edge.PointAtLength(Edge.Length), Vec2(0, 80)) then
+      Step := Key
+    else
+      StepBack := Key;
+  end;
+  AssertTrue('the step out', Step <> '');
+  AssertTrue(FPattern.LastError, Face([Edges.Neck, Step, ButtonsMade.ExtensionKeys[1]], Made));
+  AssertTrue(Facing(Made).Message, Facing(Made).State = esValid);
+  AssertTrue(Piece.Message, Piece.State = esValid);
+  AssertTrue('takes the step back in whole', Facing(Made).PathIndexOf(StepBack) >= 0);
+  Waist := TEdgeObject(FPattern.FindNode(Edges.Waist));
+  // The path runs up the extension, so the inner edge starts at the waist
+  Waist.Locate(Inner(Made).PointAtLength(0), Position, Offset);
+  AssertTrue('the inner edge starts on the waist', Offset < 0.001);
+  AssertNear('60 mm in from the extension', 45, Inner(Made).PointAtLength(0).X);
 end;
 
 initialization

@@ -51,6 +51,10 @@ type
     procedure TestGapIsInvalid;
     procedure TestSharpCornerBevels;
     procedure TestInnerCornerTooTightCollapses;
+    // A short part between two inner corners' offsets is left out, as the
+    // step out to a button extension is under a facing
+    procedure TestSwallowedPartIsLeftOut;
+    procedure TestSwallowedCurveJoin;
     procedure TestTightCurveCollapses;
     procedure TestCurveWithRoomStaysValid;
     // A handle of zero length has no derivative at its end, but the curve
@@ -229,6 +233,43 @@ begin
   FPattern.Evaluate;
   AssertTrue(Edge.State = esInvalid);
   AssertEquals(Format(rsDraftOffsetCollapses, ['Line_B_C']), Edge.Message);
+end;
+
+procedure TTestOffsetRun.TestSwallowedPartIsLeftOut;
+var
+  B, C: string;
+  Edge: TOffsetEdge;
+begin
+  B := Pt('B', 100, 0);
+  C := Pt('C', 110, 0);
+  Edge := FPattern.AddOffsetRun(Run([Line(Pt('A'), B), Line(B, C), Line(C, Pt('D', 110, 200))], [False, False, False]), '30',
+    osRight);
+  FPattern.Evaluate;
+  AssertTrue(Edge.Message, Edge.State = esValid);
+  AssertPointsNear('starts as before', Vec2(0, 30), Edge.PointAtLength(0));
+  AssertPointsNear('turns where the outer offsets cross', Vec2(80, 30), Edge.PointAtLength(80));
+  AssertPointsNear('ends as before', Vec2(80, 200), Edge.PointAtLength(Edge.Length));
+  AssertNear('without the short part', 250, Edge.Length);
+end;
+
+// A curve running into a short straight step, as a neckline into a button
+// extension: the curve's offset is cut where the next long part's crosses it
+procedure TTestOffsetRun.TestSwallowedCurveJoin;
+var
+  B, C: string;
+  Curve: TCurveObject;
+  Edge: TOffsetEdge;
+begin
+  B := Pt('B', 100, 100);
+  C := Pt('C', 110, 100);
+  // From the top, leaving straight down and arriving travelling right
+  Curve := FPattern.AddCurve(Pt('A', 30, 0), B, '270', '50', '180', '40', erOutline);
+  Edge := FPattern.AddOffsetRun(Run([Curve.Key, Line(B, C), Line(C, Pt('D', 110, 300))], [False, False, False]), '30', osRight);
+  FPattern.Evaluate;
+  AssertTrue(Edge.Message, Edge.State = esValid);
+  AssertPointsNear('ends down the long part', Vec2(80, 300), Edge.PointAtLength(Edge.Length));
+  AssertNear('the corner on the curve''s offset', 80, Edge.PointAtLength(Edge.Length - 170).X, 0.01);
+  AssertNear('level with the step''s offset', 130, Edge.PointAtLength(Edge.Length - 170).Y, 0.5);
 end;
 
 procedure TTestOffsetRun.TestTightCurveCollapses;

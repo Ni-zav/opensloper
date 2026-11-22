@@ -604,6 +604,9 @@ function CrossPieces(const PiecesA, PiecesB: TEdgePieceArray): TEdgeCrossingArra
 // Crossings of two edges, in order along A, with repeats merged
 function CrossEdges(EdgeA: TEdgeObject; ExtendA: boolean; EdgeB: TEdgeObject;
   ExtendB: boolean): TEdgeCrossingArray;
+// Where an offset, carried on straight past its ends, crosses the edge
+// limiting its end or its start, nearest that end (see TOffsetEdge)
+function OffsetLimitCrossing(Offset, Limit: TEdgeObject; AtEnd: boolean; out Crossing: TEdgeCrossing): boolean;
 // Crossings of a circle with an edge, in order along the edge
 function CrossCircleEdge(const Centre: TVec2; Radius: double; Edge: TEdgeObject;
   Extend: boolean): TEdgeCrossingArray;
@@ -1618,16 +1621,17 @@ begin
   Pieces[High(Pieces)] := Piece;
 end;
 
-function TEdgeObject.Pieces(Extend: boolean): TEdgePieceArray;
+// Segments as pieces; extended, with a ray on from each end along its tangent
+function SegmentPieces(const Segments: TEdgeSegmentArray; Extend: boolean): TEdgePieceArray;
 var
-  Segment: TEdgeSegment;
+  Segment, Last: TEdgeSegment;
   Piece: TEdgePiece;
-  Position, SegLength: double;
+  Position, SegLength, StartAngle, EndAngle: double;
   StartPos, EndPos: TVec2;
 begin
   Result := nil;
   Position := 0;
-  for Segment in FSegments do
+  for Segment in Segments do
   begin
     SegLength := SegmentLength(Segment);
     if Segment.Kind = skLine then
@@ -1642,23 +1646,39 @@ begin
     end;
     Position := Position + SegLength;
   end;
-  if Extend and (System.Length(FSegments) > 0) then
+  if not Extend or (System.Length(Segments) = 0) then
+    Exit;
+  Last := Segments[High(Segments)];
+  if Segments[0].Kind = skLine then
   begin
-    // Rays of unit-length lines, so T is the distance along them in mm: one
-    // back from the start, one on from the end
-    if FSegments[0].Kind = skLine then
-      StartPos := FSegments[0].Line.P1
-    else
-      StartPos := FSegments[0].Curve.P0;
-    if FSegments[High(FSegments)].Kind = skLine then
-      EndPos := FSegments[High(FSegments)].Line.P2
-    else
-      EndPos := FSegments[High(FSegments)].Curve.P3;
-    AddPiece(Result, LinePiece(Line2(StartPos, PolarPoint(StartPos, 1, StartDirection + 180)),
-      0, Infinity, 0, -1));
-    AddPiece(Result, LinePiece(Line2(EndPos, PolarPoint(EndPos, 1, EndDirection)),
-      0, Infinity, Position, 1));
+    StartPos := Segments[0].Line.P1;
+    StartAngle := Segments[0].Line.Angle;
+  end
+  else
+  begin
+    StartPos := Segments[0].Curve.P0;
+    StartAngle := Segments[0].Curve.StartAngle;
   end;
+  if Last.Kind = skLine then
+  begin
+    EndPos := Last.Line.P2;
+    EndAngle := Last.Line.Angle;
+  end
+  else
+  begin
+    EndPos := Last.Curve.P3;
+    // The end handle points back along the curve
+    EndAngle := NormalizeAngle(Last.Curve.EndAngle + 180);
+  end;
+  // Rays of unit-length lines, so T is the distance along them in mm: one
+  // back from the start, one on from the end
+  AddPiece(Result, LinePiece(Line2(StartPos, PolarPoint(StartPos, 1, StartAngle + 180)), 0, Infinity, 0, -1));
+  AddPiece(Result, LinePiece(Line2(EndPos, PolarPoint(EndPos, 1, EndAngle)), 0, Infinity, Position, 1));
+end;
+
+function TEdgeObject.Pieces(Extend: boolean): TEdgePieceArray;
+begin
+  Result := SegmentPieces(FSegments, Extend);
 end;
 
 function TEdgeObject.Locate(const APoint: TVec2; out Position, Offset: double): TVec2;
@@ -2121,6 +2141,22 @@ begin
   Result := Result.Normalized;
 end;
 
+procedure MoveSegmentStart(var Segment: TEdgeSegment; const At: TVec2);
+begin
+  if Segment.Kind = skLine then
+    Segment.Line.P1 := At
+  else
+    Segment.Curve.P0 := At;
+end;
+
+procedure MoveSegmentEnd(var Segment: TEdgeSegment; const At: TVec2);
+begin
+  if Segment.Kind = skLine then
+    Segment.Line.P2 := At
+  else
+    Segment.Curve.P3 := At;
+end;
+
 function TOffsetEdge.Compute(Context: TEvalContext): TEvalState;
 var
   Path: TEdgeSegmentArray;
@@ -2129,6 +2165,9 @@ var
   Joins: array of TEdgeSegmentArray;
   Distance2, Direction: double;
   Collapsed: TEdgeObject;
+  Count: integer;
+  // Parts left out, swallowed between their neighbours at inner corners
+  Dropped: array of boolean;
 
   function Across(const Along: TVec2): TVec2;
   begin
@@ -2290,8 +2329,173 @@ var
     Result := Trim(Parts[Before][High(Parts[Before])], Mitre, True) and Trim(Parts[After][0], Mitre, False);
   end;
 
+  // Cuts a part back to At, keeping its start or its end, or carries it on
+  // straight to At when At lies past that end
+  procedure CutBack(var Segments: TEdgeSegmentArray; const At: TVec2; KeepStart: boolean);
+  var
+    Item, Best: integer;
+    Nearest, Gap: double;
+    Closest: TVec2;
+  begin
+    Best := 0;
+    Nearest := Infinity;
+    for Item := 0 to High(Segments) do
+    begin
+      if Segments[Item].Kind = skLine then
+        Closest := Segments[Item].Line.ClosestPoint(At, False)
+      else
+        Closest := Segments[Item].Curve.PointAt(Segments[Item].Curve.ClosestParam(At));
+      Gap := Sloper.Core.Geometry.Distance(Closest, At);
+      if Gap < Nearest then
+      begin
+        Nearest := Gap;
+        Best := Item;
+      end;
+    end;
+    if Nearest > OFFSET_JOIN_TOLERANCE then
+    begin
+      if KeepStart then
+        AddSegment(Segments, LineSegment(Line2(SegmentEnd(Segments[High(Segments)]), At)))
+      else
+        System.Insert(LineSegment(Line2(At, SegmentStart(Segments[0]))), Segments, 0);
+      Exit;
+    end;
+    if KeepStart then
+    begin
+      if Trim(Segments[Best], At, True) then
+        SetLength(Segments, Best + 1)
+      else
+        SetLength(Segments, Best);
+      MoveSegmentEnd(Segments[High(Segments)], At);
+    end
+    else
+    begin
+      if Trim(Segments[Best], At, False) then
+        System.Delete(Segments, 0, Best)
+      else
+        System.Delete(Segments, 0, Best + 1);
+      MoveSegmentStart(Segments[0], At);
+    end;
+  end;
+
+  // Joins the end of Parts[Before] to the start of Parts[After] where they,
+  // carried on straight if need be, cross nearest Near: Before not run on
+  // back past its start, nor After on past its end
+  function CrossJoin(Before, After: integer; const Near: TVec2): boolean;
+  var
+    Hit, Back: TEdgeCrossing;
+    Backs: TEdgeCrossingArray;
+    Found: boolean;
+    Best: TVec2;
+    LengthAfter, Position: double;
+    Segment: TEdgeSegment;
+  begin
+    LengthAfter := 0;
+    for Segment in Parts[After] do
+      LengthAfter := LengthAfter + SegmentLength(Segment);
+    Found := False;
+    Best := Vec2(0, 0);
+    Backs := CrossPieces(SegmentPieces(Parts[After], True), SegmentPieces(Parts[Before], True));
+    for Hit in CrossPieces(SegmentPieces(Parts[Before], True), SegmentPieces(Parts[After], True)) do
+    begin
+      if Hit.Position < -OFFSET_JOIN_TOLERANCE then
+        Continue;
+      // Where it lies along After
+      Position := Infinity;
+      for Back in Backs do
+        if PointsNear(Back.Point, Hit.Point, OFFSET_JOIN_TOLERANCE * 10) then
+          Position := Back.Position;
+      if Position > LengthAfter + OFFSET_JOIN_TOLERANCE then
+        Continue;
+      if not Found or (Sloper.Core.Geometry.Distance(Hit.Point, Near) < Sloper.Core.Geometry.Distance(Best, Near)) then
+        Best := Hit.Point;
+      Found := True;
+    end;
+    if not Found then
+      Exit(False);
+    CutBack(Parts[Before], Best, True);
+    CutBack(Parts[After], Best, False);
+    Joins[Before] := nil;
+    Result := (System.Length(Parts[Before]) > 0) and (System.Length(Parts[After]) > 0);
+  end;
+
+  function Middle(const Segment: TEdgeSegment): TVec2;
+  begin
+    Result := (SegmentStart(Segment) + SegmentEnd(Segment)) * 0.5;
+  end;
+
+  // Joins every part to the next. Where an inner corner leaves no room for
+  // the mitre on a part, they are joined where they cross; and a short part
+  // swallowed whole between its neighbours, as a step out to a button
+  // extension under a facing's width, is left out.
+  function JoinAll(out Stuck: integer): boolean;
+  var
+    Previous, Next, Later, Before: integer;
+    SavedBefore, SavedAfter: TEdgeSegmentArray;
+    Joined: boolean;
+  begin
+    Previous := 0;
+    Next := 1;
+    while Next < Count do
+    begin
+      SavedBefore := Copy(Parts[Previous]);
+      SavedAfter := Copy(Parts[Next]);
+      if JoinParts(Previous, Next, SegmentStart(Path[Next])) then
+      begin
+        Previous := Next;
+        Inc(Next);
+        Continue;
+      end;
+      Parts[Previous] := SavedBefore;
+      Parts[Next] := SavedAfter;
+      Joins[Previous] := nil;
+      Joined := CrossJoin(Previous, Next, SegmentStart(Path[Next]));
+      if not Joined then
+      begin
+        Parts[Previous] := SavedBefore;
+        Parts[Next] := SavedAfter;
+      end;
+      // Next swallowed: Previous joins a later part
+      Later := Next + 1;
+      while not Joined and (Later < Count) do
+      begin
+        Joined := CrossJoin(Previous, Later, Middle(Path[Next]));
+        if Joined then
+        begin
+          for Before := Next to Later - 1 do
+            Dropped[Before] := True;
+          Next := Later;
+        end
+        else
+        begin
+          Parts[Previous] := SavedBefore;
+          Inc(Later);
+        end;
+      end;
+      // Previous swallowed: the part before it joins Next
+      Before := Previous - 1;
+      while (Before >= 0) and Dropped[Before] do
+        Dec(Before);
+      if not Joined and (Before >= 0) then
+      begin
+        Joined := CrossJoin(Before, Next, Middle(Path[Previous]));
+        if Joined then
+          Dropped[Previous] := True;
+      end;
+      if not Joined then
+      begin
+        Stuck := Next;
+        Exit(False);
+      end;
+      Previous := Next;
+      Inc(Next);
+    end;
+    Stuck := -1;
+    Result := True;
+  end;
+
 var
-  Index, Count: integer;
+  Index, LastKept, Stuck: integer;
   Closed: boolean;
   Part: TEdgeSegmentArray;
   Segment: TEdgeSegment;
@@ -2328,48 +2532,38 @@ begin
   for Index := 0 to Count - 1 do
     if System.Length(Parts[Index]) = 0 then
       Exit(Fail(esInvalid, Format(rsDraftOffsetCollapses, [Owners[Index].DisplayName])));
-  for Index := 1 to Count - 1 do
-    if not JoinParts(Index - 1, Index, SegmentStart(Path[Index])) then
-      Exit(Fail(esInvalid, Format(rsDraftOffsetCollapses, [Owners[Index].DisplayName])));
+  Dropped := nil;
+  SetLength(Dropped, Count);
+  if not JoinAll(Stuck) then
+    Exit(Fail(esInvalid, Format(rsDraftOffsetCollapses, [Owners[Stuck].DisplayName])));
+  LastKept := Count - 1;
+  while Dropped[LastKept] do
+    Dec(LastKept);
   // A closed run, such as a whole outline, joins up at its start too
   Closed := (Count > 1) and PointsNear(SegmentEnd(Path[Count - 1]), SegmentStart(Path[0]), OFFSET_RUN_TOLERANCE);
-  if Closed and not JoinParts(Count - 1, 0, SegmentStart(Path[0])) then
+  if Closed and not JoinParts(LastKept, 0, SegmentStart(Path[0])) then
     Exit(Fail(esInvalid, Format(rsDraftOffsetCollapses, [Owners[0].DisplayName])));
   FSegments := nil;
   // A closed run's last mitre runs to the first part's start, which is where
   // the edge then starts and ends
   for Index := 0 to Count - 1 do
   begin
+    if Dropped[Index] then
+      Continue;
     Part := Parts[Index];
     for Segment in Part do
       AddSegment(FSegments, Segment);
-    if (Index < Count - 1) or Closed then
+    if (Index < LastKept) or Closed then
       for Segment in Joins[Index] do
         AddSegment(FSegments, Segment);
   end;
   Result := ApplyLimits(Context);
 end;
 
-procedure MoveSegmentStart(var Segment: TEdgeSegment; const At: TVec2);
-begin
-  if Segment.Kind = skLine then
-    Segment.Line.P1 := At
-  else
-    Segment.Curve.P0 := At;
-end;
-
-procedure MoveSegmentEnd(var Segment: TEdgeSegment; const At: TVec2);
-begin
-  if Segment.Kind = skLine then
-    Segment.Line.P2 := At
-  else
-    Segment.Curve.P3 := At;
-end;
-
 // Where the offset, carried on straight past its ends, crosses the limit
 // nearest the end it limits. Position is along the offset from its start:
 // below 0 or past its length where it is carried on.
-function LimitCrossing(Offset, Limit: TEdgeObject; AtEnd: boolean; out Crossing: TEdgeCrossing): boolean;
+function OffsetLimitCrossing(Offset, Limit: TEdgeObject; AtEnd: boolean; out Crossing: TEdgeCrossing): boolean;
 var
   Item: TEdgeCrossing;
   Target, Total: double;
@@ -2408,7 +2602,7 @@ begin
     StartEdge := InputEdge(Context, FStartLimit);
     if not Assigned(StartEdge) then
       Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FStartLimit)])));
-    if not LimitCrossing(Self, StartEdge, False, StartHit) then
+    if not OffsetLimitCrossing(Self, StartEdge, False, StartHit) then
       Exit(Fail(esInvalid, Format(rsDraftOffsetStartMisses, [StartEdge.DisplayName])));
   end;
   if FEndLimit <> '' then
@@ -2416,7 +2610,7 @@ begin
     EndEdge := InputEdge(Context, FEndLimit);
     if not Assigned(EndEdge) then
       Exit(Fail(esError, Format(rsDraftNotAnEdge, [KeyLabel(Context, FEndLimit)])));
-    if not LimitCrossing(Self, EndEdge, True, EndHit) then
+    if not OffsetLimitCrossing(Self, EndEdge, True, EndHit) then
       Exit(Fail(esInvalid, Format(rsDraftOffsetEndMisses, [EndEdge.DisplayName])));
   end;
   if Assigned(StartEdge) and Assigned(EndEdge) and (StartHit.Position >= EndHit.Position - DEFAULT_TOLERANCE) then

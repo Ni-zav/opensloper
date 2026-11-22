@@ -2,8 +2,9 @@
 
 This tutorial opens the [bodice block](bodice-block.md) down the centre front
 and buttons it with the Features tab: five buttons, their buttonholes and the
-extension they need, in one step. Because the number of buttons is a
-variable, changing it afterwards moves and adds them with no more work.
+extension they need, in one step, and then a facing behind them. Because the
+number of buttons is a variable, changing it afterwards moves and adds them
+with no more work.
 
 The finished pattern is in the documentation's examples:
 [bodice-buttons.sloper](../examples/bodice-block/bodice-buttons.sloper),
@@ -100,10 +101,34 @@ across, centred on the point.
 Printed, a buttonhole is drawn as the slot and its bar tacks. A cutting
 machine or laser cuts it as a slit.
 
+## 6. A facing behind the buttons
+
+The extension and the neckline need finishing inside, and the buttonholes
+need two layers to be sewn through: a front facing does both.
+
+1. In the **Features** tab choose **Facing**.
+2. Click **Front_neck**, then ++shift++ and click **Line_FN_J**, the step
+   out to the extension at the neck, and **Offset_FN_FC**, the extension's
+   edge.
+3. Leave the width at `#facing_width`, tick **Interfacing, cut from** and
+   leave it as `Interfacing`, then click **Apply**.
+
+The facing's inner edge runs 6 cm in from the neckline and the extension,
+from the shoulder down to the waist. At the neck it leaves out the short step
+out to the extension, which lies inside the facing's width; at the waist it
+runs past **Line_K_FC**, the step back in, which the facing takes whole, and
+meets the waist. **Facing_Front** and **Interfacing_Front** are cut twice and
+mirrored, as the front is, and **FacingSeam** joins the facing to the
+neckline and the extension. The buttonholes lie inside the facing, so they
+are sewn through both layers.
+
+The picture above shows the finished front. To try the facing on its own, see
+[Adding a facing](facing.md).
+
 ## What next
 
-- Face the neckline with the [facing](facing.md) feature, as the facing
-  tutorial does for the block.
+- Face the back's neckline to match: select **Back_neck** and apply a
+  facing, which shares `#facing_width` with the front's.
 - Read [The Features tab](../design/features.md#buttons) for every setting
   of the buttons.
 - Ask Claude in the [Claude tab](../design/claude.md) to button a pattern:

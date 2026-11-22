@@ -5,7 +5,7 @@
   "notes": "A close-fitting bodice block: half back and half front, each cut on the fold, with a waist dart in each. The pattern of the bodice block tutorial.",
   "measurementFile": "bodice.slm",
   "identity": "a9d27dd4-466a-4988-a917-5754d4ea4b19",
-  "nextId": 83,
+  "nextId": 96,
   "variables": [
     {
       "id": 1,
@@ -78,6 +78,12 @@
       "name": "button_count",
       "formula": "5",
       "description": "How many buttons there are"
+    },
+    {
+      "id": 83,
+      "name": "facing_width",
+      "formula": "6",
+      "description": "The width of the facings"
     }
   ],
   "objects": [
@@ -611,7 +617,8 @@
         "count": 1,
         "mirrored": false
       },
-      "foldEdge": 15
+      "foldEdge": 15,
+      "material": 84
     },
     {
       "id": 67,
@@ -744,12 +751,89 @@
       "marker": "button"
     },
     {
+      "id": 86,
+      "type": "offsetEdge",
+      "edges": [
+        {
+          "edge": 50,
+          "reversed": false
+        },
+        {
+          "edge": 79,
+          "reversed": false
+        },
+        {
+          "edge": 76,
+          "reversed": false
+        }
+      ],
+      "side": "right",
+      "startLimit": 49,
+      "endLimit": 59,
+      "distance": "{83}",
+      "role": "outline"
+    },
+    {
+      "id": 87,
+      "type": "alongEdgePoint",
+      "name": "L",
+      "edge": 86,
+      "from": "start",
+      "mode": "length",
+      "value": "0"
+    },
+    {
+      "id": 90,
+      "type": "splitPart",
+      "edge": 49,
+      "point": 87,
+      "part": 2,
+      "role": "outline"
+    },
+    {
+      "id": 89,
+      "type": "splitPart",
+      "edge": 49,
+      "point": 87,
+      "part": 1,
+      "role": "outline"
+    },
+    {
+      "id": 88,
+      "type": "alongEdgePoint",
+      "name": "M",
+      "edge": 86,
+      "from": "end",
+      "mode": "length",
+      "value": "0"
+    },
+    {
+      "id": 91,
+      "type": "splitPart",
+      "edge": 59,
+      "point": 88,
+      "part": 1,
+      "role": "outline"
+    },
+    {
+      "id": 92,
+      "type": "splitPart",
+      "edge": 59,
+      "point": 88,
+      "part": 2,
+      "role": "outline"
+    },
+    {
       "id": 64,
       "type": "piece",
       "name": "Front",
       "path": [
         {
-          "edge": 59,
+          "edge": 91,
+          "reversed": false
+        },
+        {
+          "edge": 92,
           "reversed": false
         },
         {
@@ -777,7 +861,11 @@
           "reversed": true
         },
         {
-          "edge": 49,
+          "edge": 90,
+          "reversed": true
+        },
+        {
+          "edge": 89,
           "reversed": true
         },
         {
@@ -823,7 +911,8 @@
       "cut": {
         "count": 2,
         "mirrored": true
-      }
+      },
+      "material": 84
     },
     {
       "id": 65,
@@ -832,7 +921,11 @@
       "sideA": [
         {
           "piece": 64,
-          "edge": 49
+          "edge": 90
+        },
+        {
+          "piece": 64,
+          "edge": 89
         }
       ],
       "sideB": [
@@ -884,6 +977,144 @@
       "reversed": false,
       "ease": "0",
       "tolerance": "0.1"
+    },
+    {
+      "id": 93,
+      "type": "piece",
+      "name": "Facing_Front",
+      "path": [
+        {
+          "edge": 50,
+          "reversed": false
+        },
+        {
+          "edge": 79,
+          "reversed": false
+        },
+        {
+          "edge": 76,
+          "reversed": false
+        },
+        {
+          "edge": 80,
+          "reversed": false
+        },
+        {
+          "edge": 91,
+          "reversed": false
+        },
+        {
+          "edge": 86,
+          "reversed": true
+        },
+        {
+          "edge": 89,
+          "reversed": true
+        }
+      ],
+      "allowance": "1.5",
+      "grainline": {
+        "angle": "90"
+      },
+      "cut": {
+        "count": 2,
+        "mirrored": true
+      },
+      "material": 84
+    },
+    {
+      "id": 94,
+      "type": "piece",
+      "name": "Interfacing_Front",
+      "path": [
+        {
+          "edge": 50,
+          "reversed": false
+        },
+        {
+          "edge": 79,
+          "reversed": false
+        },
+        {
+          "edge": 76,
+          "reversed": false
+        },
+        {
+          "edge": 80,
+          "reversed": false
+        },
+        {
+          "edge": 91,
+          "reversed": false
+        },
+        {
+          "edge": 86,
+          "reversed": true
+        },
+        {
+          "edge": 89,
+          "reversed": true
+        }
+      ],
+      "allowance": "1.5",
+      "grainline": {
+        "angle": "90"
+      },
+      "cut": {
+        "count": 2,
+        "mirrored": true
+      },
+      "material": 85
+    },
+    {
+      "id": 95,
+      "type": "seam",
+      "name": "FacingSeam",
+      "sideA": [
+        {
+          "piece": 64,
+          "edge": 50
+        },
+        {
+          "piece": 64,
+          "edge": 79
+        },
+        {
+          "piece": 64,
+          "edge": 76
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 93,
+          "edge": 50
+        },
+        {
+          "piece": 93,
+          "edge": 79
+        },
+        {
+          "piece": 93,
+          "edge": 76
+        }
+      ],
+      "reversed": true,
+      "ease": "0",
+      "tolerance": "0.1"
+    }
+  ],
+  "materials": [
+    {
+      "id": 84,
+      "name": "Main",
+      "color": "#5B8DB8",
+      "fill": "tint"
+    },
+    {
+      "id": 85,
+      "name": "Interfacing",
+      "color": "#C9A227",
+      "fill": "tint"
     }
   ]
 }

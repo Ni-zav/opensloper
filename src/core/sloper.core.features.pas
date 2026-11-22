@@ -1195,9 +1195,14 @@ type
     // The edges faced, as the piece's path runs, and the side inside it
     Run: TRunEdgeArray;
     Side: TOffsetSide;
-    // The edges of the piece's path before and after the run, as they were
+    // The edges of the piece's path the inner edge meets before and after
+    // the run, as they were: those beside it, or further on past short ones,
+    // as past the step out to a button extension
     BeforeKey, AfterKey: string;
     BeforeReversed, AfterReversed: boolean;
+    // The edges passed over to reach them, which the facing takes whole, in
+    // the order the path runs
+    BeforeWhole, AfterWhole: TPiecePath;
     // The facing's inner edge, the neighbours' parts beside the run, and the
     // facing's path round them all
     InnerKey, BeforePart, AfterPart: string;
@@ -1330,17 +1335,109 @@ end;
 // which are split where it meets them; and the facing's path: the run, the
 // part of the edge after it, the inner edge back and the part of the edge
 // before it
+// Whether the edge lies within the facing's width of the run all along, as
+// a short step does, so the facing can take it whole
+function WithinFacing(Pattern: TPattern; const Plan: TFacingPlan; Edge: TEdgeObject; Width: double): boolean;
+
+  function Near(const Point: TVec2): boolean;
+  var
+    Item: TRunEdge;
+    Position, Offset: double;
+  begin
+    for Item in Plan.Run do
+    begin
+      TEdgeObject(Pattern.FindNode(Item.EdgeKey)).Locate(Point, Position, Offset);
+      if Offset <= Width + DEFAULT_TOLERANCE then
+        Exit(True);
+    end;
+    Result := False;
+  end;
+
+begin
+  Result := Near(Edge.PointAtLength(0)) and Near(Edge.PointAtLength(Edge.Length));
+end;
+
+// The edges the inner edge, carried on straight, meets going on round the
+// path from each end of the run: the first it reaches each way, past short
+// edges within the facing's width, which it takes whole
+function ChooseFacingLimits(Pattern: TPattern; Inner: TOffsetEdge; Width: double; var Plan: TFacingPlan): boolean;
+var
+  Path: TPiecePath;
+  Count, RunStart, RunEnd, Index, EndIndex: integer;
+  Hit: TEdgeCrossing;
+  Found: boolean;
+  Edge: TEdgeObject;
+begin
+  Path := Plan.Piece.Path;
+  Count := Length(Path);
+  RunStart := Plan.Piece.PathIndexOf(Plan.Run[0].EdgeKey);
+  RunEnd := Plan.Piece.PathIndexOf(Plan.Run[High(Plan.Run)].EdgeKey);
+  Plan.AfterWhole := nil;
+  Plan.BeforeWhole := nil;
+  // On from the end, short of the edge before the run, which the start needs
+  Index := (RunEnd + 1) mod Count;
+  Found := False;
+  while not Found and (Index <> (RunStart + Count - 1) mod Count) do
+  begin
+    Edge := TEdgeObject(Pattern.FindNode(Path[Index].EdgeKey));
+    Found := OffsetLimitCrossing(Inner, Edge, True, Hit);
+    if not Found and not WithinFacing(Pattern, Plan, Edge, Width) then
+      Break;
+    if not Found then
+    begin
+      Insert(Path[Index], Plan.AfterWhole, Length(Plan.AfterWhole));
+      Index := (Index + 1) mod Count;
+    end;
+  end;
+  if not Found then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, Format(rsDraftOffsetEndMisses,
+      [Pattern.FindNode(Plan.AfterKey).DisplayName])])));
+  EndIndex := Index;
+  // Back from the start, short of the edge the end meets
+  Index := (RunStart + Count - 1) mod Count;
+  Found := False;
+  while not Found and (Index <> EndIndex) do
+  begin
+    Edge := TEdgeObject(Pattern.FindNode(Path[Index].EdgeKey));
+    Found := OffsetLimitCrossing(Inner, Edge, False, Hit);
+    if not Found and not WithinFacing(Pattern, Plan, Edge, Width) then
+      Break;
+    if not Found then
+    begin
+      Insert(Path[Index], Plan.BeforeWhole, 0);
+      Index := (Index + Count - 1) mod Count;
+    end;
+  end;
+  if not Found then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, Format(rsDraftOffsetStartMisses,
+      [Pattern.FindNode(Plan.BeforeKey).DisplayName])])));
+  Plan.BeforeKey := Path[Index].EdgeKey;
+  Plan.BeforeReversed := Path[Index].Reversed;
+  Plan.AfterKey := Path[EndIndex].EdgeKey;
+  Plan.AfterReversed := Path[EndIndex].Reversed;
+  Inner.SetLimits(Plan.BeforeKey, Plan.AfterKey);
+  Result := True;
+end;
+
 function AddFacingInner(Pattern: TPattern; const Spec: TFacingSpec; var Plan: TFacingPlan): boolean;
 var
   Inner: TOffsetEdge;
   StartPoint, EndPoint: TDraftObject;
   Before, After: TEdgeObject;
   Item: TRunEdge;
+  Entry: TPieceEdge;
+  Width: double;
 begin
-  Inner := Pattern.AddOffsetRun(Plan.Run, Spec.Width, Plan.Side, erOutline, '', Plan.BeforeKey, Plan.AfterKey);
+  Inner := Pattern.AddOffsetRun(Plan.Run, Spec.Width, Plan.Side, erOutline);
   if not Assigned(Inner) then
     Exit(False);
   Plan.InnerKey := Inner.Key;
+  Pattern.Evaluate;
+  if Inner.State <> esValid then
+    Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, Inner.Message])));
+  if not Pattern.EvaluateText(Spec.Width, Width) or not ChooseFacingLimits(Pattern, Inner, Width * MILLIMETRES_PER_UNIT[Pattern.Units],
+    Plan) then
+    Exit(False);
   Pattern.Evaluate;
   if Inner.State <> esValid then
     Exit(Pattern.Refuse(Format(rsFeatureFacingTooWide, [Plan.Piece.DisplayName, Inner.Message])));
@@ -1362,9 +1459,13 @@ begin
   Plan.Path := nil;
   for Item in Plan.Run do
     AddPathEntry(Plan.Path, Item.EdgeKey, Item.Reversed);
+  for Entry in Plan.AfterWhole do
+    AddPathEntry(Plan.Path, Entry.EdgeKey, Entry.Reversed);
   AddPathEntry(Plan.Path, Plan.AfterPart, Plan.AfterReversed);
   AddPathEntry(Plan.Path, Plan.InnerKey, True);
   AddPathEntry(Plan.Path, Plan.BeforePart, Plan.BeforeReversed);
+  for Entry in Plan.BeforeWhole do
+    AddPathEntry(Plan.Path, Entry.EdgeKey, Entry.Reversed);
   Result := True;
 end;
 
@@ -1464,7 +1565,7 @@ end;
 function AddFacingPiece(Pattern: TPattern; const Plan: TFacingPlan; const AName: string; Material: TPatternMaterial): TPieceObject;
 var
   Garment: TPieceObject;
-  Grain: string;
+  Grain, Fold: string;
   Index, GarmentIndex: integer;
 begin
   Garment := Plan.Piece;
@@ -1499,12 +1600,18 @@ begin
   Pattern.SetPieceMaterial(Result, Material);
   if not Pattern.SetCut(Result, Garment.CutCount, Garment.Mirrored) then
     Exit(nil);
-  if (Garment.FoldEdgeKey <> '') and (Garment.FoldEdgeKey = Plan.BeforeKey) then
-    if not Pattern.SetFoldEdge(Result, FacingKeyFor(Plan, Plan.BeforePart)) then
-      Exit(nil);
-  if (Garment.FoldEdgeKey <> '') and (Garment.FoldEdgeKey = Plan.AfterKey) then
-    if not Pattern.SetFoldEdge(Result, FacingKeyFor(Plan, Plan.AfterPart)) then
-      Exit(nil);
+  // On the fold along the fold's part, or the fold itself when it is taken whole
+  Fold := '';
+  if Garment.FoldEdgeKey = Plan.BeforeKey then
+    Fold := Plan.BeforePart
+  else if Garment.FoldEdgeKey = Plan.AfterKey then
+    Fold := Plan.AfterPart
+  else
+    for Index := 0 to High(Plan.Path) do
+      if (Garment.FoldEdgeKey <> '') and (Plan.Path[Index].EdgeKey = Garment.FoldEdgeKey) then
+        Fold := Garment.FoldEdgeKey;
+  if (Fold <> '') and not Pattern.SetFoldEdge(Result, FacingKeyFor(Plan, Fold)) then
+    Exit(nil);
 end;
 
 // The piece's notches that lie on the facing's edges, on the facing too

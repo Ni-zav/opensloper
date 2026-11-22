@@ -50,8 +50,10 @@ edges and choose Tools → Offset:
 The new edge starts 10 mm away (1 cm, ½ in), as construction: set its
 distance in the properties and give it a role, such as a stitch line, so it is
 marked on the piece. It follows its edges when they move. Outer corners are
-mitred and inner ones trimmed where the offsets cross, and it is invalid when
-a curve bends more tightly than the distance.
+mitred and inner ones trimmed where the offsets cross. A short edge that an
+inner corner leaves no room for, such as a small step, is left out of the
+offset, and the offsets either side meet where they cross. It is invalid when a curve
+bends more tightly than the distance, or when its first edge is left out.
 
 An offset can also end on another edge: cut back where it crosses it, or
 carried on straight to it. A [facing's](features.md#facing) inner edge ends on

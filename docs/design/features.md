@@ -208,7 +208,11 @@ step.
 
 - adds the facing's inner edge, the width in from the edges, running on or
   cut back so it meets the edges either side of them, such as the shoulder
-  and the centre front;
+  and the centre front. A short edge that lies within the facing's width,
+  such as the step back in from a button extension at the waist, is taken
+  into the facing whole, and the inner edge meets the edge after it; and
+  where a short step between the edges is swallowed by the width, as the
+  step out to the extension at the neck, the inner edge leaves it out;
 - splits those edges where the inner edge meets them, so the facing can use
   part of them; the piece keeps its shape, and a seam on them takes both
   parts;
@@ -275,8 +279,10 @@ waistband's end, evenly spaced between a first and a last. The tutorial
 A piece cut twice, mirrored, carries both the holes and the buttons, as
 commercial patterns do: you sew buttonholes on the side that laps over.
 
-An extension narrower than half a button is made, and the status bar says
-it is narrow.
+An extension usually has a facing behind it: select the neckline, the step
+out to the extension and the extension's edge, and apply a [facing](#facing).
+An extension narrower than half a button is made, and the status bar says it
+is narrow.
 
 An edge in no piece, or that is a fold, is refused, as are no buttons and a
 first and last that leave no room between them.

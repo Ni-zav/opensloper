@@ -57,7 +57,10 @@ Changed, Fixed and Removed under each version.
   angle and moved along it by an offset, cut as a slit by machines
   (#75).
 - A tutorial, Adding buttons, opens the bodice block's front and buttons
-  it from the Features tab (#75).
+  it from the Features tab, with a facing behind the buttons (#75).
+- A facing can go behind a button extension: its inner edge leaves out a
+  short step the width swallows, and runs on past a short edge within the
+  width, which the facing takes whole, to the edge it meets (#75).
 - A tutorial, Adding a dart, puts a second dart in the skirt block's back
   from the Features tab and caps every dart (#72).
 

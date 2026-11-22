@@ -4,7 +4,7 @@
 // Node runs this TypeScript as it is.
 import { writeFile } from 'node:fs/promises';
 import { launch } from 'puppeteer-core';
-import { isRecord } from './replies.ts';
+import { isRecord } from '../../src/engine/replies.ts';
 
 function argument(name: string, fallback: string): string {
   const index = process.argv.indexOf(name);

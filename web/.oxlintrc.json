@@ -4,7 +4,8 @@
   "env": {
     "browser": true,
     "worker": true,
-    "es2022": true
+    "es2022": true,
+    "node": true
   },
   "categories": {
     "correctness": "error",
@@ -38,5 +39,5 @@
     "typescript/consistent-type-imports": "error",
     "unicorn/require-post-message-target-origin": "off"
   },
-  "ignorePatterns": ["node_modules/**"]
+  "ignorePatterns": ["node_modules/**", "out/**", "engine/out/**", "engine/*.mjs"]
 }

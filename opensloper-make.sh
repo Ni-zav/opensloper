@@ -36,12 +36,14 @@ Commands:
   web [--strip-names] [FPC OPTIONS]
                          build the web engine for wasm32-wasip1 into
                          web/engine/out with the FPC trunk cross-compiler
-                         (see web/engine/README.md); --strip-names takes
-                         the function names out of the .wasm files
+                         (see web/engine/README.md), then, when npm is set
+                         up, check, test and bundle the TypeScript: the design
+                         app into web/out/design; --strip-names takes the
+                         function names out of the .wasm files
   check [FILE...]        check the coding standards the formatter cannot
                          (errors fail, warnings advise; run before every commit);
                          with no files, also tsc, Oxlint and Prettier on the
-                         TypeScript in web/engine/browser
+                         TypeScript in web
   format [--check] [FILE...]
                          format the sources with jcfsettings.cfg, and with no
                          files the TypeScript with Prettier; --check lists
@@ -258,6 +260,7 @@ cmd_web() {
   if [ "$strip" -eq 1 ]; then
     strip_wasm_names web/engine/out/engine_serve.wasm web/engine/out/browser/engine_lib.wasm
   fi
+  typescript_step build || exit 1
 }
 
 # Rewrites each .wasm file without its custom sections (id 0), where the
@@ -292,13 +295,13 @@ strip_wasm_names() {
   ' "$@"
 }
 
-# The TypeScript in web/engine/browser, through the npm script named in $1 of
+# The TypeScript in web, through the npm script named in $1 of
 # its package.json (see the TypeScript section of documents/coding-standards.md).
 # Skipped with a note where there is no such folder, no npm, or its packages
 # are not installed; npm is looked for on the PATH, then in venv/bin, where
 # nodeenv puts it.
 typescript_step() {
-  local dir=web/engine/browser npm=""
+  local dir=web npm=""
   [ -f "$dir/package.json" ] || return 0
   if command -v npm > /dev/null; then
     npm="$(command -v npm)"

@@ -471,6 +471,11 @@ begin
       AssertEquals('its keys', 'Mod+Z', Shortcuts.Objects[Index].Strings['keys']);
     end;
   AssertTrue('undo listed', Found);
+  AssertEquals('roles', 'outline', Answer.Arrays['roles'].Objects[1].Strings['name']);
+  AssertEquals('outline in ink', '', Answer.Arrays['roles'].Objects[1].Strings['color']);
+  AssertEquals('solid', 0, Answer.Arrays['roles'].Objects[1].Arrays['dashes'].Count);
+  AssertEquals('stitch', 'stitch', Answer.Arrays['roles'].Objects[3].Strings['name']);
+  AssertEquals('dashed', '[1, 1]', Answer.Arrays['roles'].Objects[3].Arrays['dashes'].AsJSON);
 end;
 
 // The changes editor_changes names, joined by spaces

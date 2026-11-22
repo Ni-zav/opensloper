@@ -1,7 +1,7 @@
 {
-  "name": "opensloper-web-engine-spike",
+  "name": "opensloper-web",
   "private": true,
-  "description": "The web engine in a browser page, for the spike: a Web Worker running the Wasm engine through a WASI shim",
+  "description": "The web version: the engine in a Web Worker and the TypeScript design editor (issue #78)",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
@@ -10,8 +10,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "tsc --noEmit && oxlint && prettier --check .",
-    "build": "npm run check && esbuild main.ts worker.ts --bundle --format=esm --target=es2022 --outdir=../out/browser && cp index.html ../out/browser/",
-    "measure": "node measure.ts"
+    "test": "node --test tests/*.test.ts",
+    "bundle": "node bundle.ts",
+    "build": "npm run check && npm test && npm run bundle",
+    "test:browser": "node tests/design.ts",
+    "measure": "node engine/browser/measure.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

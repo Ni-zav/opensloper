@@ -155,7 +155,9 @@ resourcestring
     'their icons and menus, and its keys and mouse actions.';
   rsEditorTablesReturns = '`tools`, each with `name`, `caption`, `hint`, `icon` and `keys`; `commands`, each with ' +
     '`name`, `icon`, `place`, `menu`, `keys` and `description`; `shortcuts`, each with `command`, `keys`, `kind`, ' +
-    '`group` and `description`. Keys are written as Mod+Shift+S, Mod being Ctrl, or Cmd on macOS.';
+    '`group` and `description`. Keys are written as Mod+Shift+S, Mod being Ctrl, or Cmd on macOS. `roles`, each edge ' +
+    'role with its `name`, `color` (empty for outline and construction, drawn in ink) and `dashes`, dash and gap ' +
+    'lengths in mm, empty for a solid line.';
 
 implementation
 
@@ -741,6 +743,26 @@ begin
   Result := TJSONObject.Create(['changed', Changed]);
 end;
 
+function RolesToJSON: TJSONArray;
+var
+  Role: TEdgeRole;
+  Dashes: TJSONArray;
+  DashLength: double;
+begin
+  Result := TJSONArray.Create;
+  for Role := Low(TEdgeRole) to High(TEdgeRole) do
+  begin
+    Dashes := TJSONArray.Create;
+    // A pattern ends at its first 0
+    for DashLength in ROLE_DASHES[Role] do
+      if DashLength > 0 then
+        Dashes.Add(ReportFloat(DashLength))
+      else
+        Break;
+    Result.Add(TJSONObject.Create(['name', EDGE_ROLE_NAMES[Role], 'color', ROLE_COLORS[Role], 'dashes', Dashes]));
+  end;
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -759,7 +781,8 @@ begin
     'editor_drag_to': Result := DoDragTo(Params);
     'editor_drag_end': Result := DoDragEnd(False);
     'editor_drag_cancel': Result := DoDragEnd(True);
-    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON]);
+    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON,
+      'roles', RolesToJSON]);
     else
       Result := inherited DispatchMethod(Method, Params);
   end;

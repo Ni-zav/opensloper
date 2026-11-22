@@ -92,7 +92,7 @@ The project settings are the IDE's own settings with four changes: `RemoveExpres
 
 ## TypeScript
 
-The web version's code in the browser is TypeScript, so far the spike's page in `web/engine/browser`. Three tools check it, and none of their errors may be left in a commit:
+The web version's code in the browser is TypeScript, in the npm project in `web/` (the design app in `web/src`, the spike's page in `web/engine/browser`). Three tools check it, and none of their errors may be left in a commit:
 
 | Tool | Checks | Configuration |
 | --- | --- | --- |
@@ -102,9 +102,11 @@ The web version's code in the browser is TypeScript, so far the spike's page in 
 
 - **Running them:** `npm run check` in the folder runs all three, `npm run format` lays the files out, and `npm run build` checks before it bundles. `./opensloper-make.sh check` and `./opensloper-make.sh format` run them too when given no files, after the Pascal; they say so and go on without them when npm or the folder's packages are missing. npm comes from the repository's `venv` through `nodeenv` (see `web/engine/README.md`).
 - **Oxlint, not ESLint** (chosen 2026-11-18): `typescript-eslint` does not support TypeScript 7 yet, and Oxlint's type-aware rules run on typescript-go, the TypeScript 7 compiler. Oxlint warnings fail too (`denyWarnings`), and a disable comment that no longer disables anything is an error. `unicorn/require-post-message-target-origin` is off: it is for `window.postMessage`, and a worker's `postMessage` takes no target origin.
-- **No `any`.** A value from outside, such as `JSON.parse` or a Wasm export, is typed `unknown` and checked before it is used (`replies.ts`): an `isRecord` guard, then each field tested for its type.
-- **Disable comments say why**, on the line above, and are for what a rule cannot see: a loop that awaits one call at a time on purpose, as a drag does, or the Wasm boundary, where a function's signature cannot be checked at run time (`exported` in `worker.ts`). Each covers one rule on one line (`oxlint-disable-next-line rule`).
+- **No `any`.** A value from outside, such as `JSON.parse` or a Wasm export, is typed `unknown` and checked before it is used (`src/engine/replies.ts`): an `isRecord` guard, then each field tested for its type.
+- **Disable comments say why**, on the line above, and are for what a rule cannot see: a loop that awaits one call at a time on purpose, as a drag does, or the Wasm boundary, where a function's signature cannot be checked at run time (`exported` in `src/engine/worker.ts`). Each covers one rule on one line (`oxlint-disable-next-line rule`).
 - **Names** follow TypeScript's usage rather than the Pascal rules: `camelCase` for variables and functions, `PascalCase` for types, `UPPER_CASE` for constants, and descriptive names, no single letters, as in Pascal.
-- **Messages between page and worker** are a union with a `kind` field (`messages.ts`), so `switch (message.kind)` is checked for every kind.
-- **Node scripts** are TypeScript too, run by Node as they are (`measure.ts`), and checked like the rest.
+- **Messages between page and worker** are a union with a `kind` field (`src/engine/messages.ts`), so `switch (message.kind)` is checked for every kind.
+- **Node scripts** are TypeScript too, run by Node as they are (`bundle.ts`, `tests/design.ts`), and checked like the rest.
+- **Tests:** unit tests are `web/tests/*.test.ts`, run by `node --test` (`npm test`); a copy of Pascal logic, such as `view.ts`, is tested with the Pascal tests' cases and numbers. `tests/design.ts` drives the built app in headless Chromium as a user would.
+- **Mirror the desktop.** A module is named after the `src/ui` unit it stands for, with the same classes (`PatternCanvas`, `PatternPainter`, `PointTool`); editing logic stays in Pascal behind the editor methods, so the TypeScript only draws and handles input.
 

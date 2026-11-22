@@ -12,16 +12,16 @@ say what it showed. It is built twice from the same units:
   `engine_handle(request, size)`, taking one request as UTF-8 and giving back
   the reply, with `engine_alloc` and `engine_free` for the memory between.
 
-| File | What it is |
-| --- | --- |
-| `engine_serve.lpr` | The program: `TEditorApiServer` (the API with the editor's methods) over stdin and stdout |
-| `engine_lib.lpr` | The library: `TEditorApiServer` behind `engine_handle` |
-| `browser/` | A page that runs the library in a Web Worker and times it (TypeScript) |
-| `stubs/` | Stand-ins for `Sloper.Output.DraftPNG` and `Sloper.Output.GarmentPNG` with the same interface, without BGRABitmap; PNG is refused |
-| `build.sh` | Builds `out/engine_serve.wasm` and `out/browser/engine_lib.wasm`; run it through `./opensloper-make.sh web` |
-| `run.mjs` | Runs it under Node's WASI, with a folder mounted as `/data` |
-| `compare.py` | Runs every regression case through the desktop CLI and the engine, and compares the answers |
-| `fpc-wasi-fexpand.patch` | The fix to FPC trunk's WASI `ExpandFileName` the engine needs |
+| File                     | What it is                                                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `engine_serve.lpr`       | The program: `TEditorApiServer` (the API with the editor's methods) over stdin and stdout                                         |
+| `engine_lib.lpr`         | The library: `TEditorApiServer` behind `engine_handle`                                                                            |
+| `browser/`               | The spike's page, which runs the library in a Web Worker and times it (TypeScript, in the npm project in `web/`)                  |
+| `stubs/`                 | Stand-ins for `Sloper.Output.DraftPNG` and `Sloper.Output.GarmentPNG` with the same interface, without BGRABitmap; PNG is refused |
+| `build.sh`               | Builds `out/engine_serve.wasm` and `out/browser/engine_lib.wasm`; run it through `./opensloper-make.sh web`                       |
+| `run.mjs`                | Runs it under Node's WASI, with a folder mounted as `/data`                                                                       |
+| `compare.py`             | Runs every regression case through the desktop CLI and the engine, and compares the answers                                       |
+| `fpc-wasi-fexpand.patch` | The fix to FPC trunk's WASI `ExpandFileName` the engine needs                                                                     |
 
 ## The compiler
 
@@ -67,34 +67,20 @@ needed for `node:wasi`.
 
 ## In a browser
 
-`browser/` is a TypeScript page: `worker.ts` loads `engine_lib.wasm` in a Web
-Worker through the WASI shim `@bjorn3/browser_wasi_shim`, with an in-memory
-`/data` folder the page puts files in; `main.ts` fetches a regression pattern
-as text, opens, checks and draws it, then times 100 edits. `measure.ts`
-opens it in headless Chromium (through `puppeteer-core`, with the system's
-Chromium) and prints the times.
-
-Node and npm come from the repository's Python `venv`, through `nodeenv`, so
-nothing is installed system-wide:
-
-```
-./venv/bin/pip install nodeenv
-source venv/bin/activate && nodeenv -p --prebuilt --node=lts
-```
-
-Then, with `venv` active:
+`browser/` is the spike's TypeScript page, part of the npm project in `web/`
+(see `web/README.md`, which says how to set up Node and npm). It starts the
+engine through `web/src/engine`, the Web Worker the design app uses too,
+which loads `engine_lib.wasm` through the WASI shim
+`@bjorn3/browser_wasi_shim`; `main.ts` fetches a regression pattern and its
+measurements, opens them as text, checks and draws the pattern, then times
+100 edits. `measure.ts` opens it in headless Chromium (through
+`puppeteer-core`, with the system's Chromium) and prints the times:
 
 ```
-./opensloper-make.sh web                   # also writes out/browser/engine_lib.wasm
-cd web/engine/browser && npm ci && npm run build
-cd ../../.. && python3 -m http.server 8765 --bind 127.0.0.1 &
-cd web/engine/browser && npm run measure -- --pattern bodice-block.sloper --measurements bodice-small.slm
+./opensloper-make.sh web                   # the engine, then the pages bundled
+python3 -m http.server 8765 --bind 127.0.0.1 &
+cd web && npm run measure -- --pattern bodice-block.sloper --measurements bodice-small.slm
 ```
-
-`npm run build` first runs `npm run check`: `tsc` in strict mode, Oxlint
-with its type-aware rules, and Prettier, as the TypeScript section of
-`documents/coding-standards.md` describes; `npm run format` lays the files
-out. `./opensloper-make.sh check` and `format` run them as well.
 
 The page is at `http://127.0.0.1:8765/web/engine/out/browser/index.html`
 (`?pattern=` and `?measurements=` choose the case). A module worker does not

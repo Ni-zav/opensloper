@@ -4,7 +4,12 @@ import { readFile } from 'node:fs/promises';
 import { WASI } from 'node:wasi';
 import { argv, env } from 'node:process';
 
-const wasi = new WASI({ version: 'preview1', args: ['engine'], env: { HOME: '/data' }, preopens: { '/data': argv[2] } });
+const wasi = new WASI({
+  version: 'preview1',
+  args: ['engine'],
+  env: { HOME: '/data' },
+  preopens: { '/data': argv[2] },
+});
 const module = await WebAssembly.compile(await readFile(new URL('./out/engine_serve.wasm', import.meta.url)));
 const instance = await WebAssembly.instantiate(module, wasi.getImportObject());
 const start = performance.now();

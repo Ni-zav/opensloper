@@ -1,9 +1,6 @@
 // What the page and the engine's worker send each other
 
-export type ToWorker =
-  | { kind: 'load'; url: string }
-  | { kind: 'files'; files: Record<string, string> }
-  | { kind: 'call'; id: number; request: string };
+export type ToWorker = { kind: 'load'; url: string } | { kind: 'call'; id: number; request: string };
 
 export interface Loaded {
   kind: 'loaded';

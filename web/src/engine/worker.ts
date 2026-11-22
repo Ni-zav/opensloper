@@ -1,8 +1,9 @@
 // Runs the web engine in a Web Worker, so a slow evaluation never holds up
-// the page. Files the page sends are put in /data, an in-memory folder; each
-// call is one JSON-RPC request through the engine's engine_handle.
-import { ConsoleStdout, File, OpenFile, PreopenDirectory, WASI, type Inode } from '@bjorn3/browser_wasi_shim';
-import type { FromWorker, ToWorker } from './messages';
+// the page. Each call is one JSON-RPC request through the engine's
+// engine_handle. Files go to the engine as text, so it has no folders; the
+// empty /data is its home.
+import { ConsoleStdout, File, OpenFile, PreopenDirectory, WASI } from '@bjorn3/browser_wasi_shim';
+import type { FromWorker, ToWorker } from './messages.ts';
 
 interface EngineExports {
   memory: WebAssembly.Memory;
@@ -12,7 +13,6 @@ interface EngineExports {
   handle: (request: number, size: number) => number;
 }
 
-const data = new Map<string, Inode>();
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 let engine: EngineExports | undefined;
@@ -70,7 +70,7 @@ async function load(url: string): Promise<void> {
       ConsoleStdout.lineBuffered((line) => {
         console.warn(`engine: ${line}`);
       }),
-      new PreopenDirectory('/data', data),
+      new PreopenDirectory('/data', new Map()),
     ],
     { debug: false },
   );
@@ -106,11 +106,6 @@ async function receive(message: ToWorker): Promise<void> {
   switch (message.kind) {
     case 'load':
       await load(message.url);
-      break;
-    case 'files':
-      for (const [name, text] of Object.entries(message.files)) {
-        data.set(name, new File(encoder.encode(text)));
-      }
       break;
     case 'call': {
       const start = performance.now();

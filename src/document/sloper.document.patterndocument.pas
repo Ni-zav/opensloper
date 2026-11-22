@@ -96,6 +96,10 @@ type
     // The set's file as it was read, and its text seen changing since
     FMeasurementText, FPendingMeasurementText: string;
     FMeasurementsChanged: boolean;
+    // The set, or the pattern, came as text rather than from a file, so the
+    // measurement path is only the pattern's reference and no file is read
+    // or written for it
+    FMeasurementsInMemory: boolean;
     FFileName: string;
     FUndo, FRedo: TCommandList;
     FSavedCount: integer;
@@ -124,8 +128,11 @@ type
     procedure RequireNoChange;
     function MeasurementFileFor(const PatternFileName: string): string;
     procedure ApplySnapshot(const Text: string);
-    // Text is the file as ASet was read from it, so a write since is still seen
-    procedure SetMeasurementSet(ASet: TMeasurementSet; const APath, AText: string);
+    // Text is the file as ASet was read from it, so a write since is still
+    // seen; InMemory when it came as text, not read from APath
+    procedure SetMeasurementSet(ASet: TMeasurementSet; const APath, AText: string; InMemory: boolean = False);
+    // Makes ASet current, read from SetText, as UseMeasurements does
+    procedure ReplaceMeasurements(ASet: TMeasurementSet; const APath, SetText: string; InMemory: boolean);
     procedure RecordLocked;
     function ChangedLocked: string;
   public
@@ -140,10 +147,23 @@ type
     // measurement set, and MeasurementError says why.
     function LoadFromFile(const FileName: string; out ErrorMessage: string): boolean;
     function SaveToFile(const FileName: string; out ErrorMessage: string): boolean;
+    // A pattern file's contents, for the web, where files are not opened by
+    // path: the pattern opens with no file name and no measurement set, its
+    // MeasurementPath being the reference it stores, relative to its folder,
+    // for whoever supplies the files to give with UseMeasurementsText. On
+    // failure the open pattern is unchanged.
+    function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
+    // The pattern file's contents, now counted as saved
+    function SaveToText: string;
     // Makes the set in FileName current, or none for ''. Not an undo step,
     // but the pattern records it, so the document becomes modified. On
     // failure the current set is kept.
     function UseMeasurements(const FileName: string; out ErrorMessage: string): boolean;
+    // The same with the set's file given as Text. Reference is where the
+    // pattern records it, relative to the pattern's folder with "/"; '' keeps
+    // the one it has. Nothing is read or written for it, so
+    // ChangeMeasurements is refused until a set is used from a file.
+    function UseMeasurementsText(const Text, Reference: string; out ErrorMessage: string): boolean;
     // A small edit to the current measurement file: it is re-read, this key
     // changed or added, and written, then the set is loaded again and the
     // pattern re-evaluated. Not an undo step and does not modify the pattern,
@@ -203,8 +223,11 @@ type
     property Pattern: TPattern read FPattern;
     // nil when there is none
     property Measurements: TMeasurementSet read FMeasurements;
-    // Full path of the measurement file; kept when loading it failed
+    // Full path of the measurement file; kept when loading it failed. For a
+    // pattern from LoadFromText, the reference it stores.
     property MeasurementPath: string read FMeasurementPath;
+    // The set, or the pattern, came as text, so no file is read or written for it
+    property MeasurementsInMemory: boolean read FMeasurementsInMemory;
     // Why the pattern's measurement file could not be loaded, or ''
     property MeasurementError: string read FMeasurementError;
     property MeasurementScale: double read GetMeasurementScale;
@@ -233,6 +256,7 @@ resourcestring
   rsDocumentNoChange = 'No change is open';
   rsDocumentBadSnapshot = 'Could not restore the pattern: %s';
   rsDocumentNoMeasurements = 'There is no measurement file';
+  rsDocumentMeasurementsInMemory = 'The measurement file was given as text, so it cannot be changed here';
 
 implementation
 
@@ -434,8 +458,9 @@ begin
   FPattern.Evaluate;
 end;
 
-procedure TPatternDocument.SetMeasurementSet(ASet: TMeasurementSet; const APath, AText: string);
+procedure TPatternDocument.SetMeasurementSet(ASet: TMeasurementSet; const APath, AText: string; InMemory: boolean);
 begin
+  FMeasurementsInMemory := InMemory;
   FPattern.Measurements := ASet;
   FreeAndNil(FMeasurements);
   FMeasurements := ASet;
@@ -527,6 +552,45 @@ begin
   Result := True;
 end;
 
+function TPatternDocument.LoadFromText(const Text: string; out ErrorMessage: string): boolean;
+var
+  Loaded: TPattern;
+begin
+  RequireNoChange;
+  Loaded := TPattern.Create;
+  try
+    if not LoadPatternFromText(Loaded, Text, ErrorMessage) then
+      Exit(False);
+    if Loaded.Identity = '' then
+      Loaded.Identity := NewPatternIdentity;
+    FreeAndNil(FPattern);
+    FPattern := Loaded;
+    Loaded := nil;
+  finally
+    FreeAndNil(Loaded);
+  end;
+  SetMeasurementSet(nil, FPattern.MeasurementFile, '', True);
+  FMeasurementError := '';
+  ClearHistory;
+  FFileName := '';
+  FMeasurementsChanged := False;
+  FPattern.MeasurementFile := MeasurementFileFor(FFileName);
+  FPattern.Evaluate;
+  Inc(FGeneration);
+  Notify([dcPattern, dcObjectsReplaced, dcMeasurements, dcHistory, dcFile]);
+  Result := True;
+end;
+
+function TPatternDocument.SaveToText: string;
+begin
+  RequireNoChange;
+  FPattern.MeasurementFile := MeasurementFileFor(FFileName);
+  Result := SavePatternToText(FPattern);
+  FSavedCount := FUndo.Count;
+  FMeasurementsChanged := False;
+  Notify([dcFile]);
+end;
+
 function TPatternDocument.ChangeMeasurement(const Key: string; Value: double; const Description: string;
   out Change: TMeasurementChange; out ErrorMessage: string): boolean;
 var
@@ -558,6 +622,11 @@ begin
     ErrorMessage := rsDocumentNoMeasurements;
     Exit(False);
   end;
+  if FMeasurementsInMemory then
+  begin
+    ErrorMessage := rsDocumentMeasurementsInMemory;
+    Exit(False);
+  end;
   Size := '';
   if Assigned(FMeasurements) then
     Size := FMeasurements.SizeName;
@@ -583,7 +652,7 @@ function TPatternDocument.MeasurementFileChanged: boolean;
 var
   Text, Reason: string;
 begin
-  Result := (FMeasurementPath <> '') and ReadTextFile(FMeasurementPath, Text, Reason) and (Text <> FMeasurementText);
+  Result := (FMeasurementPath <> '') and not FMeasurementsInMemory and ReadTextFile(FMeasurementPath, Text, Reason) and (Text <> FMeasurementText);
 end;
 
 function TPatternDocument.GetMeasurementScale: double;
@@ -621,7 +690,7 @@ var
   NewSet: TMeasurementSet;
 begin
   Result := False;
-  if FChangeOpen or (FMeasurementPath = '') or not ReadTextFile(FMeasurementPath, Text, Reason) or (Text = FMeasurementText) then
+  if FChangeOpen or (FMeasurementPath = '') or FMeasurementsInMemory or not ReadTextFile(FMeasurementPath, Text, Reason) or (Text = FMeasurementText) then
   begin
     FPendingMeasurementText := '';
     Exit;
@@ -655,17 +724,13 @@ end;
 function TPatternDocument.UseMeasurements(const FileName: string; out ErrorMessage: string): boolean;
 var
   NewSet: TMeasurementSet;
-  NewPath, OldStored, SetText: string;
-  WasModified: boolean;
-  Changes: TDocumentChanges;
+  NewPath, SetText: string;
 begin
   RequireNoChange;
   ErrorMessage := '';
   SetText := '';
   NewSet := nil;
   NewPath := '';
-  WasModified := Modified;
-  OldStored := FPattern.MeasurementFile;
   try
     if FileName <> '' then
     begin
@@ -674,11 +739,49 @@ begin
       if not ReadTextFile(NewPath, SetText, ErrorMessage) or not NewSet.LoadFromText(SetText, ErrorMessage) then
         Exit(False);
     end;
-    SetMeasurementSet(NewSet, NewPath, SetText);
+    ReplaceMeasurements(NewSet, NewPath, SetText, False);
     NewSet := nil;
   finally
     FreeAndNil(NewSet);
   end;
+  Result := True;
+end;
+
+function TPatternDocument.UseMeasurementsText(const Text, Reference: string; out ErrorMessage: string): boolean;
+var
+  NewSet: TMeasurementSet;
+  NewPath: string;
+begin
+  RequireNoChange;
+  ErrorMessage := '';
+  NewPath := Reference;
+  if NewPath = '' then
+    NewPath := FPattern.MeasurementFile;
+  // A pattern with a file keeps a full path, which MeasurementFileFor makes
+  // relative again; one without keeps the reference as it is
+  if (FFileName <> '') and (NewPath <> '') then
+    NewPath := ExpandFileName(ConcatPaths([ExtractFileDir(FFileName), StringReplace(NewPath, '/', PathDelim, [rfReplaceAll])]));
+  NewSet := TMeasurementSet.Create;
+  try
+    if not NewSet.LoadFromText(Text, ErrorMessage) then
+      Exit(False);
+    ReplaceMeasurements(NewSet, NewPath, Text, True);
+    NewSet := nil;
+  finally
+    FreeAndNil(NewSet);
+  end;
+  Result := True;
+end;
+
+procedure TPatternDocument.ReplaceMeasurements(ASet: TMeasurementSet; const APath, SetText: string; InMemory: boolean);
+var
+  OldStored: string;
+  WasModified: boolean;
+  Changes: TDocumentChanges;
+begin
+  WasModified := Modified;
+  OldStored := FPattern.MeasurementFile;
+  SetMeasurementSet(ASet, APath, SetText, InMemory);
   FMeasurementError := '';
   FPattern.MeasurementFile := MeasurementFileFor(FFileName);
   if FPattern.MeasurementFile <> OldStored then
@@ -688,7 +791,6 @@ begin
   if Modified <> WasModified then
     Include(Changes, dcFile);
   Notify(Changes);
-  Result := True;
 end;
 
 procedure TPatternDocument.BeginChange(const Description: string; CheckLocks: boolean);

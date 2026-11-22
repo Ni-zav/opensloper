@@ -70,7 +70,7 @@ OpenSloper.create_pattern_file("gathered-skirt.sloper", units="cm",
                                measurement_file="measurements/size-table.slm")
 
 with OpenSloper() as sloper:
-    sloper.open("gathered-skirt.sloper", size="12")
+    sloper.open(path="gathered-skirt.sloper", size="12")
 
     sloper.add_variable("fullness", "1.5", description="Skirt width at the waist, times the hip")
     sloper.add_variable("hem", "4", description="Hem depth, turned up")

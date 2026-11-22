@@ -173,7 +173,8 @@ var
 begin
   Schema := FindTool('open').Objects['inputSchema'];
   AssertEquals('object', Schema.Get('type', ''));
-  AssertEquals('path required', '["path"]', Schema.Arrays['required'].AsJSON);
+  // A path or the text, so neither is required
+  AssertFalse('nothing required', Assigned(Schema.Find('required')));
   AssertEquals('string', Schema.Objects['properties'].Objects['path'].Get('type', ''));
   // A target is "id" or "name", so neither is required
   Schema := FindTool('rename').Objects['inputSchema'];

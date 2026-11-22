@@ -78,6 +78,11 @@ type
     procedure TestSelectSizeReevaluates;
     procedure TestChangeMeasurementKeepsSize;
     procedure TestSeesMeasurementFileChange;
+    // A pattern and set given as text keep the reference the pattern stores,
+    // and no file is read for them, even one by that name
+    procedure TestTextKeepsMeasurementReference;
+    procedure TestTextMeasurementsNotWatched;
+    procedure TestSaveToTextCountsAsSaved;
     procedure TestMeasurementWatchWaitsForAStableFile;
     procedure TestMeasurementWatchKeepsSize;
     procedure TestMeasurementWatchIgnoresBrokenFile;
@@ -638,6 +643,65 @@ begin
   AssertEquals('38', FDocument.Measurements.SizeName);
   AssertNear('that size', 820, FDocument.Measurements.Find('waist').Value);
   AssertNear('not the other', 400, FDocument.Measurements.Find('waist').ValueFor(0));
+end;
+
+procedure TTestDocument.TestTextKeepsMeasurementReference;
+var
+  Err, Saved, SetText: string;
+begin
+  AssertTrue(Err, FDocument.UseMeasurements(WriteSet('bill.slm', 720), Err));
+  AddPoint('A', '@waist / 4');
+  AssertTrue(Err, FDocument.SaveToFile(ConcatPaths([FFolder, 'skirt.sloper']), Err));
+  Saved := FDocument.SaveToText;
+  AssertTrue(Err, FDocument.LoadFromText(Saved, Err));
+  AssertEquals('no file', '', FDocument.FileName);
+  AssertEquals('the reference', 'sets/bill.slm', FDocument.MeasurementPath);
+  AssertFalse('no set read', Assigned(FDocument.Measurements));
+  AssertTrue('in memory', FDocument.MeasurementsInMemory);
+  AssertTrue(ReadTextFile(ConcatPaths([FFolder, 'sets', 'bill.slm']), SetText, Err));
+  AssertTrue(Err, FDocument.UseMeasurementsText(SetText, '', Err));
+  AssertNear('worked out', 180, PointX('A'));
+  AssertEquals('kept', 'sets/bill.slm', FDocument.Pattern.MeasurementFile);
+  AssertFalse('so unchanged', FDocument.Modified);
+  AssertTrue('the reference saved', Pos('"sets/bill.slm"', FDocument.SaveToText) > 0);
+end;
+
+procedure TTestDocument.TestTextMeasurementsNotWatched;
+var
+  Err, SetText: string;
+  Change: TMeasurementChange;
+begin
+  AssertTrue(ReadTextFile(WriteSet('bill.slm', 720), SetText, Err));
+  // Named as the file on disk would be, were it read from there
+  AssertTrue(Err, FDocument.UseMeasurementsText(SetText, ConcatPaths([FFolder, 'sets', 'bill.slm']), Err));
+  AddPoint('A', '@waist / 4');
+  WriteSet('bill.slm', 800);
+  AssertFalse('not seen', FDocument.MeasurementFileChanged);
+  AssertFalse('not read', FDocument.CheckMeasurementFile);
+  AssertFalse('not read again', FDocument.CheckMeasurementFile);
+  AssertNear('as given', 180, PointX('A'));
+  AssertFalse('not written', FDocument.ChangeMeasurement('waist', 900, '', Change, Err));
+  AssertEquals(rsDocumentMeasurementsInMemory, Err);
+  AssertTrue(Err, FDocument.UseMeasurements(ConcatPaths([FFolder, 'sets', 'bill.slm']), Err));
+  AssertFalse('from a file again', FDocument.MeasurementsInMemory);
+  AssertTrue(Err, FDocument.ChangeMeasurement('waist', 900, '', Change, Err));
+end;
+
+procedure TTestDocument.TestSaveToTextCountsAsSaved;
+var
+  Err: string;
+begin
+  AddPoint('A', '10');
+  AssertTrue('modified', FDocument.Modified);
+  FDocument.AddListener(@Listen);
+  FDocument.SaveToText;
+  AssertFalse('saved', FDocument.Modified);
+  AssertEquals('told', 1, Length(FChanges));
+  AssertTrue('the file', dcFile in FChanges[0]);
+  AssertTrue(Err, FDocument.LoadFromText(FDocument.SaveToText, Err));
+  AssertNear('loaded', 10, PointX('A'));
+  AssertFalse('bad text refused', FDocument.LoadFromText('not json', Err));
+  AssertNear('and the pattern kept', 10, PointX('A'));
 end;
 
 procedure TTestDocument.TestSeesMeasurementFileChange;

@@ -85,6 +85,7 @@ type
     // Cancels the open change and raises the pattern's reason for refusing it
     function DoOpen(Params: TJSONObject): TJSONData;
     function DoSave(Params: TJSONObject): TJSONData;
+    function DoUseMeasurements(Params: TJSONObject): TJSONData;
     function DoGetMeasurements: TJSONData;
     function DoMissingMeasurements: TJSONData;
     function DoAddRepeat(Params: TJSONObject): TJSONData;
@@ -226,6 +227,8 @@ resourcestring
   rsApiUnknownId = 'There is no object or variable with ID %d';
   rsApiUnknownName = 'There is no object or variable named "%s"';
   rsApiNoFileName = 'The pattern has no file name yet; give a "path"';
+  rsApiPathOrText = 'Give either "path" or "text"';
+  rsApiTextNoMeasurements = 'A pattern given as text takes its measurement file through use_measurements';
   rsApiSaveExtension = '"%s" is not a .sloper file; patterns are saved only as .sloper files';
   rsApiNotAPattern = '"%s" is not a pattern file, so it is not replaced';
   rsApiExportExtension = 'A %s export is written to a %s file';
@@ -292,6 +295,7 @@ resourcestring
   rsApiConvertUnits = 'Convert pattern units';
   rsApiBusy = 'The window is in the middle of a change; try again when the user has finished';
   rsApiOpenInWindow = 'Patterns are opened in the design window, not through the API; this works on the pattern open there';
+  rsApiMeasurementsInWindow = 'The measurement file is chosen in the design window, not through the API';
   rsApiWriteDeclined = 'The user did not allow writing %s';
   rsApiPatternReplaced = 'Another pattern is open now, so IDs and names from before may mean other objects; ' +
     'look again with ui_state and list_objects';
@@ -812,6 +816,10 @@ begin
   try
     Result.Add('path', ShownPatternPath(FDocument.FileName));
     Result.Add('measurements', ShownMeasurementPath);
+    if FWithholdsFiles and (FDocument.Pattern.MeasurementFile <> '') then
+      Result.Add('measurementsFile', API_WITHHELD)
+    else
+      Result.Add('measurementsFile', FDocument.Pattern.MeasurementFile);
     // Formulas and variable values are in this unit; reported positions and lengths are mm
     Result.Add('units', MEASURE_UNIT_NAMES[FDocument.Pattern.Units]);
     Result.Add('objects', FDocument.Pattern.ObjectCount);
@@ -827,16 +835,53 @@ end;
 
 function TApiServer.DoOpen(Params: TJSONObject): TJSONData;
 var
-  Err, Measurements: string;
+  Err, Measurements, Path, Text: string;
+  HasText: boolean;
 begin
   if not FOpensFiles then
     raise EApiError.Create(RPC_REFUSED, rsApiOpenInWindow);
+  Path := OptionalString(Params, 'path');
+  HasText := Assigned(Params.Find('text'));
+  Text := OptionalString(Params, 'text');
   Measurements := OptionalString(Params, 'measurements');
-  if not FDocument.LoadFromFile(RequireString(Params, 'path'), Err) then
+  if (Path = '') = not HasText then
+    raise EApiError.Create(RPC_INVALID_PARAMS, rsApiPathOrText);
+  if HasText then
+  begin
+    if Measurements <> '' then
+      raise EApiError.Create(RPC_INVALID_PARAMS, rsApiTextNoMeasurements);
+    if not FDocument.LoadFromText(Text, Err) then
+      raise EApiError.Create(RPC_REFUSED, Err);
+  end
+  else if not FDocument.LoadFromFile(Path, Err) then
     raise EApiError.Create(RPC_REFUSED, Err);
   if (Measurements <> '') and not FDocument.UseMeasurements(Measurements, Err) then
     raise EApiError.Create(RPC_REFUSED, Err);
   UseSize(OptionalString(Params, 'size'));
+  Result := DocumentInfo;
+end;
+
+function TApiServer.DoUseMeasurements(Params: TJSONObject): TJSONData;
+var
+  Err, Path: string;
+  HasText: boolean;
+begin
+  // In the design window the user picks the measurement file, as they open the pattern
+  if not FOpensFiles then
+    raise EApiError.Create(RPC_REFUSED, rsApiMeasurementsInWindow);
+  Path := OptionalString(Params, 'path');
+  HasText := Assigned(Params.Find('text'));
+  if (Path = '') = not HasText then
+    raise EApiError.Create(RPC_INVALID_PARAMS, rsApiPathOrText);
+  if FDocument.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  if HasText then
+  begin
+    if not FDocument.UseMeasurementsText(RequireString(Params, 'text'), OptionalString(Params, 'file'), Err) then
+      raise EApiError.Create(RPC_REFUSED, Err);
+  end
+  else if not FDocument.UseMeasurements(Path, Err) then
+    raise EApiError.Create(RPC_REFUSED, Err);
   Result := DocumentInfo;
 end;
 
@@ -1021,8 +1066,17 @@ end;
 
 function TApiServer.DoSave(Params: TJSONObject): TJSONData;
 var
-  Err, Path: string;
+  Err, Path, Text: string;
 begin
+  if BooleanParam(Params, 'text') then
+  begin
+    if FDocument.ChangeOpen then
+      raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+    Text := FDocument.SaveToText;
+    Result := DocumentInfo;
+    TJSONObject(Result).Add('text', Text);
+    Exit;
+  end;
   Path := OptionalString(Params, 'path');
   if Path = '' then
     Path := FDocument.FileName;
@@ -2965,6 +3019,7 @@ begin
   case Method of
     'open': Result := DoOpen(Params);
     'save': Result := DoSave(Params);
+    'use_measurements': Result := DoUseMeasurements(Params);
     'get_measurements': Result := DoGetMeasurements;
     'arrange': Result := DoArrange(Params);
     'add_repeat': Result := DoAddRepeat(Params);

@@ -72,6 +72,19 @@ type
     procedure TestFailedCallClosesChange;
     procedure TestPieceMaterialAndFill;
     procedure TestOpen;
+    // For the web, files come and go as text: the pattern opens without a
+    // file or measurements, which come as text after
+    procedure TestOpenText;
+    procedure TestSaveText;
+    // A set given as text is never written: the file it names may not exist
+    procedure TestMeasurementsTextNotWritten;
+    procedure TestOpenNeedsPathOrText;
+    procedure TestUseMeasurementsFromFile;
+    // Given as text to a pattern opened from a file, the set is recorded
+    // relative to the pattern's folder
+    procedure TestUseMeasurementsTextBesideFile;
+    // In the design window the user chooses the measurement file
+    procedure TestUseMeasurementsRefusedInWindow;
     procedure TestInchPattern;
     procedure TestConvertUnits;
     procedure TestConvertUnitsAsksForMarks;
@@ -170,6 +183,22 @@ uses
   base64, Sloper.Output.Layout,
   Sloper.Core.Arrange, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Variables,
   Sloper.Core.Draft, Sloper.Core.PieceDetect, Sloper.Core.Units, Sloper.Core.PatternMaterials, Sloper.Core.Features;
+
+// A file's contents as the "text" parameter
+function TextParams(const FileName: string): string;
+var
+  Text, Err: string;
+  Params: TJSONObject;
+begin
+  if not ReadTextFile(FileName, Text, Err) then
+    raise Exception.Create(Err);
+  Params := TJSONObject.Create(['text', Text]);
+  try
+    Result := Params.AsJSON;
+  finally
+    FreeAndNil(Params);
+  end;
+end;
 
 function PathParams(const Path: string): string;
 var
@@ -995,12 +1024,108 @@ begin
   Result := TJSONObject.Create(['file', FPatternPath, 'selection', TJSONArray.Create]);
 end;
 
+procedure TTestAPI.TestOpenText;
+begin
+  Call('open', TextParams(FPatternPath));
+  AssertEquals('objects', 3, Answer.Get('objects', 0));
+  AssertEquals('no file', '', Answer.Get('path', 'x'));
+  AssertEquals('the measurement file it names', ExtractFileName(FSetPath), Answer.Get('measurementsFile', ''));
+  AssertFalse('not modified', Answer.Get('modified', True));
+  Call('get_object', '{"name": "B"}');
+  AssertTrue('no measurements yet', Answer.Get('state', '') <> 'valid');
+  Call('use_measurements', TextParams(FSetPath));
+  AssertEquals('still named the same', ExtractFileName(FSetPath), Answer.Get('measurementsFile', ''));
+  AssertFalse('so not modified', Answer.Get('modified', True));
+  Call('get_object', '{"name": "B"}');
+  AssertEquals('worked out', 'valid', Answer.Get('state', ''));
+  AssertNear('waist / 4 + ease', 210, Answer.Get('x', 0.0), 1e-9);
+end;
+
+procedure TTestAPI.TestSaveText;
+var
+  Text: string;
+begin
+  Call('open', TextParams(FPatternPath));
+  Call('set_formula', '{"name": "ease", "field": "formula", "formula": "20"}');
+  Answer;
+  Call('save', '{"text": true}');
+  AssertFalse('counted as saved', Answer.Get('modified', True));
+  Text := Answer.Get('text', '');
+  AssertTrue('the measurement file kept', Pos('"' + ExtractFileName(FSetPath) + '"', Text) > 0);
+  Call('open', '{"text": "' + StringToJSONString(Text) + '"}');
+  Call('get_object', '{"name": "ease"}');
+  AssertNear('the edit kept', 20, Answer.Get('value', 0.0), 1e-9);
+  AssertTrue('the file untouched', ReadTextFile(FPatternPath, Text, FAskedToWrite));
+  AssertEquals('still ten', 0, Pos('"20"', Text));
+end;
+
+procedure TTestAPI.TestMeasurementsTextNotWritten;
+var
+  Before, After, Err: string;
+begin
+  AssertTrue(ReadTextFile(FSetPath, Before, Err));
+  Call('open', TextParams(FPatternPath));
+  Call('use_measurements', TextParams(FSetPath));
+  Call('set_measurement', '{"key": "waist", "value": 1000}');
+  AssertEquals('refused', RPC_REFUSED, ErrorCode);
+  AssertTrue(ReadTextFile(FSetPath, After, Err));
+  AssertEquals('unchanged', Before, After);
+end;
+
+procedure TTestAPI.TestOpenNeedsPathOrText;
+begin
+  Call('open', '{}');
+  AssertEquals('neither', RPC_INVALID_PARAMS, ErrorCode);
+  Call('open', '{"path": "a.sloper", "text": "{}"}');
+  AssertEquals('both', RPC_INVALID_PARAMS, ErrorCode);
+  Call('open', '{"text": "{}", "measurements": "a.slm"}');
+  AssertEquals('measurements come through use_measurements', RPC_INVALID_PARAMS, ErrorCode);
+  Call('open', '{"text": "not json"}');
+  AssertEquals('a bad file', RPC_REFUSED, ErrorCode);
+  Call('use_measurements', '{}');
+  AssertEquals('neither for measurements', RPC_INVALID_PARAMS, ErrorCode);
+  Call('use_measurements', '{"text": "not json"}');
+  AssertEquals('a bad set', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestAPI.TestUseMeasurementsFromFile;
+begin
+  Call('open', TextParams(FPatternPath));
+  Call('use_measurements', PathParams(FSetPath));
+  AssertEquals('the file', ExpandFileName(FSetPath), Answer.Get('measurements', ''));
+  Call('get_object', '{"name": "B"}');
+  AssertEquals('worked out', 'valid', Answer.Get('state', ''));
+  Call('set_measurement', '{"key": "waist", "value": 1000}');
+  Answer;
+end;
+
+procedure TTestAPI.TestUseMeasurementsTextBesideFile;
+begin
+  OpenTestPattern;
+  Call('use_measurements', StringReplace(TextParams(FSetPath), '{', '{"file": "sizes/other.slm", ', []));
+  AssertEquals('recorded as given', 'sizes/other.slm', Answer.Get('measurementsFile', ''));
+  AssertTrue('a new file is a change', Answer.Get('modified', False));
+  AssertEquals('found beside the pattern', ExpandFileName(ConcatPaths([FFolder, 'sizes', 'other.slm'])),
+    Answer.Get('measurements', ''));
+end;
+
+procedure TTestAPI.TestUseMeasurementsRefusedInWindow;
+begin
+  OpenTestPattern;
+  FServer.OpensFiles := False;
+  Call('use_measurements', TextParams(FSetPath));
+  AssertEquals('text', RPC_REFUSED, ErrorCode);
+  Call('use_measurements', PathParams(FSetPath));
+  AssertEquals('path', RPC_REFUSED, ErrorCode);
+end;
+
 procedure TTestAPI.TestFilesWithheld;
 begin
   FServer.WithholdsFiles := True;
   OpenTestPattern;
   AssertEquals('the pattern by its name alone', ExtractFileName(FPatternPath), Answer.Get('path', ''));
   AssertEquals('the measurement file not at all', API_WITHHELD, Answer.Get('measurements', ''));
+  AssertEquals('nor the name the pattern records', API_WITHHELD, Answer.Get('measurementsFile', ''));
   Call('get_measurements');
   AssertEquals(API_WITHHELD, Answer.Get('path', ''));
   Call('check');

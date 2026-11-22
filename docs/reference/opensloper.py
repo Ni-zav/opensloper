@@ -203,37 +203,51 @@ class OpenSloper:
 
     # The Automation API methods, in the order of the reference page
 
-    def open(self, path: str, *, measurements: str | None = None, size: str | None = None) -> Any:
-        """Opens a pattern, optionally with another measurement file and a size.
+    def open(
+        self,
+        *,
+        path: str | None = None,
+        text: str | None = None,
+        measurements: str | None = None,
+        size: str | None = None,
+    ) -> Any:
+        """Opens a pattern, optionally with another measurement file and a size. A pattern given as
+        text opens with no file and no measurements: give its measurement file, which the reply's
+        `measurementsFile` names, to `use_measurements`.
 
         Args:
-            path: The pattern file (.sloper).
+            path: The pattern file (.sloper); give this or text.
+            text: The pattern file's contents, in place of a path.
             measurements: A measurement file to use in place of the one the pattern names.
             size: The size to use from a size table.
 
         Returns:
-            The pattern's file, measurement file, unit, object and variable counts, and whether it
-            is modified.
+            The pattern's file, measurement file and `measurementsFile`, the name the pattern
+            records for it, relative to the pattern's folder; its unit, object and variable counts,
+            and whether it is modified.
         """
         return self._send("open", {
             "path": path,
+            "text": text,
             "measurements": measurements,
             "size": size,
         })
 
-    def save(self, *, path: str | None = None) -> Any:
+    def save(self, *, path: str | None = None, text: bool | None = None) -> Any:
         """Saves the pattern.
 
         Args:
             path: Where to save it, a .sloper file; by default, where it was opened from. A file
                 that is not a pattern is never replaced.
+            text: Gives the file's contents as `text` instead of writing a file, and counts the
+                pattern as saved.
 
         Returns:
-            The pattern's file, measurement file, unit, object and variable counts, and whether it
-            is modified.
+            As `open` gives it, with `text`, the contents, when asked for.
         """
         return self._send("save", {
             "path": path,
+            "text": text,
         })
 
     def convert_units(
@@ -266,8 +280,9 @@ class OpenSloper:
         """Undoes the last change.
 
         Returns:
-            The pattern's file, measurement file, unit, object and variable counts, and whether it
-            is modified.
+            The pattern's file, measurement file and `measurementsFile`, the name the pattern
+            records for it, relative to the pattern's folder; its unit, object and variable counts,
+            and whether it is modified.
         """
         return self._send("undo")
 
@@ -275,10 +290,38 @@ class OpenSloper:
         """Redoes the change last undone.
 
         Returns:
-            The pattern's file, measurement file, unit, object and variable counts, and whether it
-            is modified.
+            The pattern's file, measurement file and `measurementsFile`, the name the pattern
+            records for it, relative to the pattern's folder; its unit, object and variable counts,
+            and whether it is modified.
         """
         return self._send("redo")
+
+    def use_measurements(
+        self,
+        *,
+        path: str | None = None,
+        text: str | None = None,
+        file: str | None = None,
+    ) -> Any:
+        """Uses another measurement file for the pattern, which records it; not an undo step. A file
+        given as text is not written by `set_measurement`.
+
+        Args:
+            path: The measurement file (.slm); give this or text.
+            text: The measurement file's contents, in place of a path.
+            file: With text, the name the pattern records for the file, relative to the pattern's
+                folder with /; by default the one it records now.
+
+        Returns:
+            The pattern's file, measurement file and `measurementsFile`, the name the pattern
+            records for it, relative to the pattern's folder; its unit, object and variable counts,
+            and whether it is modified.
+        """
+        return self._send("use_measurements", {
+            "path": path,
+            "text": text,
+            "file": file,
+        })
 
     def get_measurements(self) -> Any:
         """Lists the current measurement set: its file, sizes and values in mm.
@@ -380,8 +423,9 @@ class OpenSloper:
             target: The object, by its ID or its name.
 
         Returns:
-            The pattern's file, measurement file, unit, object and variable counts, and whether it
-            is modified.
+            The pattern's file, measurement file and `measurementsFile`, the name the pattern
+            records for it, relative to the pattern's folder; its unit, object and variable counts,
+            and whether it is modified.
         """
         return self._send("delete", _target(target))
 

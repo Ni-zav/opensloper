@@ -88,15 +88,27 @@ resourcestring
   rsApiPieceTarget = 'The piece, by its ID or its name';
   rsApiReturnsObject = 'The object, as `get_object` gives it';
   rsApiReturnsPiece = 'The piece, as `get_object` gives it';
-  rsApiReturnsDocument = 'The pattern''s file, measurement file, unit, object and variable counts, and whether it is modified';
+  rsApiReturnsDocument = 'The pattern''s file, measurement file and `measurementsFile`, the name the pattern records for ' +
+    'it, relative to the pattern''s folder; its unit, object and variable counts, and whether it is modified';
   rsApiReturnsMaterials = 'The materials and the cut list, as `list_materials` gives them';
 
-  rsApiOpen = 'Opens a pattern, optionally with another measurement file and a size.';
-  rsApiOpenPath = 'The pattern file (.sloper)';
+  rsApiOpen = 'Opens a pattern, optionally with another measurement file and a size. A pattern given as text opens ' +
+    'with no file and no measurements: give its measurement file, which the reply''s `measurementsFile` names, to ' +
+    '`use_measurements`.';
+  rsApiOpenPath = 'The pattern file (.sloper); give this or text';
+  rsApiOpenText = 'The pattern file''s contents, in place of a path';
   rsApiOpenMeasurements = 'A measurement file to use in place of the one the pattern names';
   rsApiOpenSize = 'The size to use from a size table';
   rsApiSave = 'Saves the pattern.';
   rsApiSavePath = 'Where to save it, a .sloper file; by default, where it was opened from. A file that is not a pattern is never replaced';
+  rsApiSaveText = 'Gives the file''s contents as `text` instead of writing a file, and counts the pattern as saved';
+  rsApiSaveReturns = 'As `open` gives it, with `text`, the contents, when asked for';
+  rsApiUseMeasurements = 'Uses another measurement file for the pattern, which records it; not an undo step. A file ' +
+    'given as text is not written by `set_measurement`.';
+  rsApiUseMeasurementsPath = 'The measurement file (.slm); give this or text';
+  rsApiUseMeasurementsText = 'The measurement file''s contents, in place of a path';
+  rsApiUseMeasurementsFile = 'With text, the name the pattern records for the file, relative to the pattern''s folder ' +
+    'with /; by default the one it records now';
   rsApiConvertUnits = 'Converts the pattern to another unit, rewriting only lengths, as one undo step. While a number''s ' +
     'role is open nothing changes and the reply lists it; mark each and call again.';
   rsApiConvertUnitsUnits = 'The unit to convert to';
@@ -533,11 +545,13 @@ begin
   Table := nil;
   // Files
   Method('open', agFiles, rsApiOpen, rsApiReturnsDocument);
-  P('path', apText, True, rsApiOpenPath);
+  P('path', apText, False, rsApiOpenPath);
+  P('text', apText, False, rsApiOpenText);
   P('measurements', apText, False, rsApiOpenMeasurements);
   P('size', apText, False, rsApiOpenSize);
-  Method('save', agFiles, rsApiSave, rsApiReturnsDocument);
+  Method('save', agFiles, rsApiSave, rsApiSaveReturns);
   P('path', apText, False, rsApiSavePath);
+  P('text', apFlag, False, rsApiSaveText);
   Method('convert_units', agFiles, rsApiConvertUnits, rsApiConvertReturns);
   P('units', apChoice, True, rsApiConvertUnitsUnits, Joined(MEASURE_UNIT_NAMES));
   P('marks', apList, False, rsApiConvertMarks);
@@ -548,6 +562,10 @@ begin
   Method('undo', agFiles, rsApiUndo, rsApiReturnsDocument);
   Method('redo', agFiles, rsApiRedo, rsApiReturnsDocument);
   // Measurements
+  Method('use_measurements', agMeasurements, rsApiUseMeasurements, rsApiReturnsDocument);
+  P('path', apText, False, rsApiUseMeasurementsPath);
+  P('text', apText, False, rsApiUseMeasurementsText);
+  P('file', apText, False, rsApiUseMeasurementsFile);
   Method('get_measurements', agMeasurements, rsApiGetMeasurements, rsApiGetMeasurementsReturns);
   ReadsOnly;
   Method('set_measurement', agMeasurements, rsApiSetMeasurement, rsApiSetMeasurementReturns);

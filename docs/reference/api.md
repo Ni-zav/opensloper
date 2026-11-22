@@ -30,15 +30,16 @@ A refused call answers with a JSON-RPC error. Its `data` names the `field` at fa
 
 ### `open`
 
-Opens a pattern, optionally with another measurement file and a size.
+Opens a pattern, optionally with another measurement file and a size. A pattern given as text opens with no file and no measurements: give its measurement file, which the reply's `measurementsFile` names, to `use_measurements`.
 
 | Parameter | Value | Required | Description |
 | --- | --- | --- | --- |
-| `path` | text | yes | The pattern file (.sloper) |
+| `path` | text |  | The pattern file (.sloper); give this or text |
+| `text` | text |  | The pattern file's contents, in place of a path |
 | `measurements` | text |  | A measurement file to use in place of the one the pattern names |
 | `size` | text |  | The size to use from a size table |
 
-Returns: The pattern's file, measurement file, unit, object and variable counts, and whether it is modified.
+Returns: The pattern's file, measurement file and `measurementsFile`, the name the pattern records for it, relative to the pattern's folder; its unit, object and variable counts, and whether it is modified.
 
 ### `save`
 
@@ -47,8 +48,9 @@ Saves the pattern.
 | Parameter | Value | Required | Description |
 | --- | --- | --- | --- |
 | `path` | text |  | Where to save it, a .sloper file; by default, where it was opened from. A file that is not a pattern is never replaced |
+| `text` | true or false |  | Gives the file's contents as `text` instead of writing a file, and counts the pattern as saved |
 
-Returns: The pattern's file, measurement file, unit, object and variable counts, and whether it is modified.
+Returns: As `open` gives it, with `text`, the contents, when asked for.
 
 ### `convert_units`
 
@@ -71,7 +73,7 @@ Undoes the last change.
 
 No parameters.
 
-Returns: The pattern's file, measurement file, unit, object and variable counts, and whether it is modified.
+Returns: The pattern's file, measurement file and `measurementsFile`, the name the pattern records for it, relative to the pattern's folder; its unit, object and variable counts, and whether it is modified.
 
 ### `redo`
 
@@ -79,9 +81,21 @@ Redoes the change last undone.
 
 No parameters.
 
-Returns: The pattern's file, measurement file, unit, object and variable counts, and whether it is modified.
+Returns: The pattern's file, measurement file and `measurementsFile`, the name the pattern records for it, relative to the pattern's folder; its unit, object and variable counts, and whether it is modified.
 
 ## Measurements
+
+### `use_measurements`
+
+Uses another measurement file for the pattern, which records it; not an undo step. A file given as text is not written by `set_measurement`.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `path` | text |  | The measurement file (.slm); give this or text |
+| `text` | text |  | The measurement file's contents, in place of a path |
+| `file` | text |  | With text, the name the pattern records for the file, relative to the pattern's folder with /; by default the one it records now |
+
+Returns: The pattern's file, measurement file and `measurementsFile`, the name the pattern records for it, relative to the pattern's folder; its unit, object and variable counts, and whether it is modified.
 
 ### `get_measurements`
 
@@ -163,7 +177,7 @@ Deletes an object or variable that nothing uses.
 | --- | --- | --- | --- |
 | `id` or `name` | number or text | yes | The object, by its ID or its name |
 
-Returns: The pattern's file, measurement file, unit, object and variable counts, and whether it is modified.
+Returns: The pattern's file, measurement file and `measurementsFile`, the name the pattern records for it, relative to the pattern's folder; its unit, object and variable counts, and whether it is modified.
 
 ### `set_locked`
 

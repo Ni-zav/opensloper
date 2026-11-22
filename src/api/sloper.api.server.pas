@@ -144,7 +144,6 @@ type
     function DoSetPieceMaterial(Params: TJSONObject): TJSONData;
     function DoSetPieceFill(Params: TJSONObject): TJSONData;
     function DoAddTransform(Params: TJSONObject): TJSONData;
-    function SeamSideParam(Params: TJSONObject; const AName: string): TSeamSide;
     function DoAddSeam(Params: TJSONObject): TJSONData;
     function DoFlipSeam(Params: TJSONObject): TJSONData;
     function DoSuggestSeams: TJSONData;
@@ -169,6 +168,8 @@ type
     function Reference(Params: TJSONObject; const AName: string; Use: boolean = True): string;
     // Refuses, when measurements are withheld, a method that reads or writes measurement values
     procedure CheckMeasurementsShared;
+    // A seam's side, a list of objects with a piece and an edge
+    function SeamSideParam(Params: TJSONObject; const AName: string): TSeamSide;
     // The object or variable the call names by "id" or "name"
     function FindTarget(Params: TJSONObject): TEvalNode;
     // Runs the method by name, for CallMethod

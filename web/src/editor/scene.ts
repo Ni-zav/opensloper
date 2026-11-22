@@ -31,6 +31,19 @@ export interface ScenePiece extends SceneObject {
   // strokes, and the notches from where they are cut to their tips
   marks: number[];
   notches: number[];
+  // Its label, where the label goes, and a chevron along each edge (x, y and
+  // the angle it points, for each), shown while it is selected or hovered
+  caption: string;
+  middle: Vec2;
+  chevrons: number[];
+}
+
+// Drawn while selected: each side's edges, a polyline each, and their chevrons
+export interface SceneSeam extends SceneObject {
+  sideA: number[][];
+  sideB: number[][];
+  chevronsA: number[];
+  chevronsB: number[];
 }
 
 // The marker of a point or edge, as segments as a piece's marks are
@@ -59,6 +72,7 @@ export interface Scene {
   pieces: ScenePiece[];
   edges: SceneEdge[];
   markers: SceneMarker[];
+  seams: SceneSeam[];
   points: ScenePoint[];
 }
 
@@ -103,7 +117,24 @@ function sceneObject(record: JsonRecord): SceneObject {
   };
 }
 
-export const EMPTY_SCENE: Scene = { isolated: '', pieces: [], edges: [], markers: [], points: [] };
+export const EMPTY_SCENE: Scene = { isolated: '', pieces: [], edges: [], markers: [], seams: [], points: [] };
+
+// A place given as [x, y]
+function pointField(record: JsonRecord, name: string): Vec2 {
+  const values = numbersField(record, name) ?? [];
+  return { x: values[0] ?? 0, y: values[1] ?? 0 };
+}
+
+// A list of polylines, each a flat list x, y, x, y
+export function linesField(record: JsonRecord, name: string): number[][] {
+  const value = record[name];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (line: unknown): line is number[] => Array.isArray(line) && line.every((item) => typeof item === 'number'),
+  );
+}
 
 export function parseScene(result: JsonRecord): Scene {
   const pieces = recordsField(result, 'pieces').map((record): ScenePiece => {
@@ -114,6 +145,9 @@ export function parseScene(result: JsonRecord): Scene {
       cutLine: numbersField(record, 'cutLine') ?? [],
       marks: numbersField(record, 'marks') ?? [],
       notches: numbersField(record, 'notches') ?? [],
+      caption: stringField(record, 'caption') ?? '',
+      middle: pointField(record, 'middle'),
+      chevrons: numbersField(record, 'chevrons') ?? [],
     });
   });
   const edges = recordsField(result, 'edges').map((record): SceneEdge => {
@@ -136,7 +170,15 @@ export function parseScene(result: JsonRecord): Scene {
   const markers = recordsField(result, 'markers').map((record): SceneMarker =>
     Object.assign(sceneObject(record), { strokes: numbersField(record, 'strokes') ?? [] }),
   );
-  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, points };
+  const seams = recordsField(result, 'seams').map((record): SceneSeam =>
+    Object.assign(sceneObject(record), {
+      sideA: linesField(record, 'sideA'),
+      sideB: linesField(record, 'sideB'),
+      chevronsA: numbersField(record, 'chevronsA') ?? [],
+      chevronsB: numbersField(record, 'chevronsB') ?? [],
+    }),
+  );
+  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, seams, points };
 }
 
 export function parseTables(result: JsonRecord): Tables {

@@ -19,7 +19,7 @@
 // What the canvas tools' clicks make, each as one undo step: a point, a line
 // or curve between two snaps (making their points), a curve carried on, a
 // circle or rectangle, a piece of the region clicked, a notch added or
-// removed. The desktop's tools (Sloper.UI.CanvasTools) and the web editor's,
+// removed, a seam between the edges picked. The desktop's tools (Sloper.UI.CanvasTools) and the web editor's,
 // through the editor methods, both call these, so a click does the same
 // everywhere. Kept free of the LCL.
 unit Sloper.Editor.ToolEdits;
@@ -29,8 +29,8 @@ unit Sloper.Editor.ToolEdits;
 interface
 
 uses
-  SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Document.PatternDocument, Sloper.Editor.Snap,
-  Sloper.Editor.SelectionEdits;
+  SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.Document.PatternDocument,
+  Sloper.Editor.Snap, Sloper.Editor.SelectionEdits;
 
 const
   // A line or curve shorter than this (mm) is ignored
@@ -62,6 +62,16 @@ function AddPieceAt(Document: TPatternDocument; const At: TVec2): TSelectionEdit
 function ToggleNotchAt(Document: TPatternDocument; const At: TVec2; Radius: double): TSelectionEdit;
 // What a circle's or rectangle's second click would make, for the status bar
 function ShapeSizeText(Pattern: TPattern; const Start, Finish: TVec2; Circle: boolean): string;
+// The Seam tool's click: the piece's edge within Radius mm of At goes on the
+// side, or comes off it when it is there already. False, with the reason in
+// Message, when there is none there or it is the piece's fold; otherwise
+// Message is the tool's progress.
+function PickSeamEntry(Pattern: TPattern; const At: TVec2; Radius: double; var SideA, SideB: TSeamSide; OnB: boolean;
+  out Message: string): boolean;
+// Which side is being picked, both sides' lengths and their difference
+function SeamProgressText(Pattern: TPattern; const SideA, SideB: TSeamSide; OnB: boolean): string;
+// The seam between the sides picked; refused while either is empty
+function AddSeamFromSides(Document: TPatternDocument; const SideA, SideB: TSeamSide): TSelectionEdit;
 
 resourcestring
   rsToolAddLine = 'Add line';
@@ -78,6 +88,9 @@ resourcestring
   rsToolAddNotch = 'Add notch';
   rsToolRemoveNotch = 'Remove notch';
   rsToolNoSeam = 'There is no piece''s edge here';
+  rsToolSeamProgress = 'Side %s: A %s, B %s, difference %s. Tab changes side, Enter makes the seam';
+  rsToolSeamSides = 'Pick edges for both sides first';
+  rsToolAddSeam = 'Add seam';
 
 implementation
 
@@ -88,6 +101,7 @@ uses
 const
   // Curve handles start this fraction of the way along the chord
   HANDLE_FRACTION = 1 / 3;
+  SEAM_SIDE_NAMES: array[boolean] of string = ('A', 'B');
 
 // Done, selecting Keys
 function Made(const Keys: array of string): TSelectionEdit;
@@ -306,6 +320,56 @@ begin
   else
     Result := Format(rsToolRectangleSize, [LengthWithUnit(Abs(Finish.X - Start.X), Pattern.Units),
       LengthWithUnit(Abs(Finish.Y - Start.Y), Pattern.Units)]);
+end;
+
+function PickSeamEntry(Pattern: TPattern; const At: TVec2; Radius: double; var SideA, SideB: TSeamSide; OnB: boolean;
+  out Message: string): boolean;
+var
+  Entry: TSeamEntry;
+  Piece: TPieceObject;
+begin
+  Result := False;
+  if not SeamEntryAt(Pattern, At, Radius, Entry) then
+  begin
+    Message := rsToolNoSeam;
+    Exit;
+  end;
+  Piece := TPieceObject(Pattern.FindNode(Entry.PieceKey));
+  if Piece.FoldEdgeKey = Entry.EdgeKey then
+  begin
+    Message := Format(rsSeamOnFold, [Pattern.FindNode(Entry.EdgeKey).DisplayName, Piece.DisplayName]);
+    Exit;
+  end;
+  if OnB then
+    ToggleSeamEntry(SideB, Entry)
+  else
+    ToggleSeamEntry(SideA, Entry);
+  Message := SeamProgressText(Pattern, SideA, SideB, OnB);
+  Result := True;
+end;
+
+function SeamProgressText(Pattern: TPattern; const SideA, SideB: TSeamSide; OnB: boolean): string;
+var
+  LengthA, LengthB: double;
+begin
+  LengthA := SeamSideLength(Pattern, SideA);
+  LengthB := SeamSideLength(Pattern, SideB);
+  Result := Format(rsToolSeamProgress, [SEAM_SIDE_NAMES[OnB], LengthWithUnit(LengthA, Pattern.Units),
+    LengthWithUnit(LengthB, Pattern.Units), LengthWithUnit(LengthB - LengthA, Pattern.Units)]);
+end;
+
+function AddSeamFromSides(Document: TPatternDocument; const SideA, SideB: TSeamSide): TSelectionEdit;
+var
+  Seam: TSeamObject;
+begin
+  if (Length(SideA) = 0) or (Length(SideB) = 0) then
+    Exit(Refused(rsToolSeamSides));
+  Document.BeginChange(rsToolAddSeam);
+  Seam := Document.Pattern.AddSeam('', SideA, SideB);
+  if Assigned(Seam) then
+    Result := Committed(Document, True, [Seam.Key])
+  else
+    Result := Committed(Document, False, []);
 end;
 
 end.

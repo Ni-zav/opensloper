@@ -64,6 +64,11 @@ type
     procedure TestNotchTool;
     // Pieces' grainlines and notches, and markers, are in the scene
     procedure TestSceneMarks;
+    // Contextual labels: the selection with what it reads and what reads it
+    procedure TestLabelKeys;
+    // Picking a seam's sides edge by edge, then making it as one step
+    procedure TestSeamTool;
+    procedure TestSeamInScene;
     procedure TestMissingParamRefused;
     // Claude is not offered the editor's methods as tools
     procedure TestNotOfferedAsTools;
@@ -426,6 +431,76 @@ begin
   AssertTrue('the grainline drawn', Answer.Arrays['pieces'].Objects[0].Arrays['marks'].Count >= 4);
   AssertEquals('one marker', 1, Answer.Arrays['markers'].Count);
   AssertTrue('its strokes', Answer.Arrays['markers'].Objects[0].Arrays['strokes'].Count >= 8);
+end;
+
+procedure TTestEditorServer.TestLabelKeys;
+var
+  IdA, IdB, Flap: integer;
+  Keys: string;
+begin
+  AddSquare;
+  IdA := IdOf('A');
+  IdB := IdOf('B');
+  Flap := IdOf('Flap');
+  Call('editor_label_keys', '{"mode": "none", "selection": [' + IntToStr(IdA) + ']}');
+  AssertEquals('none', 0, Answer.Arrays['objects'].Count);
+  Call('editor_label_keys', '{"selection": [' + IntToStr(IdA) + ']}');
+  Keys := Answer.Arrays['objects'].AsJSON;
+  AssertTrue('the selection', Pos(IntToStr(IdA), Keys) > 0);
+  AssertTrue('not what is unrelated', Pos('[' + IntToStr(IdB) + ',', Keys + ',') = 0);
+  Call('editor_label_keys', '{"mode": "all"}');
+  AssertEquals('every point, edge and piece', 9, Answer.Arrays['objects'].Count);
+  Call('editor_label_keys', '{"hover": "Flap"}');
+  AssertEquals('the hovered piece', '[' + IntToStr(Flap) + ']', Answer.Arrays['objects'].AsJSON);
+  Call('editor_label_keys', '{"selection": [999]}');
+  AssertEquals('an unknown ID', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestSeamTool;
+var
+  SideA, SideB: string;
+begin
+  AddSquare;
+  Call('editor_seam_pick', '{"x": 50, "y": 0, "radius": 2, "sideA": [], "sideB": []}');
+  AssertTrue('picked', Answer.Booleans['picked']);
+  AssertEquals('on side A', 1, Answer.Arrays['sideA'].Count);
+  AssertTrue('the progress', Pos('Side A', Answer.Strings['message']) > 0);
+  AssertEquals('its line to draw', 1, Answer.Objects['lines'].Arrays['sideA'].Count);
+  SideA := Answer.Arrays['sideA'].AsJSON;
+  Call('editor_seam_pick', '{"sideA": ' + SideA + ', "sideB": [], "onB": true}');
+  AssertTrue('Tab: side B', Pos('Side B', Answer.Strings['message']) > 0);
+  Call('editor_seam_pick', '{"x": 50, "y": 100, "radius": 2, "sideA": ' + SideA + ', "sideB": [], "onB": true}');
+  SideB := Answer.Arrays['sideB'].AsJSON;
+  AssertEquals('on side B', 1, Answer.Arrays['sideB'].Count);
+  Call('editor_seam_pick', '{"x": 50, "y": 100, "radius": 2, "sideA": ' + SideA + ', "sideB": ' + SideB + ', "onB": true}');
+  AssertEquals('a second click takes it off', 0, Answer.Arrays['sideB'].Count);
+  Call('editor_seam_pick', '{"x": 500, "y": 500, "radius": 2, "sideA": ' + SideA + ', "sideB": []}');
+  AssertFalse('nothing there', Answer.Booleans['picked']);
+  AssertEquals('the side kept', 1, Answer.Arrays['sideA'].Count);
+  Call('editor_seam_make', '{"sideA": ' + SideA + ', "sideB": []}');
+  AssertFalse('both sides needed', Answer.Booleans['done']);
+  Call('editor_seam_make', '{"sideA": ' + SideA + ', "sideB": ' + SideB + '}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('one step', 'Add seam', Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestSeamInScene;
+var
+  Piece: TJSONObject;
+begin
+  AddSquare;
+  Call('editor_seam_pick', '{"x": 50, "y": 0, "radius": 2, "sideA": [], "sideB": []}');
+  Call('editor_seam_make', '{"sideA": ' + Answer.Arrays['sideA'].AsJSON + ', "sideB": [{"piece": "Flap", "edge": ' +
+    IntToStr(IdOf('Line_C_D')) + '}]}');
+  Call('editor_scene');
+  AssertEquals('the seam', 1, Answer.Arrays['seams'].Count);
+  AssertEquals('side A', 1, Answer.Arrays['seams'].Objects[0].Arrays['sideA'].Count);
+  AssertEquals('a chevron on each side, x, y and angle', 3, Answer.Arrays['seams'].Objects[0].Arrays['chevronsB'].Count);
+  Piece := Answer.Arrays['pieces'].Objects[0];
+  AssertTrue('the piece''s label', Pos('Flap', Piece.Strings['caption']) > 0);
+  AssertNear('its middle', 50, Piece.Arrays['middle'].Floats[0], 1);
+  AssertEquals('a chevron per edge', 12, Piece.Arrays['chevrons'].Count);
 end;
 
 procedure TTestEditorServer.TestMissingParamRefused;

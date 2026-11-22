@@ -9,7 +9,14 @@ import { EngineError } from '../engine/engine.ts';
 import { booleanField, idsField, numberField, stringField } from '../engine/replies.ts';
 import { EMPTY_SCENE, parseScene, sceneBounds, type Scene, type Tables } from '../editor/scene.ts';
 import { ViewTransform, ZOOM_STEP, type Vec2 } from '../editor/view.ts';
-import { ClickTool, SNAP_RADIUS, SnapTool, type CanvasToolHandler, type CanvasToolHost } from './canvasTools.ts';
+import {
+  ClickTool,
+  SNAP_RADIUS,
+  SeamTool,
+  SnapTool,
+  type CanvasToolHandler,
+  type CanvasToolHost,
+} from './canvasTools.ts';
 import { LatestOnly } from './latestOnly.ts';
 import { PatternPainter, type SnapMarker } from './patternPainter.ts';
 
@@ -25,10 +32,14 @@ const MIDDLE_BUTTON = 1;
 const LEFT_BUTTON = 0;
 const RIGHT_BUTTON = 2;
 
-// The tools that snap, and those that act where they are clicked; the rest
-// of the desktop's (seam, text, callout) follow with notes and seams drawn
+// The tools that snap, and those that act where they are clicked; the
+// desktop's Text and Callout follow with notes drawn
 const SNAP_TOOLS = ['point', 'line', 'curve', 'circle', 'rectangle'];
 const CLICK_TOOLS = ['piece', 'notch'];
+
+// As TLabelMode: the selection and what it works with, every object, or none
+export type LabelMode = 'contextual' | 'all' | 'none';
+export const LABEL_MODES: readonly LabelMode[] = ['contextual', 'all', 'none'];
 
 export const SELECT_TOOL = 'select';
 
@@ -49,6 +60,11 @@ export function targetParams(item: { id: string; name: string }): { id: number }
   return /^\d+$/.test(item.id) ? { id: Number(item.id) } : { name: item.name };
 }
 
+// IDs as the API takes them; a repeat's point not yet given one is left out
+function numericIds(list: Iterable<string>): number[] {
+  return [...list].filter((id) => /^\d+$/.test(id)).map(Number);
+}
+
 function distance(from: Vec2, to: Vec2): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
 }
@@ -67,6 +83,15 @@ export class PatternCanvas implements CanvasToolHost {
   private readonly scenes: LatestOnly<number>;
   private readonly hovers: LatestOnly<Vec2>;
   private readonly drags: LatestOnly<Vec2>;
+  private readonly labelQueue: LatestOnly<number>;
+  private labelIds: string[] = [];
+  private labelMode: LabelMode = 'contextual';
+  // Every label shows while the show-labels key is held
+  private labelsHeld = false;
+  // What the tool in use is working with, which is labelled too
+  private toolIds: string[] = [];
+  private seamA: number[][] = [];
+  private seamB: number[][] = [];
   private scene: Scene = EMPTY_SCENE;
   private selection = new Set<string>();
   private hoverId = '';
@@ -108,12 +133,14 @@ export class PatternCanvas implements CanvasToolHost {
     for (const name of CLICK_TOOLS) {
       this.tools.set(name, new ClickTool(this, name));
     }
+    this.tools.set('seam', new SeamTool(this, 'seam'));
     const fail = (error: unknown): void => {
       this.report(error);
     };
     this.scenes = new LatestOnly(async (tolerance) => this.loadScene(tolerance), fail);
     this.hovers = new LatestOnly(async (at) => this.updateHover(at), fail);
     this.drags = new LatestOnly(async (at) => this.dragTo(at), fail);
+    this.labelQueue = new LatestOnly(async () => this.loadLabels(), fail);
     document.addListener(this.listener);
     this.resizer = new ResizeObserver(() => {
       this.resize();
@@ -187,6 +214,20 @@ export class PatternCanvas implements CanvasToolHost {
   select(ids: string[]): void {
     this.selection = new Set(ids);
     this.events.selectionChanged(ids);
+    this.relabel();
+    this.repaint();
+  }
+
+  showToolObjects(ids: string[]): void {
+    if (ids.join(' ') !== this.toolIds.join(' ')) {
+      this.toolIds = ids;
+      this.relabel();
+    }
+  }
+
+  showSeamSides(sideA: number[][], sideB: number[][]): void {
+    this.seamA = sideA;
+    this.seamB = sideB;
     this.repaint();
   }
 
@@ -207,7 +248,44 @@ export class PatternCanvas implements CanvasToolHost {
     this.events.failed(error);
   }
 
+  get labels(): LabelMode {
+    return this.labelMode;
+  }
+
+  set labels(mode: LabelMode) {
+    this.labelMode = mode;
+    this.relabel();
+  }
+
+  // The show-labels key held or let go
+  holdLabels(held: boolean): void {
+    if (held !== this.labelsHeld) {
+      this.labelsHeld = held;
+      this.relabel();
+    }
+  }
+
+  // A key for the tool in use, such as Tab and Enter for the Seam tool; true when it took it
+  toolKeyDown(event: KeyboardEvent): boolean {
+    return this.tools.get(this.tool)?.keyDown(event) ?? false;
+  }
+
   // Drawing
+
+  private relabel(): void {
+    this.labelQueue.push(0);
+  }
+
+  private async loadLabels(): Promise<void> {
+    const answer = await this.document.read('editor_label_keys', {
+      mode: this.labelsHeld ? 'all' : this.labelMode,
+      selection: numericIds(this.selection),
+      hover: /^\d+$/.test(this.hoverId) ? Number(this.hoverId) : null,
+      tool: numericIds(this.toolIds),
+    });
+    this.labelIds = idsField(answer, 'objects');
+    this.repaint();
+  }
 
   private repaint(): void {
     if (this.frame !== 0) {
@@ -227,9 +305,14 @@ export class PatternCanvas implements CanvasToolHost {
       hoverId: this.hoverId,
       snap: this.snap,
       box,
+      labelIds: this.labelIds,
+      seamA: this.seamA,
+      seamB: this.seamB,
     });
     this.painter.drawGrid();
     this.painter.drawPattern(this.scene, this.tables);
+    this.painter.drawSeams(this.scene);
+    this.painter.drawLabels(this.scene);
     this.painter.drawSnap();
     this.painter.drawBox();
   }
@@ -275,11 +358,15 @@ export class PatternCanvas implements CanvasToolHost {
       this.fitAll();
     }
     // Objects gone, as after undo, leave the selection
-    const shown = new Set([...this.scene.pieces, ...this.scene.edges, ...this.scene.points].map((item) => item.id));
+    const shown = new Set(
+      [...this.scene.pieces, ...this.scene.edges, ...this.scene.seams, ...this.scene.points].map((item) => item.id),
+    );
     const kept = [...this.selection].filter((id) => shown.has(id));
     if (kept.length !== this.selection.size) {
       this.select(kept);
     }
+    this.tools.get(this.tool)?.sceneChanged();
+    this.relabel();
     this.repaint();
   }
 
@@ -431,6 +518,7 @@ export class PatternCanvas implements CanvasToolHost {
     const id = hits[0] ?? '';
     if (id !== this.hoverId) {
       this.hoverId = id;
+      this.relabel();
       this.repaint();
     }
   }

@@ -6,7 +6,7 @@ import { PatternDocument } from '../document/patternDocument.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
 import { numberField, stringField } from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
-import { PatternCanvas, SELECT_TOOL } from '../ui/canvas.ts';
+import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
 import { STRINGS } from '../ui/strings.ts';
 
@@ -107,6 +107,7 @@ class DesignApp {
         this.canvas.fitAll();
       }),
       this.roleBox(),
+      this.labelBox(),
     );
     for (const tool of tables.tools.filter((each) => this.canvas.hasTool(each.name))) {
       const button = iconButton(tool.icon, tool.caption, `${tool.caption} (${tool.keys})`, () => {
@@ -128,6 +129,15 @@ class DesignApp {
     });
     document.addEventListener('keydown', (event) => {
       this.keyDown(event);
+    });
+    // Every label shows while the show-labels key is held
+    document.addEventListener('keyup', (event) => {
+      if (this.isShowLabelsKey(event)) {
+        this.canvas.holdLabels(false);
+      }
+    });
+    window.addEventListener('blur', () => {
+      this.canvas.holdLabels(false);
     });
     this.document.addListener(() => {
       this.updateState();
@@ -161,6 +171,25 @@ class DesignApp {
     }
     box.addEventListener('change', () => {
       this.canvas.drawRole = box.value;
+    });
+    return box;
+  }
+
+  // Which objects are labelled, as the desktop's Labels menu
+  private labelBox(): HTMLSelectElement {
+    const box = document.createElement('select');
+    box.id = 'labels';
+    box.title = STRINGS.labelsHint;
+    const captions: Record<LabelMode, string> = {
+      contextual: STRINGS.labelsContextual,
+      all: STRINGS.labelsAll(this.tables.shortcuts.get('showLabels') ?? ''),
+      none: STRINGS.labelsNone,
+    };
+    for (const mode of LABEL_MODES) {
+      box.add(new Option(captions[mode], mode, false, mode === this.canvas.labels));
+    }
+    box.addEventListener('change', () => {
+      this.canvas.labels = LABEL_MODES.find((mode) => mode === box.value) ?? 'contextual';
     });
     return box;
   }
@@ -231,6 +260,11 @@ class DesignApp {
     URL.revokeObjectURL(link.href);
   }
 
+  private isShowLabelsKey(event: KeyboardEvent): boolean {
+    const shortcut = parseShortcut(this.tables.shortcuts.get('showLabels') ?? '');
+    return shortcut !== undefined && matchesShortcut(event, shortcut);
+  }
+
   private keyDown(event: KeyboardEvent): void {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
       return;
@@ -240,7 +274,11 @@ class DesignApp {
       return shortcut !== undefined && matchesShortcut(event, shortcut);
     };
     let handled = true;
-    if (event.key === 'Escape') {
+    if (this.canvas.toolKeyDown(event)) {
+      // The tool took it, as Tab and Enter for the Seam tool
+    } else if (this.isShowLabelsKey(event)) {
+      this.canvas.holdLabels(true);
+    } else if (event.key === 'Escape') {
       this.canvas.cancel();
     } else if (matches('undo')) {
       this.run(this.document.undo());

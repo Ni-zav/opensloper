@@ -54,6 +54,10 @@ type
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
     function DoToolClick(Params: TJSONObject): TJSONData;
+    function KeysParam(Params: TJSONObject; const AName: string): TStringArray;
+    function DoLabelKeys(Params: TJSONObject): TJSONData;
+    function DoSeamPick(Params: TJSONObject): TJSONData;
+    function DoSeamMake(Params: TJSONObject): TJSONData;
     function DoComplete(Params: TJSONObject): TJSONData;
     function DoListObjects(Params: TJSONObject): TJSONData;
     function DoListVariables(Params: TJSONObject): TJSONData;
@@ -75,7 +79,9 @@ resourcestring
   rsEditorTolerance = 'How far a curve''s polyline may stray from it, in mm; default 0.1';
   rsEditorSceneReturns = '`isolated`, the piece shown alone or null; `pieces`, each with `id`, `name`, `state`, ' +
     '`locked`, `dimmed`, `fillColor`, `fillStyle`, its `cutLine`, `marks` (grainline, fold and marking strokes) and ' +
-    '`notches`, each a flat list of segments x1, y1, x2, y2; `markers`, each with the `id` of its point or edge and ' +
+    '`notches`, each a flat list of segments x1, y1, x2, y2, its label''s `caption`, its `middle` (x, y) and its ' +
+    '`chevrons` (x, y and angle for each); `seams`, each with its sides'' edges as `sideA` and `sideB` (a polyline ' +
+    'each) and their `chevronsA` and `chevronsB`; `markers`, each with the `id` of its point or edge and ' +
     'its `strokes`, as marks are; `edges`, each with `id`, `name`, `role`, ' +
     '`state`, `locked`, `dimmed`, `copyOf`, its `line`, and `slot` and `normal` when it lies on another edge; `points`, ' +
     'each with `id`, `name`, `state`, `locked`, `dimmed`, `copyOf`, `x` and `y`. Lines are flat lists x, y, x, y, in ' +
@@ -105,7 +111,7 @@ resourcestring
   rsEditorStart = 'The tool''s first click, for line, curve, circle and rectangle: a group of `x`, `y` and `radius` ' +
     'as the click gave them. A line or curve lines up with its start first, once that is a point.';
   rsEditorToolSnapReturns = 'As editor_snap gives it, with `start`, where the first click snapped (`kind`, `x`, `y`), ' +
-    'when given';
+    'and `startObjects`, what it works from, when given';
   rsEditorToolClick = 'Does what a click of a canvas tool does, as one undo step: point adds the point it snaps to; ' +
     'line and curve take a first click, then make the edge with its points, carrying on from its end; circle and ' +
     'rectangle take a first click, then make the shape; piece makes a piece of the closed outline round the place; ' +
@@ -117,6 +123,23 @@ resourcestring
     'keep as `start`; `select`, the IDs to select, or null to leave the selection; `message` for the status bar; ' +
     'for line and curve, `end`, where the next one starts (`x`, `y`), and for a curve `curve`, the edge to carry on';
   rsEditorBusy = 'Finish the drag first';
+  rsEditorLabelKeys = 'Which objects the canvas labels: in contextual mode the hovered object, the selection with ' +
+    'what it reads and what reads it, and the objects a tool is working with; every point, edge and piece in all; ' +
+    'none in none.';
+  rsEditorLabelMode = 'contextual, all or none';
+  rsEditorSelection = 'The selected objects'' IDs';
+  rsEditorHover = 'The hovered object''s ID';
+  rsEditorToolObjects = 'The IDs of the objects the tool is working with, as editor_tool_snap gives them';
+  rsEditorLabelKeysReturns = '`objects`, their IDs in pattern order';
+  rsEditorSeamPick = 'The Seam tool''s click: the piece''s edge at the place goes on the side being picked, or comes ' +
+    'off it. Without a place, only says how the sides compare, as after Tab.';
+  rsEditorSideA = 'Side A as picked so far, each with `piece` and `edge`';
+  rsEditorSideB = 'Side B as picked so far';
+  rsEditorOnB = 'Picking side B';
+  rsEditorSeamPickReturns = '`picked`, false when there was no edge there; `sideA` and `sideB` as they now are; ' +
+    '`lines`, each side''s edges as flat lists x, y, x, y to draw; `message`, the progress or why nothing was picked';
+  rsEditorSeamMake = 'Makes the seam between the sides picked, as one undo step.';
+  rsEditorSeamMakeReturns = 'As editor_tool_click gives it';
   rsEditorComplete = 'What to offer while a formula is typed: objects, variables, measurements and functions matching ' +
     'the word at the caret; @, # and a dot after an object narrow the list.';
   rsEditorCompleteTarget = 'The object or variable whose formula it is, by ID or name; left out for a new one';
@@ -186,7 +209,7 @@ uses
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Drag;
+  Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.Seam, Sloper.Core.Settings;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -242,6 +265,21 @@ begin
     AddApiParam(Built, 'start', apGroup, False, rsEditorStart);
     AddApiParam(Built, 'extend', apReference, False, rsEditorExtend);
     AddApiParam(Built, 'role', apChoice, False, rsEditorRole, string.Join(', ', EDGE_ROLE_NAMES));
+    AddApiMethod(Built, 'editor_label_keys', rsEditorLabelKeys, rsEditorLabelKeysReturns, True);
+    AddApiParam(Built, 'mode', apChoice, False, rsEditorLabelMode, string.Join(', ', LABEL_MODE_NAMES));
+    AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
+    AddApiParam(Built, 'hover', apReference, False, rsEditorHover);
+    AddApiParam(Built, 'tool', apReferences, False, rsEditorToolObjects);
+    AddApiMethod(Built, 'editor_seam_pick', rsEditorSeamPick, rsEditorSeamPickReturns, True);
+    AddApiParam(Built, 'x', apNumber, False, rsEditorX);
+    AddApiParam(Built, 'y', apNumber, False, rsEditorY);
+    AddApiParam(Built, 'radius', apNumber, False, rsEditorRadius);
+    AddApiParam(Built, 'sideA', apList, True, rsEditorSideA);
+    AddApiParam(Built, 'sideB', apList, True, rsEditorSideB);
+    AddApiParam(Built, 'onB', apFlag, False, rsEditorOnB);
+    AddApiMethod(Built, 'editor_seam_make', rsEditorSeamMake, rsEditorSeamMakeReturns);
+    AddApiParam(Built, 'sideA', apList, True, rsEditorSideA);
+    AddApiParam(Built, 'sideB', apList, True, rsEditorSideB);
     AddApiMethod(Built, 'editor_complete', rsEditorComplete, rsEditorCompleteReturns, True);
     AddApiParam(Built, 'id', apTarget, False, rsEditorCompleteTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorCompleteText);
@@ -361,6 +399,35 @@ begin
     Result := Concat(Result, DraftObject.MarkerStrokesAt(Centre));
 end;
 
+// Chevrons as one flat list: x, y and the angle it points, for each
+function ChevronsToJSON(const Chevrons: TPieceChevronArray): TJSONArray;
+var
+  Chevron: TPieceChevron;
+begin
+  Result := TJSONArray.Create;
+  for Chevron in Chevrons do
+  begin
+    Result.Add(ReportFloat(Chevron.Position.X));
+    Result.Add(ReportFloat(Chevron.Position.Y));
+    Result.Add(ReportFloat(Chevron.Angle));
+  end;
+end;
+
+// A seam side's edges, each as a polyline
+function SideLinesToJSON(Pattern: TPattern; const Side: TSeamSide; Tolerance: double): TJSONArray;
+var
+  Entry: TSeamEntry;
+  Node: TEvalNode;
+begin
+  Result := TJSONArray.Create;
+  for Entry in Side do
+  begin
+    Node := Pattern.FindNode(Entry.EdgeKey);
+    if (Node is TEdgeObject) and Node.HasResult then
+      Result.Add(LineToJSON(EdgePolyline(TEdgeObject(Node), Tolerance)));
+  end;
+end;
+
 // What every object in the scene has
 function SceneObject(Pattern: TPattern; DraftObject: TDraftObject): TJSONObject;
 var
@@ -394,6 +461,8 @@ var
   Point: TPointObject;
   Slots: TEdgeSlotArray;
   Slot: TEdgeSlot;
+  Index: integer;
+  Seam: TSeamObject;
 begin
   Pattern := Document.Pattern;
   Tolerance := DEFAULT_TOLERANCE;
@@ -418,6 +487,9 @@ begin
         Item.Add('cutLine', LineToJSON(Piece.CutLine));
         Item.Add('marks', SegmentsToJSON(Concat(Piece.GrainArrow, Piece.FoldArrow, Piece.MarkingStrokes)));
         Item.Add('notches', SegmentsToJSON(NotchSegments(Piece)));
+        Item.Add('caption', Pattern.PieceCaption(Piece));
+        Item.Add('middle', LineToJSON([PieceMiddle(Piece)]));
+        Item.Add('chevrons', ChevronsToJSON(PieceChevrons(Pattern, Piece)));
         List.Add(Item);
       end;
 
@@ -440,6 +512,21 @@ begin
         end;
       List.Add(Item);
     end;
+
+    // Drawn while selected, each side in its colour with its direction
+    List := TJSONArray.Create;
+    Scene.Add('seams', List);
+    for Index := 0 to Pattern.ObjectCount - 1 do
+      if (Pattern.Objects[Index] is TSeamObject) and Pattern.Objects[Index].HasResult then
+      begin
+        Seam := TSeamObject(Pattern.Objects[Index]);
+        Item := SceneObject(Pattern, Seam);
+        Item.Add('sideA', SideLinesToJSON(Pattern, Seam.SideA, Tolerance));
+        Item.Add('sideB', SideLinesToJSON(Pattern, Seam.SideB, Tolerance));
+        Item.Add('chevronsA', ChevronsToJSON(SeamChevrons(Pattern, Seam, False)));
+        Item.Add('chevronsB', ChevronsToJSON(SeamChevrons(Pattern, Seam, True)));
+        List.Add(Item);
+      end;
 
     // A marker shows at its point whether or not it is on a piece yet
     List := TJSONArray.Create;
@@ -579,7 +666,10 @@ begin
   Answer.Add('description', Description);
   Answer.Add('objects', KeysToJSON(SnapObjectKeys(Snap)));
   if Assigned(Group) then
+  begin
     Answer.Add('start', SnapToJSON(Start));
+    Answer.Add('startObjects', KeysToJSON(SnapObjectKeys(Start)));
+  end;
   Result := Answer;
 end;
 
@@ -959,6 +1049,90 @@ begin
   end;
 end;
 
+// A list of IDs or names as keys; empty when the parameter is left out
+function TEditorApiServer.KeysParam(Params: TJSONObject; const AName: string): TStringArray;
+var
+  List: TJSONData;
+  Index: integer;
+  Holder: TJSONObject;
+begin
+  Result := nil;
+  List := Params.Find(AName);
+  if not Assigned(List) or (List.JSONType = jtNull) then
+    Exit;
+  if List.JSONType <> jtArray then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+  for Index := 0 to List.Count - 1 do
+  begin
+    // Each is read as one reference would be, so names and IDs both do
+    Holder := TJSONObject.Create(['item', List.Items[Index].Clone]);
+    try
+      Insert(Reference(Holder, 'item', False), Result, Length(Result));
+    finally
+      FreeAndNil(Holder);
+    end;
+  end;
+end;
+
+function TEditorApiServer.DoLabelKeys(Params: TJSONObject): TJSONData;
+var
+  Mode: TLabelMode;
+  HoverKey: string;
+begin
+  Mode := TLabelMode(ChoiceParam(Params, 'mode', LABEL_MODE_NAMES));
+  HoverKey := '';
+  if Assigned(Params.Find('hover')) and (Params.Find('hover').JSONType <> jtNull) then
+    HoverKey := Reference(Params, 'hover', False);
+  Result := TJSONObject.Create(['objects', KeysToJSON(LabelKeys(Document.Pattern, Mode, KeysParam(Params, 'selection'), HoverKey,
+    KeysParam(Params, 'tool')))]);
+end;
+
+// A seam side by IDs, as the editor keeps it
+function SideToJSON(const Side: TSeamSide): TJSONArray;
+var
+  Entry: TSeamEntry;
+begin
+  Result := TJSONArray.Create;
+  for Entry in Side do
+    Result.Add(TJSONObject.Create(['piece', KeyToJSON(Entry.PieceKey), 'edge', KeyToJSON(Entry.EdgeKey)]));
+end;
+
+function TEditorApiServer.DoSeamPick(Params: TJSONObject): TJSONData;
+var
+  SideA, SideB: TSeamSide;
+  OnB, Picked: boolean;
+  Message: string;
+  At: TVec2;
+  Answer: TJSONObject;
+begin
+  SideA := ExistingSeamEntries(Document.Pattern, SeamSideParam(Params, 'sideA'));
+  SideB := ExistingSeamEntries(Document.Pattern, SeamSideParam(Params, 'sideB'));
+  OnB := BooleanParam(Params, 'onB');
+  Picked := False;
+  if Assigned(Params.Find('x')) then
+  begin
+    At := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
+    Picked := PickSeamEntry(Document.Pattern, At, RequireNumber(Params, 'radius'), SideA, SideB, OnB, Message);
+  end
+  else
+    Message := SeamProgressText(Document.Pattern, SideA, SideB, OnB);
+  Answer := TJSONObject.Create(['picked', Picked, 'sideA', SideToJSON(SideA), 'sideB', SideToJSON(SideB), 'message', Message]);
+  Answer.Add('lines', TJSONObject.Create(['sideA', SideLinesToJSON(Document.Pattern, SideA, DEFAULT_TOLERANCE), 'sideB',
+    SideLinesToJSON(Document.Pattern, SideB, DEFAULT_TOLERANCE)]));
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoSeamMake(Params: TJSONObject): TJSONData;
+var
+  SideA, SideB: TSeamSide;
+begin
+  SideA := SeamSideParam(Params, 'sideA');
+  SideB := SeamSideParam(Params, 'sideB');
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Result := EditToJSON(AddSeamFromSides(Document, SideA, SideB));
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -968,6 +1142,9 @@ begin
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);
+    'editor_label_keys': Result := DoLabelKeys(Params);
+    'editor_seam_pick': Result := DoSeamPick(Params);
+    'editor_seam_make': Result := DoSeamMake(Params);
     'editor_complete': Result := DoComplete(Params);
     'editor_list_objects': Result := DoListObjects(Params);
     'editor_list_variables': Result := DoListVariables(Params);

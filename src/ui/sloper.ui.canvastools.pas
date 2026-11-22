@@ -94,9 +94,6 @@ function CreateCanvasTools(Host: TCanvasToolHost): TCanvasToolHandlers;
 procedure FreeCanvasTools(var Tools: TCanvasToolHandlers);
 
 resourcestring
-  rsToolSeamProgress = 'Side %s: A %s, B %s, difference %s. Tab changes side, Enter makes the seam';
-  rsToolSeamSides = 'Pick edges for both sides first';
-  rsToolAddSeam = 'Add seam';
   rsToolAddNote = 'Add note';
   rsToolNewNoteText = 'Text';
   rsToolCalloutBox = 'Click where the callout''s text goes';
@@ -107,9 +104,6 @@ implementation
 uses
   LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Editor.Scene,
   Sloper.Editor.ToolEdits;
-
-const
-  SEAM_SIDE_NAMES: array[boolean] of string = ('A', 'B');
 
 type
   // Selecting and dragging are the canvas's own gestures
@@ -743,43 +737,19 @@ begin
 end;
 
 procedure TSeamTool.ShowProgress;
-var
-  Pattern: TPattern;
-  LengthA, LengthB: double;
 begin
-  Pattern := Host.Document.Pattern;
-  LengthA := SeamSideLength(Pattern, FSideA);
-  LengthB := SeamSideLength(Pattern, FSideB);
-  Host.ShowMessage(Format(rsToolSeamProgress, [SEAM_SIDE_NAMES[FOnB], LengthWithUnit(LengthA, Pattern.Units), LengthWithUnit(LengthB, Pattern.Units),
-    LengthWithUnit(LengthB - LengthA, Pattern.Units)]));
+  Host.ShowMessage(SeamProgressText(Host.Document.Pattern, FSideA, FSideB, FOnB));
 end;
 
 // A click on a piece's edge adds it to the side being picked, or takes it off
 procedure TSeamTool.Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer);
 var
-  Pattern: TPattern;
-  Entry: TSeamEntry;
-  Piece: TPieceObject;
+  Message: string;
 begin
   if Button <> cbLeft then
     Exit;
-  Pattern := Host.Document.Pattern;
-  if not SeamEntryAt(Pattern, ModelAt(X, Y), Host.View.PixelsToMM(SNAP_RADIUS), Entry) then
-  begin
-    Host.ShowMessage(rsToolNoSeam);
-    Exit;
-  end;
-  Piece := TPieceObject(Pattern.FindNode(Entry.PieceKey));
-  if Piece.FoldEdgeKey = Entry.EdgeKey then
-  begin
-    Host.ShowMessage(Format(rsSeamOnFold, [Pattern.FindNode(Entry.EdgeKey).DisplayName, Piece.DisplayName]));
-    Exit;
-  end;
-  if FOnB then
-    ToggleSeamEntry(FSideB, Entry)
-  else
-    ToggleSeamEntry(FSideA, Entry);
-  ShowProgress;
+  PickSeamEntry(Host.Document.Pattern, ModelAt(X, Y), Host.View.PixelsToMM(SNAP_RADIUS), FSideA, FSideB, FOnB, Message);
+  Host.ShowMessage(Message);
   Host.Refresh;
 end;
 
@@ -812,30 +782,15 @@ end;
 
 procedure TSeamTool.MakeSeam;
 var
-  Document: TPatternDocument;
-  Seam: TSeamObject;
-  Key, Reason: string;
+  Edit: TSelectionEdit;
 begin
-  if (Length(FSideA) = 0) or (Length(FSideB) = 0) then
-  begin
-    Host.ShowMessage(rsToolSeamSides);
-    Exit;
-  end;
-  Document := Host.Document;
-  Document.BeginChange(rsToolAddSeam);
-  Seam := Document.Pattern.AddSeam('', FSideA, FSideB);
-  Key := '';
-  if Assigned(Seam) then
-    Key := Seam.Key;
-  Reason := Document.Pattern.LastError;
-  if Document.Commit(Assigned(Seam)) then
+  Edit := AddSeamFromSides(Host.Document, FSideA, FSideB);
+  if Edit.Done then
   begin
     Reset;
-    Host.Select([Key]);
-    Host.ShowMessage(rsToolSeamHint);
-  end
-  else
-    Host.ShowMessage(Reason);
+    Edit.Message := rsToolSeamHint;
+  end;
+  ApplyEdit(Edit);
   Host.Refresh;
 end;
 

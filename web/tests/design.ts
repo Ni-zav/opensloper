@@ -197,6 +197,24 @@ try {
   await clickAt(page, box, 170, 560);
   await waitForData(page, 'undo', 'Add circle or arc');
 
+  // A seam from the rectangle piece's top edge to its bottom one
+  await chooseTool(page, 'Seam');
+  await clickAt(page, box, 100, 300);
+  assert.match(await status(page), /^Side A/, 'side A picked');
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => document.querySelector('#status')?.textContent.startsWith('Side B'));
+  await clickAt(page, box, 100, 450);
+  await page.keyboard.press('Enter');
+  await waitForData(page, 'undo', 'Add seam');
+
+  // Every label drawn adds ink
+  await page.select('#labels', 'none');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const unlabelled = await inkedPixels(page);
+  await page.select('#labels', 'all');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok((await inkedPixels(page)) > unlabelled + MIN_INKED_PIXELS, 'labels drawn');
+
   // SCREENSHOT names a PNG file to keep what the canvas shows at the end
   if ((process.env.SCREENSHOT ?? '') !== '') {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20);
@@ -206,7 +224,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; added, dragged and undid a point; drew a line, a rectangle, ` +
-      `a piece, a notch and a circle. ${await status(page)}`,
+      `a piece, a notch, a circle and a seam; labelled everything. ${await status(page)}`,
   );
 } finally {
   await browser.close();

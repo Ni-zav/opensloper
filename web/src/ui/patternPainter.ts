@@ -2,8 +2,17 @@
 // paper and grid, pieces under edges, edges under points, then the overlays the
 // canvas asks for (the snap, the selection box). It draws what it is given and
 // decides nothing about tools or input. Colours and sizes are the desktop's.
+import {
+  placeLabels,
+  placesAlong,
+  placesAround,
+  placesStacked,
+  polylinePlaces,
+  rectAround,
+  type LabelRequest,
+} from '../editor/labelPlacement.ts';
 import type { EvalState, Scene, SceneObject, Tables } from '../editor/scene.ts';
-import type { Vec2, ViewTransform } from '../editor/view.ts';
+import type { Rect2, Vec2, ViewTransform } from '../editor/view.ts';
 
 // Screen pixels
 const MARKING_LINE_WIDTH = 1.5;
@@ -21,6 +30,21 @@ const GUIDE_DOTS = [1, 2];
 // A piece's grainline, fold and marking strokes, and its notches, in pixels
 const PIECE_MARK_WIDTH = 1.5;
 const NOTCH_WIDTH = 2;
+const SEAM_LINE_WIDTH = 4;
+const CHEVRON_SIZE = 7;
+// Degrees either side of the way a chevron points, to its wings
+const CHEVRON_SPREAD = 150;
+const CHEVRON_WIDTH = 2;
+const LABEL_FONT_HEIGHT = 13;
+// A label's box is this much taller than its font, for the ascenders and descenders
+const LABEL_LINE_HEIGHT = 1.2;
+const LABEL_FONT = `${String(LABEL_FONT_HEIGHT)}px system-ui, sans-serif`;
+// How far a label is from its point or line, and how many lines further out
+// it may move to keep clear of others, in pixels
+const LABEL_GAP_PIXELS = 4;
+const LABEL_RINGS = 2;
+// Labels this far off the canvas are left out, in pixels
+const OFFSCREEN_LABEL_PIXELS = 200;
 // The grid's lines, in mm, drawn while they are at least this many pixels apart
 const GRID_STEP = 10;
 const GRID_MAJOR_EVERY = 10;
@@ -54,6 +78,8 @@ const PIECE_HOVER_TINT = rgba(37, 116, 214, 30);
 const HOVER_HALO = rgba(37, 116, 214, 60);
 const ERROR_INK = rgba(209, 52, 56);
 const BLOCKED_INK = rgba(226, 140, 40);
+const SEAM_INK_A = rgba(214, 96, 37);
+const SEAM_INK_B = rgba(20, 140, 120);
 
 function css(color: Rgba): string {
   return `rgba(${String(color.red)}, ${String(color.green)}, ${String(color.blue)}, ${String(color.alpha / FULL_ALPHA)})`;
@@ -104,6 +130,11 @@ export interface PaintState {
   snap: SnapMarker | undefined;
   // The selection box's screen corners, while one is dragged
   box: [Vec2, Vec2] | undefined;
+  // The objects to label
+  labelIds: readonly string[];
+  // The sides of the seam the Seam tool is picking, a polyline per edge
+  seamA: readonly number[][];
+  seamB: readonly number[][];
 }
 
 export class PatternPainter {
@@ -166,6 +197,84 @@ export class PatternPainter {
     this.context.fillStyle = css({ ...PAPER, alpha: DIM_WASH_ALPHA });
     this.context.fillRect(0, 0, this.width, this.height);
     this.drawLayer(scene, tables, false);
+  }
+
+  // The selected seams, each side in its colour with chevrons the way it
+  // runs, and the sides the Seam tool is picking
+  drawSeams(scene: Scene): void {
+    const state = this.paintState();
+    for (const seam of scene.seams) {
+      if (!state.selection.has(seam.id)) {
+        continue;
+      }
+      this.strokeLines(seam.sideA, SEAM_INK_A, SEAM_LINE_WIDTH);
+      this.strokeLines(seam.sideB, SEAM_INK_B, SEAM_LINE_WIDTH);
+      this.drawChevrons(seam.chevronsA, SEAM_INK_A);
+      this.drawChevrons(seam.chevronsB, SEAM_INK_B);
+    }
+    this.strokeLines(state.seamA, SEAM_INK_A, SEAM_LINE_WIDTH);
+    this.strokeLines(state.seamB, SEAM_INK_B, SEAM_LINE_WIDTH);
+  }
+
+  // Over the rest, so no edge or point crosses out a label: pieces' names
+  // first, then points', then edges', each where it covers least
+  drawLabels(scene: Scene): void {
+    const state = this.paintState();
+    const wanted = new Set(state.labelIds);
+    if (wanted.size === 0) {
+      return;
+    }
+    const context = this.context;
+    context.font = LABEL_FONT;
+    const height = Math.round(LABEL_FONT_HEIGHT * LABEL_LINE_HEIGHT);
+    const requests: LabelRequest[] = [];
+    const texts: { text: string; color: string }[] = [];
+    const request = (item: SceneObject, text: string, places: (width: number) => Vec2[]): void => {
+      const width = context.measureText(text).width;
+      requests.push({ width, height, places: places(width) });
+      texts.push({ text, color: css(this.isSelected(item) ? SELECTED_INK : inkFor(item, INK)) });
+    };
+    const obstacles: Rect2[] = [];
+    for (const point of scene.points) {
+      const at = state.view.toScreen(point);
+      if (this.nearScreen(at)) {
+        obstacles.push(rectAround(at, POINT_RADIUS));
+      }
+    }
+    for (const piece of scene.pieces) {
+      const at = state.view.toScreen(piece.middle);
+      if (wanted.has(piece.id) && this.nearScreen(at)) {
+        request(piece, piece.caption, (width) => placesStacked(at, width, height, LABEL_RINGS));
+      }
+    }
+    for (const point of scene.points) {
+      const at = state.view.toScreen(point);
+      if (wanted.has(point.id) && this.nearScreen(at)) {
+        request(point, point.name, (width) => placesAround(at, width, height, LABEL_GAP_PIXELS, LABEL_RINGS));
+      }
+    }
+    for (const edge of scene.edges) {
+      if (!wanted.has(edge.id)) {
+        continue;
+      }
+      const line: Vec2[] = [];
+      for (let index = 0; index + 1 < edge.line.length; index += 2) {
+        line.push(state.view.toScreen({ x: edge.line[index] ?? 0, y: edge.line[index + 1] ?? 0 }));
+      }
+      const along = polylinePlaces(line);
+      if (along[0] !== undefined && this.nearScreen(along[0])) {
+        request(edge, edge.name, (width) => placesAlong(along, width, height, LABEL_GAP_PIXELS));
+      }
+    }
+    const places = placeLabels(requests, obstacles);
+    context.textBaseline = 'top';
+    places.forEach((place, index) => {
+      const label = texts[index];
+      if (label !== undefined) {
+        context.fillStyle = label.color;
+        context.fillText(label.text, place.x, place.y);
+      }
+    });
   }
 
   // The snap marker, a guide to the point it lines up with, and what the
@@ -286,6 +395,53 @@ export class PatternPainter {
     }
   }
 
+  // Near enough the canvas for its label to matter
+  private nearScreen(at: Vec2): boolean {
+    return (
+      at.x > -OFFSCREEN_LABEL_PIXELS &&
+      at.y > -OFFSCREEN_LABEL_PIXELS &&
+      at.x < this.width + OFFSCREEN_LABEL_PIXELS &&
+      at.y < this.height + OFFSCREEN_LABEL_PIXELS
+    );
+  }
+
+  private strokeLines(lines: readonly number[][], color: Rgba, width: number): void {
+    const context = this.context;
+    context.strokeStyle = css(color);
+    context.lineWidth = width;
+    context.setLineDash([]);
+    for (const line of lines) {
+      this.tracePolyline(line);
+      context.stroke();
+    }
+  }
+
+  // Chevrons as a flat list, x, y and the angle each points (degrees,
+  // anticlockwise on screen), drawn at the same size at any zoom
+  private drawChevrons(chevrons: readonly number[], color: Rgba): void {
+    const view = this.paintState().view;
+    const context = this.context;
+    context.strokeStyle = css(color);
+    context.lineWidth = CHEVRON_WIDTH;
+    context.setLineDash([]);
+    for (let index = 0; index + 2 < chevrons.length; index += 3) {
+      const tip = view.toScreen({ x: chevrons[index] ?? 0, y: chevrons[index + 1] ?? 0 });
+      const angle = chevrons[index + 2] ?? 0;
+      const wing = (turn: number): Vec2 => {
+        const radians = ((angle + turn) * Math.PI) / 180;
+        // Up the screen is a positive angle
+        return { x: tip.x + CHEVRON_SIZE * Math.cos(radians), y: tip.y - CHEVRON_SIZE * Math.sin(radians) };
+      };
+      const first = wing(CHEVRON_SPREAD);
+      const last = wing(-CHEVRON_SPREAD);
+      context.beginPath();
+      context.moveTo(first.x, first.y);
+      context.lineTo(tip.x, tip.y);
+      context.lineTo(last.x, last.y);
+      context.stroke();
+    }
+  }
+
   // Segments as a flat list, x1, y1, x2, y2 for each, in model mm
   private strokeSegments(segments: number[], color: string, width: number): void {
     if (segments.length < 4) {
@@ -370,6 +526,10 @@ export class PatternPainter {
       const ink = css(this.isSelected(piece) ? SELECTED_INK : inkFor(piece, CONSTRUCTION_INK));
       this.strokeSegments(piece.marks, ink, PIECE_MARK_WIDTH);
       this.strokeSegments(piece.notches, ink, NOTCH_WIDTH);
+      // Which way the piece's path runs, while it is selected or hovered
+      if (!dimmed && (this.isSelected(piece) || piece.id === this.paintState().hoverId)) {
+        this.drawChevrons(piece.chevrons, SELECTED_INK);
+      }
     }
     // A marker shows at its point whether or not it is on a piece yet
     for (const marker of scene.markers) {

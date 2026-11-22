@@ -7,7 +7,17 @@
 // and show where the next would snap.
 import type { PatternDocument } from '../document/patternDocument.ts';
 import { EngineError } from '../engine/engine.ts';
-import { booleanField, idField, idsField, isRecord, numberField, stringField } from '../engine/replies.ts';
+import {
+  booleanField,
+  idField,
+  idsField,
+  isRecord,
+  numberField,
+  recordsField,
+  stringField,
+  type JsonRecord,
+} from '../engine/replies.ts';
+import { linesField } from '../editor/scene.ts';
 import type { Vec2, ViewTransform } from '../editor/view.ts';
 import { LatestOnly } from './latestOnly.ts';
 import type { SnapKind, SnapMarker, SnapPreview } from './patternPainter.ts';
@@ -26,6 +36,10 @@ export interface CanvasToolHost {
   select(ids: string[]): void;
   showSnap(snap: SnapMarker | undefined): void;
   showMessage(text: string): void;
+  // The objects the tool is working with, which are labelled
+  showToolObjects(ids: string[]): void;
+  // The sides of the seam being picked, a polyline per edge
+  showSeamSides(sideA: number[][], sideB: number[][]): void;
   // Where a point is, for the guide to the point a snap lines up with
   pointAt(id: string): Vec2 | undefined;
   // A failure that is no refusal of the engine's, which the page reports
@@ -65,6 +79,14 @@ export abstract class CanvasToolHandler {
 
   // The pointer left the canvas
   leave(): void {}
+
+  // A key besides Escape: true when the tool took it
+  keyDown(_event: KeyboardEvent): boolean {
+    return false;
+  }
+
+  // The pattern changed, as after undo, so what the tool holds may be gone
+  sceneChanged(): void {}
 
   // The place a screen point is, with the snapping radius at this zoom
   protected place(at: Vec2): ToolPlace {
@@ -135,6 +157,7 @@ export class SnapTool extends CanvasToolHandler {
     this.snaps.clear();
     this.lastAt = undefined;
     this.host.showSnap(undefined);
+    this.host.showToolObjects([]);
   }
 
   override reset(): void {
@@ -221,6 +244,7 @@ export class SnapTool extends CanvasToolHandler {
       preview: this.startAt !== undefined && preview !== undefined ? { kind: preview, from: this.startAt } : undefined,
     });
     this.host.showMessage(stringField(answer, 'description') ?? '');
+    this.host.showToolObjects([...idsField(answer, 'startObjects'), ...idsField(answer, 'objects')]);
   }
 }
 
@@ -231,5 +255,86 @@ export class ClickTool extends CanvasToolHandler {
     this.toolClick(this.place(at)).catch((error: unknown) => {
       this.report(error);
     });
+  }
+}
+
+// Clicks pick the edges of side A; Tab moves to side B (Shift+Tab back),
+// Enter makes the seam, Escape drops what was picked
+export class SeamTool extends CanvasToolHandler {
+  private sideA: JsonRecord[] = [];
+  private sideB: JsonRecord[] = [];
+  private onB = false;
+
+  override reset(): void {
+    this.sideA = [];
+    this.sideB = [];
+    this.onB = false;
+    this.host.showSeamSides([], []);
+  }
+
+  override cancel(): boolean {
+    const picking = this.sideA.length > 0 || this.sideB.length > 0 || this.onB;
+    if (picking) {
+      this.reset();
+    }
+    return picking;
+  }
+
+  override click(at: Vec2): void {
+    this.pick(this.place(at)).catch((error: unknown) => {
+      this.report(error);
+    });
+  }
+
+  override keyDown(event: KeyboardEvent): boolean {
+    if (event.key === 'Tab') {
+      this.onB = !event.shiftKey;
+      this.pick({}).catch((error: unknown) => {
+        this.report(error);
+      });
+      return true;
+    }
+    if (event.key === 'Enter') {
+      this.make().catch((error: unknown) => {
+        this.report(error);
+      });
+      return true;
+    }
+    return false;
+  }
+
+  // Undo may have taken away a piece or edge picked
+  override sceneChanged(): void {
+    if (this.sideA.length > 0 || this.sideB.length > 0) {
+      this.pick({}).catch((error: unknown) => {
+        this.report(error);
+      });
+    }
+  }
+
+  // Without a place, only the sides as they are, and the progress
+  private async pick(place: object): Promise<void> {
+    const answer = await this.host.document.read('editor_seam_pick', {
+      ...place,
+      sideA: this.sideA,
+      sideB: this.sideB,
+      onB: this.onB,
+    });
+    this.sideA = recordsField(answer, 'sideA');
+    this.sideB = recordsField(answer, 'sideB');
+    const lines = isRecord(answer.lines) ? answer.lines : {};
+    this.host.showSeamSides(linesField(lines, 'sideA'), linesField(lines, 'sideB'));
+    this.host.showMessage(stringField(answer, 'message') ?? '');
+  }
+
+  private async make(): Promise<void> {
+    const answer = await this.host.document.call('editor_seam_make', { sideA: this.sideA, sideB: this.sideB });
+    if (booleanField(answer, 'done') === true) {
+      this.reset();
+    }
+    if (answer.select !== null) {
+      this.host.select(idsField(answer, 'select'));
+    }
+    this.host.showMessage(stringField(answer, 'message') ?? '');
   }
 }

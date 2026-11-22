@@ -5,24 +5,25 @@ it: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
 Worker, under an editor in plain TypeScript. Files stay on the user's
 machine: the page opens and saves them as text, and sends nothing anywhere.
 
-| Folder          | What it is                                                                                               |
-| --------------- | -------------------------------------------------------------------------------------------------------- |
-| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                 |
-| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                            |
-| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels                 |
-| `src/editor/`   | Copies of `src/editor` logic run on every frame (`view.ts`), and the engine's scene and tables, typed    |
-| `src/ui/`       | The canvas, its painter and tools, shortcuts and strings, named after their `src/ui` units               |
-| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                         |
-| `tests/`        | Unit tests (`*.test.ts`, `node --test`) and `design.ts`, which drives the built app in headless Chromium |
-| `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                |
+| Folder          | What it is                                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                             |
+| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                        |
+| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels                             |
+| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed |
+| `src/ui/`       | The canvas, its painter and tools, shortcuts and strings, named after their `src/ui` units                           |
+| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                     |
+| `tests/`        | Unit tests (`*.test.ts`, `node --test`) and `design.ts`, which drives the built app in headless Chromium             |
+| `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                            |
 
-So far the canvas draws the scene (pieces with their marks and notches,
-edges, markers, points), zooms with the wheel, pans with the middle button,
-selects by clicking and boxing, and drags points as one undo step; the
-Point, Line, Curve, Circle, Rectangle, Piece and Notch tools work as on the
-desktop, making edges in the role the role box chooses. Open, Measurements,
-Save, Undo, Redo and Fit are on the toolbar. Seam, Text and Callout, labels
-and the panels follow the same pattern.
+So far the canvas draws the scene (pieces with their marks, notches and
+direction, edges, selected seams, markers, points and labels placed clear of
+each other), zooms with the wheel, pans with the middle button, selects by
+clicking and boxing, and drags points as one undo step; the Point, Line,
+Curve, Circle, Rectangle, Piece, Notch and Seam tools work as on the desktop,
+making edges in the role the role box chooses. Open, Measurements, Save,
+Undo, Redo, Fit and the labels mode are on the toolbar. Notes with the Text
+and Callout tools, and the panels, follow the same pattern.
 
 ## Setting up
 

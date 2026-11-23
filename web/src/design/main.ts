@@ -15,6 +15,7 @@ import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
 import { FeaturesPanel } from '../ui/featuresPanel.ts';
 import { MaterialsDialog } from '../ui/materialDialog.ts';
+import { PrintDialog } from '../ui/printDialog.ts';
 import { MaterialsPanel } from '../ui/materialPanel.ts';
 import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
@@ -31,6 +32,8 @@ const ICONS = {
   measurements: 'ruler-measure',
   save: 'device-floppy',
   saveAs: 'file-pencil',
+  exportDraft: 'file-type-svg',
+  print: 'printer',
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
   fit: 'zoom-scan',
@@ -112,6 +115,7 @@ class DesignApp {
   private readonly features: FeaturesPanel;
   private readonly materials: MaterialsPanel;
   private readonly materialsDialog: MaterialsDialog;
+  private readonly printDialog: PrintDialog;
   private readonly measurements: MeasurementsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
@@ -196,6 +200,11 @@ class DesignApp {
       };
     }
     side.addSection('measurements', STRINGS.tabMeasurements, ICONS.measurementsTab, this.measurements);
+    this.printDialog = new PrintDialog(this.document, {
+      fileName: () => this.document.fileName || DEFAULT_FILE_NAME,
+      message: showMessage,
+      failed: showFailure,
+    });
     this.materialsDialog = new MaterialsDialog(this.document, {
       failed: showFailure,
       historyKey: (event) => (this.matches(event, 'undo') ? 'undo' : this.matches(event, 'redo') ? 'redo' : undefined),
@@ -235,6 +244,12 @@ class DesignApp {
           ]),
       this.undoButton,
       this.redoButton,
+      iconButton(ICONS.exportDraft, STRINGS.exportDraft, STRINGS.exportDraftHint, () => {
+        this.run(this.exportDraft());
+      }),
+      iconButton(ICONS.print, STRINGS.print, STRINGS.printHint, () => {
+        this.printDialog.open();
+      }),
       iconButton(ICONS.fit, STRINGS.fit, STRINGS.fitHint, () => {
         this.canvas.fitAll();
       }),
@@ -693,6 +708,17 @@ class DesignApp {
     await this.document.call('use_measurements', params);
     this.wantedMeasurements = '';
     showMessage(STRINGS.measurementsUsed(file.name));
+  }
+
+  // The draft as the canvas shows it, labels and all, as Export Draft SVG
+  private async exportDraft(): Promise<void> {
+    const name = `${(this.document.fileName || DEFAULT_FILE_NAME).replace(/\.[^.]*$/, '')}.svg`;
+    const answer = await this.document.read('editor_export_draft', {
+      labels: [...this.canvas.shownLabels],
+      fileName: this.document.fileName,
+    });
+    downloadText(name, stringField(answer, 'text') ?? '', 'image/svg+xml');
+    showMessage(STRINGS.exportedDraft(name));
   }
 
   // Writes the pattern to its file, or one the user chooses for a new one or

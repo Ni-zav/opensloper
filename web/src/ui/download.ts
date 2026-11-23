@@ -2,9 +2,13 @@
 // download, which asks where to put it or puts it in Downloads. Nothing
 // leaves the machine.
 
-export function downloadText(fileName: string, text: string): void {
+export function downloadText(fileName: string, text: string, type = 'application/json'): void {
+  downloadBlob(fileName, new Blob([text], { type }));
+}
+
+export function downloadBlob(fileName: string, blob: Blob): void {
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  link.href = URL.createObjectURL(blob);
   link.download = fileName;
   link.click();
   URL.revokeObjectURL(link.href);

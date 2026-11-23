@@ -69,6 +69,9 @@ type
     // relative paths start from
     procedure Load(Source: TPatternSource; const OwnerFile: string);
     procedure LoadAll(const OwnerFile: string);
+    // Reads the source from the files' contents, as the web editor holds
+    // them, rather than from disk; an empty MeasurementText is no set
+    procedure LoadText(Source: TPatternSource; const PatternText, MeasurementText: string);
     // Adds "nextId" and "sources" to a file's root
     procedure SaveTo(Root: TJSONObject);
     // Reads "sources" and "nextId"; on failure the sources are cleared
@@ -234,6 +237,39 @@ begin
       Exit;
     end;
     if not Source.Measurements.LoadFromFile(Source.MeasurementPath, Err) then
+    begin
+      Source.LoadError := Err;
+      Exit;
+    end;
+    Source.Pattern.Measurements := Source.Measurements;
+  end;
+  if (Source.Size <> '') and not Source.Measurements.SelectSize(Source.Size) then
+  begin
+    Source.LoadError := Format(rsMeasurementUnknownSize, [Source.Size]);
+    Exit;
+  end;
+  Source.Pattern.Evaluate;
+end;
+
+procedure TPatternSources.LoadText(Source: TPatternSource; const PatternText, MeasurementText: string);
+var
+  Err: string;
+begin
+  Source.Unload;
+  Source.LoadError := '';
+  Source.PatternPath := '';
+  Source.MeasurementPath := '';
+  Source.LoadedStamp := '';
+  Source.Pattern := TPattern.Create;
+  Source.Measurements := TMeasurementSet.Create;
+  if not LoadPatternFromText(Source.Pattern, PatternText, Err) then
+  begin
+    Source.LoadError := Err;
+    Exit;
+  end;
+  if MeasurementText <> '' then
+  begin
+    if not Source.Measurements.LoadFromText(MeasurementText, Err) then
     begin
       Source.LoadError := Err;
       Exit;

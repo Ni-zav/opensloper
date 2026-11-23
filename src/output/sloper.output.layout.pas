@@ -221,6 +221,8 @@ type
     function StoredPath(const Path: string): string;
     // Reads and evaluates every source's files
     procedure LoadSources;
+    // Reads a source from its files' contents instead, as the web editor holds them
+    procedure LoadSourceText(Source: TPatternSource; const PatternText, MeasurementText: string);
     function SaveToText: string;
     function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
     function SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
@@ -673,6 +675,11 @@ end;
 procedure TLayout.LoadSources;
 begin
   FSources.LoadAll(FileName);
+end;
+
+procedure TLayout.LoadSourceText(Source: TPatternSource; const PatternText, MeasurementText: string);
+begin
+  FSources.LoadText(Source, PatternText, MeasurementText);
 end;
 
 function TLayout.GetSources: TPatternSourceList;

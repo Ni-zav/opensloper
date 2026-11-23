@@ -502,6 +502,34 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok((await inkedPixels(page)) > unlabelled + MIN_INKED_PIXELS, 'labels drawn');
 
+  // Export SVG downloads the draft; Print… downloads the tiled PDF on the paper chosen, and opens it
+  // in a tab of its own for the browser's viewer to print
+  const downloaded = async (name: string, start: string): Promise<string> => {
+    let text = '';
+    for (let tries = 0; tries < 100 && !text.startsWith(start); tries++) {
+      // oxlint-disable-next-line no-await-in-loop
+      text = await readFile(join(downloads, name), 'latin1').catch(() => '');
+      // oxlint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return text;
+  };
+  await page.click('#toolbar button[title="Download the draft as SVG, as the canvas shows it"]');
+  assert.ok((await downloaded('skirt-pieces.svg', '<')).includes('<svg'), 'the draft downloaded');
+  await page.click('#toolbar button[title="Print the pieces at full size, tiled on pages"]');
+  await page.waitForSelector('.print-dialog[open]', { timeout: TIMEOUT_MS });
+  await page.select('#print-paper', 'Letter');
+  await page.click('.print-buttons button:nth-child(2)');
+  assert.ok((await downloaded('skirt-pieces.pdf', '%PDF')).startsWith('%PDF'), 'the PDF downloaded');
+  assert.equal(await status(page), 'Downloaded skirt-pieces.pdf: print it at 100% (actual size)', 'said so');
+  const viewer = browser.waitForTarget((target) => target.url().startsWith('blob:'), { timeout: TIMEOUT_MS });
+  await page.click('.print-buttons button:nth-child(1)');
+  // The viewer's tab is closed again, and the editor brought back to the front
+  await (await (await viewer).page())?.close();
+  await page.bringToFront();
+  await page.click('.print-buttons button:nth-child(3)');
+  await page.waitForFunction(() => document.querySelector('.print-dialog[open]') === null, { timeout: TIMEOUT_MS });
+
   // The Materials tab and dialog: a material added and named, a size refused and put back, the
   // name undone in the dialog, then the material deleted
   await page.click('.side-column [data-tab="materials"]');
@@ -607,7 +635,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; added, renamed and deleted a material; added a hem from the Features tab; ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; exported the draft and printed it to PDF; added, renamed and deleted a material; added a hem from the Features tab; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),
   );

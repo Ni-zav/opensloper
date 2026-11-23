@@ -43,7 +43,7 @@ Calibration scales everything printed at true size, including the test square. A
 
 **Information block and sheet notes.** The information block (`title`: `corner`, `fields`, `everyPage`) prints on the cover or beside the test square, optionally on every tile: plain lines chosen from a list, with nothing to type or place (`Sloper.Output.TitleBlock` places it for the PDF and preview alike). Sheet notes are text in layout space, dragged like pieces, with fields filled when printed; a note makes its page print. Pattern notes print with their pieces and cannot be moved here.
 
-**Code.** `src/publish` holds the window; loading, tiling, previews and exports are in `src/output` (`Sloper.Output.Layout`, `.Tiling`, `.LayoutPDF`, `.Preview`, `.TitleBlock`), so `opensloper-cli export LAYOUT` writes the same files without a window. `TLayoutDocument` keeps undo as the layout's text before each change.
+**Code.** `src/publish` holds the window; loading, tiling, previews and exports are in `src/output` (`Sloper.Output.Layout`, `.Tiling`, `.LayoutPDF`, `.Preview`, `.TitleBlock`), so `opensloper-cli export LAYOUT` writes the same files without a window, and the web editor's Print… writes a new layout's tiled PDF from a pattern held as text (`LoadSourceText`). `TLayoutDocument` keeps undo as the layout's text before each change.
 
 ## Printing
 

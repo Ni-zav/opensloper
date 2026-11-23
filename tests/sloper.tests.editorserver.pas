@@ -137,6 +137,10 @@ type
     procedure TestFeatureApply;
     // The Materials tab's list and the dialog's edits, each one undo step
     procedure TestMaterials;
+    // Export Draft SVG labels what the canvas labels
+    procedure TestExportDraft;
+    // Print makes the publish app's tiled PDF of every piece, or says why it cannot
+    procedure TestPrint;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
     // Its edits, each one undo step, refused with the reason
@@ -159,7 +163,7 @@ type
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms;
+  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64;
 
 const
   TOLERANCE = 1e-6;
@@ -1748,6 +1752,38 @@ begin
   AssertTrue('says why', Answer.Strings['reason'] <> '');
   Call('editor_material', '{"index": 5}');
   AssertEquals('no such material', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestExportDraft;
+var
+  Labelled, Unlabelled: string;
+begin
+  AddSquare;
+  Call('editor_export_draft', '{"labels": ["' + IntToStr(IdOf('B')) + '"]}');
+  Labelled := Answer.Strings['text'];
+  AssertTrue('an SVG', Pos('<svg', Labelled) > 0);
+  Call('editor_export_draft', '{"labels": []}');
+  Unlabelled := Answer.Strings['text'];
+  AssertTrue('the label written', Length(Labelled) > Length(Unlabelled));
+end;
+
+procedure TTestEditorServer.TestPrint;
+var
+  Pdf: string;
+begin
+  Call('editor_print');
+  AssertFalse('nothing to print', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['reason'] <> '');
+  AddSquare;
+  Call('editor_print', '{"paper": "Letter", "fileName": "flap.sloper"}');
+  AssertTrue('printed', Answer.Booleans['done']);
+  Pdf := DecodeStringBase64(Answer.Strings['pdf']);
+  AssertEquals('a PDF', '%PDF', Copy(Pdf, 1, 4));
+  AssertTrue('on Letter paper', Pos('612', Pdf) > 0);
+  Call('editor_changes');
+  AssertTrue('nothing saved', Answer.Booleans['modified']);
+  Call('editor_print', '{"paper": "A0"}');
+  AssertEquals('no such paper', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 initialization

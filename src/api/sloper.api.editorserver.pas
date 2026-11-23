@@ -110,6 +110,8 @@ type
     function DoSuggest(Params: TJSONObject): TJSONData;
     function DoSuggestPreview(Params: TJSONObject): TJSONData;
     function DoNotePreview(Params: TJSONObject): TJSONData;
+    function DoExportDraft(Params: TJSONObject): TJSONData;
+    function DoPrint(Params: TJSONObject): TJSONData;
     function DoMaterials: TJSONData;
     function DoMaterial(Params: TJSONObject): TJSONData;
     function DoMaterialSet(Params: TJSONObject): TJSONData;
@@ -322,6 +324,19 @@ resourcestring
   rsEditorSuggestPreview = 'What a suggestion would make of the object: where the point would go, and the object ' +
     'at the smallest and largest sizes of the table.';
   rsEditorSuggestText = 'The suggested formula';
+  rsEditorExportDraft = 'The draft as SVG, as the canvas shows it: its labels, fills, hidden roles, annotations and ' +
+    'pieces, for Export Draft SVG.';
+  rsEditorExportLabels = 'The objects the canvas labels, as editor_label_keys gives them';
+  rsEditorExportNoFills = 'Pieces left unfilled';
+  rsEditorExportDraftReturns = '`text`, the SVG file''s contents';
+  rsEditorPrint = 'A PDF to print the pattern from, as the publish app''s tiled print of a new layout with every ' +
+    'piece placed: pages with their row and column captions and overlaps, and a cover with the test square and ' +
+    'the page map. Unsaved edits are included; nothing is saved.';
+  rsEditorPrintPaper = 'The paper';
+  rsEditorPrintReturns = '`done`; with it, `pdf`, the file''s bytes in Base64, and `warnings`, what the layout would ' +
+    'warn of in the publish app; without it, the `reason`';
+  // A pattern never saved, in the PDF's title and the layout's name
+  rsEditorPrintUnnamed = 'pattern';
   rsEditorMaterials = 'The Materials tab''s list: each material''s row, the cut list they make, and the fills and ' +
     'fabrics a material can have, in words.';
   rsEditorMaterialsReturns = '`rows`, each with `name`, `color` (#RRGGBB), `fill` (tint or hatch), `fillCaption`, ' +
@@ -427,7 +442,8 @@ uses
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
-  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units;
+  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources,
+  Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -568,6 +584,13 @@ begin
     AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
     AddApiParam(Built, 'field', apText, True, rsEditorField);
     AddApiParam(Built, 'value', apNumber, False, rsEditorSuggestValue);
+    AddApiMethod(Built, 'editor_export_draft', rsEditorExportDraft, rsEditorExportDraftReturns, True);
+    AddApiParam(Built, 'labels', apTexts, True, rsEditorExportLabels);
+    AddApiParam(Built, 'noFills', apFlag, False, rsEditorExportNoFills);
+    AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
+    AddApiMethod(Built, 'editor_print', rsEditorPrint, rsEditorPrintReturns, True);
+    AddApiParam(Built, 'paper', apChoice, False, rsEditorPrintPaper, 'A4, A3, Letter');
+    AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
     AddApiMethod(Built, 'editor_materials', rsEditorMaterials, rsEditorMaterialsReturns, True);
     AddApiMethod(Built, 'editor_material', rsEditorMaterial, rsEditorMaterialReturns, True);
     AddApiParam(Built, 'index', apWhole, True, rsEditorMaterialIndex);
@@ -1703,6 +1726,79 @@ begin
   Result := Answer;
 end;
 
+function TEditorApiServer.DoExportDraft(Params: TJSONObject): TJSONData;
+var
+  Options: TDraftSVGOptions;
+  FileName: string;
+begin
+  FileName := OptionalString(Params, 'fileName');
+  if FileName = '' then
+    FileName := Document.FileName;
+  Options := DefaultDraftSVGOptions;
+  Options.NoFills := BooleanParam(Params, 'noFills');
+  Options.HiddenRoles := Document.Pattern.View.HiddenRoles;
+  Options.HideAnnotations := Document.Pattern.View.HideAnnotations;
+  Options.FollowPieceView := True;
+  Options.PatternFileName := FileName;
+  Options.LabelChosen := True;
+  Options.LabelKeys := TextsParam(Params, 'labels');
+  Result := TJSONObject.Create(['text', DraftToSVG(Document.Pattern, Options)]);
+end;
+
+const
+  // A new layout's paper
+  PRINT_PAPER = 'A4';
+
+// The pattern as open, unsaved edits and all, through a layout that is never saved
+function TEditorApiServer.DoPrint(Params: TJSONObject): TJSONData;
+var
+  Layout: TLayout;
+  Source: TPatternSource;
+  FileName, Paper, Size, Refusal, MeasurementText: string;
+  Problem: TLayoutProblem;
+  Warnings: TJSONArray;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  FileName := OptionalString(Params, 'fileName');
+  if FileName = '' then
+    FileName := ExtractFileName(Document.FileName);
+  if FileName = '' then
+    FileName := rsEditorPrintUnnamed;
+  Paper := OptionalString(Params, 'paper');
+  if Paper = '' then
+    Paper := PRINT_PAPER;
+  Size := '';
+  MeasurementText := '';
+  if Assigned(Document.Measurements) then
+  begin
+    MeasurementText := Document.MeasurementText;
+    if Document.Measurements.SizeCount > 0 then
+      Size := Document.Measurements.SizeName;
+  end;
+  Layout := TLayout.Create;
+  try
+    Layout.Name := ChangeFileExt(FileName, '');
+    Source := Layout.AddSource(FileName, '', Size);
+    Layout.LoadSourceText(Source, Document.SnapshotText, MeasurementText);
+    if not PaperSize(Paper, Layout.Output.Tiles.PaperWidth, Layout.Output.Tiles.PaperHeight) then
+      raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiBadChoice, ['paper', 'A4, A3, Letter']));
+    Layout.Output.Paper := Paper;
+    Layout.PlaceNewPieces;
+    Layout.UseDefaultTitle;
+    Refusal := Layout.Refusal;
+    if Refusal <> '' then
+      Exit(TJSONObject.Create(['done', False, 'reason', Refusal]));
+    Warnings := TJSONArray.Create;
+    for Problem in Layout.Problems do
+      if not Problem.Blocking then
+        Warnings.Add(Problem.Text);
+    Result := TJSONObject.Create(['done', True, 'pdf', EncodeStringBase64(LayoutToPDF(Layout)), 'warnings', Warnings]);
+  finally
+    FreeAndNil(Layout);
+  end;
+end;
+
 function TEditorApiServer.DoMaterials: TJSONData;
 var
   Pattern: TPattern;
@@ -2369,6 +2465,8 @@ begin
     'editor_suggest': Result := DoSuggest(Params);
     'editor_suggest_preview': Result := DoSuggestPreview(Params);
     'editor_note_preview': Result := DoNotePreview(Params);
+    'editor_export_draft': Result := DoExportDraft(Params);
+    'editor_print': Result := DoPrint(Params);
     'editor_materials': Result := DoMaterials;
     'editor_material': Result := DoMaterial(Params);
     'editor_material_set': Result := DoMaterialSet(Params);

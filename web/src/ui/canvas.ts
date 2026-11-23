@@ -410,6 +410,11 @@ export class PatternCanvas implements CanvasToolHost {
     this.events.failed(error);
   }
 
+  // The objects labelled now, as Export Draft SVG writes them
+  get shownLabels(): readonly string[] {
+    return this.labelIds;
+  }
+
   get labels(): LabelMode {
     return this.labelMode;
   }

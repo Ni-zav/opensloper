@@ -71,6 +71,8 @@ export const STRINGS = {
   tabObjects: 'Objects',
   tabVariables: 'Variables',
   tabMeasurements: 'Measurements',
+  tabFeatures: 'Features',
+  featuresApply: 'Apply',
   listSearch: 'Search',
   objectsFilter: 'Which objects',
   objectsAll: 'All objects',

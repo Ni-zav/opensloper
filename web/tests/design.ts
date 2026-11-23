@@ -502,6 +502,38 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok((await inkedPixels(page)) > unlabelled + MIN_INKED_PIXELS, 'labels drawn');
 
+  // The Features tab: a double hem along the back's bottom edge, chosen in the Objects tab, then undone
+  const undoBefore = await bodyData(page, 'undo');
+  await page.click('.side-column [data-tab="objects"]');
+  const search = '.list-panel:not([hidden]) input[type=search]';
+  await page.click(search, { count: 3 });
+  await page.type(search, 'Line_C_J');
+  await page.waitForSelector('.list-panel:not([hidden]) tbody tr', { timeout: TIMEOUT_MS });
+  await page.click('.list-panel:not([hidden]) tbody tr');
+  await page.waitForFunction(() => document.body.dataset.selection !== '', { timeout: TIMEOUT_MS });
+  await page.click('.side-column [data-tab="features"]');
+  await page.waitForSelector('.feature-kinds option', { timeout: TIMEOUT_MS });
+  await page.select('.feature-kinds', 'hem');
+  await page.waitForFunction(() => document.querySelector('.feature-header')?.textContent === 'Along Line_C_J', {
+    timeout: TIMEOUT_MS,
+  });
+  assert.ok(await isDisabled(page, '#feature-turnUnder'), 'no turn under for a single hem');
+  await page.select('#feature-style', '1');
+  await page.waitForFunction(
+    () => {
+      const turnUnder = document.querySelector('#feature-turnUnder');
+      return turnUnder instanceof HTMLInputElement && !turnUnder.disabled;
+    },
+    { timeout: TIMEOUT_MS },
+  );
+  await page.click('.feature-apply');
+  await waitForData(page, 'undo', 'Insert Hem');
+  assert.equal(await status(page), 'Hem added along Line_C_J', 'said so');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', undoBefore);
+
   // Every example listed is on the site, and one opens with the measurement file it names beside it
   const examples = await page.$$eval('#examples option', (options) =>
     options.map((option) => option.value).filter((value) => value !== ''),
@@ -535,7 +567,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; added a hem from the Features tab; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),
   );

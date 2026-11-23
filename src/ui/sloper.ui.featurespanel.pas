@@ -18,8 +18,10 @@
 
 // The Features tab: sewing details to apply to the pattern in one step: a
 // zip along the selected edge of a piece, a dart in it, a hem or a facing
-// along the selected edges, or buttons down a front. Apply adds
-// ordinary objects, as one undo step (Sloper.Core.Features).
+// along the selected edges, or buttons down a front. Each feature's fields,
+// their captions and starting values, and Apply come from
+// Sloper.Editor.FeatureForms, which the web editor uses too; this panel only
+// builds the controls. Apply adds ordinary objects, as one undo step.
 unit Sloper.UI.FeaturesPanel;
 
 {$mode ObjFPC}{$H+}
@@ -27,92 +29,50 @@ unit Sloper.UI.FeaturesPanel;
 interface
 
 uses
-  Classes, SysUtils, Controls, StdCtrls, ExtCtrls, Sloper.Document.PatternDocument, Sloper.Core.Features;
+  Classes, SysUtils, Controls, StdCtrls, ExtCtrls, Sloper.Document.PatternDocument, Sloper.Editor.FeatureForms;
 
 type
   TFeaturesMessageEvent = procedure(Sender: TObject; const AText: string) of object;
+
+  // A field's control, with the caption above it, if it has one
+  TFeatureControl = record
+    Id: string;
+    Kind: TFeatureFieldKind;
+    Caption: TLabel;
+    Control: TControl;
+  end;
+
+  TFeatureGroup = record
+    Group: TGroupBox;
+    Header: TLabel;
+    Controls: array of TFeatureControl;
+    Apply: TButton;
+    // The values when last shown, for a change to know what a field held before
+    Shown: TFeatureValues;
+  end;
 
   TFeaturesPanel = class(TPanel)
   private
     FDocument: TPatternDocument;
     // The pattern the fields' starting values were set for
     FGeneration: integer;
-    // The one edge and the one point selected, if any
-    FEdgeKey, FPointKey: string;
-    // Every edge selected, when nothing else is
-    FEdgeKeys: TStringArray;
+    // The canvas's selection
+    FKeys: TStringArray;
     FKinds: TListBox;
-    // The group the next control goes in, and how far down it
-    FGroup: TGroupBox;
-    FNextTop: integer;
-    FZipGroup: TGroupBox;
-    FEdgeLabel, FLengthLabel, FAllowanceLabel, FStitchLabel, FShieldLabel: TLabel;
-    FStyleBox, FFromBox: TComboBox;
-    FLengthEdit, FAllowanceEdit, FStitchEdit, FShieldEdit: TEdit;
-    FApply: TButton;
-    FDartGroup: TGroupBox;
-    FDartEdgeLabel, FDartPositionLabel, FDartWidthLabel, FDartDepthLabel, FDartHoleLabel: TLabel;
-    FDartFromBox, FDartFoldBox: TComboBox;
-    FDartPositionEdit, FDartWidthEdit, FDartDepthEdit, FDartHoleEdit: TEdit;
-    FDartApply: TButton;
-    FHemGroup: TGroupBox;
-    FHemEdgeLabel, FHemDepthLabel, FHemTurnLabel, FHemStitchLabel: TLabel;
-    FHemStyleBox: TComboBox;
-    FHemDepthEdit, FHemTurnEdit, FHemStitchEdit: TEdit;
-    FHemNotchBox: TCheckBox;
-    FHemApply: TButton;
-    FFacingGroup: TGroupBox;
-    FFacingEdgeLabel, FFacingWidthLabel: TLabel;
-    FFacingWidthEdit: TEdit;
-    FFacingPlaceBox, FFacingMaterialBox: TComboBox;
-    FFacingInterfacingBox: TCheckBox;
-    FFacingApply: TButton;
-    FButtonsGroup: TGroupBox;
-    FButtonsEdgeLabel, FButtonSizeLabel, FButtonThicknessLabel, FButtonFirstLabel, FButtonLastLabel: TLabel;
-    FButtonSizeEdit, FButtonThicknessEdit, FButtonCountEdit, FButtonFirstEdit, FButtonLastEdit, FButtonExtensionEdit: TEdit;
-    FButtonDirectionBox: TComboBox;
-    FButtonExtensionBox: TCheckBox;
-    FButtonsApply: TButton;
-    // The depth the topstitching's distance was last worked out from
-    FHemDepth: string;
+    FGroups: array[TFeatureKind] of TFeatureGroup;
+    // The panel is setting the controls, so their changes are not the user's
+    FUpdating: boolean;
     FOnMessage: TFeaturesMessageEvent;
     procedure SetDocument(ADocument: TPatternDocument);
     procedure DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
-    function AddGroup(const ACaption: string): TGroupBox;
-    function AddLabel(const ACaption: string): TLabel;
-    function AddEdit: TEdit;
-    function AddChoices: TComboBox;
-    function AddApply(Below: TControl; OnApply: TNotifyEvent): TButton;
-    procedure AddNote(Below: TControl; const ACaption: string);
-    procedure Place(Control: TControl);
-    procedure BuildZip;
-    procedure BuildDart;
-    procedure BuildHem;
-    procedure BuildFacing;
-    procedure RefreshFacing;
-    procedure FacingInterfacingClick(Sender: TObject);
-    procedure FacingApplyClick(Sender: TObject);
-    procedure BuildButtons;
-    procedure RefreshButtons;
-    procedure ButtonExtensionClick(Sender: TObject);
-    procedure ButtonsApplyClick(Sender: TObject);
-    procedure HemStartingValues;
-    procedure RefreshHem;
-    function EdgeNames: string;
-    procedure HemStyleChange(Sender: TObject);
-    procedure HemDepthChange(Sender: TObject);
-    procedure HemApplyClick(Sender: TObject);
-    procedure StartingValues;
+    procedure Build(Kind: TFeatureKind; const Form: TFeatureForm);
+    function ValuesOf(Kind: TFeatureKind): TFeatureValues;
+    procedure SetValues(Kind: TFeatureKind; const Values: TFeatureValues);
     procedure Refresh;
-    procedure RefreshZip(Edge: TObject);
-    procedure RefreshDart(Edge: TObject);
+    procedure RefreshKind(Kind: TFeatureKind);
     procedure KindClick(Sender: TObject);
-    procedure StyleChange(Sender: TObject);
-    // The style's own captions and which fields it takes
-    procedure ShowStyle;
+    procedure FieldChange(Sender: TObject);
     procedure ApplyClick(Sender: TObject);
-    procedure DartApplyClick(Sender: TObject);
-    procedure Say(const AText: string);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -124,108 +84,23 @@ type
   end;
 
 resourcestring
-  rsFeaturesStyle = 'Style';
-  rsFeaturesCentred = 'Centred, topstitched either side';
-  rsFeaturesInvisible = 'Invisible, nothing showing';
-  rsFeaturesLapped = 'Lapped, one side over the zip';
-  rsFeaturesFlyFront = 'Fly front, with a fly shield';
-  rsFeaturesExtension = 'Fly extension past the seam (%s)';
-  rsFeaturesLap = 'Lap stitching from the seam (%s)';
-  rsFeaturesFly = 'Fly stitching from the seam (%s)';
-  rsFeaturesShield = 'Fly shield width (%s)';
-  rsFeaturesZipShield = '%s, with a fly shield beside the pattern';
-  rsFeaturesLength = 'Length (%s)';
-  rsFeaturesFrom = 'Starts from';
-  rsFeaturesFromPoint = 'The %s end';
-  rsFeaturesAllowance = 'Allowance along the zip (%s)';
-  rsFeaturesStitch = 'Topstitching from the seam (%s)';
   rsFeaturesApply = '&Apply';
-  rsFeaturesAlong = 'Along %s';
-  rsFeaturesChooseEdge = 'Select an edge of a piece on the canvas.';
-  rsFeaturesZipNote = 'Apply splits the edge where the zip stops, gives the opening its allowance, notches the stop, ' +
-    'adds the style''s topstitching and, for a fly front, a fly shield piece. They are ordinary objects, to change as you ' +
-    'like; one Undo takes them all off.';
-  rsFeaturesUndoZip = 'Insert Zip';
-  rsFeaturesZipDone = 'Zip added along %s';
-  rsFeaturesZipOtherSide = '%s; its seam joins another edge, which needs a zip too';
-  rsFeaturesDartIn = 'In %s';
-  rsFeaturesDartChoose = 'Select an edge of a piece on the canvas, and a point for the dart to run to if you like.';
-  rsFeaturesDartPosition = 'Middle from the end below (%s), blank for halfway';
-  rsFeaturesDartWidth = 'Width at the edge (%s)';
-  rsFeaturesDartDepth = 'Depth into the piece (%s)';
-  rsFeaturesDartToPoint = 'Runs to %s, the point selected';
-  rsFeaturesDartHole = 'Hole back from the point (%s), blank for none';
-  rsFeaturesDartFold = 'Pressed towards';
-  rsFeaturesDartNote = 'Apply adds the dart''s middle, legs and point, takes the edge between the legs out of the ' +
-    'outline, closes the dart with a seam, notches the legs, marks a hole near the point and the centre line as a fold, ' +
-    'and shapes the seam allowance across the dart as it lies pressed. They are ordinary objects, to change as you like; ' +
-    'one Undo takes them all off.';
-  rsFeaturesUndoDart = 'Insert Dart';
-  rsFeaturesDartDone = 'Dart added in %s';
-  rsFeaturesHemChoose = 'Select the edges to hem on the canvas: one or more on each piece, running end to end.';
-  rsFeaturesHemSingle = 'Single, turned once';
-  rsFeaturesHemDouble = 'Double, turned twice';
-  rsFeaturesHemNarrow = 'Narrow, a small double hem';
-  rsFeaturesHemBlind = 'Blind, no topstitching';
-  rsFeaturesHemDepth = 'Depth, turned up (%s)';
-  rsFeaturesHemTurnUnder = 'Turned under besides (%s)';
-  rsFeaturesHemStitch = 'Topstitching from the fold (%s)';
-  rsFeaturesHemNotches = 'Notch where it turns up';
-  rsFeaturesHemNote = 'Apply gives the edges the hem''s allowance, shapes its ends to lie along the edges beside it ' +
-    'when turned up, adds the topstitching and notches the edges beside it. They are ordinary objects, to change as you ' +
-    'like; one Undo takes them all off.';
-  rsFeaturesUndoHem = 'Insert Hem';
-  rsFeaturesHemDone = 'Hem added along %s';
-  rsFeaturesHemProblem = '%s; %s';
-  rsFeaturesFacingChoose = 'Select the edges to face on the canvas, such as a neckline: one or more on each piece, ' +
-    'running end to end.';
-  rsFeaturesFacingWidth = 'Width (%s)';
-  rsFeaturesFacingPlace = 'Placement';
-  rsFeaturesFacingInPlace = 'In place, over the piece';
-  rsFeaturesFacingAside = 'Moved aside, beside the piece';
-  rsFeaturesFacingInterfacing = 'Interfacing, cut from';
-  rsFeaturesFacingMaterial = 'Interfacing';
-  rsFeaturesFacingNote = 'Apply adds the facing''s inner edge, splits the edges either side where it meets them, and ' +
-    'adds the facing piece, cut as the piece is, seamed to it and to the facing beside it, with an interfacing if you ' +
-    'like. They are ordinary objects, to change as you like; one Undo takes them all off.';
-  rsFeaturesUndoFacing = 'Insert Facing';
-  rsFeaturesFacingDone = 'Facing added along %s';
-  rsFeaturesButtonsChoose = 'Select the opening''s edge on the canvas, such as a centre front, and the other front''s ' +
-    'edge too if the fronts are separate pieces.';
-  rsFeaturesButtonsHoles = 'Buttonholes along %s';
-  rsFeaturesButtonsBoth = 'Buttonholes along %s, buttons along %s';
-  rsFeaturesButtonSize = 'Button size (%s)';
-  rsFeaturesButtonThickness = 'Button thickness (%s)';
-  rsFeaturesButtonCount = 'How many';
-  rsFeaturesButtonFirst = 'First from the %s end (%s)';
-  rsFeaturesButtonLast = 'Last from the %s end (%s)';
-  rsFeaturesButtonStart = 'start';
-  rsFeaturesButtonEnd = 'end';
-  rsFeaturesButtonDirection = 'Buttonholes';
-  rsFeaturesButtonHorizontal = 'Horizontal, square to the edge';
-  rsFeaturesButtonVertical = 'Vertical, along the edge';
-  rsFeaturesButtonExtension = 'Add an extension this wide';
-  rsFeaturesButtonsNote = 'Apply adds the first and last buttons'' points, a repeat of buttonholes and one of buttons ' +
-    'between them, and an extension past the edge if you like, the edge staying as a placement line. They are ordinary ' +
-    'objects: change #button_count and the buttons follow. One Undo takes them all off.';
-  rsFeaturesUndoButtons = 'Insert Buttons';
-  rsFeaturesButtonsDone = 'Buttons added along %s';
 
 implementation
 
 uses
-  Graphics, Math, Sloper.Core.Draft, Sloper.Core.Units, Sloper.UI.Spacing;
+  Graphics, Math, Sloper.Core.Pattern, Sloper.UI.Spacing;
 
 const
   // The list of features, about four rows, at 96 pixels per inch
   KIND_LIST_HEIGHT96 = 90;
-  KIND_ZIP = 0;
-  KIND_DART = 1;
-  KIND_HEM = 2;
-  KIND_FACING = 3;
-  KIND_BUTTONS = 4;
+  // A control's Tag: its feature times this, plus its place in the group
+  TAG_KIND = 1000;
 
 constructor TFeaturesPanel.Create(AOwner: TComponent);
+var
+  Kind: TFeatureKind;
+  Pattern: TPattern;
 begin
   inherited Create(AOwner);
   BevelOuter := bvNone;
@@ -235,19 +110,21 @@ begin
   FKinds := TListBox.Create(Self);
   FKinds.Parent := Self;
   FKinds.Align := alTop;
-  FKinds.Items.Add(rsFeatureZip);
-  FKinds.Items.Add(rsFeatureDart);
-  FKinds.Items.Add(rsFeatureHem);
-  FKinds.Items.Add(rsFeatureFacing);
-  FKinds.Items.Add(rsFeatureButtons);
-  FKinds.ItemIndex := KIND_ZIP;
   FKinds.Height := Scale96ToScreen(KIND_LIST_HEIGHT96);
   FKinds.OnClick := @KindClick;
-  BuildZip;
-  BuildDart;
-  BuildHem;
-  BuildFacing;
-  BuildButtons;
+  // A feature's fields are the same for any pattern, so an empty one lays them out
+  Pattern := TPattern.Create;
+  try
+    for Kind in TFeatureKind do
+    begin
+      FKinds.Items.Add(FeatureCaption(Kind));
+      Build(Kind, FeatureForm(Pattern, Kind, Default(TFeatureSelection), FeatureStartingValues(Pattern, Kind, nil)));
+      SetValues(Kind, FeatureStartingValues(Pattern, Kind, nil));
+    end;
+  finally
+    FreeAndNil(Pattern);
+  end;
+  FKinds.ItemIndex := Ord(fkZip);
   KindClick(nil);
 end;
 
@@ -257,224 +134,170 @@ begin
   inherited Destroy;
 end;
 
-function TFeaturesPanel.AddGroup(const ACaption: string): TGroupBox;
-begin
-  Result := TGroupBox.Create(Self);
-  Result.Parent := Self;
-  Result.Align := alClient;
-  Result.Caption := ACaption;
-  SpaceChildren(Result);
-  FGroup := Result;
-  FNextTop := 0;
-end;
-
-// A caption over the field after it, both down the group in order
-function TFeaturesPanel.AddLabel(const ACaption: string): TLabel;
-begin
-  Result := TLabel.Create(Self);
-  Result.Caption := ACaption;
-  Place(Result);
-end;
-
-function TFeaturesPanel.AddEdit: TEdit;
-begin
-  Result := TEdit.Create(Self);
-  Place(Result);
-end;
-
-function TFeaturesPanel.AddChoices: TComboBox;
-begin
-  Result := TComboBox.Create(Self);
-  Result.Style := csDropDownList;
-  Place(Result);
-end;
-
-function TFeaturesPanel.AddApply(Below: TControl; OnApply: TNotifyEvent): TButton;
-begin
-  Result := TButton.Create(Self);
-  Result.Caption := rsFeaturesApply;
-  Result.AutoSize := True;
-  Result.OnClick := OnApply;
-  Place(Result);
-  Result.Align := alNone;
-  Result.Anchors := [akLeft, akTop];
-  Result.AnchorSide[akTop].Control := Below;
-  Result.AnchorSide[akTop].Side := asrBottom;
-  Result.BorderSpacing.Top := ControlGap;
-end;
-
-procedure TFeaturesPanel.AddNote(Below: TControl; const ACaption: string);
+// The fields down the group in order, each caption over its field, then
+// Apply and the note saying what it adds
+procedure TFeaturesPanel.Build(Kind: TFeatureKind; const Form: TFeatureForm);
 var
+  Group: TGroupBox;
+  Next: integer;
+  Index: integer;
+  Field: TFeatureField;
+  Item: TFeatureControl;
+  Edit: TEdit;
+  Box: TComboBox;
+  Check: TCheckBox;
   Note: TLabel;
+
+  procedure Place(Control: TControl);
+  begin
+    Control.Parent := Group;
+    Control.Align := alTop;
+    // Each below the one before
+    Inc(Next, Control.Height + 1);
+    Control.Top := Next;
+  end;
+
 begin
+  Group := TGroupBox.Create(Self);
+  Group.Parent := Self;
+  Group.Align := alClient;
+  Group.Caption := FeatureCaption(Kind);
+  SpaceChildren(Group);
+  Next := 0;
+  FGroups[Kind].Group := Group;
+  FGroups[Kind].Header := TLabel.Create(Self);
+  FGroups[Kind].Header.Font.Style := [fsBold];
+  FGroups[Kind].Header.WordWrap := True;
+  Place(FGroups[Kind].Header);
+  FGroups[Kind].Controls := nil;
+  for Index := 0 to High(Form.Fields) do
+  begin
+    Field := Form.Fields[Index];
+    Item := Default(TFeatureControl);
+    Item.Id := Field.Id;
+    Item.Kind := Field.Kind;
+    if (Field.Kind <> ffkCheck) and (Field.Caption <> '') then
+    begin
+      Item.Caption := TLabel.Create(Self);
+      Place(Item.Caption);
+    end;
+    case Field.Kind of
+      ffkText:
+      begin
+        Edit := TEdit.Create(Self);
+        Edit.OnChange := @FieldChange;
+        Item.Control := Edit;
+      end;
+      ffkChoice, ffkCombo:
+      begin
+        Box := TComboBox.Create(Self);
+        if Field.Kind = ffkChoice then
+          Box.Style := csDropDownList
+        else
+          Box.Style := csDropDown;
+        Box.OnChange := @FieldChange;
+        Item.Control := Box;
+      end;
+      ffkCheck:
+      begin
+        Check := TCheckBox.Create(Self);
+        Check.OnClick := @FieldChange;
+        Item.Control := Check;
+      end;
+    end;
+    Item.Control.Tag := Ord(Kind) * TAG_KIND + Index;
+    Place(Item.Control);
+    Insert(Item, FGroups[Kind].Controls, Length(FGroups[Kind].Controls));
+  end;
+  FGroups[Kind].Apply := TButton.Create(Self);
+  FGroups[Kind].Apply.Caption := rsFeaturesApply;
+  FGroups[Kind].Apply.AutoSize := True;
+  FGroups[Kind].Apply.Tag := Ord(Kind) * TAG_KIND;
+  FGroups[Kind].Apply.OnClick := @ApplyClick;
+  Place(FGroups[Kind].Apply);
+  FGroups[Kind].Apply.Align := alNone;
+  FGroups[Kind].Apply.Anchors := [akLeft, akTop];
+  FGroups[Kind].Apply.AnchorSide[akTop].Control := FGroups[Kind].Controls[High(FGroups[Kind].Controls)].Control;
+  FGroups[Kind].Apply.AnchorSide[akTop].Side := asrBottom;
+  FGroups[Kind].Apply.BorderSpacing.Top := ControlGap;
   Note := TLabel.Create(Self);
-  Note.Parent := FGroup;
+  Note.Parent := Group;
   Note.WordWrap := True;
   Note.AutoSize := True;
-  Note.Caption := ACaption;
+  Note.Caption := Form.Note;
   Note.Anchors := [akLeft, akRight, akTop];
-  Note.AnchorSide[akLeft].Control := FGroup;
-  Note.AnchorSide[akRight].Control := FGroup;
+  Note.AnchorSide[akLeft].Control := Group;
+  Note.AnchorSide[akRight].Control := Group;
   Note.AnchorSide[akRight].Side := asrBottom;
-  Note.AnchorSide[akTop].Control := Below;
+  Note.AnchorSide[akTop].Control := FGroups[Kind].Apply;
   Note.AnchorSide[akTop].Side := asrBottom;
   Note.BorderSpacing.Top := ControlGap;
 end;
 
-procedure TFeaturesPanel.Place(Control: TControl);
+function SameItems(Items: TStrings; const Choices: TStringArray): boolean;
+var
+  Index: integer;
 begin
-  Control.Parent := FGroup;
-  Control.Align := alTop;
-  // Each below the one before
-  Inc(FNextTop, Control.Height + 1);
-  Control.Top := FNextTop;
+  Result := Items.Count = Length(Choices);
+  for Index := 0 to High(Choices) do
+    if Result and (Items[Index] <> Choices[Index]) then
+      Result := False;
 end;
 
-procedure TFeaturesPanel.BuildZip;
+function TFeaturesPanel.ValuesOf(Kind: TFeatureKind): TFeatureValues;
+var
+  Item: TFeatureControl;
+  Value: string;
 begin
-  FZipGroup := AddGroup(rsFeatureZip);
-  FEdgeLabel := AddLabel('');
-  FEdgeLabel.Font.Style := [fsBold];
-  AddLabel(rsFeaturesStyle);
-  FStyleBox := AddChoices;
-  FStyleBox.Items.Add(rsFeaturesCentred);
-  FStyleBox.Items.Add(rsFeaturesInvisible);
-  FStyleBox.Items.Add(rsFeaturesLapped);
-  FStyleBox.Items.Add(rsFeaturesFlyFront);
-  FStyleBox.ItemIndex := 0;
-  FStyleBox.OnChange := @StyleChange;
-  FLengthLabel := AddLabel('');
-  FLengthEdit := AddEdit;
-  AddLabel(rsFeaturesFrom);
-  FFromBox := AddChoices;
-  FAllowanceLabel := AddLabel('');
-  FAllowanceEdit := AddEdit;
-  FStitchLabel := AddLabel('');
-  FStitchEdit := AddEdit;
-  FShieldLabel := AddLabel('');
-  FShieldEdit := AddEdit;
-  FApply := AddApply(FShieldEdit, @ApplyClick);
-  AddNote(FApply, rsFeaturesZipNote);
+  Result := nil;
+  for Item in FGroups[Kind].Controls do
+  begin
+    case Item.Kind of
+      ffkChoice: Value := IntToStr(TComboBox(Item.Control).ItemIndex);
+      ffkCheck:
+        if TCheckBox(Item.Control).Checked then
+          Value := FEATURE_CHECKED
+        else
+          Value := FEATURE_UNCHECKED;
+      ffkCombo: Value := TComboBox(Item.Control).Text;
+      else
+        Value := TEdit(Item.Control).Text;
+    end;
+    SetFeatureValue(Result, Item.Id, Value);
+  end;
 end;
 
-procedure TFeaturesPanel.BuildDart;
+procedure TFeaturesPanel.SetValues(Kind: TFeatureKind; const Values: TFeatureValues);
+var
+  Item: TFeatureControl;
+  Value: string;
 begin
-  FDartGroup := AddGroup(rsFeatureDart);
-  FDartEdgeLabel := AddLabel('');
-  FDartEdgeLabel.Font.Style := [fsBold];
-  FDartEdgeLabel.WordWrap := True;
-  FDartPositionLabel := AddLabel('');
-  FDartPositionEdit := AddEdit;
-  AddLabel(rsFeaturesFrom);
-  FDartFromBox := AddChoices;
-  FDartWidthLabel := AddLabel('');
-  FDartWidthEdit := AddEdit;
-  FDartDepthLabel := AddLabel('');
-  FDartDepthEdit := AddEdit;
-  FDartHoleLabel := AddLabel('');
-  FDartHoleEdit := AddEdit;
-  AddLabel(rsFeaturesDartFold);
-  FDartFoldBox := AddChoices;
-  FDartApply := AddApply(FDartFoldBox, @DartApplyClick);
-  AddNote(FDartApply, rsFeaturesDartNote);
-end;
-
-procedure TFeaturesPanel.BuildHem;
-begin
-  FHemGroup := AddGroup(rsFeatureHem);
-  FHemEdgeLabel := AddLabel('');
-  FHemEdgeLabel.Font.Style := [fsBold];
-  FHemEdgeLabel.WordWrap := True;
-  AddLabel(rsFeaturesStyle);
-  FHemStyleBox := AddChoices;
-  // In the order of THemStyle
-  FHemStyleBox.Items.Add(rsFeaturesHemSingle);
-  FHemStyleBox.Items.Add(rsFeaturesHemDouble);
-  FHemStyleBox.Items.Add(rsFeaturesHemNarrow);
-  FHemStyleBox.Items.Add(rsFeaturesHemBlind);
-  FHemStyleBox.ItemIndex := 0;
-  FHemStyleBox.OnChange := @HemStyleChange;
-  FHemDepthLabel := AddLabel('');
-  FHemDepthEdit := AddEdit;
-  FHemDepthEdit.OnChange := @HemDepthChange;
-  FHemTurnLabel := AddLabel('');
-  FHemTurnEdit := AddEdit;
-  FHemStitchLabel := AddLabel('');
-  FHemStitchEdit := AddEdit;
-  FHemNotchBox := TCheckBox.Create(Self);
-  FHemNotchBox.Caption := rsFeaturesHemNotches;
-  FHemNotchBox.Checked := True;
-  Place(FHemNotchBox);
-  FHemApply := AddApply(FHemNotchBox, @HemApplyClick);
-  AddNote(FHemApply, rsFeaturesHemNote);
-end;
-
-procedure TFeaturesPanel.BuildFacing;
-begin
-  FFacingGroup := AddGroup(rsFeatureFacing);
-  FFacingEdgeLabel := AddLabel('');
-  FFacingEdgeLabel.Font.Style := [fsBold];
-  FFacingEdgeLabel.WordWrap := True;
-  FFacingWidthLabel := AddLabel('');
-  FFacingWidthEdit := AddEdit;
-  AddLabel(rsFeaturesFacingPlace);
-  FFacingPlaceBox := AddChoices;
-  FFacingPlaceBox.Items.Add(rsFeaturesFacingInPlace);
-  FFacingPlaceBox.Items.Add(rsFeaturesFacingAside);
-  FFacingPlaceBox.ItemIndex := 0;
-  FFacingInterfacingBox := TCheckBox.Create(Self);
-  FFacingInterfacingBox.Caption := rsFeaturesFacingInterfacing;
-  FFacingInterfacingBox.OnClick := @FacingInterfacingClick;
-  Place(FFacingInterfacingBox);
-  // A material of the pattern, or a new one's name typed in
-  FFacingMaterialBox := TComboBox.Create(Self);
-  FFacingMaterialBox.Style := csDropDown;
-  Place(FFacingMaterialBox);
-  FFacingMaterialBox.Text := rsFeaturesFacingMaterial;
-  FFacingMaterialBox.Enabled := False;
-  FFacingApply := AddApply(FFacingMaterialBox, @FacingApplyClick);
-  AddNote(FFacingApply, rsFeaturesFacingNote);
-end;
-
-procedure TFeaturesPanel.BuildButtons;
-begin
-  FButtonsGroup := AddGroup(rsFeatureButtons);
-  FButtonsEdgeLabel := AddLabel('');
-  FButtonsEdgeLabel.Font.Style := [fsBold];
-  FButtonsEdgeLabel.WordWrap := True;
-  FButtonSizeLabel := AddLabel('');
-  FButtonSizeEdit := AddEdit;
-  FButtonThicknessLabel := AddLabel('');
-  FButtonThicknessEdit := AddEdit;
-  AddLabel(rsFeaturesButtonCount);
-  FButtonCountEdit := AddEdit;
-  FButtonFirstLabel := AddLabel('');
-  FButtonFirstEdit := AddEdit;
-  FButtonLastLabel := AddLabel('');
-  FButtonLastEdit := AddEdit;
-  AddLabel(rsFeaturesButtonDirection);
-  FButtonDirectionBox := AddChoices;
-  // In the order of TButtonDirection
-  FButtonDirectionBox.Items.Add(rsFeaturesButtonHorizontal);
-  FButtonDirectionBox.Items.Add(rsFeaturesButtonVertical);
-  FButtonDirectionBox.ItemIndex := 0;
-  FButtonExtensionBox := TCheckBox.Create(Self);
-  FButtonExtensionBox.Caption := rsFeaturesButtonExtension;
-  FButtonExtensionBox.OnClick := @ButtonExtensionClick;
-  Place(FButtonExtensionBox);
-  FButtonExtensionEdit := AddEdit;
-  FButtonExtensionEdit.Enabled := False;
-  FButtonsApply := AddApply(FButtonExtensionEdit, @ButtonsApplyClick);
-  AddNote(FButtonsApply, rsFeaturesButtonsNote);
+  FUpdating := True;
+  try
+    for Item in FGroups[Kind].Controls do
+    begin
+      Value := FeatureValue(Values, Item.Id, #0);
+      if Value = #0 then
+        Continue;
+      case Item.Kind of
+        ffkChoice: TComboBox(Item.Control).ItemIndex := StrToIntDef(Value, 0);
+        ffkCheck: TCheckBox(Item.Control).Checked := Value = FEATURE_CHECKED;
+        ffkCombo: TComboBox(Item.Control).Text := Value;
+        else
+          TEdit(Item.Control).Text := Value;
+      end;
+    end;
+  finally
+    FUpdating := False;
+  end;
 end;
 
 procedure TFeaturesPanel.KindClick(Sender: TObject);
+var
+  Kind: TFeatureKind;
 begin
-  FZipGroup.Visible := FKinds.ItemIndex = KIND_ZIP;
-  FDartGroup.Visible := FKinds.ItemIndex = KIND_DART;
-  FHemGroup.Visible := FKinds.ItemIndex = KIND_HEM;
-  FFacingGroup.Visible := FKinds.ItemIndex = KIND_FACING;
-  FButtonsGroup.Visible := FKinds.ItemIndex = KIND_BUTTONS;
+  for Kind in TFeatureKind do
+    FGroups[Kind].Group.Visible := FKinds.ItemIndex = Ord(Kind);
 end;
 
 procedure TFeaturesPanel.SetDocument(ADocument: TPatternDocument);
@@ -493,506 +316,110 @@ begin
 end;
 
 procedure TFeaturesPanel.ShowSelection(const Keys: TStringArray);
-var
-  Key: string;
-  Node: TObject;
-  Edges, Points: integer;
 begin
-  FEdgeKey := '';
-  FPointKey := '';
-  FEdgeKeys := nil;
-  Edges := 0;
-  Points := 0;
-  if Assigned(FDocument) then
-    for Key in Keys do
-    begin
-      Node := FDocument.Pattern.FindNode(Key);
-      if Node is TEdgeObject then
-      begin
-        FEdgeKey := Key;
-        Insert(Key, FEdgeKeys, Length(FEdgeKeys));
-        Inc(Edges);
-      end
-      else if Node is TPointObject then
-      begin
-        FPointKey := Key;
-        Inc(Points);
-      end;
-    end;
-  if Edges <> Length(Keys) then
-    FEdgeKeys := nil;
-  // One of each at most, and nothing else
-  if (Edges <> 1) or (Points > 1) or (Edges + Points <> Length(Keys)) then
-  begin
-    FEdgeKey := '';
-    FPointKey := '';
-  end;
+  FKeys := Copy(Keys);
   Refresh;
 end;
 
-// A new or opened pattern, or another unit, starts the fields again, at the
-// chosen style's widths
-procedure TFeaturesPanel.StartingValues;
-var
-  Spec: TZipSpec;
-  Dart: TDartSpec;
-  Buttons: TButtonsSpec;
-begin
-  Spec := DefaultZip(FDocument.Pattern, '', TZipStyle(Max(FStyleBox.ItemIndex, 0)));
-  FLengthEdit.Text := Spec.Length;
-  FAllowanceEdit.Text := Spec.Allowance;
-  FStitchEdit.Text := Spec.StitchDistance;
-  FShieldEdit.Text := Spec.ShieldWidth;
-  Dart := DefaultDart(FDocument.Pattern, '');
-  FDartPositionEdit.Text := Dart.Position;
-  FDartWidthEdit.Text := Dart.Width;
-  FDartDepthEdit.Text := Dart.Depth;
-  FDartHoleEdit.Text := Dart.HoleInset;
-  HemStartingValues;
-  FFacingWidthEdit.Text := DefaultFacing(FDocument.Pattern, []).Width;
-  Buttons := DefaultButtons(FDocument.Pattern, '');
-  FButtonSizeEdit.Text := Buttons.Size;
-  FButtonThicknessEdit.Text := Buttons.Thickness;
-  FButtonCountEdit.Text := Buttons.Count;
-  FButtonFirstEdit.Text := Buttons.First;
-  FButtonLastEdit.Text := Buttons.Last;
-  FButtonExtensionEdit.Text := Buttons.Size;
-  FGeneration := FDocument.Generation;
-  ShowStyle;
-end;
-
-// The hem's fields at the chosen style's starting widths
-procedure TFeaturesPanel.HemStartingValues;
-var
-  Hem: THemSpec;
-begin
-  Hem := DefaultHem(FDocument.Pattern, [], THemStyle(Max(FHemStyleBox.ItemIndex, 0)));
-  FHemDepth := Hem.Depth;
-  FHemDepthEdit.Text := Hem.Depth;
-  FHemTurnEdit.Text := Hem.TurnUnder;
-  FHemStitchEdit.Text := Hem.StitchDistance;
-end;
-
-procedure TFeaturesPanel.ShowStyle;
-var
-  UnitText: string;
-  Style: TZipStyle;
-begin
-  Style := TZipStyle(Max(FStyleBox.ItemIndex, 0));
-  UnitText := MEASURE_UNIT_NAMES[muMillimetre];
-  if Assigned(FDocument) then
-    UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
-  FLengthLabel.Caption := Format(rsFeaturesLength, [UnitText]);
-  if Style = zsFlyFront then
-    FAllowanceLabel.Caption := Format(rsFeaturesExtension, [UnitText])
-  else
-    FAllowanceLabel.Caption := Format(rsFeaturesAllowance, [UnitText]);
-  case Style of
-    zsLapped: FStitchLabel.Caption := Format(rsFeaturesLap, [UnitText]);
-    zsFlyFront: FStitchLabel.Caption := Format(rsFeaturesFly, [UnitText]);
-    else
-      FStitchLabel.Caption := Format(rsFeaturesStitch, [UnitText]);
-  end;
-  FShieldLabel.Caption := Format(rsFeaturesShield, [UnitText]);
-  FStitchEdit.Enabled := Style <> zsInvisible;
-  FStitchLabel.Enabled := FStitchEdit.Enabled;
-  FShieldEdit.Enabled := Style = zsFlyFront;
-  FShieldLabel.Enabled := FShieldEdit.Enabled;
-  FDartPositionLabel.Caption := Format(rsFeaturesDartPosition, [UnitText]);
-  FDartWidthLabel.Caption := Format(rsFeaturesDartWidth, [UnitText]);
-  FDartHoleLabel.Caption := Format(rsFeaturesDartHole, [UnitText]);
-  FHemDepthLabel.Caption := Format(rsFeaturesHemDepth, [UnitText]);
-  FHemTurnLabel.Caption := Format(rsFeaturesHemTurnUnder, [UnitText]);
-  FHemStitchLabel.Caption := Format(rsFeaturesHemStitch, [UnitText]);
-  FFacingWidthLabel.Caption := Format(rsFeaturesFacingWidth, [UnitText]);
-  FButtonSizeLabel.Caption := Format(rsFeaturesButtonSize, [UnitText]);
-  FButtonThicknessLabel.Caption := Format(rsFeaturesButtonThickness, [UnitText]);
-  FHemTurnEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) in [hsDouble, hsNarrow];
-  FHemTurnLabel.Enabled := FHemTurnEdit.Enabled;
-  FHemStitchEdit.Enabled := THemStyle(Max(FHemStyleBox.ItemIndex, 0)) <> hsBlind;
-  FHemStitchLabel.Enabled := FHemStitchEdit.Enabled;
-end;
-
-function PointName(Document: TPatternDocument; const Key: string): string;
-var
-  Node: TObject;
-begin
-  Node := Document.Pattern.FindNode(Key);
-  if Node is TDraftObject then
-    Result := TDraftObject(Node).DisplayName
-  else
-    Result := Key;
-end;
-
-// The edge's two ends as choices, keeping the one chosen
-procedure ShowEnds(Box: TComboBox; Document: TPatternDocument; Edge: TEdgeObject; const Caption: string);
-var
-  Index: integer;
-begin
-  Index := Max(Box.ItemIndex, 0);
-  Box.Items.Clear;
-  if not Assigned(Edge) then
-    Exit;
-  Box.Items.Add(Format(Caption, [PointName(Document, Edge.StartKey)]));
-  Box.Items.Add(Format(Caption, [PointName(Document, Edge.EndKey)]));
-  Box.ItemIndex := Index;
-end;
-
+// A new or opened pattern starts the fields again, keeping each style chosen
 procedure TFeaturesPanel.Refresh;
 var
-  Node: TObject;
-  Edge: TEdgeObject;
-begin
-  Edge := nil;
-  if Assigned(FDocument) then
-  begin
-    if FGeneration <> FDocument.Generation then
-      StartingValues;
-    Node := FDocument.Pattern.FindNode(FEdgeKey);
-    if (Node is TEdgeObject) and not TEdgeObject(Node).IsClosed then
-      Edge := TEdgeObject(Node);
-  end;
-  RefreshZip(Edge);
-  RefreshDart(Edge);
-  RefreshHem;
-  RefreshFacing;
-  RefreshButtons;
-end;
-
-// The selected edges' names, in the order selected
-function TFeaturesPanel.EdgeNames: string;
-var
-  Key: string;
-begin
-  Result := '';
-  for Key in FEdgeKeys do
-  begin
-    if Result <> '' then
-      Result := Result + ', ';
-    Result := Result + PointName(FDocument, Key);
-  end;
-end;
-
-procedure TFeaturesPanel.RefreshHem;
-begin
-  FHemApply.Enabled := Assigned(FDocument) and (Length(FEdgeKeys) > 0);
-  if FHemApply.Enabled then
-    FHemEdgeLabel.Caption := Format(rsFeaturesAlong, [EdgeNames])
-  else
-    FHemEdgeLabel.Caption := rsFeaturesHemChoose;
-end;
-
-// The selected edges, and the pattern's materials to cut an interfacing from
-procedure TFeaturesPanel.RefreshFacing;
-var
-  Index: integer;
-  Typed: string;
-begin
-  FFacingApply.Enabled := Assigned(FDocument) and (Length(FEdgeKeys) > 0);
-  if FFacingApply.Enabled then
-    FFacingEdgeLabel.Caption := Format(rsFeaturesAlong, [EdgeNames])
-  else
-    FFacingEdgeLabel.Caption := rsFeaturesFacingChoose;
-  if not Assigned(FDocument) then
-    Exit;
-  Typed := FFacingMaterialBox.Text;
-  FFacingMaterialBox.Items.Clear;
-  for Index := 0 to FDocument.Pattern.MaterialCount - 1 do
-    FFacingMaterialBox.Items.Add(FDocument.Pattern.Materials[Index].Name);
-  FFacingMaterialBox.Text := Typed;
-end;
-
-procedure TFeaturesPanel.FacingInterfacingClick(Sender: TObject);
-begin
-  FFacingMaterialBox.Enabled := FFacingInterfacingBox.Checked;
-end;
-
-// One undo step, or none when the facing cannot go there
-procedure TFeaturesPanel.FacingApplyClick(Sender: TObject);
-var
-  Spec: TFacingSpec;
-  Made: TFacingMade;
-  Done: string;
-begin
-  if not Assigned(FDocument) or FDocument.ChangeOpen then
-    Exit;
-  Spec := DefaultFacing(FDocument.Pattern, FEdgeKeys);
-  Spec.Width := Trim(FFacingWidthEdit.Text);
-  Spec.Aside := FFacingPlaceBox.ItemIndex = 1;
-  if FFacingInterfacingBox.Checked then
-    Spec.Interfacing := Trim(FFacingMaterialBox.Text);
-  Done := Format(rsFeaturesFacingDone, [EdgeNames]);
-  FDocument.BeginChange(rsFeaturesUndoFacing);
-  if not InsertFacing(FDocument.Pattern, Spec, Made) then
-  begin
-    Done := FDocument.Pattern.LastError;
-    FDocument.CancelChange;
-    Say(Done);
-    Exit;
-  end;
-  FDocument.EndChange;
-  if FDocument.ChangeRefused then
-  begin
-    Say(FDocument.Pattern.LastError);
-    Exit;
-  end;
-  Say(Done);
-end;
-
-// One edge for both, or the holes' edge and then the buttons', with the ends
-// the first and last buttons are measured from
-procedure TFeaturesPanel.RefreshButtons;
-var
-  UnitText, StartName, EndName: string;
-  Edge: TEdgeObject;
-begin
-  FButtonsApply.Enabled := Assigned(FDocument) and (Length(FEdgeKeys) in [1, 2]);
-  UnitText := MEASURE_UNIT_NAMES[muMillimetre];
-  StartName := rsFeaturesButtonStart;
-  EndName := rsFeaturesButtonEnd;
-  if Assigned(FDocument) then
-    UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
-  if not FButtonsApply.Enabled then
-    FButtonsEdgeLabel.Caption := rsFeaturesButtonsChoose
-  else
-  begin
-    if Length(FEdgeKeys) = 1 then
-      FButtonsEdgeLabel.Caption := Format(rsFeaturesButtonsHoles, [PointName(FDocument, FEdgeKeys[0])])
-    else
-      FButtonsEdgeLabel.Caption := Format(rsFeaturesButtonsBoth, [PointName(FDocument, FEdgeKeys[0]), PointName(FDocument, FEdgeKeys[1])]);
-    Edge := TEdgeObject(FDocument.Pattern.FindNode(FEdgeKeys[0]));
-    StartName := PointName(FDocument, Edge.StartKey);
-    EndName := PointName(FDocument, Edge.EndKey);
-  end;
-  FButtonFirstLabel.Caption := Format(rsFeaturesButtonFirst, [StartName, UnitText]);
-  FButtonLastLabel.Caption := Format(rsFeaturesButtonLast, [EndName, UnitText]);
-end;
-
-procedure TFeaturesPanel.ButtonExtensionClick(Sender: TObject);
-begin
-  FButtonExtensionEdit.Enabled := FButtonExtensionBox.Checked;
-end;
-
-// One undo step, or none when the buttons cannot go there
-procedure TFeaturesPanel.ButtonsApplyClick(Sender: TObject);
-var
-  Spec: TButtonsSpec;
-  Made: TButtonsMade;
-  Done, Problem: string;
-begin
-  if not Assigned(FDocument) or FDocument.ChangeOpen or not (Length(FEdgeKeys) in [1, 2]) then
-    Exit;
-  Spec := DefaultButtons(FDocument.Pattern, FEdgeKeys[0]);
-  if Length(FEdgeKeys) = 2 then
-    Spec.ButtonsEdgeKey := FEdgeKeys[1];
-  Spec.Size := Trim(FButtonSizeEdit.Text);
-  Spec.Thickness := Trim(FButtonThicknessEdit.Text);
-  Spec.Count := Trim(FButtonCountEdit.Text);
-  Spec.First := Trim(FButtonFirstEdit.Text);
-  Spec.Last := Trim(FButtonLastEdit.Text);
-  Spec.Direction := TButtonDirection(Max(FButtonDirectionBox.ItemIndex, 0));
-  if FButtonExtensionBox.Checked then
-    Spec.Extension := Trim(FButtonExtensionEdit.Text);
-  Done := Format(rsFeaturesButtonsDone, [EdgeNames]);
-  FDocument.BeginChange(rsFeaturesUndoButtons);
-  if not InsertButtons(FDocument.Pattern, Spec, Made) then
-  begin
-    Done := FDocument.Pattern.LastError;
-    FDocument.CancelChange;
-    Say(Done);
-    Exit;
-  end;
-  FDocument.EndChange;
-  if FDocument.ChangeRefused then
-  begin
-    Say(FDocument.Pattern.LastError);
-    Exit;
-  end;
-  for Problem in Made.Problems do
-    Done := Format(rsFeaturesHemProblem, [Done, Problem]);
-  Say(Done);
-end;
-
-// A style starts with its own depth: a narrow hem is much smaller
-procedure TFeaturesPanel.HemStyleChange(Sender: TObject);
-begin
-  if Assigned(FDocument) then
-    HemStartingValues;
-  ShowStyle;
-end;
-
-// The topstitching follows the depth, until it is typed in itself
-procedure TFeaturesPanel.HemDepthChange(Sender: TObject);
+  Kind: TFeatureKind;
 begin
   if not Assigned(FDocument) then
     Exit;
-  if Trim(FHemStitchEdit.Text) = HemStitchDistance(FDocument.Pattern, FHemDepth) then
-    FHemStitchEdit.Text := HemStitchDistance(FDocument.Pattern, Trim(FHemDepthEdit.Text));
-  FHemDepth := Trim(FHemDepthEdit.Text);
+  if FGeneration <> FDocument.Generation then
+  begin
+    for Kind in TFeatureKind do
+      SetValues(Kind, FeatureStartingValues(FDocument.Pattern, Kind, ValuesOf(Kind)));
+    FGeneration := FDocument.Generation;
+  end;
+  for Kind in TFeatureKind do
+    RefreshKind(Kind);
 end;
 
-// One undo step, or none when the hem cannot go there
-procedure TFeaturesPanel.HemApplyClick(Sender: TObject);
+// Shows the feature's form: what it goes along, each field's caption and
+// choices, and what can be changed or applied now
+procedure TFeaturesPanel.RefreshKind(Kind: TFeatureKind);
 var
-  Spec: THemSpec;
-  Made: THemMade;
-  Done, Problem: string;
+  Form: TFeatureForm;
+  Index, Chosen: integer;
+  Item: TFeatureControl;
+  Field: TFeatureField;
+  Box: TComboBox;
+  Choice: string;
 begin
-  if not Assigned(FDocument) or FDocument.ChangeOpen then
-    Exit;
-  Spec := DefaultHem(FDocument.Pattern, FEdgeKeys, THemStyle(Max(FHemStyleBox.ItemIndex, 0)));
-  Spec.Depth := Trim(FHemDepthEdit.Text);
-  Spec.TurnUnder := Trim(FHemTurnEdit.Text);
-  Spec.StitchDistance := Trim(FHemStitchEdit.Text);
-  Spec.Notches := FHemNotchBox.Checked;
-  Done := Format(rsFeaturesHemDone, [EdgeNames]);
-  FDocument.BeginChange(rsFeaturesUndoHem);
-  if not InsertHem(FDocument.Pattern, Spec, Made) then
-  begin
-    Done := FDocument.Pattern.LastError;
-    FDocument.CancelChange;
-    Say(Done);
-    Exit;
+  FGroups[Kind].Shown := ValuesOf(Kind);
+  Form := FeatureForm(FDocument.Pattern, Kind, FeatureSelectionOf(FDocument.Pattern, FKeys), FGroups[Kind].Shown);
+  FGroups[Kind].Header.Caption := Form.Header;
+  FGroups[Kind].Apply.Enabled := Form.CanApply;
+  FUpdating := True;
+  try
+    for Index := 0 to High(FGroups[Kind].Controls) do
+    begin
+      Item := FGroups[Kind].Controls[Index];
+      Field := Form.Fields[Index];
+      if Assigned(Item.Caption) then
+      begin
+        Item.Caption.Caption := Field.Caption;
+        Item.Caption.Enabled := Field.Enabled;
+      end;
+      Item.Control.Enabled := Field.Enabled;
+      case Item.Kind of
+        ffkCheck: TCheckBox(Item.Control).Caption := Field.Caption;
+        ffkChoice, ffkCombo:
+        begin
+          Box := TComboBox(Item.Control);
+          // Choices put back only when they change, as an edge's ends do, keeping what is chosen or typed
+          if not SameItems(Box.Items, Field.Choices) then
+          begin
+            Chosen := Max(StrToIntDef(Field.Text, 0), 0);
+            Box.Items.Clear;
+            for Choice in Field.Choices do
+              Box.Items.Add(Choice);
+            if Item.Kind = ffkCombo then
+              Box.Text := Field.Text
+            else if Chosen < Box.Items.Count then
+              Box.ItemIndex := Chosen
+            else if Box.Items.Count > 0 then
+              Box.ItemIndex := 0;
+          end;
+        end;
+      end;
+    end;
+  finally
+    FUpdating := False;
   end;
-  FDocument.EndChange;
-  if FDocument.ChangeRefused then
-  begin
-    Say(FDocument.Pattern.LastError);
-    Exit;
-  end;
-  for Problem in Made.Problems do
-    Done := Format(rsFeaturesHemProblem, [Done, Problem]);
-  Say(Done);
 end;
 
-procedure TFeaturesPanel.RefreshZip(Edge: TObject);
-begin
-  FApply.Enabled := Assigned(Edge) and (FPointKey = '');
-  FFromBox.Enabled := FApply.Enabled;
-  if not FApply.Enabled then
-  begin
-    FEdgeLabel.Caption := rsFeaturesChooseEdge;
-    FFromBox.Items.Clear;
-    Exit;
-  end;
-  FEdgeLabel.Caption := Format(rsFeaturesAlong, [TEdgeObject(Edge).DisplayName]);
-  ShowEnds(FFromBox, FDocument, TEdgeObject(Edge), rsFeaturesFromPoint);
-  StyleChange(nil);
-end;
-
-procedure TFeaturesPanel.RefreshDart(Edge: TObject);
+// Another style starts again at its own widths, and a hem's topstitching
+// follows its depth, then the form is shown again
+procedure TFeaturesPanel.FieldChange(Sender: TObject);
 var
-  UnitText: string;
+  Kind: TFeatureKind;
+  Id: string;
 begin
-  FDartApply.Enabled := Assigned(Edge);
-  FDartFromBox.Enabled := FDartApply.Enabled;
-  FDartFoldBox.Enabled := FDartApply.Enabled;
-  UnitText := MEASURE_UNIT_NAMES[muMillimetre];
-  if Assigned(FDocument) then
-    UnitText := MEASURE_UNIT_NAMES[FDocument.Pattern.Units];
-  FDartDepthEdit.Enabled := FPointKey = '';
-  if FPointKey = '' then
-    FDartDepthLabel.Caption := Format(rsFeaturesDartDepth, [UnitText])
-  else
-    FDartDepthLabel.Caption := Format(rsFeaturesDartToPoint, [PointName(FDocument, FPointKey)]);
-  if not Assigned(Edge) then
-  begin
-    FDartEdgeLabel.Caption := rsFeaturesDartChoose;
-    FDartFromBox.Items.Clear;
-    FDartFoldBox.Items.Clear;
+  if FUpdating or not Assigned(FDocument) then
     Exit;
-  end;
-  FDartEdgeLabel.Caption := Format(rsFeaturesDartIn, [TEdgeObject(Edge).DisplayName]);
-  ShowEnds(FDartFromBox, FDocument, TEdgeObject(Edge), rsFeaturesFromPoint);
-  ShowEnds(FDartFoldBox, FDocument, TEdgeObject(Edge), rsFeaturesFromPoint);
+  Kind := TFeatureKind(TControl(Sender).Tag div TAG_KIND);
+  Id := FGroups[Kind].Controls[TControl(Sender).Tag mod TAG_KIND].Id;
+  SetValues(Kind, FeatureValueChanged(FDocument.Pattern, Kind, ValuesOf(Kind), Id,
+    FeatureValue(FGroups[Kind].Shown, Id)));
+  RefreshKind(Kind);
 end;
 
-// A style starts with its own widths: a fly is wider than a lap
-procedure TFeaturesPanel.StyleChange(Sender: TObject);
-begin
-  if Assigned(FDocument) and Assigned(Sender) then
-    StartingValues
-  else
-    ShowStyle;
-end;
-
-procedure TFeaturesPanel.Say(const AText: string);
-begin
-  if Assigned(FOnMessage) then
-    FOnMessage(Self, AText);
-end;
-
-// One undo step, or none when the zip cannot go there
+// One undo step, or none when the feature cannot go there
 procedure TFeaturesPanel.ApplyClick(Sender: TObject);
 var
-  Spec: TZipSpec;
-  Made: TZipMade;
-  EdgeName, Done: string;
+  Kind: TFeatureKind;
+  Message: string;
 begin
-  if not Assigned(FDocument) or FDocument.ChangeOpen then
+  if not Assigned(FDocument) then
     Exit;
-  Spec := DefaultZip(FDocument.Pattern, FEdgeKey, TZipStyle(FStyleBox.ItemIndex));
-  Spec.FromEnd := FFromBox.ItemIndex = 1;
-  Spec.Length := Trim(FLengthEdit.Text);
-  Spec.Allowance := Trim(FAllowanceEdit.Text);
-  Spec.StitchDistance := Trim(FStitchEdit.Text);
-  Spec.ShieldWidth := Trim(FShieldEdit.Text);
-  EdgeName := PointName(FDocument, FEdgeKey);
-  FDocument.BeginChange(rsFeaturesUndoZip);
-  if not InsertZip(FDocument.Pattern, Spec, Made) then
-  begin
-    Done := FDocument.Pattern.LastError;
-    FDocument.CancelChange;
-    Say(Done);
-    Exit;
-  end;
-  FDocument.EndChange;
-  if FDocument.ChangeRefused then
-  begin
-    Say(FDocument.Pattern.LastError);
-    Exit;
-  end;
-  Done := Format(rsFeaturesZipDone, [EdgeName]);
-  if Made.ShieldKey <> '' then
-    Done := Format(rsFeaturesZipShield, [Done]);
-  if Made.OtherSide then
-    Done := Format(rsFeaturesZipOtherSide, [Done]);
-  Say(Done);
-end;
-
-// One undo step, or none when the dart cannot go there
-procedure TFeaturesPanel.DartApplyClick(Sender: TObject);
-var
-  Spec: TDartSpec;
-  Made: TDartMade;
-  Reason: string;
-begin
-  if not Assigned(FDocument) or FDocument.ChangeOpen then
-    Exit;
-  Spec := DefaultDart(FDocument.Pattern, FEdgeKey);
-  Spec.FromEnd := FDartFromBox.ItemIndex = 1;
-  Spec.TowardsEnd := FDartFoldBox.ItemIndex = 1;
-  Spec.Position := Trim(FDartPositionEdit.Text);
-  Spec.Width := Trim(FDartWidthEdit.Text);
-  Spec.Depth := Trim(FDartDepthEdit.Text);
-  Spec.HoleInset := Trim(FDartHoleEdit.Text);
-  FDocument.BeginChange(rsFeaturesUndoDart);
-  if FPointKey <> '' then
-    Spec.ApexKey := FDocument.Pattern.UsePoint(FPointKey);
-  if not InsertDart(FDocument.Pattern, Spec, Made) then
-  begin
-    Reason := FDocument.Pattern.LastError;
-    FDocument.CancelChange;
-    Say(Reason);
-    Exit;
-  end;
-  FDocument.EndChange;
-  if FDocument.ChangeRefused then
-  begin
-    Say(FDocument.Pattern.LastError);
-    Exit;
-  end;
-  Say(Format(rsFeaturesDartDone, [PointName(FDocument, Made.PieceKey)]));
+  Kind := TFeatureKind(TControl(Sender).Tag div TAG_KIND);
+  ApplyFeature(FDocument, Kind, FeatureSelectionOf(FDocument.Pattern, FKeys), ValuesOf(Kind), Message);
+  if Assigned(FOnMessage) then
+    FOnMessage(Self, Message);
 end;
 
 end.

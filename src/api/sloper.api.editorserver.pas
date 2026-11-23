@@ -110,6 +110,8 @@ type
     function DoSuggest(Params: TJSONObject): TJSONData;
     function DoSuggestPreview(Params: TJSONObject): TJSONData;
     function DoNotePreview(Params: TJSONObject): TJSONData;
+    function DoFeatures(Params: TJSONObject): TJSONData;
+    function DoFeatureApply(Params: TJSONObject): TJSONData;
   protected
     function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; override;
   public
@@ -315,6 +317,23 @@ resourcestring
   rsEditorSuggestPreview = 'What a suggestion would make of the object: where the point would go, and the object ' +
     'at the smallest and largest sizes of the table.';
   rsEditorSuggestText = 'The suggested formula';
+  rsEditorFeatures = 'The Features tab''s form for a feature: what it goes along for the selection, its fields with ' +
+    'their captions, choices and values, whether they apply now, and whether Apply can add it. Without `values` the ' +
+    'fields start at the pattern''s own; with `changed`, the values that follow a change to that field (another ' +
+    'style starts at its own widths, a hem''s topstitching follows its depth).';
+  rsEditorFeature = 'The feature';
+  rsEditorFeatureSelection = 'The canvas''s selection, by ID or name';
+  rsEditorFeatureValues = 'The fields'' values so far: a choice''s index, 1 or 0 for a box, else what is typed';
+  rsEditorFeatureValueId = 'The field';
+  rsEditorFeatureValueText = 'Its value';
+  rsEditorFeatureChanged = 'The field just changed, whose values follow';
+  rsEditorFeaturePrevious = 'What the changed field held before';
+  rsEditorFeaturesReturns = '`features`, every feature''s `name` and `caption`; `header`, what it goes along or what to ' +
+    'select; `note`, what Apply adds; `canApply`; `values`, each field''s `id` and `text`, to send back; `fields`, ' +
+    'each with `id`, `kind` (text, choice, check or combo, a choice that may be typed), `caption` (beside a check), ' +
+    '`text`, `choices` and `enabled`';
+  rsEditorFeatureApply = 'Applies a feature from the Features tab''s values, as one undo step.';
+  rsEditorFeatureApplyReturns = '`done`, and `message`, what was added or why nothing was';
   rsEditorNotePreview = 'A note as editor_scene draws it, with its text as typed and not yet committed, as the ' +
     'canvas shows it while the text is typed in the Properties tab; nothing changes.';
   rsEditorNotePreviewTarget = 'The note, by ID or name';
@@ -384,7 +403,8 @@ uses
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows;
+  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
+  Sloper.Editor.FeatureForms;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -522,6 +542,20 @@ begin
     AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
     AddApiParam(Built, 'field', apText, True, rsEditorField);
     AddApiParam(Built, 'value', apNumber, False, rsEditorSuggestValue);
+    AddApiMethod(Built, 'editor_features', rsEditorFeatures, rsEditorFeaturesReturns, True);
+    AddApiParam(Built, 'feature', apChoice, True, rsEditorFeature, string.Join(', ', FEATURE_NAMES));
+    AddApiParam(Built, 'selection', apTexts, True, rsEditorFeatureSelection);
+    AddApiParam(Built, 'values', apList, False, rsEditorFeatureValues);
+    AddApiParam(Built, 'values[].id', apText, True, rsEditorFeatureValueId);
+    AddApiParam(Built, 'values[].text', apText, True, rsEditorFeatureValueText);
+    AddApiParam(Built, 'changed', apText, False, rsEditorFeatureChanged);
+    AddApiParam(Built, 'previous', apText, False, rsEditorFeaturePrevious);
+    AddApiMethod(Built, 'editor_feature_apply', rsEditorFeatureApply, rsEditorFeatureApplyReturns);
+    AddApiParam(Built, 'feature', apChoice, True, rsEditorFeature, string.Join(', ', FEATURE_NAMES));
+    AddApiParam(Built, 'selection', apTexts, True, rsEditorFeatureSelection);
+    AddApiParam(Built, 'values', apList, True, rsEditorFeatureValues);
+    AddApiParam(Built, 'values[].id', apText, True, rsEditorFeatureValueId);
+    AddApiParam(Built, 'values[].text', apText, True, rsEditorFeatureValueText);
     AddApiMethod(Built, 'editor_note_preview', rsEditorNotePreview, rsEditorNotePreviewReturns, True);
     AddApiParam(Built, 'id', apTarget, True, rsEditorNotePreviewTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorNotePreviewText);
@@ -1633,6 +1667,111 @@ begin
   Result := Answer;
 end;
 
+const
+  FEATURE_FIELD_KIND_NAMES: array[TFeatureFieldKind] of string = ('text', 'choice', 'check', 'combo');
+
+function FeatureParam(Params: TJSONObject): TFeatureKind;
+begin
+  if not FeatureKindOf(RequireString(Params, 'feature'), Result) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiBadChoice, ['feature', string.Join(', ', FEATURE_NAMES)]));
+end;
+
+// The fields' values as sent, or none when left out
+function FeatureValuesParam(Params: TJSONObject): TFeatureValues;
+var
+  List: TJSONData;
+  Item: TJSONData;
+  Index: integer;
+begin
+  Result := nil;
+  List := Params.Find('values');
+  if not Assigned(List) then
+    Exit;
+  if List.JSONType <> jtArray then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['values']));
+  for Index := 0 to List.Count - 1 do
+  begin
+    Item := List.Items[Index];
+    if Item.JSONType <> jtObject then
+      raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['values[].id']));
+    SetFeatureValue(Result, RequireString(TJSONObject(Item), 'id'), TJSONObject(Item).Get('text', ''));
+  end;
+end;
+
+// The selection's keys, each given by ID or name
+function SelectionKeys(Pattern: TPattern; Params: TJSONObject): TStringArray;
+var
+  Index: integer;
+  Node: TObject;
+begin
+  Result := TextsParam(Params, 'selection');
+  for Index := 0 to High(Result) do
+    if not Assigned(Pattern.FindNode(Result[Index])) then
+    begin
+      Node := Pattern.FindObject(Result[Index]);
+      if Node is TEvalNode then
+        Result[Index] := TEvalNode(Node).Key;
+    end;
+end;
+
+function FeatureValuesToJSON(const Values: TFeatureValues): TJSONArray;
+var
+  Value: TFeatureValue;
+begin
+  Result := TJSONArray.Create;
+  for Value in Values do
+    Result.Add(TJSONObject.Create(['id', Value.Id, 'text', Value.Text]));
+end;
+
+function TEditorApiServer.DoFeatures(Params: TJSONObject): TJSONData;
+var
+  Pattern: TPattern;
+  Kind: TFeatureKind;
+  Values: TFeatureValues;
+  Form: TFeatureForm;
+  Field: TFeatureField;
+  Features, Fields, Choices: TJSONArray;
+  Choice: string;
+  Answer: TJSONObject;
+begin
+  Pattern := Document.Pattern;
+  Kind := FeatureParam(Params);
+  if Assigned(Params.Find('values')) then
+    Values := FeatureValuesParam(Params)
+  else
+    Values := FeatureStartingValues(Pattern, Kind, nil);
+  if OptionalString(Params, 'changed') <> '' then
+    Values := FeatureValueChanged(Pattern, Kind, Values, OptionalString(Params, 'changed'),
+      OptionalString(Params, 'previous'));
+  Form := FeatureForm(Pattern, Kind, FeatureSelectionOf(Pattern, SelectionKeys(Pattern, Params)), Values);
+  Features := TJSONArray.Create;
+  for Kind in TFeatureKind do
+    Features.Add(TJSONObject.Create(['name', FEATURE_NAMES[Kind], 'caption', FeatureCaption(Kind)]));
+  Fields := TJSONArray.Create;
+  for Field in Form.Fields do
+  begin
+    Choices := TJSONArray.Create;
+    for Choice in Field.Choices do
+      Choices.Add(Choice);
+    Fields.Add(TJSONObject.Create(['id', Field.Id, 'kind', FEATURE_FIELD_KIND_NAMES[Field.Kind], 'caption', Field.Caption,
+      'text', Field.Text, 'choices', Choices, 'enabled', Field.Enabled]));
+  end;
+  Answer := TJSONObject.Create(['features', Features, 'header', Form.Header, 'note', Form.Note, 'canApply',
+    Form.CanApply, 'values', FeatureValuesToJSON(Values), 'fields', Fields]);
+  Result := Answer;
+end;
+
+// A refusal is an answer, for the status bar, not an error
+function TEditorApiServer.DoFeatureApply(Params: TJSONObject): TJSONData;
+var
+  Message: string;
+  Done: boolean;
+begin
+  Done := ApplyFeature(Document, FeatureParam(Params), FeatureSelectionOf(Document.Pattern,
+    SelectionKeys(Document.Pattern, Params)), FeatureValuesParam(Params), Message);
+  Result := TJSONObject.Create(['done', Done, 'message', Message]);
+end;
+
 function TEditorApiServer.DoNotePreview(Params: TJSONObject): TJSONData;
 var
   Node: TEvalNode;
@@ -2105,6 +2244,8 @@ begin
     'editor_suggest': Result := DoSuggest(Params);
     'editor_suggest_preview': Result := DoSuggestPreview(Params);
     'editor_note_preview': Result := DoNotePreview(Params);
+    'editor_features': Result := DoFeatures(Params);
+    'editor_feature_apply': Result := DoFeatureApply(Params);
     'editor_changes': Result := DoChanges;
     'editor_snapshot': Result := DoSnapshot;
     'editor_mark_unsaved': Result := DoMarkUnsaved;

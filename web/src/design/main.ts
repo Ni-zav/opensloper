@@ -13,6 +13,7 @@ import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/c
 import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
+import { FeaturesPanel } from '../ui/featuresPanel.ts';
 import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
@@ -36,6 +37,7 @@ const ICONS = {
   objectsTab: 'list-tree',
   variablesTab: 'variable',
   measurementsTab: 'ruler-measure',
+  featuresTab: 'components',
 } as const;
 
 const DEFAULT_FILE_NAME = 'pattern.sloper';
@@ -104,6 +106,7 @@ class DesignApp {
   private readonly canvas: PatternCanvas;
   private readonly objects: ObjectsPanel;
   private readonly properties: PropertiesPanel;
+  private readonly features: FeaturesPanel;
   private readonly measurements: MeasurementsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
@@ -126,6 +129,7 @@ class DesignApp {
         document.body.dataset.selection = ids.join(' ');
         this.objects.showSelection(ids);
         this.properties.showSelection(ids);
+        this.features.showSelection(ids);
       },
       failed: showFailure,
     });
@@ -187,6 +191,8 @@ class DesignApp {
       };
     }
     side.addSection('measurements', STRINGS.tabMeasurements, ICONS.measurementsTab, this.measurements);
+    this.features = new FeaturesPanel(this.document, { message: showMessage, failed: showFailure });
+    side.addSection('features', STRINGS.tabFeatures, ICONS.featuresTab, this.features);
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
       this.run(this.document.undo());
     });

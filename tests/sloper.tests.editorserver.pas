@@ -131,6 +131,10 @@ type
     procedure TestSnapshot;
     // A pattern opened again from work in progress counts as not saved
     procedure TestMarkUnsaved;
+    // The Features tab's forms: starting values, the selection, and values that follow a change
+    procedure TestFeatureForms;
+    // Apply adds a feature as one undo step, or says why it cannot
+    procedure TestFeatureApply;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
     // Its edits, each one undo step, refused with the reason
@@ -145,12 +149,15 @@ type
     function HasPropertyRow(const RowId: string): boolean;
     // A callout from B, its text at (150, -40); its ID
     function AddCallout: integer;
+    // The field with this id in the last editor_features answer
+    function FeatureField(const Id: string): TJSONObject;
+    function FeatureValueOf(const Id: string): string;
   end;
 
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows;
+  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms;
 
 const
   TOLERANCE = 1e-6;
@@ -1622,6 +1629,87 @@ begin
   Call('editor_changes');
   AssertTrue('unsaved', Answer.Booleans['modified']);
   AssertEquals('the title changes', '["file"]', Answer.Arrays['changes'].AsJSON);
+end;
+
+function TTestEditorServer.FeatureField(const Id: string): TJSONObject;
+var
+  Index: integer;
+  Fields: TJSONArray;
+begin
+  Fields := Answer.Arrays['fields'];
+  for Index := 0 to Fields.Count - 1 do
+    if Fields.Objects[Index].Strings['id'] = Id then
+      Exit(Fields.Objects[Index]);
+  Fail('No field ' + Id + ' in ' + Fields.AsJSON);
+  Result := nil;
+end;
+
+function TTestEditorServer.FeatureValueOf(const Id: string): string;
+var
+  Index: integer;
+  Values: TJSONArray;
+begin
+  Values := Answer.Arrays['values'];
+  for Index := 0 to Values.Count - 1 do
+    if Values.Objects[Index].Strings['id'] = Id then
+      Exit(Values.Objects[Index].Strings['text']);
+  Fail('No value ' + Id + ' in ' + Values.AsJSON);
+  Result := '';
+end;
+
+procedure TTestEditorServer.TestFeatureForms;
+var
+  Values, Depth, Stitch: string;
+begin
+  AddSquare;
+  Call('editor_features', '{"feature": "zip", "selection": []}');
+  AssertEquals('every feature', 5, Answer.Arrays['features'].Count);
+  AssertFalse('nothing to go along', Answer.Booleans['canApply']);
+  AssertEquals('what to select', rsFeaturesChooseEdge, Answer.Strings['header']);
+  AssertFalse('no ends to start from', FeatureField('from').Booleans['enabled']);
+  AssertTrue('a length to start with', FeatureValueOf('length') <> '');
+  AssertFalse('no shield but for a fly front', FeatureField('shield').Booleans['enabled']);
+  Call('editor_features', '{"feature": "zip", "selection": ["Line_B_C"]}');
+  AssertTrue('an edge', Answer.Booleans['canApply']);
+  AssertEquals('along it', Format(rsFeaturesAlong, ['Line_B_C']), Answer.Strings['header']);
+  AssertEquals('its ends', '["The B end", "The C end"]', FeatureField('from').Arrays['choices'].AsJSON);
+  // A fly front, with its shield
+  Values := Answer.Arrays['values'].AsJSON;
+  Call('editor_features', '{"feature": "zip", "selection": ["Line_B_C"], "values": ' +
+    StringReplace(Values, '"id" : "style", "text" : "0"', '"id" : "style", "text" : "3"', []) + ', "changed": "style"}');
+  AssertTrue('a shield', FeatureField('shield').Booleans['enabled']);
+  // A hem's topstitching follows its depth
+  Call('editor_features', '{"feature": "hem", "selection": ["Line_C_D", "Line_D_A"]}');
+  AssertEquals('both edges', Format(rsFeaturesAlong, ['Line_C_D, Line_D_A']), Answer.Strings['header']);
+  Depth := FeatureValueOf('depth');
+  Stitch := FeatureValueOf('stitch');
+  Call('editor_features', '{"feature": "hem", "selection": [], "values": [{"id": "depth", "text": "50"}, ' +
+    '{"id": "stitch", "text": "' + Stitch + '"}], "changed": "depth", "previous": "' + Depth + '"}');
+  AssertEquals('3 mm short', '47', FeatureValueOf('stitch'));
+  Call('editor_features', '{"feature": "pocket", "selection": []}');
+  AssertEquals('no such feature', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestFeatureApply;
+var
+  Values: string;
+begin
+  AddSquare;
+  Call('editor_features', '{"feature": "hem", "selection": ["Line_C_D"]}');
+  Values := Answer.Arrays['values'].AsJSON;
+  Call('editor_feature_apply', '{"feature": "hem", "selection": [], "values": ' + Values + '}');
+  AssertFalse('nothing selected', Answer.Booleans['done']);
+  AssertEquals('says what to select', rsFeaturesHemChoose, Answer.Strings['message']);
+  Call('editor_feature_apply', '{"feature": "hem", "selection": ["Line_C_D"], "values": ' + Values + '}');
+  AssertTrue('added', Answer.Booleans['done']);
+  AssertEquals('says so', Format(rsFeaturesHemDone, ['Line_C_D']), Answer.Strings['message']);
+  Call('editor_changes');
+  AssertEquals('one step', rsFeaturesUndoHem, Answer.Strings['undo']);
+  Call('editor_feature_apply', '{"feature": "dart", "selection": ["Line_A_B"], "values": [{"id": "width", "text": "0"}]}');
+  AssertFalse('refused', Answer.Booleans['done']);
+  AssertTrue('with the reason', Answer.Strings['message'] <> '');
+  Call('editor_changes');
+  AssertEquals('no step', rsFeaturesUndoHem, Answer.Strings['undo']);
 end;
 
 initialization

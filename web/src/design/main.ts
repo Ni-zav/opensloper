@@ -161,6 +161,9 @@ class DesignApp {
       suggestPreview: (preview) => {
         this.canvas.showSuggestPreview(preview);
       },
+      suggestObjects: (ids) => {
+        this.canvas.showSuggestionObjects(ids);
+      },
       noteText: (id, text) => {
         this.canvas.showNoteText(id, text);
       },

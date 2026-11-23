@@ -46,6 +46,10 @@ type
     FGrade: TGradeCheck;
     FOnChoose: TNotifyEvent;
     FOnHover: TSuggestHoverEvent;
+    FOnViewChange: TNotifyEvent;
+    // The first row in view and how many rows were, when last told
+    FViewTop, FViewRows: integer;
+    procedure CheckView;
     procedure DrawRow(Control: TWinControl; Index: integer; ARect: TRect; State: TOwnerDrawState);
     function ColumnGap: integer;
     function FormulaWidth(RowWidth: integer): integer;
@@ -67,9 +71,13 @@ type
     function RowSuggestion(Index: integer; out Suggestion: TSuggestion): boolean;
     // Up, Down and Enter from the field while the list is open; True when used
     function HandleKey(var Key: word): boolean;
+    // The formulas of the rows in view, as the list is scrolled
+    function VisibleFormulas: TStringArray;
     // A row was clicked, or Enter pressed on one: ItemIndex says which
     property OnChoose: TNotifyEvent read FOnChoose write FOnChoose;
     property OnHover: TSuggestHoverEvent read FOnHover write FOnHover;
+    // The rows in view changed: new suggestions, or the list scrolled
+    property OnViewChange: TNotifyEvent read FOnViewChange write FOnViewChange;
     // With a size table, each row also shows its values at the first and last
     // sizes, and its tooltip the value at every size; nil for none. The panel owns it.
     property Grade: TGradeCheck read FGrade write FGrade;
@@ -109,6 +117,7 @@ begin
   TabStop := False;
   FNoneRow := -1;
   FHoverIndex := -1;
+  FViewTop := -1;
 end;
 
 procedure TFormulaSuggestList.Restart;
@@ -157,6 +166,38 @@ begin
   Height := FShownRows * ItemHeight + FRAME_PIXELS;
   if FHoverIndex > High(FRows) then
     SetHover(-1);
+  FViewTop := -1;
+  CheckView;
+end;
+
+function TFormulaSuggestList.VisibleFormulas: TStringArray;
+var
+  Index, Found: integer;
+begin
+  Result := nil;
+  if ItemHeight <= 0 then
+    Exit;
+  SetLength(Result, Length(FRows));
+  Found := 0;
+  for Index := Max(0, TopIndex) to Min(High(FRows), TopIndex + FShownRows - 1) do
+    if Index <> FNoneRow then
+    begin
+      Result[Found] := FRows[Index].Text;
+      Inc(Found);
+    end;
+  SetLength(Result, Found);
+end;
+
+// Scrolling draws the rows coming into view, so a row's drawing finds the
+// view moved; new suggestions are checked as they are shown
+procedure TFormulaSuggestList.CheckView;
+begin
+  if (TopIndex = FViewTop) and (FShownRows = FViewRows) then
+    Exit;
+  FViewTop := TopIndex;
+  FViewRows := FShownRows;
+  if Assigned(FOnViewChange) then
+    FOnViewChange(Self);
 end;
 
 function TFormulaSuggestList.RowSuggestion(Index: integer; out Suggestion: TSuggestion): boolean;
@@ -194,6 +235,7 @@ var
   Row: TSuggestion;
   ValueText, DeltaText, RangeText: string;
 begin
+  CheckView;
   Canvas.FillRect(ARect);
   if (Index < 0) or (Index > High(FRows)) then
     Exit;

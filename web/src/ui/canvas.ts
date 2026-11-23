@@ -156,6 +156,8 @@ export class PatternCanvas implements CanvasToolHost {
   private labelsHeld = false;
   // What the tool in use is working with, which is labelled too
   private toolIds: string[] = [];
+  // The objects the formula suggestions in view read, labelled as the tool's are
+  private suggestionIds: string[] = [];
   private seamA: number[][] = [];
   private seamB: number[][] = [];
   private readonly noteEditor: NoteEditor;
@@ -351,6 +353,13 @@ export class PatternCanvas implements CanvasToolHost {
     }
   }
 
+  showSuggestionObjects(ids: string[]): void {
+    if (ids.join(' ') !== this.suggestionIds.join(' ')) {
+      this.suggestionIds = ids;
+      this.relabel();
+    }
+  }
+
   showSeamSides(sideA: number[][], sideB: number[][]): void {
     this.seamA = sideA;
     this.seamB = sideB;
@@ -449,6 +458,7 @@ export class PatternCanvas implements CanvasToolHost {
       selection: numericIds(this.selection),
       hover: /^\d+$/.test(this.hoverId) ? Number(this.hoverId) : null,
       tool: numericIds(this.toolIds),
+      suggestions: numericIds(this.suggestionIds),
     });
     this.labelIds = idsField(answer, 'objects');
     this.repaint();

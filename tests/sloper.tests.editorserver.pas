@@ -514,6 +514,10 @@ begin
   AssertEquals('every point, edge and piece', 9, Answer.Arrays['objects'].Count);
   Call('editor_label_keys', '{"hover": "Flap"}');
   AssertEquals('the hovered piece', '[' + IntToStr(Flap) + ']', Answer.Arrays['objects'].AsJSON);
+  Call('editor_label_keys', '{"suggestions": [' + IntToStr(IdB) + ']}');
+  AssertEquals('what the suggestions read', '[' + IntToStr(IdB) + ']', Answer.Arrays['objects'].AsJSON);
+  Call('editor_label_keys', '{"mode": "none", "suggestions": [' + IntToStr(IdB) + ']}');
+  AssertEquals('none means none', 0, Answer.Arrays['objects'].Count);
   Call('editor_label_keys', '{"selection": [999]}');
   AssertEquals('an unknown ID', RPC_REFUSED, ErrorCode);
 end;
@@ -772,10 +776,13 @@ procedure TTestEditorServer.TestSuggest;
 var
   Items: TJSONArray;
   Index: integer;
-  Found: boolean;
+  Found, FoundPoint: boolean;
+  IdC: integer;
 begin
   Call('add_variable', '{"name": "width", "formula": "100"}');
   AddSquare;
+  IdC := IdOf('C');
+  FoundPoint := False;
   Call('editor_suggest', '{"name": "B", "field": "x", "value": 100.3}');
   AssertEquals('kind', 'length', Answer.Strings['kind']);
   AssertTrue('tolerance', Answer.Strings['tolerance'] <> '');
@@ -787,8 +794,15 @@ begin
       Found := True;
       AssertNear('value', 100, Items.Objects[Index].Floats['value'], TOLERANCE);
       AssertNear('delta', -0.3, Items.Objects[Index].Floats['delta'], TOLERANCE);
+      AssertEquals('a variable is not on the canvas', 0, Items.Objects[Index].Arrays['objects'].Count);
+    end
+    else if Items.Objects[Index].Strings['text'] = 'C.x' then
+    begin
+      FoundPoint := True;
+      AssertEquals('the object it reads', '[' + IntToStr(IdC) + ']', Items.Objects[Index].Arrays['objects'].AsJSON);
     end;
   AssertTrue('the variable is suggested', Found);
+  AssertTrue('a point is suggested', FoundPoint);
   AssertFalse('nearest', Answer.Nulls['nearest']);
 end;
 

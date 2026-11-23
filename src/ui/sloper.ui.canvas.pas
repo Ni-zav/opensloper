@@ -75,6 +75,7 @@ type
     FTipSnapShown: boolean;
     FTipClick: TVec2;
     FLabelMode: TLabelMode;
+    FExtraLabelKeys: TStringArray;
     FDrawRole: TEdgeRole;
     FShowPieceFills: boolean;
     // The problems the overlay marks, worked out again after each change
@@ -228,6 +229,9 @@ type
     // no point to show
     procedure ShowGhost(const Position: TVec2; const Sizes: TGradeGhostArray);
     procedure HideGhost;
+    // Objects labelled besides the contextual ones, such as those the formula
+    // suggestions in view read; none for the None mode, as ever
+    procedure SetExtraLabelKeys(const Keys: TStringArray);
     // mkPoint makes the selected points and repeats holes, which join the
     // pieces they lie in; the others add a marking to the selected piece
     // from the edge (or, for mkLine, the marked point) selected with it
@@ -1227,7 +1231,13 @@ function TPatternCanvas.ShownLabelKeys: TStringArray;
 begin
   Result := nil;
   if Assigned(FDocument) then
-    Result := LabelKeys(FDocument.Pattern, ShownLabelMode, FSelection, FHoverKey, ActiveTool.LabelKeys);
+    Result := LabelKeys(FDocument.Pattern, ShownLabelMode, FSelection, FHoverKey, Concat(ActiveTool.LabelKeys, FExtraLabelKeys));
+end;
+
+procedure TPatternCanvas.SetExtraLabelKeys(const Keys: TStringArray);
+begin
+  FExtraLabelKeys := Keys;
+  Invalidate;
 end;
 
 // The dropped tip hangs the callout from what it snaps to; its text stays put

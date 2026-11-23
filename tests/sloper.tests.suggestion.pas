@@ -60,6 +60,7 @@ type
     procedure TestPointCoordinates;
     procedure TestMidpoints;
     procedure TestLeavesOutDependents;
+    procedure TestObjectKeys;
     procedure TestAngles;
     procedure TestAngleWrapsRound;
     procedure TestRatios;
@@ -344,6 +345,19 @@ procedure TTestSuggestion.TestLeavesOutDependents;
 begin
   // Hem ends at B, so B cannot read it
   AssertEquals('its own edge', 0, Pos('Hem.', Texts(Suggested(FFree, 'x', 250))));
+end;
+
+procedure TTestSuggestion.TestObjectKeys;
+var
+  Keys: TStringArray;
+begin
+  Keys := SuggestionObjectKeys(FPattern, ['@waist/4', '(A.x + B.x)/2', 'B.x', 'Hem.length/2 + #ease', 'nonsense +']);
+  // Measurements and variables are not on the canvas; each object comes once, in order
+  AssertEquals('count', 3, Length(Keys));
+  AssertEquals('first read', FBase.Key, Keys[0]);
+  AssertEquals('second', FFree.Key, Keys[1]);
+  AssertEquals('an edge', FHem.Key, Keys[2]);
+  AssertEquals('none', 0, Length(SuggestionObjectKeys(FPattern, [])));
 end;
 
 procedure TTestSuggestion.TestAngles;

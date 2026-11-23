@@ -116,5 +116,6 @@ Every change is one step in Edit → Undo (++ctrl+z++) and Edit → Redo
 something else uses an object, and the status bar says what.
 
 Labels follow View → Labels: Contextual shows the names of what you are working
-with, All shows every name, and None hides them. Hold ++n++ to see every name
+with, and of the points and edges the formula suggestions in view name, All
+shows every name, and None hides them. Hold ++n++ to see every name
 for a moment.

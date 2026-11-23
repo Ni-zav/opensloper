@@ -189,6 +189,7 @@ type
     procedure ListPanelMessage(Sender: TObject; const AText: string);
     procedure PropertiesSuggestChange(Sender: TObject);
     procedure PropertiesSuggestPreview(Sender: TObject; Shown: boolean; const GhostAt: TVec2; const Sizes: TGradeGhostArray);
+    procedure PropertiesSuggestLabels(Sender: TObject);
     procedure GarmentHoverPiece(Sender: TObject; const PieceKey: string);
     procedure GarmentSelectPiece(Sender: TObject; const PieceKey: string);
     procedure ProblemSelect(Sender: TObject; const Key: string);
@@ -647,6 +648,7 @@ begin
   FProperties.OnMessage := @ListPanelMessage;
   FProperties.OnSuggestChange := @PropertiesSuggestChange;
   FProperties.OnSuggestPreview := @PropertiesSuggestPreview;
+  FProperties.OnSuggestLabels := @PropertiesSuggestLabels;
   FObjects := TObjectsPanel(AddList('objects', rsTabObjects, aiObjectsTab, TObjectsPanel.Create(Self)));
   FObjects.OnSelect := @ObjectsSelect;
   FObjects.OnZoom := @ObjectsZoom;
@@ -779,6 +781,11 @@ begin
     FCanvas.ShowGhost(GhostAt, Sizes)
   else
     FCanvas.HideGhost;
+end;
+
+procedure TMainForm.PropertiesSuggestLabels(Sender: TObject);
+begin
+  FCanvas.SetExtraLabelKeys(FProperties.SuggestLabelKeys);
 end;
 
 procedure TMainForm.ObjectsSelect(Sender: TObject);

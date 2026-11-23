@@ -244,11 +244,12 @@ resourcestring
   rsEditorFileName = 'The pattern file''s name, for the {pattern.name} field in notes; by default the file it was opened from';
   rsEditorNoteMargin = 'How near a note''s text must be, in mm; 0 by default';
   rsEditorLabelKeys = 'Which objects the canvas labels: in contextual mode the hovered object, the selection with ' +
-    'what it reads and what reads it, and the objects a tool is working with; every point, edge and piece in all; ' +
-    'none in none.';
+    'what it reads and what reads it, the objects a tool is working with and those the formula suggestions in view ' +
+    'read; every point, edge and piece in all; none in none.';
   rsEditorLabelMode = 'contextual, all or none';
   rsEditorSelection = 'The selected objects'' IDs';
   rsEditorHover = 'The hovered object''s ID';
+  rsEditorSuggestObjects = 'The IDs of the objects the formula suggestions in view read, as editor_suggest gives them';
   rsEditorToolObjects = 'The IDs of the objects the tool is working with, as editor_tool_snap gives them';
   rsEditorLabelKeysReturns = '`objects`, their IDs in pattern order';
   rsEditorSeamPick = 'The Seam tool''s click: the piece''s edge at the place goes on the side being picked, or comes ' +
@@ -318,7 +319,7 @@ resourcestring
   rsEditorSuggestValue = 'The value to match, in mm, degrees or a ratio, as while dragging; the field''s own value ' +
     'when left out';
   rsEditorSuggestReturns = '`kind` (length, angle or ratio), `tolerance` in words, `items` within it, each with ' +
-    '`text`, `value`, `valueText`, `delta` and `deltaText`, and `nearest`, the closest of all, or null; with a size ' +
+    '`text`, `value`, `valueText`, `delta`, `deltaText` and `objects`, the IDs of the objects it reads, and `nearest`, the closest of all, or null; with a size ' +
     'table, `sizes`, its first and last sizes, and on each item `range`, its values at them, and `sizeValues`, its ' +
     'value at every size, in words';
   rsEditorSuggestPreview = 'What a suggestion would make of the object: where the point would go, and the object ' +
@@ -546,6 +547,7 @@ begin
     AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
     AddApiParam(Built, 'hover', apReference, False, rsEditorHover);
     AddApiParam(Built, 'tool', apReferences, False, rsEditorToolObjects);
+    AddApiParam(Built, 'suggestions', apReferences, False, rsEditorSuggestObjects);
     AddApiMethod(Built, 'editor_seam_pick', rsEditorSeamPick, rsEditorSeamPickReturns, True);
     AddApiParam(Built, 'x', apNumber, False, rsEditorX);
     AddApiParam(Built, 'y', apNumber, False, rsEditorY);
@@ -1605,7 +1607,7 @@ var
 begin
   Result := TJSONObject.Create(['text', Suggestion.Text, 'value', ReportFloat(Suggestion.Value), 'valueText',
     SuggestionValueText(Suggestion.Value, Kind, Pattern.Units), 'delta', ReportFloat(Suggestion.Delta), 'deltaText',
-    SuggestionDeltaText(Suggestion.Delta, Kind, Pattern.Units)]);
+    SuggestionDeltaText(Suggestion.Delta, Kind, Pattern.Units), 'objects', KeysToJSON(SuggestionObjectKeys(Pattern, [Suggestion.Text]))]);
   if not Assigned(Grade) then
     Exit;
   Values := Grade.Values(Suggestion.Text);
@@ -2383,7 +2385,7 @@ begin
   if Assigned(Params.Find('hover')) and (Params.Find('hover').JSONType <> jtNull) then
     HoverKey := Reference(Params, 'hover', False);
   Result := TJSONObject.Create(['objects', KeysToJSON(LabelKeys(Document.Pattern, Mode, KeysParam(Params, 'selection'), HoverKey,
-    KeysParam(Params, 'tool')))]);
+    Concat(KeysParam(Params, 'tool'), KeysParam(Params, 'suggestions'))))]);
 end;
 
 // A seam side by IDs, as the editor keeps it

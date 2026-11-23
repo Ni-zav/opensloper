@@ -126,6 +126,7 @@ The canvas feels like Inkscape, but every point records how it was placed relati
 - **Drag locked to the field:** while the list is open, dragging or nudging the point changes only that field, constrained to its direction (`CanDragField`, `DragPointField`, `NudgeField`), even when it holds a formula, which the drag replaces with a number in the same step.
 - **Grade check:** with a size table each row shows its values at the smallest and largest sizes, and hovering ghosts the pieces at those sizes, so a formula that matches by coincidence stands out. It works on copies of the pattern, one per size, never the pattern itself.
 - Hovering a row ghosts the point where the formula would put it; choosing one writes it as one undo step. Alt+Down opens the list.
+- **Names on the canvas:** with Contextual labels, the canvas also labels the objects the rows in view read (`SuggestionObjectKeys`), so `C.x` or `Hem.length/2` can be found on it; scrolling the list changes them. None still shows no labels, as the user chose.
 
 **Spacing** (`Sloper.UI.Spacing`). Every app lays controls out on one gap, 8 pixels at 96 dpi scaled to the screen, between neighbours and from a container's edge, set through `ChildSizing` (`SpaceChildren`, `SpaceBetween`, `SpaceButtons`). Dialogs fit their contents when shown, then keep that size.
 

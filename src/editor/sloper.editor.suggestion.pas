@@ -27,7 +27,7 @@ unit Sloper.Editor.Suggestion;
 interface
 
 uses
-  Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units;
+  SysUtils, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units;
 
 type
   // What a field holds, for what can be suggested: none for a count or text
@@ -107,6 +107,10 @@ function SuggestionValueText(Value: double; Kind: TSuggestionKind; Units: TMeasu
 function SuggestionDeltaText(Delta: double; Kind: TSuggestionKind; Units: TMeasureUnit): string;
 // "5 mm", "1°", for the line shown when nothing is close
 function SuggestionToleranceText(Kind: TSuggestionKind; Units: TMeasureUnit): string;
+// The objects the formulas read, such as B for B.x, in the order first read:
+// what the canvas labels while the suggestions show, so their names can be
+// found on it. A formula that does not parse adds nothing.
+function SuggestionObjectKeys(Pattern: TPattern; const Formulas: array of string): TStringArray;
 
 const
   // The most suggestions a match gives
@@ -119,7 +123,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Generics.Collections, Sloper.Core.EvalTypes, Sloper.Core.Formula, Sloper.Core.Draft, Sloper.Core.Drag,
+  Math, Generics.Collections, Sloper.Core.EvalTypes, Sloper.Core.Formula, Sloper.Core.Draft, Sloper.Core.Drag,
   Sloper.Core.JSON, Sloper.Core.Note, Sloper.Core.Measurements, Sloper.Core.Variables;
 
 const
@@ -308,6 +312,41 @@ begin
     else
       Result := LengthWithUnit(LENGTH_TOLERANCE, Units);
   end;
+end;
+
+function SuggestionObjectKeys(Pattern: TPattern; const Formulas: array of string): TStringArray;
+var
+  Formula: TFormula;
+  Seen: TKeySet;
+  Text, Key: string;
+  Ref: TFormulaReference;
+  Count: integer;
+begin
+  Result := nil;
+  Count := 0;
+  Seen := TKeySet.Create;
+  Formula := TFormula.Create;
+  try
+    for Text in Formulas do
+    begin
+      if not Formula.Parse(Text, Pattern.Resolver) then
+        Continue;
+      for Ref in Formula.References do
+      begin
+        Key := ReferenceKey(Ref);
+        if (Ref.Kind <> rkObject) or not Seen.Add(Key) then
+          Continue;
+        if Count = Length(Result) then
+          SetLength(Result, Max(8, 2 * Count));
+        Result[Count] := Key;
+        Inc(Count);
+      end;
+    end;
+  finally
+    FreeAndNil(Formula);
+    FreeAndNil(Seen);
+  end;
+  SetLength(Result, Count);
 end;
 
 // Which way a length field runs on the page, for which measurements suit it

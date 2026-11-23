@@ -3,8 +3,17 @@
 // first, each with its value and how far off it is, and with a size table
 // its values at the first and last sizes on a second line. When none is
 // close, a line says so above the nearest. The field keeps the keyboard and
-// passes the list Up, Down and Enter while it shows.
-import { isRecord, numberField, recordsField, stringField, stringsField, type JsonRecord } from '../engine/replies.ts';
+// passes the list Up, Down and Enter while it shows. The objects the rows in
+// view read are passed on, for the canvas to label.
+import {
+  idsField,
+  isRecord,
+  numberField,
+  recordsField,
+  stringField,
+  stringsField,
+  type JsonRecord,
+} from '../engine/replies.ts';
 import { STRINGS } from './strings.ts';
 
 export interface Suggestion {
@@ -16,12 +25,16 @@ export interface Suggestion {
   // Its values at the first and last sizes, and at every size, in words
   range: string;
   sizeValues: string;
+  // The IDs of the objects it reads
+  objects: string[];
 }
 
 export interface FormulaSuggestEvents {
   choose(suggestion: Suggestion): void;
   // The row under the pointer or chosen by key, or undefined for none
   hover(suggestion: Suggestion | undefined): void;
+  // The IDs of the objects the rows in view read, as they are shown or scrolled
+  view(ids: string[]): void;
 }
 
 function parseSuggestion(item: JsonRecord): Suggestion {
@@ -32,6 +45,7 @@ function parseSuggestion(item: JsonRecord): Suggestion {
     deltaText: stringField(item, 'deltaText') ?? '',
     range: stringField(item, 'range') ?? '',
     sizeValues: stringField(item, 'sizeValues') ?? '',
+    objects: idsField(item, 'objects'),
   };
 }
 
@@ -42,6 +56,7 @@ export class FormulaSuggestList {
   private rows: (Suggestion | undefined)[] = [];
   private chosen = -1;
   private hovered: Suggestion | undefined;
+  private viewIds = '';
 
   constructor(events: FormulaSuggestEvents) {
     this.events = events;
@@ -62,6 +77,9 @@ export class FormulaSuggestList {
     this.element.addEventListener('mouseleave', () => {
       this.setHover(this.chosenRow());
     });
+    this.element.addEventListener('scroll', () => {
+      this.checkView();
+    });
   }
 
   // Shows editor_suggest's answer; the row chosen stays chosen while its formula is still there
@@ -80,6 +98,26 @@ export class FormulaSuggestList {
     );
     const again = this.rows.findIndex((row) => row !== undefined && row.text === wasChosen);
     this.choose(again);
+    this.checkView();
+  }
+
+  // The rows at least partly in view; a list not on the page has none
+  private checkView(): void {
+    const box = this.element.getBoundingClientRect();
+    const ids = new Set<string>();
+    for (const [index, line] of [...this.element.children].entries()) {
+      const rect = line.getBoundingClientRect();
+      if (rect.bottom > box.top && rect.top < box.bottom) {
+        for (const id of this.rows[index]?.objects ?? []) {
+          ids.add(id);
+        }
+      }
+    }
+    const key = [...ids].join(' ');
+    if (key !== this.viewIds) {
+      this.viewIds = key;
+      this.events.view([...ids]);
+    }
   }
 
   chosenRow(): Suggestion | undefined {

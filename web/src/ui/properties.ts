@@ -201,6 +201,8 @@ export interface PropertiesEvents {
   suggestChanged(id: string, field: string): void;
   // Where the suggestion hovered would put things, or undefined
   suggestPreview(preview: SuggestPreview | undefined): void;
+  // The IDs of the objects the suggestions in view read, for the canvas to label; none when closed
+  suggestObjects(ids: string[]): void;
   // A note's text as typed in the tab, for the canvas to show; undefined when typing ends
   noteText(id: string | undefined, text: string): void;
 }
@@ -632,6 +634,11 @@ export class PropertiesPanel implements SideTabContent {
       hover: (suggestion) => {
         this.previews.push(suggestion);
       },
+      view: (ids) => {
+        if (this.suggest?.list === list) {
+          this.events.suggestObjects(ids);
+        }
+      },
     });
     this.suggest = { target, field, list };
     this.placeSuggestions();
@@ -648,6 +655,7 @@ export class PropertiesPanel implements SideTabContent {
     this.suggestions.clear();
     this.previews.clear();
     this.events.suggestPreview(undefined);
+    this.events.suggestObjects([]);
     this.events.suggestChanged('', '');
   }
 

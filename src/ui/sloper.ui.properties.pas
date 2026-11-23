@@ -166,6 +166,9 @@ type
     FWandImages: TImageList;
     FOnSuggestChange: TNotifyEvent;
     FOnSuggestPreview: TSuggestPreviewEvent;
+    FOnSuggestLabels: TNotifyEvent;
+    // The objects the suggestions in view read
+    FSuggestLabelKeys: TStringArray;
     FOnNotePreview: TNotePreviewEvent;
     // A note's text is being shown on the canvas as typed
     FNotePreviewing: boolean;
@@ -186,6 +189,8 @@ type
     procedure WandClick(Sender: TObject);
     procedure SuggestChoose(Sender: TObject);
     procedure SuggestHover(Sender: TObject; Index: integer);
+    procedure SuggestViewChange(Sender: TObject);
+    procedure SetSuggestLabelKeys(const Keys: TStringArray);
     procedure SuggestListKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     procedure SetDocument(ADocument: TPatternDocument);
     procedure DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
@@ -250,6 +255,10 @@ type
     // The suggestions opened or closed
     property OnSuggestChange: TNotifyEvent read FOnSuggestChange write FOnSuggestChange;
     property OnSuggestPreview: TSuggestPreviewEvent read FOnSuggestPreview write FOnSuggestPreview;
+    // The objects the formula suggestions in view read, for the canvas to
+    // label so their names can be found on it; empty while none show
+    property SuggestLabelKeys: TStringArray read FSuggestLabelKeys;
+    property OnSuggestLabels: TNotifyEvent read FOnSuggestLabels write FOnSuggestLabels;
     property OnNotePreview: TNotePreviewEvent read FOnNotePreview write FOnNotePreview;
 
     { For the sections }
@@ -915,6 +924,7 @@ begin
   List.Tag := RowIndex;
   List.OnChoose := @SuggestChoose;
   List.OnHover := @SuggestHover;
+  List.OnViewChange := @SuggestViewChange;
   List.OnKeyDown := @SuggestListKeyDown;
   Stack(List);
   FRows[RowIndex].List := List;
@@ -976,6 +986,7 @@ begin
   FSuggestField := '';
   FreeAndNil(FSuggestSource);
   FreeAndNil(FGrade);
+  SetSuggestLabelKeys(nil);
   if Notify then
     SuggestChanged;
 end;
@@ -1099,6 +1110,22 @@ begin
     FOnSuggestPreview(Self, True, Position, Ghosts)
   else
     FOnSuggestPreview(Self, Length(Ghosts) > 0, Vec2(NaN, NaN), Ghosts);
+end;
+
+// Only the open list's rows count: a hidden one may still be drawn as it goes
+procedure TPropertiesPanel.SuggestViewChange(Sender: TObject);
+begin
+  if (FSuggestRow >= 0) and (Sender = FRows[FSuggestRow].List) and Assigned(FDocument) then
+    SetSuggestLabelKeys(SuggestionObjectKeys(FDocument.Pattern, FRows[FSuggestRow].List.VisibleFormulas));
+end;
+
+procedure TPropertiesPanel.SetSuggestLabelKeys(const Keys: TStringArray);
+begin
+  if (Length(Keys) = 0) and (Length(FSuggestLabelKeys) = 0) then
+    Exit;
+  FSuggestLabelKeys := Keys;
+  if Assigned(FOnSuggestLabels) then
+    FOnSuggestLabels(Self);
 end;
 
 procedure TPropertiesPanel.SuggestListKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);

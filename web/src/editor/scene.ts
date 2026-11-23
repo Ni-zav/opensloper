@@ -90,6 +90,46 @@ export interface ScenePoint extends SceneObject {
   y: number;
 }
 
+// A selected curve's handle, as editor_handles gives it: the end of a
+// tangent line from its anchor on the curve, named by its length field
+export interface CurveHandle {
+  edge: string;
+  field: string;
+  anchor: Vec2;
+  at: Vec2;
+  // False when a formula or a lock sets it, which draws it hollow
+  draggable: boolean;
+}
+
+// Which handle: its curve and its length field
+export interface HandleRef {
+  edge: string;
+  field: string;
+}
+
+export function parseHandle(record: JsonRecord | undefined): HandleRef | undefined {
+  const edge = idField(record, 'edge');
+  const field = stringField(record, 'field');
+  return edge === undefined || field === undefined ? undefined : { edge, field };
+}
+
+export function parseHandles(result: JsonRecord): CurveHandle[] {
+  return recordsField(result, 'handles').flatMap((record): CurveHandle[] => {
+    const ref = parseHandle(record);
+    if (ref === undefined) {
+      return [];
+    }
+    return [
+      {
+        ...ref,
+        anchor: { x: numberField(record, 'anchorX') ?? 0, y: numberField(record, 'anchorY') ?? 0 },
+        at: { x: numberField(record, 'x') ?? 0, y: numberField(record, 'y') ?? 0 },
+        draggable: booleanField(record, 'draggable') ?? false,
+      },
+    ];
+  });
+}
+
 export interface Scene {
   isolated: string;
   pieces: ScenePiece[];

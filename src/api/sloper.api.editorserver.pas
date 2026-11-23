@@ -29,17 +29,23 @@ interface
 
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
-  Sloper.Editor.Snap;
+  Sloper.Editor.Snap, Sloper.Core.Drag;
 
 type
   TEditorApiServer = class(TApiServer)
   private
     // What the document has said changed since editor_changes last answered
     FChanges: TDocumentChanges;
-    // The point or note being dragged, and the one field a point's drag
+    // The point, note or curve being dragged, and the one field a point's drag
     // changes, or '' for all it can; '' when no drag is open
     FDragKey, FDragField: string;
+    // For a curve, the length field of the handle being dragged
+    FDragHandle: string;
     procedure RequireDrag;
+    // The handle of the curve being dragged
+    function DraggedHandle: TCurveHandle;
+    // Where the dragged object is: a point's place, a note's top left or a handle's end
+    function DragPosition: TJSONObject;
     function DoDragBegin(Params: TJSONObject): TJSONData;
     function DoDragTo(Params: TJSONObject): TJSONData;
     function DoDragEnd(Cancel: boolean): TJSONData;
@@ -52,6 +58,7 @@ type
     function DoSnap(Params: TJSONObject): TJSONData;
     function DoObjectsAt(Params: TJSONObject): TJSONData;
     function DoObjectsInBox(Params: TJSONObject): TJSONData;
+    function DoHandles(Params: TJSONObject): TJSONData;
     // The snap of a place given as a group of x, y and radius
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
@@ -103,7 +110,14 @@ resourcestring
     'then points nearest first, then edges nearest first, then pieces smallest first.';
   rsEditorPointRadius = 'How near a point must be, in mm';
   rsEditorEdgeRadius = 'How near an edge must be, in mm';
-  rsEditorObjectsReturns = '`objects`, their IDs';
+  rsEditorObjectsReturns = '`objects`, their IDs; with a selection, `handle`, the handle of a selected curve there ' +
+    '(`edge` and `field`, its length field), or null';
+  rsEditorObjectsSelection = 'The selected objects'' IDs, whose curves'' handles lie over everything else';
+  rsEditorHandles = 'The handles of the selected curves, to draw and drag: the end of each tangent line, set by an ' +
+    'angle and a length.';
+  rsEditorHandlesReturns = '`handles`, each with `edge`, `field` (its length field, which names it for a drag), ' +
+    '`anchorX` and `anchorY`, where it starts on the curve, `x` and `y`, its end, and `draggable`, false when a ' +
+    'formula or a lock sets it';
   rsEditorObjectsInBox = 'The points, edges and pieces lying wholly inside a box, in pattern order; a repeat counts as ' +
     'its points.';
   rsEditorMinX = 'The box''s left, in mm';
@@ -184,15 +198,16 @@ resourcestring
   rsEditorChangesReturns = '`changes`, any of pattern (definitions or results), objectsReplaced (every object is new, ' +
     'as after undo or open), measurements (another set), history, file and view; `generation`, which grows when ' +
     'another pattern is opened; `canUndo`, `canRedo`, `undo` and `redo`, the steps'' names; `modified`';
-  rsEditorDragBegin = 'Starts dragging a point or a note, as one undo step: editor_drag_to moves it, editor_drag_end ' +
+  rsEditorDragBegin = 'Starts dragging a point, a note or a curve''s handle, as one undo step: editor_drag_to moves it, editor_drag_end ' +
     'keeps the step and editor_drag_cancel puts everything back. Other changes are refused until it ends.';
-  rsEditorDragTarget = 'The point or note, by ID or name';
+  rsEditorDragTarget = 'The point, note or curve, by ID or name';
+  rsEditorDragHandle = 'For a curve, the handle to drag, by its length field as editor_handles gives it';
   rsEditorDragField = 'For a point, the one field to change, as while formula suggestions are open on it; by default ' +
     'every field a drag sets';
-  rsEditorDragBeginReturns = '`x` and `y`, where the point or the note''s top left is now, in mm';
+  rsEditorDragBeginReturns = '`x` and `y`, where the point, the note''s top left or the handle''s end is now, in mm';
   rsEditorDragTo = 'Moves the object being dragged as near the place as its operation allows; a point along an edge ' +
     'stays on the edge.';
-  rsEditorDragX = 'Where the point, or the note''s top left, goes across, in mm';
+  rsEditorDragX = 'Where the point, the note''s top left or the handle''s end goes across, in mm';
   rsEditorDragY = 'Where it goes down, in mm';
   rsEditorDragToReturns = '`x` and `y`, where it now is, and `moved`, false with the `reason` when it could not move';
   rsEditorDragEnd = 'Ends the drag, keeping what it did as one undo step.';
@@ -200,6 +215,7 @@ resourcestring
   rsEditorDragCancel = 'Ends the drag, putting the object back where it was.';
   rsEditorDragCancelReturns = '`changed`, false';
   rsEditorNotDraggable = '%s is not a point or a note';
+  rsEditorNoHandle = '%s has no handle %s';
   rsEditorNoDrag = 'No drag is open: call editor_drag_begin first';
   rsEditorDragOpen = 'A drag is already open';
   rsEditorTables = 'The design app''s tables the editor reads instead of copying: its canvas tools, its commands with ' +
@@ -217,7 +233,7 @@ uses
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.Seam, Sloper.Core.Settings;
+  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -257,11 +273,14 @@ begin
     AddApiParam(Built, 'edgeRadius', apNumber, True, rsEditorEdgeRadius);
     AddApiParam(Built, 'noteMargin', apNumber, False, rsEditorNoteMargin);
     AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
+    AddApiParam(Built, 'selection', apReferences, False, rsEditorObjectsSelection);
     AddApiMethod(Built, 'editor_objects_in_box', rsEditorObjectsInBox, rsEditorObjectsReturns, True);
     AddApiParam(Built, 'minX', apNumber, True, rsEditorMinX);
     AddApiParam(Built, 'minY', apNumber, True, rsEditorMinY);
     AddApiParam(Built, 'maxX', apNumber, True, rsEditorMaxX);
     AddApiParam(Built, 'maxY', apNumber, True, rsEditorMaxY);
+    AddApiMethod(Built, 'editor_handles', rsEditorHandles, rsEditorHandlesReturns, True);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorSelection);
     AddApiMethod(Built, 'editor_tool_snap', rsEditorToolSnap, rsEditorToolSnapReturns, True);
     AddApiParam(Built, 'tool', apChoice, True, rsEditorTool, string.Join(', ', SNAP_TOOL_NAMES));
     AddApiParam(Built, 'x', apNumber, True, rsEditorX);
@@ -312,6 +331,7 @@ begin
     AddApiMethod(Built, 'editor_drag_begin', rsEditorDragBegin, rsEditorDragBeginReturns);
     AddApiParam(Built, 'id', apTarget, True, rsEditorDragTarget);
     AddApiParam(Built, 'field', apText, False, rsEditorDragField);
+    AddApiParam(Built, 'handle', apText, False, rsEditorDragHandle);
     AddApiMethod(Built, 'editor_drag_to', rsEditorDragTo, rsEditorDragToReturns);
     AddApiParam(Built, 'x', apNumber, True, rsEditorDragX);
     AddApiParam(Built, 'y', apNumber, True, rsEditorDragY);
@@ -665,6 +685,8 @@ function TEditorApiServer.DoObjectsAt(Params: TJSONObject): TJSONData;
 var
   At: TVec2;
   PointRadius, EdgeRadius, NoteMargin: double;
+  Handle: TCurveHandle;
+  Answer: TJSONObject;
 begin
   At := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
   PointRadius := RequireNumber(Params, 'pointRadius');
@@ -672,8 +694,30 @@ begin
   NoteMargin := 0;
   OptionalNumber(Params, 'noteMargin', NoteMargin);
   // A note lies over whatever is under it
-  Result := TJSONObject.Create(['objects', KeysToJSON(Concat(NotesAt(Document.Pattern, At, FieldValuesFor(Params), NoteMargin),
+  Answer := TJSONObject.Create(['objects', KeysToJSON(Concat(NotesAt(Document.Pattern, At, FieldValuesFor(Params), NoteMargin),
     ObjectsAt(Document.Pattern, At, PointRadius, EdgeRadius)))]);
+  // A selected curve's handle lies over everything
+  if Assigned(Params.Find('selection')) then
+    if HandleAt(Document.Pattern, KeysParam(Params, 'selection'), At, PointRadius, Handle) then
+      Answer.Add('handle', TJSONObject.Create(['edge', KeyToJSON(Handle.EdgeKey), 'field', Handle.LengthField]))
+    else
+      Answer.Add('handle', TJSONNull.Create);
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoHandles(Params: TJSONObject): TJSONData;
+var
+  Handles: TJSONArray;
+  Handle: TCurveHandle;
+  Reason: string;
+begin
+  Handles := TJSONArray.Create;
+  for Handle in SelectionHandles(Document.Pattern, KeysParam(Params, 'selection')) do
+    Handles.Add(TJSONObject.Create(['edge', KeyToJSON(Handle.EdgeKey), 'field', Handle.LengthField, 'anchorX',
+      ReportFloat(Handle.Anchor.X), 'anchorY', ReportFloat(Handle.Anchor.Y), 'x', ReportFloat(Handle.Position.X), 'y',
+      ReportFloat(Handle.Position.Y), 'draggable', CanDragHandle(TEdgeObject(Document.Pattern.FindNode(Handle.EdgeKey)),
+      Handle, Reason)]));
+  Result := TJSONObject.Create(['handles', Handles]);
 end;
 
 function TEditorApiServer.DoObjectsInBox(Params: TJSONObject): TJSONData;
@@ -1037,12 +1081,38 @@ begin
     Document.CanRedo, 'undo', Document.UndoDescription, 'redo', Document.RedoDescription, 'modified', Document.Modified]);
 end;
 
-// Where the dragged object is: a point's place, or a note's top left
-function DragPosition(Node: TEvalNode): TJSONObject;
+// The handle of Edge named by its length field, which names one handle of
+// a curve; False when it has none such, as before it is worked out
+function FindHandle(Edge: TEdgeObject; const LengthField: string; out Handle: TCurveHandle): boolean;
 var
+  Candidate: TCurveHandle;
+begin
+  Handle := Default(TCurveHandle);
+  for Candidate in CurveHandles(Edge) do
+    if Candidate.LengthField = LengthField then
+    begin
+      Handle := Candidate;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TEditorApiServer.DraggedHandle: TCurveHandle;
+begin
+  if not FindHandle(TEdgeObject(Document.Pattern.FindNode(FDragKey)), FDragHandle, Result) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsEditorNoHandle, [Document.Pattern.FindNode(FDragKey).DisplayName,
+      FDragHandle]));
+end;
+
+function TEditorApiServer.DragPosition: TJSONObject;
+var
+  Node: TEvalNode;
   At: TVec2;
 begin
-  if Node is TNoteObject then
+  Node := Document.Pattern.FindNode(FDragKey);
+  if FDragHandle <> '' then
+    At := DraggedHandle.Position
+  else if Node is TNoteObject then
     At := TNoteObject(Node).Position
   else
     At := TPointObject(Node).Position;
@@ -1058,13 +1128,26 @@ end;
 function TEditorApiServer.DoDragBegin(Params: TJSONObject): TJSONData;
 var
   Node: TEvalNode;
-  FieldName, Reason: string;
+  FieldName, HandleField, Reason: string;
+  Handle: TCurveHandle;
   Allowed: boolean;
 begin
   if FDragKey <> '' then
     raise EApiError.Create(RPC_REFUSED, rsEditorDragOpen);
   Node := FindTarget(Params);
   FieldName := OptionalString(Params, 'field');
+  HandleField := OptionalString(Params, 'handle');
+  if HandleField <> '' then
+  begin
+    if not (Node is TEdgeObject) or not FindHandle(TEdgeObject(Node), HandleField, Handle) then
+      raise EApiError.Create(RPC_REFUSED, Format(rsEditorNoHandle, [Node.DisplayName, HandleField]));
+    if not CanDragHandle(TEdgeObject(Node), Handle, Reason) then
+      raise EApiError.Create(RPC_REFUSED, Reason);
+    BeginChange(rsToolMoveHandle);
+    FDragKey := Node.Key;
+    FDragHandle := HandleField;
+    Exit(DragPosition);
+  end;
   if Node is TNoteObject then
     Allowed := CanDragNote(TNoteObject(Node), Reason)
   else if not (Node is TPointObject) then
@@ -1081,7 +1164,7 @@ begin
     BeginChange(rsToolMovePoint);
   FDragKey := Node.Key;
   FDragField := FieldName;
-  Result := DragPosition(Node);
+  Result := DragPosition;
 end;
 
 function TEditorApiServer.DoDragTo(Params: TJSONObject): TJSONData;
@@ -1097,7 +1180,9 @@ begin
   Target := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
   Pattern := Document.Pattern;
   Node := Pattern.FindNode(FDragKey);
-  if Node is TNoteObject then
+  if FDragHandle <> '' then
+    Moved := DragHandle(Pattern, TEdgeObject(Node), DraggedHandle, Target, Reason)
+  else if Node is TNoteObject then
     Moved := DragNote(Pattern, TNoteObject(Node), Target, Reason)
   else if FDragField <> '' then
     Moved := DragPointField(Pattern, TPointObject(Node), FDragField, Target, Reason)
@@ -1105,7 +1190,7 @@ begin
     Moved := DragPoint(Pattern, TPointObject(Node), Target, Reason);
   if Moved then
     Document.LiveUpdate;
-  Answer := DragPosition(Pattern.FindNode(FDragKey));
+  Answer := DragPosition;
   Answer.Add('moved', Moved);
   if not Moved then
     Answer.Add('reason', Reason);
@@ -1119,6 +1204,7 @@ begin
   RequireDrag;
   FDragKey := '';
   FDragField := '';
+  FDragHandle := '';
   Changed := False;
   if Cancel then
     Document.CancelChange
@@ -1243,6 +1329,7 @@ begin
     'editor_snap': Result := DoSnap(Params);
     'editor_objects_at': Result := DoObjectsAt(Params);
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
+    'editor_handles': Result := DoHandles(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);
     'editor_label_keys': Result := DoLabelKeys(Params);

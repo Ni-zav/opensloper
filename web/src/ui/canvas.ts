@@ -1,13 +1,23 @@
 // The drawing canvas, as Sloper.UI.Canvas: shows the scene the engine gives,
 // keeps the view (zoom and pan), the selection and the gestures: clicking to
-// select, dragging a point as one undo step, boxing a selection, panning with
+// select, dragging a point, a note or a selected curve's handle as one undo step, boxing a selection, panning with
 // the middle button and zooming with the wheel. Other tools get the clicks and
 // moves (Sloper.UI.CanvasTools). Every engine call is asynchronous; moves go
 // through LatestOnly, so only the newest counts.
 import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
 import { EngineError } from '../engine/engine.ts';
-import { booleanField, idsField, stringField } from '../engine/replies.ts';
-import { EMPTY_SCENE, parseScene, sceneBounds, type Scene, type Tables } from '../editor/scene.ts';
+import { booleanField, idsField, isRecord, stringField } from '../engine/replies.ts';
+import {
+  EMPTY_SCENE,
+  parseHandle,
+  parseHandles,
+  parseScene,
+  sceneBounds,
+  type CurveHandle,
+  type HandleRef,
+  type Scene,
+  type Tables,
+} from '../editor/scene.ts';
 import { ViewTransform, ZOOM_STEP, type Vec2 } from '../editor/view.ts';
 import {
   ClickTool,
@@ -71,8 +81,21 @@ function numericIds(list: Iterable<string>): number[] {
   return [...list].filter((id) => /^\d+$/.test(id)).map(Number);
 }
 
+// What lies under a place: the objects in the order a click picks them, and
+// a selected curve's handle, which lies over them all
+interface Hits {
+  ids: string[];
+  handle: HandleRef | undefined;
+}
+
+const NO_HITS: Hits = { ids: [], handle: undefined };
+
 function distance(from: Vec2, to: Vec2): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
+}
+
+function sameHandle(one: HandleRef | undefined, other: HandleRef | undefined): boolean {
+  return one?.edge === other?.edge && one?.field === other?.field;
 }
 
 export class PatternCanvas implements CanvasToolHost {
@@ -90,6 +113,10 @@ export class PatternCanvas implements CanvasToolHost {
   private readonly hovers: LatestOnly<Vec2>;
   private readonly drags: LatestOnly<Vec2>;
   private readonly labelQueue: LatestOnly<number>;
+  private readonly handleQueue: LatestOnly<number>;
+  // The selected curves' handles, and the one under the cursor
+  private handles: CurveHandle[] = [];
+  private hoverHandle: HandleRef | undefined;
   private labelIds: string[] = [];
   private labelMode: LabelMode = 'contextual';
   // Every label shows while the show-labels key is held
@@ -108,7 +135,7 @@ export class PatternCanvas implements CanvasToolHost {
   private pressAt: Vec2 = { x: 0, y: 0 };
   private lastAt: Vec2 = { x: 0, y: 0 };
   private pressShift = false;
-  private pressHits: Promise<string[]> = Promise.resolve([]);
+  private pressHits: Promise<Hits> = Promise.resolve(NO_HITS);
   // The steps of the gesture under way, run in order
   private gesture: Promise<void> = Promise.resolve();
   private dragId = '';
@@ -151,6 +178,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.hovers = new LatestOnly(async (at) => this.updateHover(at), fail);
     this.drags = new LatestOnly(async (at) => this.dragTo(at), fail);
     this.labelQueue = new LatestOnly(async () => this.loadLabels(), fail);
+    this.handleQueue = new LatestOnly(async () => this.loadHandles(), fail);
     document.addListener(this.listener);
     this.resizer = new ResizeObserver(() => {
       this.resize();
@@ -189,6 +217,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.tool = name;
     this.tools.get(name)?.reset();
     this.hoverId = '';
+    this.hoverHandle = undefined;
     this.showSnap(undefined);
     this.events.message(this.tables.tools.find((tool) => tool.name === name)?.hint ?? '');
   }
@@ -233,6 +262,7 @@ export class PatternCanvas implements CanvasToolHost {
   select(ids: string[]): void {
     this.selection = new Set(ids);
     this.events.selectionChanged(ids);
+    this.handleQueue.push(0);
     this.relabel();
     this.repaint();
   }
@@ -283,7 +313,7 @@ export class PatternCanvas implements CanvasToolHost {
     const at = this.screenAt(event);
     this.objectsAt(at)
       .then((hits) => {
-        const id = hits[0];
+        const id = hits.ids[0];
         if (id !== undefined && this.scene.notes.some((note) => note.id === id)) {
           this.select([id]);
           this.noteAdded(id);
@@ -342,6 +372,12 @@ export class PatternCanvas implements CanvasToolHost {
     this.repaint();
   }
 
+  private async loadHandles(): Promise<void> {
+    const answer = await this.document.read('editor_handles', { selection: numericIds(this.selection) });
+    this.handles = parseHandles(answer);
+    this.repaint();
+  }
+
   private repaint(): void {
     if (this.frame !== 0) {
       return;
@@ -363,11 +399,16 @@ export class PatternCanvas implements CanvasToolHost {
       labelIds: this.labelIds,
       seamA: this.seamA,
       seamB: this.seamB,
+      handles: this.handles,
+      hoverHandle: this.hoverHandle,
     });
     this.painter.drawGrid();
     this.painter.drawPattern(this.scene, this.tables);
     this.painter.drawSeams(this.scene);
     this.painter.drawNotes(this.scene);
+    if (this.tool === SELECT_TOOL) {
+      this.painter.drawHandles();
+    }
     this.painter.drawLabels(this.scene);
     this.painter.drawSnap();
     this.painter.drawBox();
@@ -425,6 +466,7 @@ export class PatternCanvas implements CanvasToolHost {
       this.select(kept);
     }
     this.tools.get(this.tool)?.sceneChanged();
+    this.handleQueue.push(0);
     this.relabel();
     this.repaint();
   }
@@ -447,7 +489,7 @@ export class PatternCanvas implements CanvasToolHost {
     return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   }
 
-  private async objectsAt(at: Vec2): Promise<string[]> {
+  private async objectsAt(at: Vec2): Promise<Hits> {
     const model = this.view.toModel(at);
     const radius = this.view.pixelsToMM(SNAP_RADIUS);
     const answer = await this.document.read('editor_objects_at', {
@@ -457,8 +499,10 @@ export class PatternCanvas implements CanvasToolHost {
       edgeRadius: radius,
       noteMargin: this.view.pixelsToMM(NOTE_HIT_PIXELS),
       fileName: this.document.fileName,
+      selection: numericIds(this.selection),
     });
-    return idsField(answer, 'objects');
+    const handle = answer.handle;
+    return { ids: idsField(answer, 'objects'), handle: parseHandle(isRecord(handle) ? handle : undefined) };
   }
 
   private readonly pointerDown = (event: PointerEvent): void => {
@@ -560,8 +604,9 @@ export class PatternCanvas implements CanvasToolHost {
     if (this.mode === 'idle') {
       this.hovers.clear();
       this.tools.get(this.tool)?.leave();
-      if (this.hoverId !== '') {
+      if (this.hoverId !== '' || this.hoverHandle !== undefined) {
         this.hoverId = '';
+        this.hoverHandle = undefined;
         this.repaint();
       }
     }
@@ -576,7 +621,11 @@ export class PatternCanvas implements CanvasToolHost {
 
   private async updateHover(at: Vec2): Promise<void> {
     const hits = await this.objectsAt(at);
-    const id = hits[0] ?? '';
+    if (!sameHandle(hits.handle, this.hoverHandle)) {
+      this.hoverHandle = hits.handle;
+      this.repaint();
+    }
+    const id = hits.ids[0] ?? '';
     if (id !== this.hoverId) {
       this.hoverId = id;
       this.relabel();
@@ -585,7 +634,12 @@ export class PatternCanvas implements CanvasToolHost {
   }
 
   private async clickSelect(toggle: boolean): Promise<void> {
-    const id = (await this.pressHits)[0];
+    const hits = await this.pressHits;
+    // A click on a handle leaves the selection as it is
+    if (hits.handle !== undefined) {
+      return;
+    }
+    const id = hits.ids[0];
     if (id === undefined) {
       if (!toggle) {
         this.select([]);
@@ -601,9 +655,14 @@ export class PatternCanvas implements CanvasToolHost {
     }
   }
 
-  // A press on a point drags it; anywhere else draws a selection box
+  // A press on a handle, a point or a note drags it; anywhere else draws a selection box
   private async startDragOrBox(): Promise<void> {
-    const id = (await this.pressHits)[0];
+    const hits = await this.pressHits;
+    if (hits.handle !== undefined) {
+      await this.startHandleDrag(hits.handle);
+      return;
+    }
+    const id = hits.ids[0];
     const note = this.scene.notes.find((each) => each.id === id);
     // A note is dragged by its text's top left
     const point =
@@ -615,15 +674,29 @@ export class PatternCanvas implements CanvasToolHost {
       this.repaint();
       return;
     }
+    await this.beginDrag(point.id, targetParams(point), point);
+  }
+
+  private async startHandleDrag(handle: HandleRef): Promise<void> {
+    const shown = this.handles.find((each) => each.edge === handle.edge && each.field === handle.field);
+    if (shown === undefined) {
+      this.mode = 'idle';
+      return;
+    }
+    await this.beginDrag(handle.edge, { id: Number(handle.edge), handle: handle.field }, shown.at);
+  }
+
+  // Opens the drag in the engine, keeping the press's offset from where the object is
+  private async beginDrag(id: string, params: object, from: Vec2): Promise<void> {
     try {
-      await this.document.call('editor_drag_begin', targetParams(point));
+      await this.document.call('editor_drag_begin', params);
     } catch (error: unknown) {
       this.mode = 'refused';
       throw error;
     }
-    this.dragId = point.id;
+    this.dragId = id;
     const pressed = this.view.toModel(this.pressAt);
-    this.dragOffset = { x: point.x - pressed.x, y: point.y - pressed.y };
+    this.dragOffset = { x: from.x - pressed.x, y: from.y - pressed.y };
     if (this.mode === 'refused') {
       // Escape came while the drag was starting
       await this.endDrag(true);

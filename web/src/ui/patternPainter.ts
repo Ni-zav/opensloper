@@ -11,7 +11,7 @@ import {
   rectAround,
   type LabelRequest,
 } from '../editor/labelPlacement.ts';
-import type { EvalState, Scene, SceneNote, SceneObject, Tables } from '../editor/scene.ts';
+import type { CurveHandle, EvalState, HandleRef, Scene, SceneNote, SceneObject, Tables } from '../editor/scene.ts';
 import type { Rect2, Vec2, ViewTransform } from '../editor/view.ts';
 
 // Screen pixels
@@ -19,6 +19,9 @@ const MARKING_LINE_WIDTH = 1.5;
 const POINT_RADIUS = 3.5;
 const COINCIDENT_GAP = 3;
 const SNAP_MARKER_SIZE = 6;
+// A curve's handle, and how much larger the one under the cursor is
+const HANDLE_RADIUS = 4;
+const HANDLE_HOVER_GROWTH = 1.5;
 // A copied point's diamond reaches this many dot radii from its centre
 const DIAMOND_SCALE = 1.6;
 // A role's dashes are this many pixels a millimetre of its pattern, at any zoom
@@ -151,6 +154,9 @@ export interface PaintState {
   // The sides of the seam the Seam tool is picking, a polyline per edge
   seamA: readonly number[][];
   seamB: readonly number[][];
+  // The selected curves' handles, and the one under the cursor
+  handles: readonly CurveHandle[];
+  hoverHandle: HandleRef | undefined;
 }
 
 export class PatternPainter {
@@ -375,6 +381,38 @@ export class PatternPainter {
         break;
     }
     context.stroke();
+  }
+
+  // Each selected curve's tangent lines. A handle set by a formula is hollow,
+  // since it cannot be dragged.
+  drawHandles(): void {
+    const { handles, hoverHandle, view } = this.paintState();
+    const context = this.context;
+    context.setLineDash([]);
+    context.lineWidth = 1;
+    for (const handle of handles) {
+      const anchor = view.toScreen(handle.anchor);
+      const tip = view.toScreen(handle.at);
+      context.strokeStyle = css(SELECTED_INK);
+      context.beginPath();
+      context.moveTo(anchor.x, anchor.y);
+      context.lineTo(tip.x, tip.y);
+      context.stroke();
+      const hovered = hoverHandle?.edge === handle.edge && hoverHandle.field === handle.field;
+      const radius = HANDLE_RADIUS + (hovered ? HANDLE_HOVER_GROWTH : 0);
+      context.beginPath();
+      context.arc(tip.x, tip.y, radius, 0, 2 * Math.PI);
+      if (handle.draggable) {
+        context.fillStyle = css(SELECTED_INK);
+        context.fill();
+      } else {
+        context.fillStyle = css(PAPER);
+        context.fill();
+        context.lineWidth = 1.5;
+        context.stroke();
+        context.lineWidth = 1;
+      }
+    }
   }
 
   drawBox(): void {

@@ -103,6 +103,11 @@ type
     // While a drag is open, other changes wait
     procedure TestDragBlocksChanges;
     procedure TestDragRefusals;
+    // The selected curves' handles, and the one under a place
+    procedure TestHandles;
+    procedure TestDragHandle;
+    // A handle set by a formula is drawn but not dragged
+    procedure TestHandleFormulaRefused;
   end;
 
 implementation
@@ -939,6 +944,70 @@ begin
   Call('editor_drag_begin', '{"name": "C"}');
   AssertEquals('locked', RPC_REFUSED, ErrorCode);
   // No change was left open
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
+  Answer;
+end;
+
+procedure TTestEditorServer.TestHandles;
+var
+  Handles: TJSONArray;
+  Curve: integer;
+begin
+  AddSquare;
+  Call('add_edge', '{"type": "curve", "name": "Arch", "start": "A", "end": "B", "angle1": 270, "length1": 30, ' +
+    '"angle2": 270, "length2": 30}');
+  Curve := IdOf('Arch');
+  Call('editor_handles', '{"selection": ["A"]}');
+  AssertEquals('no curve selected', 0, Answer.Arrays['handles'].Count);
+  Call('editor_handles', '{"selection": ["Arch"]}');
+  Handles := Answer.Arrays['handles'];
+  AssertEquals('two', 2, Handles.Count);
+  AssertEquals('its curve', Curve, Handles.Objects[0].Integers['edge']);
+  AssertEquals('named by its length', 'length1', Handles.Objects[0].Strings['field']);
+  AssertNear('starts at the curve''s start', 0, Handles.Objects[0].Floats['anchorY'], TOLERANCE);
+  AssertNear('ends below it', 30, Handles.Objects[0].Floats['y'], TOLERANCE);
+  AssertTrue('draggable', Handles.Objects[0].Booleans['draggable']);
+  Call('editor_objects_at', '{"x": 100, "y": 29, "pointRadius": 2, "edgeRadius": 2, "selection": ["Arch"]}');
+  AssertEquals('the second handle', 'length2', Answer.Objects['handle'].Strings['field']);
+  Call('editor_objects_at', '{"x": 100, "y": 29, "pointRadius": 2, "edgeRadius": 2, "selection": []}');
+  AssertTrue('not while unselected', Answer.Nulls['handle']);
+  Call('editor_objects_at', '{"x": 100, "y": 29, "pointRadius": 2, "edgeRadius": 2}');
+  AssertNull('only asked with a selection', Answer.Find('handle'));
+end;
+
+procedure TTestEditorServer.TestDragHandle;
+begin
+  AddSquare;
+  Call('add_edge', '{"type": "curve", "name": "Arch", "start": "A", "end": "B", "angle1": 270, "length1": 30, ' +
+    '"angle2": 270, "length2": 30}');
+  Call('editor_drag_begin', '{"name": "Arch", "handle": "length1"}');
+  AssertNear('starts at the handle', 30, Answer.Floats['y'], TOLERANCE);
+  Call('editor_drag_to', '{"x": 40, "y": 0}');
+  AssertTrue('moved', Answer.Booleans['moved']);
+  AssertNear('across', 40, Answer.Floats['x'], TOLERANCE);
+  AssertNear('level', 0, Answer.Floats['y'], TOLERANCE);
+  Call('editor_drag_end');
+  Call('get_object', '{"name": "Arch"}');
+  AssertEquals('angle', '0', Answer.Objects['formulas'].Strings['angle1']);
+  AssertEquals('length', '40', Answer.Objects['formulas'].Strings['length1']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Move curve handle', Answer.Strings['undo']);
+  Call('editor_drag_begin', '{"name": "Arch", "handle": "angle1"}');
+  AssertEquals('not a handle', RPC_REFUSED, ErrorCode);
+  Call('editor_drag_begin', '{"name": "Line_A_B", "handle": "length1"}');
+  AssertEquals('a line has none', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestHandleFormulaRefused;
+begin
+  AddSquare;
+  Call('add_edge', '{"type": "curve", "name": "Arch", "start": "A", "end": "B", "angle1": 270, "length1": "15 * 2", ' +
+    '"angle2": 270, "length2": 30}');
+  Call('editor_handles', '{"selection": ["Arch"]}');
+  AssertFalse('set by a formula', Answer.Arrays['handles'].Objects[0].Booleans['draggable']);
+  AssertTrue('the other is not', Answer.Arrays['handles'].Objects[1].Booleans['draggable']);
+  Call('editor_drag_begin', '{"name": "Arch", "handle": "length1"}');
+  AssertEquals('refused', RPC_REFUSED, ErrorCode);
   Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
   Answer;
 end;

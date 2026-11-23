@@ -29,7 +29,7 @@ interface
 
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
-  Sloper.Editor.Snap, Sloper.Core.Drag;
+  Sloper.Core.Geometry, Sloper.Editor.Snap, Sloper.Core.Drag;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -41,6 +41,13 @@ type
     FDragKey, FDragField: string;
     // For a curve, the length field of the handle being dragged
     FDragHandle: string;
+    // A callout's tip is being dragged: it changes nothing until dropped,
+    // where it last snapped (FTipSnap, for a move to FTipClick), if it moved
+    FDragTip, FTipMoved: boolean;
+    FTipSnap: TSnap;
+    FTipClick: TVec2;
+    function DoTipTo(Params: TJSONObject): TJSONData;
+    function DoTipEnd(Cancel: boolean): TJSONData;
     procedure RequireDrag;
     // The handle of the curve being dragged
     function DraggedHandle: TCurveHandle;
@@ -110,9 +117,10 @@ resourcestring
     'then points nearest first, then edges nearest first, then pieces smallest first.';
   rsEditorPointRadius = 'How near a point must be, in mm';
   rsEditorEdgeRadius = 'How near an edge must be, in mm';
-  rsEditorObjectsReturns = '`objects`, their IDs; with a selection, `handle`, the handle of a selected curve there ' +
-    '(`edge` and `field`, its length field), or null';
-  rsEditorObjectsSelection = 'The selected objects'' IDs, whose curves'' handles lie over everything else';
+  rsEditorObjectsReturns = '`objects`, their IDs; with a selection, `tip`, the selected callout whose tip is there, ' +
+    'or null, and `handle`, the handle of a selected curve there (`edge` and `field`, its length field), or null';
+  rsEditorObjectsSelection = 'The selected objects'' IDs, whose callouts'' tips and curves'' handles lie over ' +
+    'everything else';
   rsEditorHandles = 'The handles of the selected curves, to draw and drag: the end of each tangent line, set by an ' +
     'angle and a length.';
   rsEditorHandlesReturns = '`handles`, each with `edge`, `field` (its length field, which names it for a drag), ' +
@@ -198,24 +206,30 @@ resourcestring
   rsEditorChangesReturns = '`changes`, any of pattern (definitions or results), objectsReplaced (every object is new, ' +
     'as after undo or open), measurements (another set), history, file and view; `generation`, which grows when ' +
     'another pattern is opened; `canUndo`, `canRedo`, `undo` and `redo`, the steps'' names; `modified`';
-  rsEditorDragBegin = 'Starts dragging a point, a note or a curve''s handle, as one undo step: editor_drag_to moves it, editor_drag_end ' +
+  rsEditorDragBegin = 'Starts dragging a point, a note, a curve''s handle or a callout''s tip, as one undo step: editor_drag_to moves it, editor_drag_end ' +
     'keeps the step and editor_drag_cancel puts everything back. Other changes are refused until it ends.';
   rsEditorDragTarget = 'The point, note or curve, by ID or name';
   rsEditorDragHandle = 'For a curve, the handle to drag, by its length field as editor_handles gives it';
+  rsEditorDragTip = 'For a callout, drag its tip: each move snaps and changes nothing, and editor_drag_end hangs ' +
+    'the callout from where it last snapped';
+  rsEditorDragRadius = 'For a callout''s tip, how far round the place to snap, in mm';
   rsEditorDragField = 'For a point, the one field to change, as while formula suggestions are open on it; by default ' +
     'every field a drag sets';
   rsEditorDragBeginReturns = '`x` and `y`, where the point, the note''s top left or the handle''s end is now, in mm';
   rsEditorDragTo = 'Moves the object being dragged as near the place as its operation allows; a point along an edge ' +
     'stays on the edge.';
-  rsEditorDragX = 'Where the point, the note''s top left or the handle''s end goes across, in mm';
+  rsEditorDragX = 'Where the point, the note''s top left, the handle''s end or the tip goes across, in mm';
   rsEditorDragY = 'Where it goes down, in mm';
-  rsEditorDragToReturns = '`x` and `y`, where it now is, and `moved`, false with the `reason` when it could not move';
+  rsEditorDragToReturns = '`x` and `y`, where it now is, and `moved`, false with the `reason` when it could not move; ' +
+    'for a callout''s tip, where it snapped, with the snap''s `kind`, the `message` saying what it would point at and ' +
+    'the `leaderStrokes` to draw to it';
   rsEditorDragEnd = 'Ends the drag, keeping what it did as one undo step.';
   rsEditorDragEndReturns = '`changed`, false when it ended where it began, which makes no step';
   rsEditorDragCancel = 'Ends the drag, putting the object back where it was.';
   rsEditorDragCancelReturns = '`changed`, false';
   rsEditorNotDraggable = '%s is not a point or a note';
   rsEditorNoHandle = '%s has no handle %s';
+  rsEditorNotCallout = '%s is not a callout';
   rsEditorNoDrag = 'No drag is open: call editor_drag_begin first';
   rsEditorDragOpen = 'A drag is already open';
   rsEditorTables = 'The design app''s tables the editor reads instead of copying: its canvas tools, its commands with ' +
@@ -229,7 +243,7 @@ resourcestring
 implementation
 
 uses
-  TypInfo, Sloper.API.Rpc, Sloper.Core.Geometry, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
+  TypInfo, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
@@ -332,9 +346,12 @@ begin
     AddApiParam(Built, 'id', apTarget, True, rsEditorDragTarget);
     AddApiParam(Built, 'field', apText, False, rsEditorDragField);
     AddApiParam(Built, 'handle', apText, False, rsEditorDragHandle);
+    AddApiParam(Built, 'tip', apFlag, False, rsEditorDragTip);
     AddApiMethod(Built, 'editor_drag_to', rsEditorDragTo, rsEditorDragToReturns);
     AddApiParam(Built, 'x', apNumber, True, rsEditorDragX);
     AddApiParam(Built, 'y', apNumber, True, rsEditorDragY);
+    AddApiParam(Built, 'radius', apNumber, False, rsEditorDragRadius);
+    AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
     AddApiMethod(Built, 'editor_drag_end', rsEditorDragEnd, rsEditorDragEndReturns);
     AddApiMethod(Built, 'editor_drag_cancel', rsEditorDragCancel, rsEditorDragCancelReturns);
   end;
@@ -497,6 +514,16 @@ begin
   Result := PatternFieldValues(Document.Pattern, FileName);
 end;
 
+// A callout's leader from its frame to Tip; none for a plain note
+function LeaderToTip(Note: TNoteObject; const Frame: TRect2; const Tip: TVec2): TLine2Array;
+var
+  Start: TVec2;
+begin
+  Result := nil;
+  if (Note.Leader <> nlNone) and LeaderStart(Frame, Tip, Start) then
+    Result := LeaderStrokes(Start, Tip, Note.Leader);
+end;
+
 // A note as the canvas draws it: its text with fields filled in, line by
 // line, its look, where its text and frame are, and its leader
 function NoteToSceneJSON(Pattern: TPattern; Note: TNoteObject; const PatternValues: TFieldValues): TJSONObject;
@@ -506,8 +533,6 @@ var
   Lines: TJSONArray;
   Line: string;
   Frame: TRect2;
-  Start: TVec2;
-  Strokes: TLine2Array;
 begin
   Shown := Note.ShownText;
   Values := NoteFieldValues(Pattern, Note, PatternValues, Shown);
@@ -530,10 +555,17 @@ begin
   Result.Add('anchor', NOTE_ANCHOR_NAMES[Note.Anchor]);
   Result.Add('anchorAt', LineToJSON([Note.AnchorPosition]));
   Result.Add('leader', NOTE_LEADER_NAMES[Note.Leader]);
-  Strokes := nil;
-  if (Note.Leader <> nlNone) and LeaderStart(Frame, Note.AnchorPosition, Start) then
-    Strokes := LeaderStrokes(Start, Note.AnchorPosition, Note.Leader);
-  Result.Add('leaderStrokes', SegmentsToJSON(Strokes));
+  Result.Add('leaderStrokes', SegmentsToJSON(LeaderToTip(Note, Frame, Note.AnchorPosition)));
+end;
+
+function NoteLeaderStrokes(Pattern: TPattern; Note: TNoteObject; const PatternValues: TFieldValues; const Tip: TVec2): TLine2Array;
+var
+  Values: TFieldValues;
+  Shown: string;
+begin
+  Shown := Note.ShownText;
+  Values := NoteFieldValues(Pattern, Note, PatternValues, Shown);
+  Result := LeaderToTip(Note, NoteFrame(Note, Values, Shown), Tip);
 end;
 
 function TEditorApiServer.DoScene(Params: TJSONObject): TJSONData;
@@ -687,6 +719,8 @@ var
   PointRadius, EdgeRadius, NoteMargin: double;
   Handle: TCurveHandle;
   Answer: TJSONObject;
+  Selection: TStringArray;
+  TipKey: string;
 begin
   At := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
   PointRadius := RequireNumber(Params, 'pointRadius');
@@ -696,12 +730,20 @@ begin
   // A note lies over whatever is under it
   Answer := TJSONObject.Create(['objects', KeysToJSON(Concat(NotesAt(Document.Pattern, At, FieldValuesFor(Params), NoteMargin),
     ObjectsAt(Document.Pattern, At, PointRadius, EdgeRadius)))]);
-  // A selected curve's handle lies over everything
+  // A selected callout's tip or curve's handle lies over everything
   if Assigned(Params.Find('selection')) then
-    if HandleAt(Document.Pattern, KeysParam(Params, 'selection'), At, PointRadius, Handle) then
+  begin
+    Selection := KeysParam(Params, 'selection');
+    TipKey := CalloutTipAt(Document.Pattern, Selection, At, PointRadius);
+    if TipKey <> '' then
+      Answer.Add('tip', KeyToJSON(TipKey))
+    else
+      Answer.Add('tip', TJSONNull.Create);
+    if HandleAt(Document.Pattern, Selection, At, PointRadius, Handle) then
       Answer.Add('handle', TJSONObject.Create(['edge', KeyToJSON(Handle.EdgeKey), 'field', Handle.LengthField]))
     else
       Answer.Add('handle', TJSONNull.Create);
+  end;
   Result := Answer;
 end;
 
@@ -1112,6 +1154,8 @@ begin
   Node := Document.Pattern.FindNode(FDragKey);
   if FDragHandle <> '' then
     At := DraggedHandle.Position
+  else if FDragTip then
+    At := TNoteObject(Node).AnchorPosition
   else if Node is TNoteObject then
     At := TNoteObject(Node).Position
   else
@@ -1137,6 +1181,18 @@ begin
   Node := FindTarget(Params);
   FieldName := OptionalString(Params, 'field');
   HandleField := OptionalString(Params, 'handle');
+  // A tip changes nothing until it is dropped, so no change is begun
+  if BooleanParam(Params, 'tip') then
+  begin
+    if not (Node is TNoteObject) or (TNoteObject(Node).Leader = nlNone) then
+      raise EApiError.Create(RPC_REFUSED, Format(rsEditorNotCallout, [Node.DisplayName]));
+    if Document.Pattern.IsLocked(Node) then
+      raise EApiError.Create(RPC_REFUSED, Format(rsPatternLocked, [Node.DisplayName]));
+    FDragKey := Node.Key;
+    FDragTip := True;
+    FTipMoved := False;
+    Exit(DragPosition);
+  end;
   if HandleField <> '' then
   begin
     if not (Node is TEdgeObject) or not FindHandle(TEdgeObject(Node), HandleField, Handle) then
@@ -1177,6 +1233,8 @@ var
   Answer: TJSONObject;
 begin
   RequireDrag;
+  if FDragTip then
+    Exit(DoTipTo(Params));
   Target := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
   Pattern := Document.Pattern;
   Node := Pattern.FindNode(FDragKey);
@@ -1202,6 +1260,8 @@ var
   Changed: boolean;
 begin
   RequireDrag;
+  if FDragTip then
+    Exit(DoTipEnd(Cancel));
   FDragKey := '';
   FDragField := '';
   FDragHandle := '';
@@ -1215,6 +1275,47 @@ begin
       raise EApiError.Create(RPC_REFUSED, Document.Pattern.LastError);
   end;
   Result := TJSONObject.Create(['changed', Changed]);
+end;
+
+function TEditorApiServer.DoTipTo(Params: TJSONObject): TJSONData;
+var
+  Pattern: TPattern;
+  Note: TNoteObject;
+  Radius: double;
+  Answer: TJSONObject;
+begin
+  Pattern := Document.Pattern;
+  Note := TNoteObject(Pattern.FindNode(FDragKey));
+  Radius := 0;
+  OptionalNumber(Params, 'radius', Radius);
+  FTipClick := Vec2(RequireNumber(Params, 'x'), RequireNumber(Params, 'y'));
+  FTipSnap := FindSnap(Pattern, FTipClick, Radius);
+  FTipMoved := True;
+  Answer := SnapToJSON(FTipSnap);
+  Answer.Add('moved', True);
+  Answer.Add('message', CalloutSnapDescription(Pattern, FTipSnap, FTipClick));
+  Answer.Add('leaderStrokes', SegmentsToJSON(NoteLeaderStrokes(Pattern, Note, FieldValuesFor(Params), FTipSnap.Position)));
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoTipEnd(Cancel: boolean): TJSONData;
+var
+  Edit: TSelectionEdit;
+  Moved: boolean;
+begin
+  Moved := FTipMoved and not Cancel;
+  FDragTip := False;
+  FTipMoved := False;
+  if not Moved then
+  begin
+    FDragKey := '';
+    Exit(TJSONObject.Create(['changed', False]));
+  end;
+  Edit := MoveCalloutTip(Document, TNoteObject(Document.Pattern.FindNode(FDragKey)), FTipSnap, FTipClick);
+  FDragKey := '';
+  if not Edit.Done then
+    raise EApiError.Create(RPC_REFUSED, Edit.Message);
+  Result := TJSONObject.Create(['changed', True]);
 end;
 
 function RolesToJSON: TJSONArray;

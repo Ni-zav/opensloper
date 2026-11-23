@@ -30,7 +30,7 @@ interface
 
 uses
   SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.Document.PatternDocument,
-  Sloper.Editor.Snap, Sloper.Editor.SelectionEdits;
+  Sloper.Core.Note, Sloper.Editor.Snap, Sloper.Editor.SelectionEdits;
 
 const
   // A line or curve shorter than this (mm) is ignored
@@ -79,6 +79,9 @@ function AddNoteFromSnap(Document: TPatternDocument; const Snap: TSnap; const Cl
 function CalloutStartRefusal(Pattern: TPattern; const Tip: TSnap; const TipClick: TVec2): string;
 // A callout pointing where its first click snapped, its text at BoxAt
 function AddCalloutFromSnap(Document: TPatternDocument; const Tip: TSnap; const TipClick, BoxAt: TVec2): TSelectionEdit;
+// Hangs a callout from where its dragged tip was dropped (at TipClick,
+// snapped to Tip), its text staying where it is, as one undo step
+function MoveCalloutTip(Document: TPatternDocument; Note: TNoteObject; const Tip: TSnap; const TipClick: TVec2): TSelectionEdit;
 
 resourcestring
   rsToolAddLine = 'Add line';
@@ -102,11 +105,12 @@ resourcestring
   rsToolNewNoteText = 'Text';
   rsToolCalloutBox = 'Click where the callout''s text goes';
   rsToolAddCallout = 'Add callout';
+  rsToolMoveTip = 'Move callout tip';
 
 implementation
 
 uses
-  Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.PieceDetect, Sloper.Core.Note,
+  Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Piece, Sloper.Core.PieceDetect,
   Sloper.Editor.Scene, Sloper.Editor.Tools;
 
 const
@@ -417,6 +421,12 @@ begin
     Result := Committed(Document, True, [Note.Key])
   else
     Result := Committed(Document, False, []);
+end;
+
+function MoveCalloutTip(Document: TPatternDocument; Note: TNoteObject; const Tip: TSnap; const TipClick: TVec2): TSelectionEdit;
+begin
+  Document.BeginChange(rsToolMoveTip);
+  Result := Committed(Document, ReanchorFromSnap(Document.Pattern, Note, Tip, TipClick), [Note.Key]);
 end;
 
 end.

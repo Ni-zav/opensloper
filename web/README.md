@@ -20,11 +20,11 @@ So far the canvas draws the scene (pieces with their marks, notches and
 direction, edges, selected seams, notes and callouts, markers, points and
 labels placed clear of each other, and the selected curves' handles), zooms
 with the wheel, pans with the middle button, selects by clicking and boxing,
-and drags points, notes and curve handles as one undo step; every drawing
-tool of the desktop's works (Point, Line, Curve, Circle, Rectangle, Piece,
-Notch, Seam, Text and Callout), and a note's text is typed over the canvas.
-Open, Measurements, Save, Undo, Redo, Fit, the role box and the labels mode
-are on the toolbar. The panels and a callout's tip follow the same pattern.
+and drags points, notes, curve handles and callout tips as one undo step;
+every drawing tool of the desktop's works (Point, Line, Curve, Circle,
+Rectangle, Piece, Notch, Seam, Text and Callout), and a note's text is typed
+over the canvas. Open, Measurements, Save, Undo, Redo, Fit, the role box and
+the labels mode are on the toolbar. The panels follow the same pattern.
 
 ## Setting up
 

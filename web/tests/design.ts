@@ -2,7 +2,7 @@
 // Chromium as a user would: opens a regression pattern with its measurements,
 // checks the canvas drew it, adds a point with the Point tool, drags it with
 // the Select tool and undoes, then uses each drawing tool and drags a curve's
-// handle and a note. Serves the app itself on a free port. Node runs
+// handle, a note and a callout's tip. Serves the app itself on a free port. Node runs
 // this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
 // default, and SCREENSHOT, a file name without .png, keeps a picture of the end.
 import assert from 'node:assert/strict';
@@ -217,7 +217,7 @@ try {
   await page.keyboard.press('Escape');
   await chooseTool(page, 'Select');
   await clickAt(page, box, 135, 220);
-  await page.waitForFunction(() => (document.body.dataset.selection ?? '').split(' ').length === 1);
+  await page.waitForFunction(() => /^\d+$/.test(document.body.dataset.selection ?? ''));
   await new Promise((resolve) => setTimeout(resolve, 200));
   await page.mouse.move(box.x + 110, box.y + 220);
   await page.mouse.down();
@@ -275,6 +275,7 @@ try {
   assert.match(await status(page), /text goes/, 'asks where its text goes');
   await clickAt(page, box, 240, 600);
   await waitForData(page, 'undo', 'Add callout');
+  const calloutId = await bodyData(page, 'selection');
   await page.waitForSelector('textarea.note-editor', { timeout: TIMEOUT_MS });
   await page.keyboard.press('Escape');
 
@@ -288,6 +289,24 @@ try {
   }
   await page.mouse.up();
   await waitForData(page, 'undo', 'Move note');
+
+  // The callout, selected by its text, has its tip dragged from the circle's centre to the rectangle's corner
+  await clickAt(page, box, 243, 602);
+  await waitForData(page, 'selection', calloutId);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  await page.mouse.move(box.x + 130, box.y + 560);
+  await page.mouse.down();
+  for (let step = 1; step <= 4; step++) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.mouse.move(box.x + 130 + step * 17.5, box.y + 560 - step * 27.5);
+  }
+  try {
+    await page.waitForFunction(() => document.querySelector('#status')?.textContent.includes('AD'), { timeout: 3000 });
+  } catch (error: unknown) {
+    throw new Error(`the tip: ${await status(page)} ${await bodyData(page, 'selection')}`, { cause: error });
+  }
+  await page.mouse.up();
+  await waitForData(page, 'undo', 'Move callout tip');
 
   // Every label drawn adds ink
   await page.select('#labels', 'none');
@@ -306,7 +325,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; added, dragged and undid a point; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout and moved the note; labelled everything. ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything. ` +
       (await status(page)),
   );
 } finally {

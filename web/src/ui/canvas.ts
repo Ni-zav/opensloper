@@ -1,12 +1,21 @@
 // The drawing canvas, as Sloper.UI.Canvas: shows the scene the engine gives,
 // keeps the view (zoom and pan), the selection and the gestures: clicking to
-// select, dragging a point, a note or a selected curve's handle as one undo step, boxing a selection, panning with
+// select, dragging a point, a note, a selected curve's handle or a callout's
+// tip as one undo step, boxing a selection, panning with
 // the middle button and zooming with the wheel. Other tools get the clicks and
 // moves (Sloper.UI.CanvasTools). Every engine call is asynchronous; moves go
 // through LatestOnly, so only the newest counts.
 import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
 import { EngineError } from '../engine/engine.ts';
-import { booleanField, idsField, isRecord, stringField } from '../engine/replies.ts';
+import {
+  booleanField,
+  idField,
+  idsField,
+  isRecord,
+  numberField,
+  numbersField,
+  stringField,
+} from '../engine/replies.ts';
 import {
   EMPTY_SCENE,
   parseHandle,
@@ -21,6 +30,7 @@ import {
 import { ViewTransform, ZOOM_STEP, type Vec2 } from '../editor/view.ts';
 import {
   ClickTool,
+  SNAP_KINDS,
   SNAP_RADIUS,
   SeamTool,
   SnapTool,
@@ -29,7 +39,7 @@ import {
 } from './canvasTools.ts';
 import { LatestOnly } from './latestOnly.ts';
 import { NoteEditor } from './noteEditor.ts';
-import { PatternPainter, type SnapMarker } from './patternPainter.ts';
+import { PatternPainter, type DraggedTip, type SnapMarker } from './patternPainter.ts';
 
 // A press that moves further than this, in pixels, is a drag, not a click
 const DRAG_THRESHOLD = 4;
@@ -82,13 +92,14 @@ function numericIds(list: Iterable<string>): number[] {
 }
 
 // What lies under a place: the objects in the order a click picks them, and
-// a selected curve's handle, which lies over them all
+// a selected callout's tip or curve's handle, which lie over them all
 interface Hits {
   ids: string[];
+  tip: string | undefined;
   handle: HandleRef | undefined;
 }
 
-const NO_HITS: Hits = { ids: [], handle: undefined };
+const NO_HITS: Hits = { ids: [], tip: undefined, handle: undefined };
 
 function distance(from: Vec2, to: Vec2): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
@@ -139,6 +150,9 @@ export class PatternCanvas implements CanvasToolHost {
   // The steps of the gesture under way, run in order
   private gesture: Promise<void> = Promise.resolve();
   private dragId = '';
+  // A callout's tip is being dragged: it snaps, and changes nothing until dropped
+  private dragTip = false;
+  private draggedTip: DraggedTip | undefined;
   private dragOffset: Vec2 = { x: 0, y: 0 };
   private generation = -1;
   // Fit each new scene to the window: from opening a pattern until the user
@@ -401,6 +415,8 @@ export class PatternCanvas implements CanvasToolHost {
       seamB: this.seamB,
       handles: this.handles,
       hoverHandle: this.hoverHandle,
+      tipHandles: this.tool === SELECT_TOOL,
+      draggedTip: this.draggedTip,
     });
     this.painter.drawGrid();
     this.painter.drawPattern(this.scene, this.tables);
@@ -502,7 +518,11 @@ export class PatternCanvas implements CanvasToolHost {
       selection: numericIds(this.selection),
     });
     const handle = answer.handle;
-    return { ids: idsField(answer, 'objects'), handle: parseHandle(isRecord(handle) ? handle : undefined) };
+    return {
+      ids: idsField(answer, 'objects'),
+      tip: idField(answer, 'tip'),
+      handle: parseHandle(isRecord(handle) ? handle : undefined),
+    };
   }
 
   private readonly pointerDown = (event: PointerEvent): void => {
@@ -635,8 +655,8 @@ export class PatternCanvas implements CanvasToolHost {
 
   private async clickSelect(toggle: boolean): Promise<void> {
     const hits = await this.pressHits;
-    // A click on a handle leaves the selection as it is
-    if (hits.handle !== undefined) {
+    // A click on a handle or a callout's tip leaves the selection as it is
+    if (hits.tip !== undefined || hits.handle !== undefined) {
       return;
     }
     const id = hits.ids[0];
@@ -658,6 +678,12 @@ export class PatternCanvas implements CanvasToolHost {
   // A press on a handle, a point or a note drags it; anywhere else draws a selection box
   private async startDragOrBox(): Promise<void> {
     const hits = await this.pressHits;
+    if (hits.tip !== undefined) {
+      // The tip goes where the pointer is, snapped
+      this.dragTip = true;
+      await this.beginDrag(hits.tip, { id: Number(hits.tip), tip: true }, this.view.toModel(this.pressAt));
+      return;
+    }
     if (hits.handle !== undefined) {
       await this.startHandleDrag(hits.handle);
       return;
@@ -692,6 +718,7 @@ export class PatternCanvas implements CanvasToolHost {
       await this.document.call('editor_drag_begin', params);
     } catch (error: unknown) {
       this.mode = 'refused';
+      this.dragTip = false;
       throw error;
     }
     this.dragId = id;
@@ -712,6 +739,10 @@ export class PatternCanvas implements CanvasToolHost {
       return;
     }
     const model = this.view.toModel(at);
+    if (this.dragTip) {
+      await this.tipTo(model);
+      return;
+    }
     const answer = await this.document.call('editor_drag_to', {
       x: model.x + this.dragOffset.x,
       y: model.y + this.dragOffset.y,
@@ -722,6 +753,20 @@ export class PatternCanvas implements CanvasToolHost {
     }
   }
 
+  // Shows where the tip snaps and the leader to it, and says what it would point at
+  private async tipTo(model: Vec2): Promise<void> {
+    const answer = await this.document.read('editor_drag_to', {
+      x: model.x,
+      y: model.y,
+      radius: this.view.pixelsToMM(SNAP_RADIUS),
+      fileName: this.document.fileName,
+    });
+    const snapped = { x: numberField(answer, 'x') ?? model.x, y: numberField(answer, 'y') ?? model.y };
+    this.draggedTip = { id: this.dragId, at: snapped, leaderStrokes: numbersField(answer, 'leaderStrokes') ?? [] };
+    this.showSnap({ kind: SNAP_KINDS.find((each) => each === stringField(answer, 'kind')) ?? 'free', at: snapped });
+    this.events.message(stringField(answer, 'message') ?? '');
+  }
+
   // Ends the drag once its last move has run; a cancel drops moves still waiting
   private async endDrag(cancel: boolean): Promise<void> {
     if (cancel) {
@@ -730,11 +775,22 @@ export class PatternCanvas implements CanvasToolHost {
     await this.drags.idle();
     const id = this.dragId;
     this.dragId = '';
-    if (id !== '') {
+    const tip = this.dragTip;
+    this.dragTip = false;
+    if (id === '') {
+      return;
+    }
+    try {
       await this.document.call(cancel ? 'editor_drag_cancel' : 'editor_drag_end');
-      if (!cancel && !this.selection.has(id)) {
-        this.select([id]);
+    } finally {
+      // The scene shows the tip where it was dropped, or where it was
+      if (tip) {
+        this.draggedTip = undefined;
+        this.showSnap(undefined);
       }
+    }
+    if (!cancel && !this.selection.has(id)) {
+      this.select([id]);
     }
   }
 

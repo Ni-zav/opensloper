@@ -25,7 +25,7 @@ import type { SnapKind, SnapMarker, SnapPreview } from './patternPainter.ts';
 // Screen pixels around the pointer that a tool snaps to or picks from, as SNAP_RADIUS
 export const SNAP_RADIUS = 8;
 
-const SNAP_KINDS: readonly SnapKind[] = ['free', 'point', 'crossing', 'edge', 'horizontal', 'vertical'];
+export const SNAP_KINDS: readonly SnapKind[] = ['free', 'point', 'crossing', 'edge', 'horizontal', 'vertical'];
 
 // What a tool needs of the canvas
 export interface CanvasToolHost {

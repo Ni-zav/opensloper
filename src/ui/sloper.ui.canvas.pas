@@ -287,7 +287,6 @@ type
   end;
 
 resourcestring
-  rsCanvasMoveTip = 'Move callout tip';
   rsCanvasPickPivot = 'Rotate Copy: click the point to turn about; Escape cancels';
   rsCanvasPickAxis = 'Mirror Copy: click a straight edge, or the first of two points; Escape cancels';
   rsCanvasPickSecond = 'Mirror Copy: click the second point; Escape cancels';
@@ -302,7 +301,7 @@ implementation
 
 uses
   Math, Forms, StrUtils, LCLIntf, Sloper.UI.Commands, Sloper.Core.Bounds, Sloper.Core.EvalTypes, Sloper.Core.Evaluator,
-  Sloper.Editor.ObjectList;
+  Sloper.Editor.ObjectList, Sloper.Editor.ToolEdits;
 
 const
   // Between an object's problems in the status bar
@@ -1235,20 +1234,16 @@ end;
 procedure TPatternCanvas.FinishTipDrag;
 var
   Node: TEvalNode;
-  Reason: string;
-  Done: boolean;
+  Edit: TSelectionEdit;
 begin
   FTipDragging := False;
   FTipSnapShown := False;
   Node := FDocument.Pattern.FindNode(FPressKey);
   if not (Node is TNoteObject) then
     Exit;
-  FDocument.BeginChange(rsCanvasMoveTip);
-  Done := ReanchorFromSnap(FDocument.Pattern, TNoteObject(Node), FTipSnap, FTipClick);
-  Reason := FDocument.Pattern.LastError;
-  FDocument.Commit(Done);
-  if not Done then
-    ShowMessageText(Reason);
+  Edit := MoveCalloutTip(FDocument, TNoteObject(Node), FTipSnap, FTipClick);
+  if not Edit.Done then
+    ShowMessageText(Edit.Message);
   Invalidate;
 end;
 

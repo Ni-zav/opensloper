@@ -157,6 +157,16 @@ export interface PaintState {
   // The selected curves' handles, and the one under the cursor
   handles: readonly CurveHandle[];
   hoverHandle: HandleRef | undefined;
+  // A selected callout shows a handle on its tip, for dragging it
+  tipHandles: boolean;
+  // The callout whose tip is being dragged, where it snapped and its leader there
+  draggedTip: DraggedTip | undefined;
+}
+
+export interface DraggedTip {
+  id: string;
+  at: Vec2;
+  leaderStrokes: number[];
 }
 
 export class PatternPainter {
@@ -480,10 +490,14 @@ export class PatternPainter {
     if (note.dimmed) {
       ink = { ...ink, alpha: DIM_NOTE_ALPHA };
     }
-    if (note.leader !== 'none' && note.leaderStrokes.length >= 4) {
-      this.strokeSegments(note.leaderStrokes, css(ink), 1);
+    // A callout's leader, to where its tip is being dragged while it is
+    const dragged = state.draggedTip?.id === note.id ? state.draggedTip : undefined;
+    const tip = dragged?.at ?? note.anchorAt;
+    const leaderStrokes = dragged?.leaderStrokes ?? note.leaderStrokes;
+    if (note.leader !== 'none' && leaderStrokes.length >= 4) {
+      this.strokeSegments(leaderStrokes, css(ink), 1);
       if (note.leader === 'dot') {
-        const spot = view.toScreen(note.anchorAt);
+        const spot = view.toScreen(tip);
         context.fillStyle = css(ink);
         context.beginPath();
         context.arc(spot.x, spot.y, Math.max(MIN_DOT_PIXELS, LEADER_DOT_RADIUS * view.scale), 0, 2 * Math.PI);
@@ -500,6 +514,17 @@ export class PatternPainter {
       context.lineTo(topLeft.x, topLeft.y);
       context.stroke();
       context.setLineDash([]);
+    }
+    // A selected callout's tip can be dragged to something else
+    if (selected && note.leader !== 'none' && state.tipHandles) {
+      const spot = view.toScreen(tip);
+      context.beginPath();
+      context.arc(spot.x, spot.y, HANDLE_RADIUS, 0, 2 * Math.PI);
+      context.fillStyle = css(PAPER);
+      context.fill();
+      context.strokeStyle = css(SELECTED_INK);
+      context.lineWidth = 1.5;
+      context.stroke();
     }
     if (note.boxed) {
       context.fillStyle = css(WHITE);

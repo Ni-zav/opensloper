@@ -108,6 +108,12 @@ type
     procedure TestDragHandle;
     // A handle set by a formula is drawn but not dragged
     procedure TestHandleFormulaRefused;
+    // A callout's tip snaps as it moves, changing nothing until it is dropped
+    procedure TestDragCalloutTip;
+    procedure TestCalloutTipRefusals;
+  private
+    // A callout from B, its text at (150, -40); its ID
+    function AddCallout: integer;
   end;
 
 implementation
@@ -1010,6 +1016,74 @@ begin
   AssertEquals('refused', RPC_REFUSED, ErrorCode);
   Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
   Answer;
+end;
+
+function TTestEditorServer.AddCallout: integer;
+begin
+  Call('editor_tool_click', '{"tool": "callout", "x": 100, "y": 0, "radius": 2}');
+  Call('editor_tool_click', '{"tool": "callout", "x": 150, "y": -40, "radius": 2, "start": {"x": 100, "y": 0, ' +
+    '"radius": 2}}');
+  Result := Answer.Arrays['select'].Integers[0];
+end;
+
+procedure TTestEditorServer.TestDragCalloutTip;
+var
+  Callout: integer;
+  Note: TJSONObject;
+begin
+  AddSquare;
+  Callout := AddCallout;
+  Call('editor_objects_at', '{"x": 100.5, "y": 0.5, "pointRadius": 2, "edgeRadius": 2, "selection": [' +
+    IntToStr(Callout) + ']}');
+  AssertEquals('its tip', Callout, Answer.Integers['tip']);
+  Call('editor_objects_at', '{"x": 100.5, "y": 0.5, "pointRadius": 2, "edgeRadius": 2, "selection": []}');
+  AssertTrue('not while unselected', Answer.Nulls['tip']);
+  Call('editor_changes');
+  Call('editor_drag_begin', '{"id": ' + IntToStr(Callout) + ', "tip": true}');
+  AssertNear('starts at B', 100, Answer.Floats['x'], TOLERANCE);
+  Call('editor_drag_to', '{"x": 0.5, "y": 0.5, "radius": 2}');
+  AssertEquals('snaps to A', 'point', Answer.Strings['kind']);
+  AssertNear('there', 0, Answer.Floats['x'], TOLERANCE);
+  AssertTrue('says what it points at', Pos('A', Answer.Strings['message']) > 0);
+  AssertTrue('its leader to draw', Answer.Arrays['leaderStrokes'].Count >= 4);
+  Call('editor_changes');
+  AssertEquals('nothing changed yet', '', ChangeNames(Answer));
+  Call('editor_drag_end');
+  AssertTrue('changed', Answer.Booleans['changed']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Move callout tip', Answer.Strings['undo']);
+  Call('editor_scene');
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertNear('pointing at A', 0, Note.Arrays['anchorAt'].Floats[0], TOLERANCE);
+  AssertNear('its text stays', 150, Note.Arrays['box'].Floats[0], 0.1);
+  Call('editor_drag_begin', '{"id": ' + IntToStr(Callout) + ', "tip": true}');
+  Call('editor_drag_to', '{"x": 100.5, "y": 99.5, "radius": 2}');
+  Call('editor_drag_cancel');
+  AssertFalse('cancelled', Answer.Booleans['changed']);
+  Call('editor_drag_begin', '{"id": ' + IntToStr(Callout) + ', "tip": true}');
+  Call('editor_drag_end');
+  AssertFalse('never moved', Answer.Booleans['changed']);
+end;
+
+procedure TTestEditorServer.TestCalloutTipRefusals;
+var
+  Callout: integer;
+begin
+  AddSquare;
+  Callout := AddCallout;
+  Call('editor_drag_begin', '{"id": ' + IntToStr(Callout) + ', "tip": true}');
+  Call('editor_drag_to', '{"x": 300, "y": 300, "radius": 2}');
+  AssertEquals('free', 'free', Answer.Strings['kind']);
+  Call('editor_drag_end');
+  AssertEquals('a tip on nothing', RPC_REFUSED, ErrorCode);
+  // The drop left no change open
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": 5, "y": 5}');
+  Answer;
+  Call('editor_drag_begin', '{"name": "A", "tip": true}');
+  AssertEquals('a point has no tip', RPC_REFUSED, ErrorCode);
+  Call('set_locked', '{"id": ' + IntToStr(Callout) + ', "locked": true}');
+  Call('editor_drag_begin', '{"id": ' + IntToStr(Callout) + ', "tip": true}');
+  AssertEquals('locked', RPC_REFUSED, ErrorCode);
 end;
 
 initialization

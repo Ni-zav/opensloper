@@ -43,8 +43,10 @@ be straight.
 
 Drag a point with the Select tool, or nudge the selected points with the arrow
 keys: 1 mm a press, 10 mm with ++shift++. Only plain numbers change: a point
-placed by a formula, or by other objects, stays put and the status bar says
-why. Change its formulas in the Properties tab instead.
+with one formula moves along its other number only, so a point whose x is a
+formula moves up and down along a dashed guide. A point placed only by
+formulas, or by other objects, stays put and the status bar says why. Change
+its formulas in the Properties tab instead.
 
 ## Locking objects
 

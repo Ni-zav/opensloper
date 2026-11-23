@@ -468,7 +468,7 @@ var
 begin
   AssertTrue('set', FPattern.SetFormula(FOffset, 'dy', '@waist/10'));
   FPattern.Evaluate;
-  AssertFalse('a whole drag is refused', CanDrag(FPattern, FOffset, Reason));
+  AssertEquals('a whole drag moves only the plain field', 'dx', PartialDragField(FOffset));
   AssertTrue('the plain field can be dragged', DragPointField(FPattern, FOffset, 'dx', Vec2(120, 0), Reason));
   AssertEquals('the other keeps its formula', '@waist/10', FPattern.FormulaText(FOffset, 'dy'));
 end;
@@ -494,6 +494,7 @@ begin
   AssertTrue('along an edge', DragPointField(FPattern, FAlong, 'value', FHem.PointAtLength(FHem.Length / 2), Reason));
   AssertEquals('a ratio', '0.5', FPattern.FormulaText(FAlong, 'value'));
   // A whole drag still leaves formulas alone
+  AssertTrue('set y', FPattern.SetFormula(FFree, 'y', '@waist/3'));
   AssertFalse('a whole drag', CanDrag(FPattern, FFree, Reason));
 end;
 

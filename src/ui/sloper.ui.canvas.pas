@@ -117,6 +117,7 @@ type
     // The suggestion's object at the smallest and largest sizes
     FGradeGhosts: TGradeGhostArray;
     function DragLocked: boolean;
+    procedure DrawDragGuide;
     procedure TakeFocus;
     function NoteValues: TFieldValues;
     function NotesHere(X, Y: integer): TStringArray;
@@ -783,11 +784,31 @@ begin
   begin
     FDocument.LiveUpdate;
     // The guide follows the point
-    if DragLocked then
+    if DragLocked or (PartialDragField(Point) <> '') then
       Invalidate;
   end
   else
     ShowMessageText(Reason);
+end;
+
+// The path the dragged point keeps to: the locked field's, or the plain
+// field's of a point whose other field is a formula
+procedure TPatternCanvas.DrawDragGuide;
+var
+  Node: TEvalNode;
+begin
+  if FDraggingHandle then
+    Exit;
+  if DragLocked then
+  begin
+    Node := FDocument.Pattern.FindNode(FLockKey);
+    if Node is TPointObject then
+      FPainter.DrawFieldGuide(FieldGuide(FDocument.Pattern, TPointObject(Node), FLockField));
+    Exit;
+  end;
+  Node := FDocument.Pattern.FindNode(FPressKey);
+  if (Node is TPointObject) and (PartialDragField(TPointObject(Node)) <> '') then
+    FPainter.DrawFieldGuide(FieldGuide(FDocument.Pattern, TPointObject(Node), PartialDragField(TPointObject(Node))));
 end;
 
 // The point being pressed or dragged is the one whose field is locked
@@ -1813,8 +1834,8 @@ begin
       FPainter.DrawSnap(FTipSnap, spNone, FTipSnap.Position);
     if FInput.Mode = cmBoxing then
       FPainter.DrawBox(FPressPos, FLastPos);
-    if (FInput.Mode = cmDragging) and DragLocked and (FDocument.Pattern.FindNode(FLockKey) is TPointObject) then
-      FPainter.DrawFieldGuide(FieldGuide(FDocument.Pattern, TPointObject(FDocument.Pattern.FindNode(FLockKey)), FLockField));
+    if FInput.Mode = cmDragging then
+      DrawDragGuide;
     if FGhostShown then
     begin
       for Ghost in FGradeGhosts do

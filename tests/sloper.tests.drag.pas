@@ -46,6 +46,8 @@ type
     procedure TestAlongEdge;
     procedure TestNegativeLiteralCanDrag;
     procedure TestFormulaIsLocked;
+    procedure TestDragMovesOnlyPlainField;
+    procedure TestDragAlongPlainPolarField;
     procedure TestPlacedPointCannotDrag;
     procedure TestCurveHandles;
     procedure TestDragStartHandle;
@@ -171,12 +173,44 @@ var
   Err: string;
 begin
   Pt('A', '0', '0');
-  B := TPointObject(Check(FPattern.AddOffsetPoint('B', '1', omPolar, '@waist / 4', '0')));
+  B := TPointObject(Check(FPattern.AddOffsetPoint('B', '1', omPolar, '@waist / 4', '90 - 90')));
   FPattern.Evaluate;
   AssertFalse(CanDrag(FPattern, B, Err));
   AssertEquals(Format(rsDragFormula, ['B']), Err);
   AssertFalse('drag refused', DragPoint(FPattern, B, Vec2(1, 1), Err));
   AssertEquals('formula kept', '@waist / 4', FPattern.FormulaText(B, 'length'));
+end;
+
+// A free point whose x is a formula moves only up and down, keeping the formula
+procedure TTestDrag.TestDragMovesOnlyPlainField;
+var
+  E: TPointObject;
+  Err: string;
+begin
+  Pt('A', '0', '0');
+  Pt('D', '100', '0');
+  E := Pt('E', '(A.x + D.x)/2', '134');
+  FPattern.Evaluate;
+  AssertTrue(Err, CanDrag(FPattern, E, Err));
+  AssertEquals('the field it drags', 'y', PartialDragField(E));
+  Drag(E, 80, 150);
+  AssertEquals('x keeps its formula', '(A.x + D.x)/2', FPattern.FormulaText(E, 'x'));
+  AssertEquals('y follows', '150', FPattern.FormulaText(E, 'y'));
+  AssertPointsNear('moved straight down', Vec2(50, 150), E.Position);
+end;
+
+// A polar offset whose angle is a formula slides along that angle
+procedure TTestDrag.TestDragAlongPlainPolarField;
+var
+  B: TPointObject;
+begin
+  Pt('A', '0', '0');
+  B := TPointObject(Check(FPattern.AddOffsetPoint('B', '1', omPolar, '10', '90 - 90')));
+  FPattern.Evaluate;
+  Drag(B, 40, 25);
+  AssertEquals('length', '40', FPattern.FormulaText(B, 'length'));
+  AssertEquals('angle kept', '90 - 90', FPattern.FormulaText(B, 'angle'));
+  AssertPointsNear('on its angle', Vec2(40, 0), B.Position);
 end;
 
 procedure TTestDrag.TestPlacedPointCannotDrag;

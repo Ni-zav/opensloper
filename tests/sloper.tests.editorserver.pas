@@ -99,6 +99,7 @@ type
     procedure TestDragPoint;
     procedure TestDragCancel;
     procedure TestDragOneField;
+    procedure TestDragPartlyFormula;
     procedure TestDragNote;
     // While a drag is open, other changes wait
     procedure TestDragBlocksChanges;
@@ -963,6 +964,23 @@ begin
   Call('editor_drag_end');
   Call('editor_drag_begin', '{"name": "C", "field": "colour"}');
   AssertEquals('no such field', RPC_REFUSED, ErrorCode);
+end;
+
+// A point whose x is a formula moves only up and down, along a guide
+procedure TTestEditorServer.TestDragPartlyFormula;
+begin
+  AddSquare;
+  Call('set_formula', '{"name": "C", "field": "x", "formula": "B.x"}');
+  Call('editor_drag_begin', '{"name": "C"}');
+  AssertEquals('a line to keep to', 'line', Answer.Objects['guide'].Strings['kind']);
+  AssertNear('upright through it', 100, Answer.Objects['guide'].Floats['x2'], TOLERANCE);
+  Call('editor_drag_to', '{"x": 130, "y": 160}');
+  AssertTrue('moved', Answer.Booleans['moved']);
+  AssertNear('not across', 100, Answer.Floats['x'], TOLERANCE);
+  AssertNear('down', 160, Answer.Floats['y'], TOLERANCE);
+  Call('editor_drag_end');
+  Call('get_object', '{"name": "C"}');
+  AssertEquals('x keeps its formula', 'B.x', Answer.Objects['formulas'].Strings['x']);
 end;
 
 procedure TTestEditorServer.TestDragNote;

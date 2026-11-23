@@ -102,7 +102,7 @@ The canvas feels like Inkscape, but every point records how it was placed relati
 - **Edits to the selection** (`Sloper.Editor.SelectionEdits`): each checks the selection fits, makes one undo step and returns what to select and show, so the rules are tested without the LCL.
 - **Drawing** (`Sloper.UI.PatternPainter`) draws what it is handed and decides nothing. Outlines solid, construction thin, grey and dashed; errors red, blocked orange, failing objects faded at their last good result.
 - **Selection.** Points win over edges, both over pieces; Shift adds; a box selects what is wholly inside.
-- **Dragging** changes only plain-number fields, rounded to the unit's step; a point placed by a formula refuses, saying why. Handles with a formula are drawn hollow and refuse. Arrow keys nudge 1 mm (10 with Shift).
+- **Dragging** changes only plain-number fields, rounded to the unit's step: a point with one field a formula moves along its other field only (`PartialDragField`), drawing that field's guide (a free point whose x is a formula moves up and down), and one with no plain field refuses, saying why. Handles with a formula are drawn hollow and refuse. Arrow keys nudge 1 mm (10 with Shift).
 - **Deleting** is refused while something else uses an object. Only Delete or Backspace deletes; Shift+Delete means Cut elsewhere, so it does nothing here.
 - **One gesture at a time** (`Sloper.UI.CanvasInput`): a drag holds an open document change until its button is released, so other buttons and editing keys are ignored meanwhile; Escape cancels.
 - **Changing an edge's type** (`ConvertToLine`, `ConvertToCurve`) keeps its ID, role and users. Refused where straightness matters (a fold, a mirror axis, a line whose `.angle` a formula reads).

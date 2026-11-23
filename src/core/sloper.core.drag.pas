@@ -18,8 +18,9 @@
 
 // Dragging points and curve handles: which can follow the mouse, and the
 // formulas a drag writes. A drag only changes fields that are plain numbers, so
-// anything placed by a formula (@waist/4) keeps its parametric intent and is
-// locked. No LCL dependency.
+// anything placed by a formula (@waist/4) keeps its parametric intent: a point
+// with one formula field moves along its other field only, and one with no
+// plain field is locked. No LCL dependency.
 unit Sloper.Core.Drag;
 
 {$mode ObjFPC}{$H+}
@@ -57,14 +58,19 @@ function RoundedText(Value: double; Decimals: integer): string;
 // in the pattern unit
 function DraggedLength(Target: TDraftObject; const FieldName: string; Millimetres: double; Units: TMeasureUnit): string;
 // True when Point can be dragged: it is not locked, its type moves freely,
-// and every field the drag would change is a plain number. Otherwise
+// and at least one field the drag would change is a plain number. Otherwise
 // ErrorMessage says why; for a transform copy it names the source and
 // transform.
 function CanDrag(Pattern: TPattern; Point: TPointObject; out ErrorMessage: string): boolean;
+// The one field a drag of Point changes when its other drag field holds a
+// formula (y for a free point whose x is a formula); empty when every drag
+// field is a plain number, or none is
+function PartialDragField(Point: TPointObject): string;
 // Sets Point's fields so it lies at Target, or as near as its operation
-// allows (a point along an edge stays on the edge). Call inside a document
-// change and evaluate afterwards. False, with ErrorMessage, when the point
-// cannot be dragged.
+// allows (a point along an edge stays on the edge, one with a formula field
+// moves along its plain field only). Call inside a document change and
+// evaluate afterwards. False, with ErrorMessage, when the point cannot be
+// dragged.
 function DragPoint(Pattern: TPattern; Point: TPointObject; const Target: TVec2; out ErrorMessage: string): boolean;
 // The fields a drag of Point writes; empty when its type cannot be dragged
 function DragFields(Point: TPointObject): TStringArray;
@@ -202,12 +208,30 @@ begin
     Exit(False);
   end;
   for FieldName in Fields do
-    if not Point.Field(FieldName).IsLiteral then
+    if Point.Field(FieldName).IsLiteral then
+      Exit(True);
+  ErrorMessage := Format(rsDragFormula, [Point.DisplayName]);
+  Result := False;
+end;
+
+function PartialDragField(Point: TPointObject): string;
+var
+  FieldName: string;
+  Plain, Formulas: integer;
+begin
+  Result := '';
+  Plain := 0;
+  Formulas := 0;
+  for FieldName in DragFields(Point) do
+    if Point.Field(FieldName).IsLiteral then
     begin
-      ErrorMessage := Format(rsDragFormula, [Point.DisplayName]);
-      Exit(False);
-    end;
-  Result := True;
+      Inc(Plain);
+      Result := FieldName;
+    end
+    else
+      Inc(Formulas);
+  if (Plain <> 1) or (Formulas = 0) then
+    Result := '';
 end;
 
 function SetFields(Pattern: TPattern; Target: TDraftObject; const Names, Texts: array of string; out ErrorMessage: string): boolean;
@@ -282,9 +306,13 @@ function DragPoint(Pattern: TPattern; Point: TPointObject; const Target: TVec2; 
 var
   BaseNode: TEvalNode;
   Base: TVec2;
+  Partial: string;
 begin
   if not CanDrag(Pattern, Point, ErrorMessage) then
     Exit(False);
+  Partial := PartialDragField(Point);
+  if Partial <> '' then
+    Exit(DragPointField(Pattern, Point, Partial, Target, ErrorMessage));
   if Point is TFreePoint then
     Exit(SetFields(Pattern, Point, ['x', 'y'],
       [DraggedLength(Point, 'x', Target.X, Pattern.Units), DraggedLength(Point, 'y', Target.Y, Pattern.Units)], ErrorMessage));

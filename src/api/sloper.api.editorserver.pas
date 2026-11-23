@@ -2171,7 +2171,10 @@ begin
     At := TPointObject(Node).Position;
   Result := TJSONObject.Create(['x', ReportFloat(At.X), 'y', ReportFloat(At.Y)]);
   if FDragField <> '' then
-    Result.Add('guide', GuideToJSON(FieldGuide(Document.Pattern, TPointObject(Node), FDragField)));
+    Result.Add('guide', GuideToJSON(FieldGuide(Document.Pattern, TPointObject(Node), FDragField)))
+  // A point with a formula field moves along its plain field only
+  else if (FDragHandle = '') and not FDragTip and (Node is TPointObject) and (PartialDragField(TPointObject(Node)) <> '') then
+    Result.Add('guide', GuideToJSON(FieldGuide(Document.Pattern, TPointObject(Node), PartialDragField(TPointObject(Node)))));
 end;
 
 procedure TEditorApiServer.RequireDrag;

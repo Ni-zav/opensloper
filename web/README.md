@@ -59,8 +59,8 @@ cd web && npm ci
 
 ```
 ./opensloper-make.sh web       # the engine, then npm run build: check, unit tests, bundle
-cd web && npm run test:browser # the app in headless Chromium (CHROMIUM names the browser; SCREENSHOT=name keeps name.png)
-python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design
+(cd web && npm run test:browser) # the app in headless Chromium (CHROMIUM names the browser; SCREENSHOT=name keeps name.png)
+python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design  # from the repository's root
 ```
 
 The app is then at `http://127.0.0.1:8766/`; a module worker does not load

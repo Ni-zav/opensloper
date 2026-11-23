@@ -259,7 +259,7 @@ Pieces are coloured by the material they are cut from, so colour carries meaning
 - **Display.** Fills are semi-transparent and under every line; the palette stays distinguishable for colour-blind users, and the name is in the piece label, so colour is never the only cue. Hatching angles go by place in the list, so hatched materials differ in black and white. Printing fills is off by default.
 - **Cut list** grouped by material ("Main: Front ×1 on fold, Back ×2 · Lining: …"), the `{cutlist}` field.
 
-Code: `Sloper.Core.Materials`, `Sloper.Core.PatternMaterials`, with `TPattern` answering `MaterialOf`, `PieceLook`, `PieceCaption` and `CutList`, so the canvas and every export ask the same place. The Materials tab is read-only (`Sloper.UI.MaterialPanel`); editing is in `Sloper.UI.MaterialDialog`, each field one undo step applied at once.
+Code: `Sloper.Core.Materials`, `Sloper.Core.PatternMaterials`, with `TPattern` answering `MaterialOf`, `PieceLook`, `PieceCaption` and `CutList`, so the canvas and every export ask the same place. The Materials tab is read-only (`Sloper.UI.MaterialPanel`); editing is in `Sloper.UI.MaterialDialog`, each field one undo step applied at once. The list's rows and the fill and fabric captions are in the LCL-free `Sloper.Editor.MaterialList` and the edits in `Sloper.Editor.PanelEdits`, so the web editor shares them through `editor_materials`, `editor_material`, `editor_material_set`, `editor_material_add` and `editor_material_delete`.
 
 ## Annotations
 

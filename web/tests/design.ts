@@ -502,13 +502,53 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok((await inkedPixels(page)) > unlabelled + MIN_INKED_PIXELS, 'labels drawn');
 
+  // The Materials tab and dialog: a material added and named, a size refused and put back, the
+  // name undone in the dialog, then the material deleted
+  await page.click('.side-column [data-tab="materials"]');
+  const materialRows = '.materials .material-grid tbody tr';
+  await page.waitForSelector(materialRows, { timeout: TIMEOUT_MS });
+  const materialCount = (await page.$$(materialRows)).length;
+  await page.click('.materials .material-edit');
+  await page.waitForSelector('.materials-dialog[open]', { timeout: TIMEOUT_MS });
+  await page.click('.materials-left .list-buttons button:first-child');
+  await waitForData(page, 'undo', 'Add material');
+  await page.waitForFunction(() => document.activeElement?.id === 'material-name', { timeout: TIMEOUT_MS });
+  await page.keyboard.type('Lining');
+  await page.keyboard.press('Enter');
+  await waitForData(page, 'undo', 'Rename material');
+  await page.waitForSelector('.materials-dialog tr.selected[data-name="Lining"]', { timeout: TIMEOUT_MS });
+  await page.click('#material-width');
+  await page.keyboard.type('wide');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('#material-width.refused', { timeout: TIMEOUT_MS });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#material-width:not(.refused)', { timeout: TIMEOUT_MS });
+  assert.ok(await page.$('.materials-dialog[open]'), 'Escape put the field back, leaving the dialog open');
+  await page.focus('.materials-dialog .material-grid');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', 'Add material');
+  await page.click('.materials-left .list-buttons button:last-child');
+  await waitForData(page, 'undo', 'Delete material');
+  await page.click('.materials-bottom button');
+  await page.waitForFunction(() => document.querySelector('.materials-dialog[open]') === null, { timeout: TIMEOUT_MS });
+  assert.equal((await page.$$(materialRows)).length, materialCount, 'the tab lists them as before');
+
   // The Features tab: a double hem along the back's bottom edge, chosen in the Objects tab, then undone
   const undoBefore = await bodyData(page, 'undo');
   await page.click('.side-column [data-tab="objects"]');
   const search = '.list-panel:not([hidden]) input[type=search]';
   await page.click(search, { count: 3 });
   await page.type(search, 'Line_C_J');
-  await page.waitForSelector('.list-panel:not([hidden]) tbody tr', { timeout: TIMEOUT_MS });
+  // The list is refilled as the search narrows: the row is clicked once it is the only one
+  await page.waitForFunction(
+    () => {
+      const rows = document.querySelectorAll('.list-panel:not([hidden]) tbody tr');
+      return rows.length === 1 && rows[0]?.textContent.includes('Line_C_J') === true;
+    },
+    { timeout: TIMEOUT_MS },
+  );
   await page.click('.list-panel:not([hidden]) tbody tr');
   await page.waitForFunction(() => document.body.dataset.selection !== '', { timeout: TIMEOUT_MS });
   await page.click('.side-column [data-tab="features"]');
@@ -567,7 +607,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; added a hem from the Features tab; ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; added, renamed and deleted a material; added a hem from the Features tab; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),
   );

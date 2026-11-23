@@ -51,33 +51,14 @@ type
 
 // Asks for a colour, starting from Text; True when one was chosen
 function ChooseMaterialColor(Owner: TComponent; var Text: string): boolean;
-function MaterialFillCaption(Fill: TMaterialFill): string;
-function FabricCaption(Fabric: TFabric): string;
 // Hatching over Rect at the material's angle, in Ink
 procedure DrawSwatchHatching(Canvas: TCanvas; const Rect: TRect; Angle: double; Ink: TColor);
 function SwatchColor(const ColorText: string): TColor;
 
-resourcestring
-  rsMaterialColour = 'Colour';
-  rsMaterialName = 'Material';
-  rsMaterialFill = 'Fill';
-  rsMaterialFillTint = 'Tint';
-  rsMaterialFillHatch = 'Hatching';
-  rsMaterialAllowance = 'Allowance';
-  rsMaterialSize = 'Size';
-  rsFabricNone = 'Not set (drapes as cotton)';
-  rsFabricCotton = 'Cotton';
-  rsFabricSilk = 'Silk';
-  rsFabricJersey = 'Jersey (knit)';
-  rsFabricWool = 'Wool';
-  rsFabricDenim = 'Denim';
-  rsFabricCanvas = 'Canvas';
-  rsFabricLeather = 'Leather';
-
 implementation
 
 uses
-  Math, Forms, Sloper.Core.JSON, Sloper.Core.Units, Sloper.Core.PatternMaterials;
+  Math, Forms, Sloper.Core.PatternMaterials, Sloper.Editor.MaterialList;
 
 const
   COLUMN_COLOUR = 0;
@@ -112,22 +93,6 @@ begin
   finally
     FreeAndNil(Dialog);
   end;
-end;
-
-function MaterialFillCaption(Fill: TMaterialFill): string;
-begin
-  if Fill = ffHatch then
-    Result := rsMaterialFillHatch
-  else
-    Result := rsMaterialFillTint;
-end;
-
-function FabricCaption(Fabric: TFabric): string;
-const
-  CAPTIONS: array[TFabric] of string = (rsFabricNone, rsFabricCotton, rsFabricSilk, rsFabricJersey, rsFabricWool, rsFabricDenim,
-    rsFabricCanvas, rsFabricLeather);
-begin
-  Result := CAPTIONS[Fabric];
 end;
 
 function SwatchColor(const ColorText: string): TColor;
@@ -197,7 +162,8 @@ end;
 procedure TMaterialGrid.ShowMaterials(APattern: TPattern);
 var
   Index, Current: integer;
-  Material: TPatternMaterial;
+  Materials: TMaterialRowArray;
+  Material: TMaterialRow;
 begin
   FPattern := APattern;
   Current := MaterialIndex;
@@ -209,18 +175,16 @@ begin
         RowCount := 1
       else
       begin
-        RowCount := FPattern.MaterialCount + 1;
+        Materials := MaterialRows(FPattern);
+        RowCount := Length(Materials) + 1;
         for Index := 0 to FPattern.MaterialCount - 1 do
         begin
-          Material := FPattern.Materials[Index];
+          Material := Materials[Index];
           Cells[COLUMN_COLOUR, Index + 1] := '';
           Cells[COLUMN_NAME, Index + 1] := Material.Name;
-          Cells[COLUMN_FILL, Index + 1] := MaterialFillCaption(Material.Fill);
-          if Material.HasAllowance then
-            Cells[COLUMN_ALLOWANCE, Index + 1] := FormatJSONFloat(Material.Allowance)
-          else
-            Cells[COLUMN_ALLOWANCE, Index + 1] := '';
-          Cells[COLUMN_SIZE, Index + 1] := MaterialSizeText(Material, MEASURE_UNIT_NAMES[FPattern.Units]);
+          Cells[COLUMN_FILL, Index + 1] := Material.FillCaption;
+          Cells[COLUMN_ALLOWANCE, Index + 1] := Material.AllowanceText;
+          Cells[COLUMN_SIZE, Index + 1] := Material.SizeText;
         end;
       end;
     finally

@@ -135,6 +135,8 @@ type
     procedure TestFeatureForms;
     // Apply adds a feature as one undo step, or says why it cannot
     procedure TestFeatureApply;
+    // The Materials tab's list and the dialog's edits, each one undo step
+    procedure TestMaterials;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
     // Its edits, each one undo step, refused with the reason
@@ -1710,6 +1712,42 @@ begin
   AssertTrue('with the reason', Answer.Strings['message'] <> '');
   Call('editor_changes');
   AssertEquals('no step', rsFeaturesUndoHem, Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestMaterials;
+begin
+  Call('editor_materials');
+  AssertEquals('one to start with', 1, Answer.Arrays['rows'].Count);
+  AssertEquals('named', 'Main', Answer.Arrays['rows'].Objects[0].Strings['name']);
+  AssertEquals('tint or hatching', 2, Answer.Arrays['fills'].Count);
+  AssertEquals('every fabric', 8, Answer.Arrays['fabrics'].Count);
+  AssertEquals('the unit', 'mm', Answer.Strings['unit']);
+  Call('editor_material_add');
+  AssertEquals('added after it', 1, Answer.Integers['index']);
+  Call('editor_material', '{"index": 1}');
+  AssertTrue('a name of its own', Answer.Strings['name'] <> 'Main');
+  AssertTrue('either may go now', Answer.Booleans['canDelete']);
+  Call('editor_material_set', '{"index": 1, "field": "name", "text": "Lining"}');
+  AssertTrue('renamed', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('one step', rsPanelRenameMaterial, Answer.Strings['undo']);
+  Call('editor_material_set', '{"index": 1, "field": "color", "text": "blue"}');
+  AssertFalse('not a colour', Answer.Booleans['done']);
+  AssertEquals('says why', rsPanelBadColor, Answer.Strings['reason']);
+  Call('editor_material_set', '{"index": 1, "field": "fill", "text": "hatch"}');
+  Call('editor_material_set', '{"index": 1, "field": "width", "text": "1500"}');
+  Call('editor_materials');
+  AssertEquals('hatched', 'Hatching', Answer.Arrays['rows'].Objects[1].Strings['fillCaption']);
+  AssertTrue('a roll', Pos('1500', Answer.Arrays['rows'].Objects[1].Strings['size']) > 0);
+  Call('editor_material_set', '{"index": 1, "field": "colour", "text": "#000000"}');
+  AssertEquals('no such field', RPC_INVALID_PARAMS, ErrorCode);
+  Call('editor_material_delete', '{"index": 1}');
+  AssertTrue('deleted', Answer.Booleans['done']);
+  Call('editor_material_delete', '{"index": 0}');
+  AssertFalse('the last stays', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['reason'] <> '');
+  Call('editor_material', '{"index": 5}');
+  AssertEquals('no such material', RPC_REFUSED, ErrorCode);
 end;
 
 initialization

@@ -14,6 +14,8 @@ import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
 import { FeaturesPanel } from '../ui/featuresPanel.ts';
+import { MaterialsDialog } from '../ui/materialDialog.ts';
+import { MaterialsPanel } from '../ui/materialPanel.ts';
 import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
@@ -38,6 +40,7 @@ const ICONS = {
   variablesTab: 'variable',
   measurementsTab: 'ruler-measure',
   featuresTab: 'components',
+  materialsTab: 'texture',
 } as const;
 
 const DEFAULT_FILE_NAME = 'pattern.sloper';
@@ -107,6 +110,8 @@ class DesignApp {
   private readonly objects: ObjectsPanel;
   private readonly properties: PropertiesPanel;
   private readonly features: FeaturesPanel;
+  private readonly materials: MaterialsPanel;
+  private readonly materialsDialog: MaterialsDialog;
   private readonly measurements: MeasurementsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
@@ -191,6 +196,17 @@ class DesignApp {
       };
     }
     side.addSection('measurements', STRINGS.tabMeasurements, ICONS.measurementsTab, this.measurements);
+    this.materialsDialog = new MaterialsDialog(this.document, {
+      failed: showFailure,
+      historyKey: (event) => (this.matches(event, 'undo') ? 'undo' : this.matches(event, 'redo') ? 'redo' : undefined),
+    });
+    this.materials = new MaterialsPanel(this.document, {
+      edit: (index) => {
+        this.materialsDialog.open(index);
+      },
+      failed: showFailure,
+    });
+    side.addSection('materials', STRINGS.tabMaterials, ICONS.materialsTab, this.materials);
     this.features = new FeaturesPanel(this.document, { message: showMessage, failed: showFailure });
     side.addSection('features', STRINGS.tabFeatures, ICONS.featuresTab, this.features);
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
@@ -742,7 +758,17 @@ class DesignApp {
     return shortcut !== undefined && matchesShortcut(event, shortcut);
   }
 
+  // Whether the key press is the command's shortcut, as the engine's tables give it
+  private matches(event: KeyboardEvent, command: string): boolean {
+    const shortcut = parseShortcut(this.tables.shortcuts.get(command) ?? '');
+    return shortcut !== undefined && matchesShortcut(event, shortcut);
+  }
+
   private keyDown(event: KeyboardEvent): void {
+    // A modal dialog takes the keys it wants itself, and the window none
+    if (document.querySelector('dialog[open]') !== null) {
+      return;
+    }
     if (this.fileKeyDown(event)) {
       event.preventDefault();
       return;
@@ -754,10 +780,7 @@ class DesignApp {
     ) {
       return;
     }
-    const matches = (command: string): boolean => {
-      const shortcut = parseShortcut(this.tables.shortcuts.get(command) ?? '');
-      return shortcut !== undefined && matchesShortcut(event, shortcut);
-    };
+    const matches = (command: string): boolean => this.matches(event, command);
     let handled = true;
     if (this.canvas.toolKeyDown(event)) {
       // The tool took it, as Tab and Enter for the Seam tool

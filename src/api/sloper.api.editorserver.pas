@@ -110,6 +110,11 @@ type
     function DoSuggest(Params: TJSONObject): TJSONData;
     function DoSuggestPreview(Params: TJSONObject): TJSONData;
     function DoNotePreview(Params: TJSONObject): TJSONData;
+    function DoMaterials: TJSONData;
+    function DoMaterial(Params: TJSONObject): TJSONData;
+    function DoMaterialSet(Params: TJSONObject): TJSONData;
+    function DoMaterialAdd: TJSONData;
+    function DoMaterialDelete(Params: TJSONObject): TJSONData;
     function DoFeatures(Params: TJSONObject): TJSONData;
     function DoFeatureApply(Params: TJSONObject): TJSONData;
   protected
@@ -317,6 +322,24 @@ resourcestring
   rsEditorSuggestPreview = 'What a suggestion would make of the object: where the point would go, and the object ' +
     'at the smallest and largest sizes of the table.';
   rsEditorSuggestText = 'The suggested formula';
+  rsEditorMaterials = 'The Materials tab''s list: each material''s row, the cut list they make, and the fills and ' +
+    'fabrics a material can have, in words.';
+  rsEditorMaterialsReturns = '`rows`, each with `name`, `color` (#RRGGBB), `fill` (tint or hatch), `fillCaption`, ' +
+    '`allowance` and `size` in words, and `hatchAngle` in degrees; `cutList`; `unit`, the pattern''s; `fills` and ' +
+    '`fabrics`, each choice''s `name` and `caption`';
+  rsEditorMaterial = 'One material''s fields as the Materials dialog edits them.';
+  rsEditorMaterialIndex = 'The material, by its place in the list from 0';
+  rsEditorMaterialReturns = '`name`, `color`, `fill`, `allowance`, `width` and `length` (in the pattern''s unit, empty ' +
+    'for none), `allowTurns` (true or false) and `fabric` (its name, empty for none), as text; `canDelete`, false for ' +
+    'the last material';
+  rsEditorMaterialSet = 'Changes one field of a material as one undo step; a refusal is an answer with the reason.';
+  rsEditorMaterialField = 'The field';
+  rsEditorMaterialText = 'Its new value, as editor_material gives it';
+  rsEditorMaterialSetReturns = '`done`, and the `reason` when refused';
+  rsEditorMaterialAdd = 'Adds a material with the next free name and colour, as one undo step.';
+  rsEditorMaterialAddReturns = '`index`, its place in the list';
+  rsEditorMaterialDelete = 'Deletes a material no piece is cut from, as one undo step; the last one stays.';
+  rsEditorMaterialDeleteReturns = '`done`, and the `reason` when refused';
   rsEditorFeatures = 'The Features tab''s form for a feature: what it goes along for the selection, its fields with ' +
     'their captions, choices and values, whether they apply now, and whether Apply can add it. Without `values` the ' +
     'fields start at the pattern''s own; with `changed`, the values that follow a change to that field (another ' +
@@ -399,12 +422,12 @@ resourcestring
 implementation
 
 uses
-  TypInfo, Math, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Draft,
+  TypInfo, Math, StrUtils, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
-  Sloper.Editor.FeatureForms;
+  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -422,6 +445,9 @@ const
   // The test size's reach, in percent either way, as the desktop's slider
   MAX_TEST_PERCENT = 20;
   OBJECT_FILTER_NAMES: array[TObjectFilter] of string = ('all', 'points', 'edges', 'pieces', 'notes', 'problems');
+  // As TMaterialField
+  MATERIAL_FIELD_NAMES: array[TMaterialField] of string = ('name', 'color', 'fill', 'allowance', 'width', 'length',
+    'allowTurns', 'fabric');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
   ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
   SHORTCUT_KIND_NAMES: array[TShortcutKind] of string = ('command', 'fixed', 'mouse');
@@ -542,6 +568,16 @@ begin
     AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
     AddApiParam(Built, 'field', apText, True, rsEditorField);
     AddApiParam(Built, 'value', apNumber, False, rsEditorSuggestValue);
+    AddApiMethod(Built, 'editor_materials', rsEditorMaterials, rsEditorMaterialsReturns, True);
+    AddApiMethod(Built, 'editor_material', rsEditorMaterial, rsEditorMaterialReturns, True);
+    AddApiParam(Built, 'index', apWhole, True, rsEditorMaterialIndex);
+    AddApiMethod(Built, 'editor_material_set', rsEditorMaterialSet, rsEditorMaterialSetReturns);
+    AddApiParam(Built, 'index', apWhole, True, rsEditorMaterialIndex);
+    AddApiParam(Built, 'field', apChoice, True, rsEditorMaterialField, string.Join(', ', MATERIAL_FIELD_NAMES));
+    AddApiParam(Built, 'text', apText, True, rsEditorMaterialText);
+    AddApiMethod(Built, 'editor_material_add', rsEditorMaterialAdd, rsEditorMaterialAddReturns);
+    AddApiMethod(Built, 'editor_material_delete', rsEditorMaterialDelete, rsEditorMaterialDeleteReturns);
+    AddApiParam(Built, 'index', apWhole, True, rsEditorMaterialIndex);
     AddApiMethod(Built, 'editor_features', rsEditorFeatures, rsEditorFeaturesReturns, True);
     AddApiParam(Built, 'feature', apChoice, True, rsEditorFeature, string.Join(', ', FEATURE_NAMES));
     AddApiParam(Built, 'selection', apTexts, True, rsEditorFeatureSelection);
@@ -1667,6 +1703,95 @@ begin
   Result := Answer;
 end;
 
+function TEditorApiServer.DoMaterials: TJSONData;
+var
+  Pattern: TPattern;
+  Rows, Fills, Fabrics: TJSONArray;
+  Row: TMaterialRow;
+  Fill: TMaterialFill;
+  Fabric: TFabric;
+begin
+  Pattern := Document.Pattern;
+  Rows := TJSONArray.Create;
+  for Row in MaterialRows(Pattern) do
+    Rows.Add(TJSONObject.Create(['name', Row.Name, 'color', Row.Color, 'fill', MATERIAL_FILL_NAMES[Ord(Row.Fill)],
+      'fillCaption', Row.FillCaption, 'allowance', Row.AllowanceText, 'size', Row.SizeText, 'hatchAngle',
+      ReportFloat(Row.HatchAngle)]));
+  Fills := TJSONArray.Create;
+  for Fill in TMaterialFill do
+    Fills.Add(TJSONObject.Create(['name', MATERIAL_FILL_NAMES[Ord(Fill)], 'caption', MaterialFillCaption(Fill)]));
+  Fabrics := TJSONArray.Create;
+  for Fabric in TFabric do
+    Fabrics.Add(TJSONObject.Create(['name', FABRIC_NAMES[Ord(Fabric)], 'caption', FabricCaption(Fabric)]));
+  Result := TJSONObject.Create(['rows', Rows, 'cutList', Pattern.CutList, 'unit', MEASURE_UNIT_NAMES[Pattern.Units],
+    'fills', Fills, 'fabrics', Fabrics]);
+end;
+
+// A drag holds the document's change open, and every other change waits for it
+procedure RequireIdle(Document: TPatternDocument);
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+end;
+
+function MaterialIndexParam(Document: TPatternDocument; Params: TJSONObject): integer;
+begin
+  Result := RequireWhole(Params, 'index');
+  if (Result < 0) or (Result >= Document.Pattern.MaterialCount) then
+    raise EApiError.Create(RPC_REFUSED, rsPanelNoMaterial);
+end;
+
+function TEditorApiServer.DoMaterial(Params: TJSONObject): TJSONData;
+var
+  Index: integer;
+  Field: TMaterialField;
+  Answer: TJSONObject;
+begin
+  Index := MaterialIndexParam(Document, Params);
+  Answer := TJSONObject.Create;
+  for Field in TMaterialField do
+    Answer.Add(MATERIAL_FIELD_NAMES[Field], MaterialFieldText(Document, Index, Field));
+  Answer.Add('canDelete', Document.Pattern.MaterialCount > 1);
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoMaterialSet(Params: TJSONObject): TJSONData;
+var
+  Index, FieldIndex: integer;
+  Reason: string;
+  Answer: TJSONObject;
+begin
+  Index := MaterialIndexParam(Document, Params);
+  FieldIndex := IndexStr(RequireString(Params, 'field'), MATERIAL_FIELD_NAMES);
+  if FieldIndex < 0 then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiBadChoice, ['field', string.Join(', ',
+      MATERIAL_FIELD_NAMES)]));
+  RequireIdle(Document);
+  Answer := TJSONObject.Create(['done', CommitMaterialField(Document, Index, TMaterialField(FieldIndex),
+    RequireString(Params, 'text'), Reason)]);
+  if Reason <> '' then
+    Answer.Add('reason', Reason);
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoMaterialAdd: TJSONData;
+begin
+  RequireIdle(Document);
+  Result := TJSONObject.Create(['index', AddMaterialStep(Document)]);
+end;
+
+function TEditorApiServer.DoMaterialDelete(Params: TJSONObject): TJSONData;
+var
+  Reason: string;
+  Answer: TJSONObject;
+begin
+  RequireIdle(Document);
+  Answer := TJSONObject.Create(['done', DeleteMaterialStep(Document, MaterialIndexParam(Document, Params), Reason)]);
+  if Reason <> '' then
+    Answer.Add('reason', Reason);
+  Result := Answer;
+end;
+
 const
   FEATURE_FIELD_KIND_NAMES: array[TFeatureFieldKind] of string = ('text', 'choice', 'check', 'combo');
 
@@ -2244,6 +2369,11 @@ begin
     'editor_suggest': Result := DoSuggest(Params);
     'editor_suggest_preview': Result := DoSuggestPreview(Params);
     'editor_note_preview': Result := DoNotePreview(Params);
+    'editor_materials': Result := DoMaterials;
+    'editor_material': Result := DoMaterial(Params);
+    'editor_material_set': Result := DoMaterialSet(Params);
+    'editor_material_add': Result := DoMaterialAdd;
+    'editor_material_delete': Result := DoMaterialDelete(Params);
     'editor_features': Result := DoFeatures(Params);
     'editor_feature_apply': Result := DoFeatureApply(Params);
     'editor_changes': Result := DoChanges;

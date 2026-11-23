@@ -180,19 +180,52 @@
         min-width: 0;
       }
       .property-value input[type='text'],
+      .property-value input[type='number'],
+      .property-value textarea,
       .property-value select {
         box-sizing: border-box;
         width: 100%;
         font: inherit;
       }
-      .property-value input[type='text'] {
+      .property-value input[type='text'],
+      .property-value input[type='number'],
+      .property-value textarea {
         padding: 2px 5px;
       }
-      .property-value input.refused {
+      .property-value textarea {
+        resize: vertical;
+      }
+      .property-value select {
+        margin: 0;
+      }
+      .property-color {
+        display: flex;
+        gap: 4px;
+      }
+      .property-color select {
+        flex: 1;
+      }
+      .property-swatch {
+        box-sizing: border-box;
+        flex: none;
+        width: 36px;
+        height: 24px;
+        margin: 0;
+        padding: 1px;
+      }
+      .property-check {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        padding: 2px 0;
+      }
+      .property-value input.refused,
+      .property-value textarea.refused {
         color: #d13438;
         background: #ffd8d8;
       }
-      .property-value input[readonly] {
+      .property-value input[readonly],
+      .property-value textarea[readonly] {
         color: #5d636b;
         background: #f1f0ec;
       }

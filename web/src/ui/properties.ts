@@ -4,7 +4,9 @@
 // come from the engine (editor_properties), which says what each object shows,
 // so the panel only draws them. Enter or leaving a field commits it as one
 // undo step and Escape puts it back; a refused entry keeps its text, with the
-// reason under it in red. Choices, the Locked box and buttons commit at once.
+// reason under it in red; a note's text takes several lines, so Enter adds
+// one and Ctrl+Enter commits it. Choices, boxes, numbers, colours and buttons
+// commit at once.
 import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
 import {
   booleanField,
@@ -20,10 +22,29 @@ import { LatestOnly } from './latestOnly.ts';
 import type { SideTabContent } from './sideTabs.ts';
 
 // As TPropertyRowKind
-type PropertyRowKind = 'text' | 'name' | 'formula' | 'choice' | 'check' | 'button' | 'problem';
-const ROW_KINDS: readonly PropertyRowKind[] = ['text', 'name', 'formula', 'choice', 'check', 'button', 'problem'];
+type PropertyRowKind =
+  'text' | 'name' | 'formula' | 'choice' | 'check' | 'button' | 'problem' | 'number' | 'longText' | 'font' | 'color';
+const ROW_KINDS: readonly PropertyRowKind[] = [
+  'text',
+  'name',
+  'formula',
+  'choice',
+  'check',
+  'button',
+  'problem',
+  'number',
+  'longText',
+  'font',
+  'color',
+];
 // The row that stays usable on a locked object
 const LOCKED_ROW = 'locked';
+// A grainline between two points takes effect once both are chosen: the
+// choice that asks for them, and the rows they are chosen in
+const GRAIN_ROW = 'grain';
+const GRAIN_POINTS = 2;
+const GRAIN_FROM_ROW = 'grainFrom';
+const GRAIN_TO_ROW = 'grainTo';
 
 interface PropertyRow {
   id: string;
@@ -35,6 +56,16 @@ interface PropertyRow {
   choice: number;
   checked: boolean;
   hint: string;
+  // False when it cannot be changed now
+  enabled: boolean;
+  // A number row's value and range
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  decimals: number;
+  // A colour row's colour as drawn
+  color: string;
 }
 
 interface Properties {
@@ -43,6 +74,11 @@ interface Properties {
   title: string;
   locked: boolean;
   rows: PropertyRow[];
+}
+
+// A colour for a colour input, which takes only #rrggbb
+function colorValue(color: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : '#000000';
 }
 
 // The object as editor_property_set takes it: by ID, or by key for a repeat's point
@@ -66,6 +102,13 @@ function parseRow(row: JsonRecord): PropertyRow {
     choice: numberField(row, 'choice') ?? -1,
     checked: booleanField(row, 'checked') ?? false,
     hint: stringField(row, 'hint') ?? '',
+    enabled: booleanField(row, 'enabled') ?? true,
+    value: numberField(row, 'value') ?? 0,
+    min: numberField(row, 'min') ?? 0,
+    max: numberField(row, 'max') ?? 0,
+    step: numberField(row, 'step') ?? 1,
+    decimals: numberField(row, 'decimals') ?? 0,
+    color: stringField(row, 'color') ?? '',
   };
 }
 
@@ -94,9 +137,11 @@ interface RowControl {
   control: HTMLInputElement | HTMLSelectElement | HTMLButtonElement | HTMLElement;
   // A text or problem row's text
   text?: HTMLElement;
-  // A name or formula field, with the reason it was refused under it
-  field?: HTMLInputElement;
+  // A name, formula, long text or font field, with the reason it was refused under it
+  field?: HTMLInputElement | HTMLTextAreaElement;
   refusal?: HTMLElement;
+  // A colour row's colour, beside its choice
+  swatch?: HTMLInputElement;
 }
 
 export interface PropertiesEvents {
@@ -225,6 +270,9 @@ export class PropertiesPanel implements SideTabContent {
     const control = this.makeControl(target, row, value);
     if (row.hint !== '') {
       control.control.title = row.hint;
+      if (control.field !== undefined) {
+        control.field.title = row.hint;
+      }
     }
     if (control.control !== value) {
       const controlId = `property-${row.id}`;
@@ -238,6 +286,8 @@ export class PropertiesPanel implements SideTabContent {
     switch (row.kind) {
       case 'name':
       case 'formula':
+      case 'longText':
+      case 'font':
         return this.makeField(target, row, value);
       case 'choice': {
         const box = window.document.createElement('select');
@@ -245,7 +295,7 @@ export class PropertiesPanel implements SideTabContent {
           box.add(new Option(choice, String(index)));
         });
         box.addEventListener('change', () => {
-          this.commitRow(target, row.id, Number(box.value));
+          this.choose(target, row.id, Number(box.value));
         });
         value.append(box);
         return { row, control: box };
@@ -256,9 +306,17 @@ export class PropertiesPanel implements SideTabContent {
         box.addEventListener('change', () => {
           this.commitRow(target, row.id, box.checked ? 1 : 0);
         });
-        value.append(box);
+        // The caption beside the box, as "Print and export it"
+        const label = window.document.createElement('label');
+        label.className = 'property-check';
+        label.append(box, row.text);
+        value.append(label);
         return { row, control: box };
       }
+      case 'number':
+        return this.makeNumber(target, row, value);
+      case 'color':
+        return this.makeColor(target, row, value);
       case 'button': {
         const button = window.document.createElement('button');
         button.type = 'button';
@@ -280,10 +338,23 @@ export class PropertiesPanel implements SideTabContent {
 
   // A name or formula: typing marks it, so a refresh keeps the text until it is committed or put back
   private makeField(target: string, row: PropertyRow, value: HTMLElement): RowControl {
-    const field = window.document.createElement('input');
-    field.type = 'text';
+    const lines = row.kind === 'longText';
+    let field: HTMLInputElement | HTMLTextAreaElement;
+    if (lines) {
+      field = window.document.createElement('textarea');
+      field.rows = 3;
+      field.wrap = 'off';
+    } else {
+      const input = window.document.createElement('input');
+      input.type = 'text';
+      input.autocomplete = 'off';
+      // A font row's first choice names the default font, shown while it is empty
+      if (row.kind === 'font') {
+        input.placeholder = row.choices[0] ?? '';
+      }
+      field = input;
+    }
     field.spellcheck = false;
-    field.autocomplete = 'off';
     const refusal = window.document.createElement('div');
     refusal.className = 'property-refusal';
     refusal.hidden = true;
@@ -291,7 +362,7 @@ export class PropertiesPanel implements SideTabContent {
     const control: RowControl = { row, control: field, field, refusal };
     const formula = row.kind === 'formula';
     const complete = (explicit: boolean): void => {
-      if (formula && !field.readOnly) {
+      if (formula && field instanceof HTMLInputElement && !field.readOnly) {
         this.completer.update(field, /^\d+$/.test(target) ? Number(target) : undefined, explicit);
       }
     };
@@ -300,13 +371,16 @@ export class PropertiesPanel implements SideTabContent {
       complete(false);
     });
     field.addEventListener('keydown', (event) => {
+      if (!(event instanceof KeyboardEvent)) {
+        return;
+      }
       if (formula && this.completer.handleKey(event)) {
         return;
       }
       if (formula && event.key === ' ' && event.ctrlKey) {
         complete(true);
         event.preventDefault();
-      } else if (event.key === 'Enter') {
+      } else if (event.key === 'Enter' && (!lines || event.ctrlKey)) {
         this.commitField(target, control);
         event.preventDefault();
       } else if (event.key === 'Escape') {
@@ -319,6 +393,47 @@ export class PropertiesPanel implements SideTabContent {
       this.commitField(target, control);
     });
     return control;
+  }
+
+  // Each change commits, a run of them on one row being one undo step
+  private makeNumber(target: string, row: PropertyRow, value: HTMLElement): RowControl {
+    const box = window.document.createElement('input');
+    box.type = 'number';
+    box.min = String(row.min);
+    box.max = String(row.max);
+    box.step = String(row.step);
+    box.addEventListener('change', () => {
+      const number = box.valueAsNumber;
+      if (Number.isNaN(number)) {
+        this.fill(false);
+        return;
+      }
+      this.commit(target, { row: row.id, number });
+    });
+    value.append(box);
+    return { row, control: box };
+  }
+
+  // From the material, or its own colour, chosen beside the box
+  private makeColor(target: string, row: PropertyRow, value: HTMLElement): RowControl {
+    const box = window.document.createElement('select');
+    row.choices.forEach((choice, index) => {
+      box.add(new Option(choice, String(index)));
+    });
+    const swatch = window.document.createElement('input');
+    swatch.type = 'color';
+    swatch.className = 'property-swatch';
+    box.addEventListener('change', () => {
+      this.commit(target, { row: row.id, text: box.value === '0' ? '' : swatch.value });
+    });
+    swatch.addEventListener('change', () => {
+      this.commit(target, { row: row.id, text: swatch.value });
+    });
+    const pair = window.document.createElement('div');
+    pair.className = 'property-color';
+    pair.append(box, swatch);
+    value.append(pair);
+    return { row, control: box, swatch };
   }
 
   // Shows the values in the rows built; a field typed in keeps its text
@@ -342,8 +457,16 @@ export class PropertiesPanel implements SideTabContent {
         if (row.kind === 'problem') {
           text.hidden = row.text === '';
         }
+      } else if (control.swatch !== undefined && control.control instanceof HTMLSelectElement) {
+        control.control.value = row.text === '' ? '0' : '1';
+        control.swatch.value = colorValue(row.color);
+        control.swatch.disabled = locked;
       } else if (control.control instanceof HTMLSelectElement) {
         control.control.value = String(row.choice);
+      } else if (control.control instanceof HTMLInputElement && row.kind === 'number') {
+        if (window.document.activeElement !== control.control) {
+          control.control.value = row.value.toFixed(row.decimals);
+        }
       } else if (control.control instanceof HTMLInputElement) {
         control.control.checked = row.checked;
       } else if (control.control instanceof HTMLButtonElement) {
@@ -355,7 +478,7 @@ export class PropertiesPanel implements SideTabContent {
           (control.control instanceof HTMLInputElement && control.field === undefined)) &&
         row.id !== LOCKED_ROW
       ) {
-        control.control.disabled = locked;
+        control.control.disabled = locked || !row.enabled;
       }
     }
   }
@@ -437,10 +560,56 @@ export class PropertiesPanel implements SideTabContent {
     }
   }
 
-  // A choice, box or button: refused, the row goes back to what the object has
+  // A choice. The grainline between two points waits for both points: until
+  // then the rows to choose them in are only enabled here.
+  private choose(target: string, row: string, value: number): void {
+    const grainPoints = (): [number, number] => [this.choiceOf(GRAIN_FROM_ROW), this.choiceOf(GRAIN_TO_ROW)];
+    const onPoints = this.rowOf(GRAIN_ROW)?.choice === GRAIN_POINTS;
+    if (row === GRAIN_ROW && value === GRAIN_POINTS && !onPoints) {
+      this.enable(GRAIN_FROM_ROW);
+      this.enable(GRAIN_TO_ROW);
+      const [from, to] = grainPoints();
+      if (from > 0 && to > 0) {
+        this.commit(target, { row, value, from, to });
+      }
+      return;
+    }
+    if ((row === GRAIN_FROM_ROW || row === GRAIN_TO_ROW) && !onPoints) {
+      const [from, to] = grainPoints();
+      if (this.choiceOf(GRAIN_ROW) === GRAIN_POINTS && from > 0 && to > 0) {
+        this.commit(target, { row: GRAIN_ROW, value: GRAIN_POINTS, from, to });
+      }
+      return;
+    }
+    this.commitRow(target, row, value);
+  }
+
+  private rowOf(id: string): PropertyRow | undefined {
+    return this.current.rows.find((row) => row.id === id);
+  }
+
+  // What a choice row's box shows, which may not be committed yet
+  private choiceOf(id: string): number {
+    const control = this.controls.find((each) => each.row.id === id)?.control;
+    return control instanceof HTMLSelectElement ? Number(control.value) : -1;
+  }
+
+  private enable(id: string): void {
+    const control = this.controls.find((each) => each.row.id === id)?.control;
+    if (control instanceof HTMLSelectElement && !this.current.locked) {
+      control.disabled = false;
+    }
+  }
+
+  // A choice, box or button
   private commitRow(target: string, row: string, value: number): void {
+    this.commit(target, { row, value });
+  }
+
+  // Refused, the rows go back to what the object has, and the reason is said
+  private commit(target: string, params: Record<string, unknown>): void {
     this.document
-      .call('editor_property_set', { ...targetParams(target), row, value })
+      .call('editor_property_set', { ...targetParams(target), ...params })
       .then((answer) => {
         if (booleanField(answer, 'done') !== true) {
           this.events.message(stringField(answer, 'reason') ?? '');

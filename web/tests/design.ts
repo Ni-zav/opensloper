@@ -409,6 +409,19 @@ try {
   await chooseTool(page, 'Piece');
   await clickAt(page, box, 130, 375);
   await waitForData(page, 'undo', 'Add piece');
+  // The new piece's rows: cut twice, folded on an edge and given its own colour
+  await page.waitForSelector(field('cut'), { timeout: TIMEOUT_MS });
+  await page.$eval(field('cut'), (shown) => {
+    if (shown instanceof HTMLInputElement) {
+      shown.value = '2';
+      shown.dispatchEvent(new Event('change'));
+    }
+  });
+  await waitForData(page, 'undo', 'Change cut');
+  await page.select('.property-value[data-row="fold"] select', '1');
+  await waitForData(page, 'undo', 'Change fold');
+  await page.select('.property-value[data-row="fillColor"] select', '1');
+  await waitForData(page, 'undo', 'Change fill');
   await chooseTool(page, 'Notch');
   await clickAt(page, box, 130, 300);
   await waitForData(page, 'undo', 'Add notch');
@@ -460,6 +473,23 @@ try {
   }
   await page.mouse.up();
   await waitForData(page, 'undo', 'Move note');
+  // Its text retyped in the Properties tab, on two lines, and made bold
+  await page.waitForSelector('.property-value[data-row="noteText"] textarea', { timeout: TIMEOUT_MS });
+  await page.$eval('.property-value[data-row="noteText"] textarea', (shown) => {
+    if (shown instanceof HTMLTextAreaElement) {
+      shown.focus();
+      shown.select();
+    }
+  });
+  await page.keyboard.type('Cut 2');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('on fold');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Enter');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', 'Change note text');
+  await page.click(field('noteBold'));
+  await waitForData(page, 'undo', 'Change note');
 
   // The callout, selected by its text, has its tip dragged from the circle's centre to the rectangle's corner
   await clickAt(page, box, 243, 602);
@@ -513,7 +543,7 @@ try {
   }
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
-    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab; drew a line, a curve, ` +
+    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, as a piece and a note; drew a line, a curve, ` +
       `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),

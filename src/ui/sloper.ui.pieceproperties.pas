@@ -40,16 +40,16 @@ type
     // A cap for each dart: none, or pressed towards its first or second leg,
     // in the order of TDartPress
     FDartBoxes: array of TComboBox;
-    FDartLegs: TPieceDartArray;
+    FDarts: TDartRowArray;
     // Adds an edge's own seam allowance: one choice per edge without one,
     // after the prompt, with the path index of each
     FAllowanceBox: TComboBox;
-    FAllowanceIndexes: array of integer;
+    FAllowanceIndexes: TPathIndexArray;
     // Mirrors an edge's allowance ends: one choice per edge without, after
     // the prompt, and a row for each edge with them, plain or mirrored, with
     // the path index of each
     FMirrorEndsBox: TComboBox;
-    FMirrorIndexes: array of integer;
+    FMirrorIndexes: TPathIndexArray;
     FEndBoxes: array of TComboBox;
     FEndIndexes: array of integer;
     // The grainline's kind, in the order of TGrainKind, and its two points
@@ -71,9 +71,8 @@ type
     procedure CutChange(Sender: TObject);
     procedure FoldChange(Sender: TObject);
     procedure AllowanceChange(Sender: TObject);
-    // Added with the piece's allowance, or removed
+    // Added with the piece's allowance
     procedure AddEdgeAllowance(PathIndex: integer);
-    procedure RemoveEdgeAllowance(PathIndex: integer);
     procedure AddEndRows(Piece: TPieceObject);
     procedure MirrorChange(Sender: TObject);
     procedure EndChange(Sender: TObject);
@@ -93,58 +92,12 @@ type
     procedure QueuedChangeDue(Change, Data: integer); override;
   end;
 
-resourcestring
-  rsPropCut = 'Cut';
-  rsPropMirrored = 'Mirrored';
-  rsPropFold = 'Fold';
-  rsPropNoFold = 'None';
-  rsPropMaterial = 'Material';
-  rsPropNoMaterial = 'None';
-  rsPropChangeMaterial = 'Change material';
-  rsPropFillStyle = 'Fill';
-  rsPropFillColor = 'Colour';
-  rsPropFromMaterial = 'From material';
-  rsPropFillTint = 'Tint';
-  rsPropFillHatch = 'Hatching';
-  rsPropChooseColor = 'Choose…';
-  rsPropChangeFill = 'Change fill';
-  rsPropGrainline = 'Grainline';
-  rsPropGrainNone = 'None';
-  rsPropGrainAngle = 'At an angle';
-  rsPropGrainPoints = 'Between two points';
-  rsPropGrainFrom = 'Grainline from';
-  rsPropGrainTo = 'Grainline to';
-  rsPropGrainChoose = 'Choose...';
-  rsPropChangeGrainline = 'Change grainline';
-  rsPropOwnAllowance = 'Own allowance';
-  rsPropOwnAllowancePrompt = 'Add for an edge...';
-  rsPropOwnAllowanceHint = 'Give one edge its own seam allowance; empty its row to go back to the piece''s';
-  rsPropAddEdgeAllowance = 'Add edge allowance';
-  rsPropRemoveEdgeAllowance = 'Remove edge allowance';
-  rsPropMirrorEnds = 'Mirrored ends';
-  rsPropMirrorEndsPrompt = 'Add for an edge...';
-  rsPropMirrorEndsHint = 'Shape an edge''s allowance ends as the edges beside it, mirrored, so it lies flat turned up, ' +
-    'as a hem does';
-  rsPropEndsOf = 'Ends of %s';
-  rsPropEndsPlain = 'Plain';
-  rsPropEndsMirrored = 'Mirrored';
-  rsPropChangeAllowanceEnd = 'Change allowance ends';
-  rsPropChangeCut = 'Change cut';
-  rsPropChangeFold = 'Change fold';
-  rsPropDartCap = 'Cap on %s';
-  rsPropDartCapHint = 'Shapes the seam allowance across the dart as it lies pressed, so it sews into the seam';
-  rsPropNoCap = 'None';
-  rsPropCapTowards = 'Pressed towards %s';
-  rsPropDartLegs = '%s and %s';
-  rsPropChangeDartCap = 'Change dart cap';
-
 implementation
 
 uses
-  Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.UI.MaterialGrid, Sloper.Editor.ObjectList, Sloper.Editor.PropertyText;
+  Sloper.Core.Pattern, Sloper.UI.MaterialGrid, Sloper.Editor.ObjectList, Sloper.Editor.PropertyText;
 
 const
-  MAX_CUT_COUNT = 99;
   // The changes that add or remove rows, so they are queued
   QUEUED_ADD_ALLOWANCE = 0;
   QUEUED_REMOVE_ALLOWANCE = 1;
@@ -162,8 +115,6 @@ end;
 procedure TPieceSection.AddRows(Piece: TPieceObject);
 var
   Pattern: TPattern;
-  Entry: TPieceEdge;
-  Edge: TEvalNode;
   Index: integer;
   FoldNames, AllowanceNames: TStringArray;
 begin
@@ -176,28 +127,16 @@ begin
   FMirrorBox := TCheckBox.Create(Panel);
   FMirrorBox.OnChange := @CutChange;
   Panel.AddRow(rsPropMirrored, FMirrorBox);
-  FoldNames := nil;
-  Insert(rsPropNoFold, FoldNames, 0);
-  FFoldKeys := [''];
-  for Entry in Piece.Path do
-  begin
-    Edge := Pattern.FindNode(Entry.EdgeKey);
-    if IsStraightEdge(TEdgeObject(Edge)) then
-    begin
-      Insert(Edge.DisplayName, FoldNames, Length(FoldNames));
-      Insert(Entry.EdgeKey, FFoldKeys, Length(FFoldKeys));
-    end;
-  end;
+  FFoldKeys := FoldKeys(Pattern, Piece);
+  FoldNames := [rsPropNoFold];
+  for Index := 1 to High(FFoldKeys) do
+    Insert(Pattern.FindNode(FFoldKeys[Index]).DisplayName, FoldNames, Length(FoldNames));
   FFoldBox := Panel.AddChoiceRow(rsPropFold, FoldNames, @FoldChange);
   AddDartRows(Piece);
-  AllowanceNames := nil;
-  Insert(rsPropOwnAllowancePrompt, AllowanceNames, 0);
-  for Index := 0 to High(Piece.Path) do
-    if not Piece.HasOverride(Index) then
-    begin
-      Insert(Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName, AllowanceNames, Length(AllowanceNames));
-      Insert(Index, FAllowanceIndexes, Length(FAllowanceIndexes));
-    end;
+  FAllowanceIndexes := EdgesWithoutOwnAllowance(Piece);
+  AllowanceNames := [rsPropOwnAllowancePrompt];
+  for Index in FAllowanceIndexes do
+    Insert(Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName, AllowanceNames, Length(AllowanceNames));
   FAllowanceBox := Panel.AddChoiceRow(rsPropOwnAllowance, AllowanceNames, @AllowanceChange);
   FAllowanceBox.Hint := rsPropOwnAllowanceHint;
   FAllowanceBox.ShowHint := True;
@@ -236,10 +175,16 @@ begin
 end;
 
 procedure TPieceSection.QueuedChangeDue(Change, Data: integer);
+var
+  Reason: string;
 begin
   case Change of
     QUEUED_ADD_ALLOWANCE: AddEdgeAllowance(Data);
-    QUEUED_REMOVE_ALLOWANCE: RemoveEdgeAllowance(Data);
+    QUEUED_REMOVE_ALLOWANCE:
+    begin
+      Panel.BeginStep;
+      Panel.EndStep(SetOwnAllowanceStep(Panel.Document, Panel.SelectedNode, Data, False, Reason), Reason);
+    end;
     QUEUED_GRAIN: ChangeGrain(TGrainKind(Data));
     QUEUED_MIRROR_ENDS: ChangeAllowanceEnd(Data, aeMirror);
     QUEUED_PLAIN_ENDS: ChangeAllowanceEnd(Data, aePlain);
@@ -255,35 +200,29 @@ var
   Box: TComboBox;
 begin
   Pattern := Panel.Document.Pattern;
-  FMirrorIndexes := nil;
   FEndBoxes := nil;
   FEndIndexes := nil;
-  Names := nil;
-  Insert(rsPropMirrorEndsPrompt, Names, 0);
-  for Index := 0 to High(Piece.Path) do
-    if Piece.Path[Index].AllowanceEnd = aePlain then
-    begin
-      Insert(Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName, Names, Length(Names));
-      Insert(Index, FMirrorIndexes, Length(FMirrorIndexes));
-    end;
+  FMirrorIndexes := EdgesWithEnds(Piece, aePlain);
+  Names := [rsPropMirrorEndsPrompt];
+  for Index in FMirrorIndexes do
+    Insert(Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName, Names, Length(Names));
   FMirrorEndsBox := Panel.AddChoiceRow(rsPropMirrorEnds, Names, @MirrorChange);
   FMirrorEndsBox.Hint := rsPropMirrorEndsHint;
   FMirrorEndsBox.ShowHint := True;
   FMirrorEndsBox.ItemIndex := 0;
   FMirrorEndsBox.Enabled := Length(FMirrorIndexes) > 0;
-  for Index := 0 to High(Piece.Path) do
-    if Piece.Path[Index].AllowanceEnd = aeMirror then
-    begin
-      // In the order of TAllowanceEnd
-      Box := Panel.AddChoiceRow(Format(rsPropEndsOf, [Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName]),
-        [rsPropEndsPlain, rsPropEndsMirrored], @EndChange);
-      Box.ItemIndex := Ord(aeMirror);
-      Box.Tag := Length(FEndBoxes);
-      Box.Hint := rsPropMirrorEndsHint;
-      Box.ShowHint := True;
-      Insert(Box, FEndBoxes, Length(FEndBoxes));
-      Insert(Index, FEndIndexes, Length(FEndIndexes));
-    end;
+  for Index in EdgesWithEnds(Piece, aeMirror) do
+  begin
+    // In the order of TAllowanceEnd
+    Box := Panel.AddChoiceRow(Format(rsPropEndsOf, [Pattern.FindNode(Piece.Path[Index].EdgeKey).DisplayName]),
+      [rsPropEndsPlain, rsPropEndsMirrored], @EndChange);
+    Box.ItemIndex := Ord(aeMirror);
+    Box.Tag := Length(FEndBoxes);
+    Box.Hint := rsPropMirrorEndsHint;
+    Box.ShowHint := True;
+    Insert(Box, FEndBoxes, Length(FEndBoxes));
+    Insert(Index, FEndIndexes, Length(FEndIndexes));
+  end;
 end;
 
 // Mirroring adds a row, so the panel is built again after it
@@ -307,14 +246,11 @@ end;
 procedure TPieceSection.ChangeAllowanceEnd(PathIndex: integer; Value: TAllowanceEnd);
 var
   APanel: TPropertiesPanel;
-  Node: TEvalNode;
+  Reason: string;
 begin
   APanel := Panel;
-  Node := APanel.SelectedNode;
-  if not (Node is TPieceObject) or (PathIndex > High(TPieceObject(Node).Path)) then
-    Exit;
-  APanel.Document.BeginChange(rsPropChangeAllowanceEnd);
-  APanel.Document.Commit(APanel.Document.Pattern.SetAllowanceEnd(TPieceObject(Node), PathIndex, Value));
+  APanel.BeginStep;
+  APanel.EndStep(SetAllowanceEndStep(APanel.Document, APanel.SelectedNode, PathIndex, Value, Reason), Reason);
   APanel.Rebuild;
 end;
 
@@ -367,31 +303,30 @@ end;
 procedure TPieceSection.MaterialChange(Sender: TObject);
 var
   Node: TEvalNode;
-  Pattern: TPattern;
-  Material: TPatternMaterial;
+  MaterialIndex: integer;
+  Reason: string;
 begin
   Node := Panel.SelectedNode;
   if FFilling or not (Node is TPieceObject) or (FMaterialBox.ItemIndex < 0) then
     Exit;
-  Pattern := Panel.Document.Pattern;
-  Material := nil;
-  if FMaterialBox.ItemIndex < Pattern.MaterialCount then
-    Material := Pattern.Materials[FMaterialBox.ItemIndex];
-  Panel.BeginEdit(rsPropChangeMaterial);
-  Pattern.SetPieceMaterial(TPieceObject(Node), Material);
-  Panel.EndEdit(True);
+  MaterialIndex := FMaterialBox.ItemIndex;
+  if MaterialIndex >= Panel.Document.Pattern.MaterialCount then
+    MaterialIndex := -1;
+  Panel.BeginStep;
+  Panel.EndStep(SetPieceMaterialStep(Panel.Document, Node, MaterialIndex, Reason), Reason);
   Refresh(Panel.SelectedNode);
 end;
 
 procedure TPieceSection.ChangePieceFill(const AColor: string; Style: TPieceFillStyle);
 var
   Node: TEvalNode;
+  Reason: string;
 begin
   Node := Panel.SelectedNode;
   if not (Node is TPieceObject) then
     Exit;
-  Panel.BeginEdit(rsPropChangeFill);
-  Panel.EndEdit(Panel.Document.Pattern.SetPieceFill(TPieceObject(Node), AColor, Style));
+  Panel.BeginStep;
+  Panel.EndStep(SetPieceFillStep(Panel.Document, Node, AColor, Style, Reason), Reason);
   Refresh(Panel.SelectedNode);
 end;
 
@@ -436,77 +371,28 @@ end;
 procedure TPieceSection.CutChange(Sender: TObject);
 var
   Node: TEvalNode;
-  Piece: TPieceObject;
+  Reason: string;
 begin
   if FFilling then
     Exit;
   Node := Panel.SelectedNode;
   if not (Node is TPieceObject) then
     Exit;
-  Piece := TPieceObject(Node);
-  if (Piece.CutCount = FCutEdit.Value) and (Piece.Mirrored = FMirrorBox.Checked) then
-    Exit;
-  Panel.BeginEdit(rsPropChangeCut);
-  Panel.EndEdit(Panel.Document.Pattern.SetCut(Piece, FCutEdit.Value, FMirrorBox.Checked), 'cut:' + Panel.SelectedKey);
+  Panel.BeginStep;
+  Panel.EndStep(SetCutStep(Panel.Document, Node, FCutEdit.Value, FMirrorBox.Checked, Reason, 'cut:' + Node.Key), Reason);
 end;
 
-function NodeName(Pattern: TPattern; const Key: string): string;
-begin
-  if Assigned(Pattern.FindNode(Key)) then
-    Result := Pattern.FindNode(Key).DisplayName
-  else
-    Result := Key;
-end;
-
-// The piece's darts: each seam joining two neighbouring edges of it, and any
-// other pair of edges with a cap
 procedure TPieceSection.AddDartRows(Piece: TPieceObject);
 var
-  Pattern: TPattern;
-  Index, First, Second, Count: integer;
-  Seam: TSeamObject;
-  Dart: TPieceDart;
-  Captions: array of string;
+  Index: integer;
   Box: TComboBox;
-
-  procedure AddDart(const FirstKey, SecondKey, Caption: string);
-  begin
-    for Dart in FDartLegs do
-      if ((Dart.FirstKey = FirstKey) and (Dart.SecondKey = SecondKey)) or ((Dart.FirstKey = SecondKey) and (Dart.SecondKey = FirstKey)) then
-        Exit;
-    SetLength(FDartLegs, Length(FDartLegs) + 1);
-    FDartLegs[High(FDartLegs)].FirstKey := FirstKey;
-    FDartLegs[High(FDartLegs)].SecondKey := SecondKey;
-    Insert(Caption, Captions, Length(Captions));
-  end;
-
 begin
-  Pattern := Panel.Document.Pattern;
-  FDartLegs := nil;
+  FDarts := PieceDarts(Panel.Document.Pattern, Piece);
   FDartBoxes := nil;
-  Captions := nil;
-  Count := Length(Piece.Path);
-  for Index := 0 to Pattern.ObjectCount - 1 do
+  for Index := 0 to High(FDarts) do
   begin
-    if not (Pattern.Objects[Index] is TSeamObject) then
-      Continue;
-    Seam := TSeamObject(Pattern.Objects[Index]);
-    if (Length(Seam.SideA) <> 1) or (Length(Seam.SideB) <> 1) or (Seam.SideA[0].PieceKey <> Piece.Key) or
-      (Seam.SideB[0].PieceKey <> Piece.Key) then
-      Continue;
-    First := Piece.PathIndexOf(Seam.SideA[0].EdgeKey);
-    Second := Piece.PathIndexOf(Seam.SideB[0].EdgeKey);
-    if (First >= 0) and (Second >= 0) and (((First + 1) mod Count = Second) or ((Second + 1) mod Count = First)) then
-      AddDart(Seam.SideA[0].EdgeKey, Seam.SideB[0].EdgeKey, Seam.DisplayName);
-  end;
-  for Dart in Copy(Piece.Darts) do
-    AddDart(Dart.FirstKey, Dart.SecondKey, Format(rsPropDartLegs, [NodeName(Pattern, Dart.FirstKey),
-      NodeName(Pattern, Dart.SecondKey)]));
-  for Index := 0 to High(FDartLegs) do
-  begin
-    Box := Panel.AddChoiceRow(Format(rsPropDartCap, [Captions[Index]]), [rsPropNoCap,
-      Format(rsPropCapTowards, [NodeName(Pattern, FDartLegs[Index].FirstKey)]),
-      Format(rsPropCapTowards, [NodeName(Pattern, FDartLegs[Index].SecondKey)])], @DartChange);
+    Box := Panel.AddChoiceRow(Format(rsPropDartCap, [FDarts[Index].Caption]), DartCapChoices(Panel.Document.Pattern,
+      FDarts[Index].Legs), @DartChange);
     Box.Tag := Index;
     Box.Hint := rsPropDartCapHint;
     Box.ShowHint := True;
@@ -516,45 +402,31 @@ end;
 
 procedure TPieceSection.RefreshDartRows(Piece: TPieceObject);
 var
-  Index, Dart: integer;
+  Index: integer;
 begin
   for Index := 0 to High(FDartBoxes) do
-  begin
-    Dart := Piece.DartOf(FDartLegs[Index].FirstKey, FDartLegs[Index].SecondKey);
-    if Dart < 0 then
-      FDartBoxes[Index].ItemIndex := Ord(dpNone)
-    else if Piece.Darts[Dart].TowardsFirst = (Piece.Darts[Dart].FirstKey = FDartLegs[Index].FirstKey) then
-      FDartBoxes[Index].ItemIndex := Ord(dpFirst)
-    else
-      FDartBoxes[Index].ItemIndex := Ord(dpSecond);
-  end;
+    FDartBoxes[Index].ItemIndex := Ord(DartPress(Piece, FDarts[Index].Legs));
 end;
 
 procedure TPieceSection.DartChange(Sender: TObject);
 var
-  Node: TEvalNode;
-  Legs: TPieceDart;
+  Reason: string;
 begin
   if FFilling then
     Exit;
-  Node := Panel.SelectedNode;
-  if not (Node is TPieceObject) then
-    Exit;
-  Legs := FDartLegs[TComboBox(Sender).Tag];
-  Panel.BeginEdit(rsPropChangeDartCap);
-  Panel.EndEdit(Panel.Document.Pattern.SetDartCap(TPieceObject(Node), Legs.FirstKey, Legs.SecondKey,
-    TDartPress(TComboBox(Sender).ItemIndex)));
+  Panel.BeginStep;
+  Panel.EndStep(SetDartCapStep(Panel.Document, Panel.SelectedNode, FDarts[TComboBox(Sender).Tag].Legs,
+    TDartPress(TComboBox(Sender).ItemIndex), Reason), Reason);
 end;
 
 procedure TPieceSection.FoldChange(Sender: TObject);
 var
-  Node: TEvalNode;
+  Reason: string;
 begin
-  Node := Panel.SelectedNode;
-  if not (Node is TPieceObject) or (TPieceObject(Node).FoldEdgeKey = FFoldKeys[FFoldBox.ItemIndex]) then
+  if FFoldBox.ItemIndex < 0 then
     Exit;
-  Panel.BeginEdit(rsPropChangeFold);
-  Panel.EndEdit(Panel.Document.Pattern.SetFoldEdge(TPieceObject(Node), FFoldKeys[FFoldBox.ItemIndex]));
+  Panel.BeginStep;
+  Panel.EndStep(SetFoldStep(Panel.Document, Panel.SelectedNode, FFoldKeys[FFoldBox.ItemIndex], Reason), Reason);
 end;
 
 // Adding a field rebuilds the panel, box and all
@@ -572,36 +444,19 @@ procedure TPieceSection.AddEdgeAllowance(PathIndex: integer);
 var
   APanel: TPropertiesPanel;
   Node: TEvalNode;
-  Piece: TPieceObject;
+  Reason: string;
 begin
   APanel := Panel;
-  Node := APanel.SelectedNode;
-  if not (Node is TPieceObject) or (PathIndex > High(TPieceObject(Node).Path)) then
-    Exit;
-  Piece := TPieceObject(Node);
-  APanel.Document.BeginChange(rsPropAddEdgeAllowance);
-  APanel.Document.Commit(APanel.Document.Pattern.SetEdgeAllowance(Piece, PathIndex, APanel.Document.Pattern.FormulaText(Piece,
-    PIECE_ALLOWANCE_FIELD)));
+  APanel.BeginStep;
+  APanel.EndStep(SetOwnAllowanceStep(APanel.Document, APanel.SelectedNode, PathIndex, True, Reason), Reason);
   // The commit may have replaced the piece
   Node := APanel.SelectedNode;
   if Node is TPieceObject then
     APanel.FocusFormulaRow(TPieceObject(Node).OverrideField(PathIndex));
 end;
 
-procedure TPieceSection.RemoveEdgeAllowance(PathIndex: integer);
-var
-  Node: TEvalNode;
-begin
-  Node := Panel.SelectedNode;
-  if not (Node is TPieceObject) or (PathIndex > High(TPieceObject(Node).Path)) then
-    Exit;
-  Panel.Document.BeginChange(rsPropRemoveEdgeAllowance);
-  Panel.Document.Commit(Panel.Document.Pattern.SetEdgeAllowance(TPieceObject(Node), PathIndex, ''));
-end;
-
 procedure TPieceSection.AddGrainRows(Piece: TPieceObject);
 var
-  Point: TPointObject;
   Index: integer;
   PointNames: TStringArray;
 begin
@@ -610,14 +465,8 @@ begin
   for Index := 0 to Piece.FieldCount - 1 do
     if Piece.Fields[Index].Name = GRAIN_ANGLE_FIELD then
       Panel.AddEditRow(FieldCaption(GRAIN_ANGLE_FIELD), frFormula, GRAIN_ANGLE_FIELD);
-  PointNames := nil;
-  Insert(rsPropGrainChoose, PointNames, 0);
-  FGrainPointKeys := [''];
-  for Point in Panel.Document.Pattern.AllPoints do
-  begin
-    Insert(Point.DisplayName, PointNames, Length(PointNames));
-    Insert(Point.Key, FGrainPointKeys, Length(FGrainPointKeys));
-  end;
+  FGrainPointKeys := GrainPointKeys(Panel.Document.Pattern);
+  PointNames := GrainPointChoices(Panel.Document.Pattern);
   FGrainStartBox := Panel.AddChoiceRow(rsPropGrainFrom, PointNames, @GrainChange);
   FGrainEndBox := Panel.AddChoiceRow(rsPropGrainTo, PointNames, @GrainChange);
 end;
@@ -669,37 +518,12 @@ end;
 procedure TPieceSection.ChangeGrain(Kind: TGrainKind);
 var
   APanel: TPropertiesPanel;
-  Pattern: TPattern;
-  Node: TEvalNode;
-  Piece: TPieceObject;
   Reason: string;
-  Done: boolean;
 begin
   APanel := Panel;
-  Node := APanel.SelectedNode;
-  if not (Node is TPieceObject) then
-    Exit;
-  Piece := TPieceObject(Node);
-  Pattern := APanel.Document.Pattern;
-  APanel.Document.BeginChange(rsPropChangeGrainline);
-  case Kind of
-    gkNone:
-    begin
-      Pattern.ClearGrain(Piece);
-      Done := True;
-    end;
-    gkAngle:
-      if Piece.GrainKind = gkAngle then
-        Done := True
-      else
-        Done := Pattern.SetGrainAngle(Piece, DEFAULT_GRAIN_ANGLE);
-    else
-      Done := Pattern.SetGrainPoints(Piece, FGrainPointKeys[FGrainStartBox.ItemIndex], FGrainPointKeys[FGrainEndBox.ItemIndex]);
-  end;
-  Reason := Pattern.LastError;
-  APanel.Document.Commit(Done);
-  if not Done then
-    APanel.Report(Reason);
+  APanel.BeginStep;
+  APanel.EndStep(SetGrainStep(APanel.Document, APanel.SelectedNode, Kind, FGrainPointKeys[FGrainStartBox.ItemIndex],
+    FGrainPointKeys[FGrainEndBox.ItemIndex], Reason), Reason);
 end;
 
 end.

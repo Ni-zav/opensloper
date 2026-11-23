@@ -158,15 +158,23 @@ resourcestring
   rsEditorPropertiesSelection = 'The selected objects, by ID, name, or key as the scene gives a repeat''s points';
   rsEditorPropertiesReturns = '`id`, the object shown, or null; `title`, what to show instead when none is; ' +
     '`locked`, its rows are read-only apart from `locked`; `rows`, each with `id`, `kind` (text, name, formula, ' +
-    'choice, check, button or problem), `caption` and `text`, a formula row''s `field`, a choice row''s `choices` and ' +
-    '`choice` (its index, or -1), a check row''s `checked`, and a `hint` when it has one';
+    'choice, check, button, problem, number, longText, font or color), `caption` and `text` (a check''s box caption, ' +
+    'a color row''s own colour or ""), a formula row''s `field`, a choice row''s `choices` and `choice` (its index, ' +
+    'or -1), a font row''s `choices` (the default font''s caption) and a color row''s (following the material, its ' +
+    'own), a color row''s `color` as drawn, a check row''s `checked`, a number row''s `value`, `min`, `max`, `step` ' +
+    'and `decimals`, `enabled` false when it cannot be changed now, and a `hint` when it has one';
   rsEditorPropertyTarget = 'The object, by ID or name';
   rsEditorPropertySet = 'Commits a row of the Properties tab as one undo step: the name or a formula as typed with ' +
-    'names (`text`), or a choice, check or button (`value`). What the row already holds makes no step.';
+    'names, a long text, font or colour (`text`), a number (`number`), or a choice, check or button (`value`). ' +
+    'What the row already holds makes no step.';
   rsEditorPropertyRow = 'The row''s `id`, as editor_properties gives it';
   rsEditorPropertyField = 'A formula row''s field, in place of `row`';
-  rsEditorPropertyText = 'What the name or formula field holds';
+  rsEditorPropertyText = 'What the name, formula, long text, font or colour field holds';
   rsEditorPropertyValue = 'A choice''s index, 1 or 0 for a check; a button ignores it';
+  rsEditorPropertyNumber = 'A number row''s value';
+  rsEditorPropertyFrom = 'With `row` grain, the grainline between two points: the first point''s index in the ' +
+    'grainFrom row''s choices, with `to`';
+  rsEditorPropertyTo = 'The second point''s index in the grainTo row''s choices';
   rsEditorPropertySetReturns = '`done`, false when refused, with the `reason` and, for a formula, `errorPos`, where ' +
     'the problem is, in characters from 1 (0 for none)';
   rsEditorBounds = 'The box round objects, as the canvas shows or zooms to a selection';
@@ -404,6 +412,9 @@ begin
     AddApiParam(Built, 'field', apText, False, rsEditorPropertyField);
     AddApiParam(Built, 'text', apText, False, rsEditorPropertyText);
     AddApiParam(Built, 'value', apWhole, False, rsEditorPropertyValue);
+    AddApiParam(Built, 'number', apNumber, False, rsEditorPropertyNumber);
+    AddApiParam(Built, 'from', apWhole, False, rsEditorPropertyFrom);
+    AddApiParam(Built, 'to', apWhole, False, rsEditorPropertyTo);
     AddApiMethod(Built, 'editor_bounds', rsEditorBounds, rsEditorBoundsReturns, True);
     AddApiParam(Built, 'ids', apReferences, True, rsEditorBoundsTargets);
     AddApiMethod(Built, 'editor_list_click', rsEditorListClick, rsEditorListClickReturns, True);
@@ -954,7 +965,7 @@ end;
 const
   // As TPropertyRowKind
   PROPERTY_ROW_KIND_NAMES: array[TPropertyRowKind] of string = ('text', 'name', 'formula', 'choice', 'check', 'button',
-    'problem');
+    'problem', 'number', 'longText', 'font', 'color');
 
 function PropertyRowToJSON(const Row: TPropertyRow): TJSONObject;
 var
@@ -967,16 +978,29 @@ begin
     prkFormula:
       Result.Add('field', Row.Field);
     prkChoice:
-    begin
-      Choices := TJSONArray.Create;
-      for Choice in Row.Choices do
-        Choices.Add(Choice);
-      Result.Add('choices', Choices);
       Result.Add('choice', Row.Choice);
-    end;
     prkCheck:
       Result.Add('checked', Row.Checked);
+    prkNumber:
+    begin
+      Result.Add('value', ReportFloat(Row.Value));
+      Result.Add('min', ReportFloat(Row.MinValue));
+      Result.Add('max', ReportFloat(Row.MaxValue));
+      Result.Add('step', ReportFloat(Row.Step));
+      Result.Add('decimals', Row.Decimals);
+    end;
+    prkColor:
+      Result.Add('color', Row.Color);
   end;
+  if Row.Kind in [prkChoice, prkFont, prkColor] then
+  begin
+    Choices := TJSONArray.Create;
+    for Choice in Row.Choices do
+      Choices.Add(Choice);
+    Result.Add('choices', Choices);
+  end;
+  if not Row.Enabled then
+    Result.Add('enabled', False);
   if Row.Hint <> '' then
     Result.Add('hint', Row.Hint);
 end;
@@ -1039,12 +1063,18 @@ begin
     Done := CommitPropertyField(Document, Node, Field, RequireString(Params, 'text'), Reason, ErrorPos)
   else if Row = PROPERTY_ROW_NAME then
     Done := CommitPropertyField(Document, Node, '', RequireString(Params, 'text'), Reason, ErrorPos)
-  else if Row = PROPERTY_ROW_FLIP then
+  else if Row = '' then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['row']))
+  else if Assigned(Params.Find('text')) then
+    Done := CommitPropertyText(Document, Node, Row, RequireString(Params, 'text'), Reason)
+  else if Assigned(Params.Find('number')) then
+    Done := CommitPropertyNumber(Document, Node, Row, RequireNumber(Params, 'number'), Reason)
+  else if (Row = PROPERTY_ROW_GRAIN) and Assigned(Params.Find('from')) then
+    Done := CommitGrainPoints(Document, Node, RequireWhole(Params, 'from'), RequireWhole(Params, 'to'), Reason)
+  else if (Row = PROPERTY_ROW_FLIP) or (Row = PROPERTY_ROW_NOTE_FREE) then
     Done := CommitPropertyRow(Document, Node, Row, 0, Reason)
-  else if Row <> '' then
-    Done := CommitPropertyRow(Document, Node, Row, RequireWhole(Params, 'value'), Reason)
   else
-    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['row']));
+    Done := CommitPropertyRow(Document, Node, Row, RequireWhole(Params, 'value'), Reason);
   Result := TJSONObject.Create(['done', Done, 'reason', Reason, 'errorPos', ErrorPos]);
 end;
 

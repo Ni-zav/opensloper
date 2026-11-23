@@ -33,8 +33,9 @@ in the grid too, its edits in bold until Save downloads the measurement file,
 with the size box and the test size. The Properties tab, first as on the
 desktop, shows the selected object's rows as the engine lists them: name and
 formulas edited with completion, refused entries kept in red with the reason,
-and choices, the Locked box and buttons; pieces' and notes' own rows are
-still to come.
+and choices, boxes, numbers, colours and buttons, with a piece's cut, fold,
+darts, own allowances, ends, grainline, material and fill, and a note's text,
+size, look and font.
 
 ## Setting up
 

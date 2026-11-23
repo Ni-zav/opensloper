@@ -34,14 +34,11 @@ function NewFontBox(Owner: TComponent; Changed: TNotifyEvent): TComboBox;
 function FontBoxName(Box: TComboBox): string;
 procedure ShowFontName(Box: TComboBox; const AName: string);
 
-resourcestring
-  rsFontBoxDefault = 'Default (sans-serif)';
-  rsFontBoxHint = 'The font it prints in. One not installed, or with PostScript outlines, prints in the default font.';
 
 implementation
 
 uses
-  SysUtils, Forms;
+  SysUtils, Forms, Sloper.Editor.PropertyRows;
 
 const
   // Fonts shown at once when the list opens
@@ -73,10 +70,10 @@ function NewFontBox(Owner: TComponent; Changed: TNotifyEvent): TComboBox;
 begin
   Result := TComboBox.Create(Owner);
   Result.Style := csDropDown;
-  Result.Items.Add(rsFontBoxDefault);
+  Result.Items.Add(rsPropFontDefault);
   Result.Items.AddStrings(SortedFontNames);
   Result.DropDownCount := FONT_LIST_ROWS;
-  Result.Hint := rsFontBoxHint;
+  Result.Hint := rsPropFontHint;
   Result.ShowHint := True;
   Result.OnSelect := Changed;
   Result.OnEditingDone := Changed;
@@ -85,14 +82,14 @@ end;
 function FontBoxName(Box: TComboBox): string;
 begin
   Result := Trim(Box.Text);
-  if SameText(Result, rsFontBoxDefault) then
+  if SameText(Result, rsPropFontDefault) then
     Result := '';
 end;
 
 procedure ShowFontName(Box: TComboBox; const AName: string);
 begin
   if AName = '' then
-    Box.Text := rsFontBoxDefault
+    Box.Text := rsPropFontDefault
   else
     Box.Text := AName;
 end;

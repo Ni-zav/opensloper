@@ -124,9 +124,14 @@ type
     procedure TestProperties;
     // Its edits, each one undo step, refused with the reason
     procedure TestPropertyEdits;
+    // A piece's rows: cut, fold, own allowance, grainline, material and fill
+    procedure TestPiecePropertyEdits;
+    // A note's rows: text, size, printing, look, font and making it free
+    procedure TestNotePropertyEdits;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
+    function HasPropertyRow(const RowId: string): boolean;
     // A callout from B, its text at (150, -40); its ID
     function AddCallout: integer;
   end;
@@ -134,7 +139,7 @@ type
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.API.Mcp, Sloper.Editor.PanelEdits;
+  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows;
 
 const
   TOLERANCE = 1e-6;
@@ -1178,6 +1183,18 @@ begin
   Result := nil;
 end;
 
+function TTestEditorServer.HasPropertyRow(const RowId: string): boolean;
+var
+  Index: integer;
+  Rows: TJSONArray;
+begin
+  Rows := Answer.Arrays['rows'];
+  for Index := 0 to Rows.Count - 1 do
+    if Rows.Objects[Index].Strings['id'] = RowId then
+      Exit(True);
+  Result := False;
+end;
+
 procedure TTestEditorServer.TestProperties;
 var
   Rows: TJSONArray;
@@ -1270,6 +1287,123 @@ begin
   AssertFalse('no such row', Answer.Booleans['done']);
   Call('editor_property_set', '{"id": ' + IdEdge + '}');
   AssertEquals('which row', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestPiecePropertyEdits;
+var
+  IdPiece, Field: string;
+begin
+  AddSquare;
+  IdPiece := IntToStr(IdOf('Flap'));
+  Call('editor_properties', '{"selection": [' + IdPiece + ']}');
+  AssertEquals('cut as a number', 'number', PropertyRow('cut').Strings['kind']);
+  AssertEquals('cut once', 1, PropertyRow('cut').Get('value', 0.0), TOLERANCE);
+  AssertEquals('at most', MAX_CUT_COUNT, PropertyRow('cut').Get('max', 0.0), TOLERANCE);
+  AssertEquals('no fold and four straight edges', 5, PropertyRow('fold').Arrays['choices'].Count);
+  AssertEquals('every edge can have its own', 5, PropertyRow('ownAllowance').Arrays['choices'].Count);
+  AssertEquals('a new piece''s grainline is at an angle', 1, PropertyRow('grain').Integers['choice']);
+  AssertEquals('its angle shown', 'formula', PropertyRow(GRAIN_ANGLE_FIELD).Strings['kind']);
+  AssertFalse('its points wait', PropertyRow('grainFrom').Booleans['enabled']);
+  AssertEquals('a colour', 'color', PropertyRow('fillColor').Strings['kind']);
+  AssertEquals('from its material', '', PropertyRow('fillColor').Strings['text']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "cut", "number": 2}');
+  AssertTrue('cut twice', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "cut", "number": 3}');
+  Call('editor_changes');
+  AssertEquals('its step', 'Change cut', Answer.Strings['undo']);
+  Call('undo');
+  Call('editor_properties', '{"selection": [' + IdPiece + ']}');
+  AssertEquals('a run of counts is one step', 1, PropertyRow('cut').Get('value', 0.0), TOLERANCE);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "cut", "number": 2.5}');
+  AssertFalse('a whole number', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "fold", "value": 1}');
+  AssertTrue('folded', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdPiece + ']}');
+  AssertEquals('on its first edge', 1, PropertyRow('fold').Integers['choice']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "ownAllowance", "value": 2}');
+  AssertTrue('an edge of its own', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Add edge allowance', Answer.Strings['undo']);
+  Call('editor_properties', '{"selection": [' + IdPiece + ']}');
+  AssertEquals('one edge fewer to choose', 4, PropertyRow('ownAllowance').Arrays['choices'].Count);
+  // The second edge's, with a row of its own
+  Field := 'edge2.' + PIECE_ALLOWANCE_FIELD;
+  AssertTrue('with a field', HasPropertyRow(Field));
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "field": "' + Field + '", "text": ""}');
+  AssertTrue('emptied', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('goes back to the piece''s', 'Remove edge allowance', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "grain", "value": 2}');
+  AssertFalse('needs its points', Answer.Booleans['done']);
+  // The points in the order they were added
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "grain", "value": 2, "from": 1, "to": 3}');
+  AssertTrue('between two points', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdPiece + ']}');
+  AssertEquals('between points', 2, PropertyRow('grain').Integers['choice']);
+  AssertFalse('its points shown', Assigned(PropertyRow('grainFrom').Find('enabled')));
+  AssertEquals('from A', 'A', PropertyRow('grainFrom').Arrays['choices'].Strings[PropertyRow('grainFrom').Integers['choice']]);
+  AssertEquals('to C', 'C', PropertyRow('grainTo').Arrays['choices'].Strings[PropertyRow('grainTo').Integers['choice']]);
+  AssertFalse('no angle', HasPropertyRow(GRAIN_ANGLE_FIELD));
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "grain", "value": 0}');
+  Call('editor_changes');
+  AssertEquals('its step', 'Change grainline', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "fillColor", "text": "#ff0000"}');
+  AssertTrue('its own colour', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdPiece + ']}');
+  AssertEquals('kept', '#FF0000', PropertyRow('fillColor').Strings['text']);
+  AssertEquals('drawn in it', '#FF0000', PropertyRow('fillColor').Strings['color']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "fillColor", "text": "red"}');
+  AssertFalse('not a colour', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "fill", "value": 2}');
+  AssertTrue('hatched', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdPiece + ', "row": "dart0", "value": 1}');
+  AssertFalse('no darts', Answer.Booleans['done']);
+end;
+
+procedure TTestEditorServer.TestNotePropertyEdits;
+var
+  IdNote: string;
+begin
+  AddSquare;
+  Call('add_note', '{"text": "Fold", "anchor": {"point": "A"}, "x": 10, "y": 20, "leader": "arrow"}');
+  IdNote := IntToStr(Answer.Integers['id']);
+  Call('editor_properties', '{"selection": [' + IdNote + ']}');
+  AssertEquals('its text', 'Fold', PropertyRow('noteText').Strings['text']);
+  AssertEquals('of several lines', 'longText', PropertyRow('noteText').Strings['kind']);
+  AssertEquals('an arrow', 1, PropertyRow('noteLeader').Integers['choice']);
+  AssertEquals('the default font', '', PropertyRow('noteFont').Strings['text']);
+  AssertEquals('named', rsPropFontDefault, PropertyRow('noteFont').Arrays['choices'].Strings[0]);
+  AssertEquals('its box''s caption', rsPropNoteBold, PropertyRow('noteBold').Strings['text']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteText", "text": "Fold\nhere\n"}');
+  AssertTrue('two lines', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Change note text', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteText", "text": "{=nothing.length}"}');
+  AssertFalse('a draft value that does not parse', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['reason'] <> '');
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteSize", "number": 14}');
+  AssertTrue('bigger', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteSize", "number": 900}');
+  AssertFalse('too big', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteBold", "value": 1}');
+  AssertTrue('bold', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Change note', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteFont", "text": "DejaVu Serif"}');
+  AssertTrue('a font', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdNote + ']}');
+  AssertEquals('its font', 'DejaVu Serif', PropertyRow('noteFont').Strings['text']);
+  AssertTrue('still bold', PropertyRow('noteBold').Booleans['checked']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteFont", "text": "' + rsPropFontDefault + '"}');
+  Call('editor_properties', '{"selection": [' + IdNote + ']}');
+  AssertEquals('the default again', '', PropertyRow('noteFont').Strings['text']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "notePrint", "value": 0}');
+  AssertTrue('not printed', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdNote + ', "row": "noteFree"}');
+  AssertTrue('free', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdNote + ']}');
+  AssertFalse('nothing to point at', HasPropertyRow('noteLeader'));
+  AssertFalse('nor to unhook', HasPropertyRow('noteFree'));
 end;
 
 const

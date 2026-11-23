@@ -295,35 +295,6 @@ type
   end;
 
 resourcestring
-  rsPropNoteText = 'Text';
-  rsPropNoteSize = 'Size (points)';
-  rsPropNotePrint = 'Print';
-  rsPropNotePrintCaption = 'Print and export it';
-  rsPropNoteAnchor = 'Hangs from';
-  rsPropNoteFree = 'Make free';
-  rsPropNoteFreeHint = 'Unhook the note, leaving it where it is, so what it hangs from can be deleted';
-  rsPropChangeNoteText = 'Change note text';
-  rsPropChangeNoteSize = 'Change note size';
-  rsPropChangeNotePrint = 'Change note printing';
-  rsPropFreeNote = 'Make note free';
-  rsPropNoteLeader = 'Leader';
-  rsPropNoteLeaderNone = 'None (a plain note)';
-  rsPropNoteLeaderArrow = 'Arrow';
-  rsPropNoteLeaderDot = 'Dot';
-  rsPropNoteLeaderLine = 'Line';
-  rsPropNoteAlign = 'Lines';
-  rsPropNoteAlignLeft = 'Left';
-  rsPropNoteAlignCentre = 'Centred';
-  rsPropNoteAlignRight = 'Right';
-  rsPropNoteBox = 'Box';
-  rsPropNoteBoxCaption = 'On a white box';
-  rsPropChangeNoteLook = 'Change note';
-  rsPropNoteFont = 'Font';
-  rsPropNoteStyle = 'Style';
-  rsPropNoteBold = 'Bold';
-  rsPropNoteItalic = 'Italic';
-  rsPropChangeNoteFont = 'Change note font';
-  rsPropNoteTextHint = 'Draft values go in {= }, such as {=Line_A_B.length}';
   rsPropSuggestHint = 'Suggest formulas that give this value (Alt+Down)';
   // On the suggestions button when the icons are missing
   rsPropSuggestCaption = 'f';
@@ -440,7 +411,6 @@ const
   MIN_COLUMN96 = 48;
   // A note's text field, at 96 pixels per inch
   NOTE_TEXT_HEIGHT96 = 64;
-  NOTE_SIZE_STEP = 1;
   // What CommitFocused names the name field and a note's text by; neither
   // can be a formula field's name
   FOCUS_NAME = ':name';
@@ -2061,23 +2031,16 @@ end;
 function TNoteSection.CommitText: boolean;
 var
   Node: TEvalNode;
-  NewText, Reason: string;
+  Reason: string;
   Done: boolean;
 begin
   Result := True;
   Node := Panel.SelectedNode;
   if not (Node is TNoteObject) then
     Exit;
-  NewText := NoteTextFromField(FNoteText.Text);
-  if NewText = TNoteObject(Node).DisplayText(Panel.Document.Pattern.Resolver) then
-  begin
-    FNoteRefusal.Visible := False;
-    Exit;
-  end;
-  Panel.BeginEdit(rsPropChangeNoteText);
-  Done := Panel.Document.Pattern.SetNoteText(TNoteObject(Node), NewText);
-  Reason := Panel.Document.Pattern.LastError;
-  Panel.EndEdit(Done);
+  Panel.BeginStep;
+  Done := SetNoteTextStep(Panel.Document, Node, FNoteText.Text, Reason);
+  Panel.EndStep(True, '');
   if not Done then
     FNoteRefusal.Caption := Reason;
   FNoteRefusal.Visible := not Done;
@@ -2130,37 +2093,20 @@ end;
 procedure TNoteSection.LookChange(Sender: TObject);
 var
   Node: TEvalNode;
-  Note: TNoteObject;
-  Pattern: TPattern;
   Leader: TNoteLeader;
   Reason: string;
-  Style: TTextStyle;
 begin
   if FFilling then
     Exit;
   Node := Panel.SelectedNode;
   if not (Node is TNoteObject) then
     Exit;
-  Note := TNoteObject(Node);
-  Pattern := Panel.Document.Pattern;
-  Leader := Note.Leader;
+  Leader := TNoteObject(Node).Leader;
   if Assigned(FNoteLeaderBox) and (FNoteLeaderBox.ItemIndex >= 0) then
     Leader := TNoteLeader(FNoteLeaderBox.ItemIndex);
-  Style := Note.Style;
-  Style.Bold := FNoteBoldCheck.Checked;
-  Style.Italic := FNoteItalicCheck.Checked;
-  if (Leader = Note.Leader) and (Ord(Note.Align) = FNoteAlignBox.ItemIndex) and (Note.Boxed = FNoteBoxCheck.Checked) and
-    SameTextStyle(Style, Note.Style) then
-    Exit;
-  Panel.BeginEdit(rsPropChangeNoteLook);
-  Pattern.SetNoteAlign(Note, TTextAlign(Max(0, FNoteAlignBox.ItemIndex)));
-  Pattern.SetNoteBoxed(Note, FNoteBoxCheck.Checked);
-  Reason := '';
-  if not Pattern.SetNoteStyle(Note, Style) or not Pattern.SetNoteLeader(Note, Leader) then
-    Reason := Pattern.LastError;
-  Panel.EndEdit(Reason = '');
-  if Reason <> '' then
-    Panel.Report(Reason);
+  Panel.BeginStep;
+  Panel.EndStep(SetNoteLookStep(Panel.Document, Node, Leader, TTextAlign(Max(0, FNoteAlignBox.ItemIndex)),
+    FNoteBoxCheck.Checked, FNoteBoldCheck.Checked, FNoteItalicCheck.Checked, Reason), Reason);
 end;
 
 // Picked from the list or typed; a name that is refused goes back to the
@@ -2168,9 +2114,24 @@ end;
 procedure TNoteSection.FontChange(Sender: TObject);
 var
   Node: TEvalNode;
-  Note: TNoteObject;
-  Style: TTextStyle;
+  Reason: string;
   Done: boolean;
+begin
+  if FFilling then
+    Exit;
+  Node := Panel.SelectedNode;
+  if not (Node is TNoteObject) then
+    Exit;
+  Panel.BeginStep;
+  Done := SetNoteFontStep(Panel.Document, Node, FontBoxName(FNoteFontBox), Reason);
+  Panel.EndStep(Done, Reason);
+  if not Done and (Panel.SelectedNode is TNoteObject) then
+    ShowFontName(FNoteFontBox, TNoteObject(Panel.SelectedNode).Style.Font);
+end;
+
+procedure TNoteSection.SizeChange(Sender: TObject);
+var
+  Node: TEvalNode;
   Reason: string;
 begin
   if FFilling then
@@ -2178,47 +2139,18 @@ begin
   Node := Panel.SelectedNode;
   if not (Node is TNoteObject) then
     Exit;
-  Note := TNoteObject(Node);
-  Style := Note.Style;
-  Style.Font := FontBoxName(FNoteFontBox);
-  if Style.Font = Note.Style.Font then
-    Exit;
-  Panel.BeginEdit(rsPropChangeNoteFont);
-  Done := Panel.Document.Pattern.SetNoteStyle(Note, Style);
-  Reason := Panel.Document.Pattern.LastError;
-  Panel.EndEdit(Done);
-  if not Done then
-  begin
-    ShowFontName(FNoteFontBox, Note.Style.Font);
-    Panel.Report(Reason);
-  end;
-end;
-
-procedure TNoteSection.SizeChange(Sender: TObject);
-var
-  Node: TEvalNode;
-begin
-  if FFilling then
-    Exit;
-  Node := Panel.SelectedNode;
-  if not (Node is TNoteObject) or SameValue(TNoteObject(Node).Size, FNoteSize.Value) then
-    Exit;
-  Panel.BeginEdit(rsPropChangeNoteSize);
-  Panel.EndEdit(Panel.Document.Pattern.SetNoteSize(TNoteObject(Node), FNoteSize.Value), 'notesize:' + Panel.SelectedKey);
+  Panel.BeginStep;
+  Panel.EndStep(SetNoteSizeStep(Panel.Document, Node, FNoteSize.Value, Reason, 'notesize:' + Node.Key), Reason);
 end;
 
 procedure TNoteSection.PrintClick(Sender: TObject);
 var
-  Node: TEvalNode;
+  Reason: string;
 begin
   if FFilling then
     Exit;
-  Node := Panel.SelectedNode;
-  if not (Node is TNoteObject) or (TNoteObject(Node).Print = FNotePrint.Checked) then
-    Exit;
-  Panel.BeginEdit(rsPropChangeNotePrint);
-  Panel.Document.Pattern.SetNotePrint(TNoteObject(Node), FNotePrint.Checked);
-  Panel.EndEdit(True);
+  Panel.BeginStep;
+  Panel.EndStep(SetNotePrintStep(Panel.Document, Panel.SelectedNode, FNotePrint.Checked, Reason), Reason);
 end;
 
 // The commit rebuilds the panel, which frees this section, so only the panel
@@ -2226,20 +2158,11 @@ end;
 procedure TNoteSection.FreeClick(Sender: TObject);
 var
   APanel: TPropertiesPanel;
-  Node: TEvalNode;
   Reason: string;
 begin
   APanel := Panel;
-  Node := APanel.SelectedNode;
-  if not (Node is TNoteObject) then
-    Exit;
-  APanel.Document.BeginChange(rsPropFreeNote);
-  Reason := '';
-  if not APanel.Document.Pattern.MakeNoteFree(TNoteObject(Node)) then
-    Reason := APanel.Document.Pattern.LastError;
-  APanel.Document.Commit(Reason = '');
-  if Reason <> '' then
-    APanel.Report(Reason);
+  APanel.BeginStep;
+  APanel.EndStep(MakeNoteFreeStep(APanel.Document, APanel.SelectedNode, Reason), Reason);
 end;
 
 end.

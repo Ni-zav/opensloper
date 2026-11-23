@@ -12,6 +12,18 @@ export const STRINGS = {
   measurementsHint: 'Choose the measurement file for the pattern',
   save: 'Save',
   saveHint: 'Download the pattern file',
+  saveToFileHint: 'Save the pattern to its file',
+  saveAs: 'Save as…',
+  saveAsHint: 'Save the pattern to another file',
+  saved: (name: string): string => `Saved ${name}`,
+  writeRefused: (name: string): string => `OpenSloper was not allowed to write ${name}`,
+  // The kinds of file the pickers offer
+  patternFiles: 'OpenSloper pattern',
+  measurementFiles: 'OpenSloper measurements',
+  // When the measurement file is not among those the browser lets the page read
+  findMeasurements: (file: string): string =>
+    `The pattern uses the measurement file ${file}: find it in the folder that holds them, or choose it with Measurements…`,
+  findMeasurementsButton: 'Find it…',
   undo: 'Undo',
   redo: 'Redo',
   undoStep: (step: string): string => `Undo ${step}`,
@@ -75,7 +87,7 @@ export const STRINGS = {
   measurementsSize: 'Size',
   measurementsAdd: 'Add',
   measurementsSave: 'Save',
-  measurementsSaveHint: 'Make the edits in bold to the measurement set and download its file',
+  measurementsSaveHint: 'Make the edits in bold to the measurement set and save its file',
   measurementsRevert: 'Revert',
   measurementsRevertHint: 'Drop the edits in bold',
   measurementsEdited: (key: string): string => `${key} *`,

@@ -5,18 +5,16 @@
 // drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
 // set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
 // this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
-// default, and SCREENSHOT, a file name without .png, keeps a picture of the end.
+// default, and SCREENSHOT, a file name without .png, keeps a picture of the end. It opens and saves
+// through uploads and downloads, as where the browser has no File System Access.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { extname, join, normalize } from 'node:path';
-import { launch, type Page } from 'puppeteer-core';
+import { join } from 'node:path';
+import type { Page } from 'puppeteer-core';
+import { bodyData, launchBrowser, serveApp, status, TIMEOUT_MS, waitForData, watchProblems } from './browser.ts';
 
-const ROOT = 'out/design';
 const PATTERNS = '../tests/patterns';
-const TIMEOUT_MS = 30000;
 // The canvas's paper colour, which an empty canvas is all of but the grid
 const PAPER = [252, 251, 248];
 // Pixels of the pattern's ink an opened skirt draws at the least
@@ -25,59 +23,11 @@ const DRAG_PIXELS = 40;
 // How long the page is watched while idle, in ms
 const IDLE_MS = 1000;
 
-const TYPES: Record<string, string> = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.wasm': 'application/wasm',
-  '.svg': 'image/svg+xml',
-};
-
-const server = createServer((request, response) => {
-  const path = normalize(join(ROOT, decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)));
-  const file = path.endsWith('/') || path === ROOT ? join(path, 'index.html') : path;
-  readFile(file)
-    .then((data) => {
-      response.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
-      response.end(data);
-      return undefined;
-    })
-    .catch(() => {
-      response.writeHead(404);
-      response.end();
-    });
-});
-await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-const address: string | AddressInfo | null = server.address();
-if (address === null || typeof address === 'string') {
-  throw new Error('the server has no port');
-}
-const { port } = address;
+const { port, close } = await serveApp();
 
 // A row's field or box in the Properties tab
 function field(row: string): string {
   return `.property-value[data-row="${row}"] input`;
-}
-
-async function bodyData(page: Page, name: string): Promise<string> {
-  return page.$eval('body', (body, key) => body.dataset[key] ?? '', name);
-}
-
-// Waits for a body data value; on a timeout, says what the page showed instead
-async function waitForData(page: Page, name: string, value: string): Promise<void> {
-  try {
-    await page.waitForFunction(
-      (key, expected) => document.body.dataset[key] === expected,
-      { timeout: TIMEOUT_MS },
-      name,
-      value,
-    );
-  } catch (error: unknown) {
-    const shown = await page.evaluate(() => ({
-      data: Object.fromEntries(Object.entries(document.body.dataset)),
-      status: document.querySelector('#status')?.textContent,
-    }));
-    throw new Error(`waiting for ${name} "${value}": ${JSON.stringify(shown)}`, { cause: error });
-  }
 }
 
 // Chooses a tool by its button, whose hint is its caption and keys
@@ -103,10 +53,6 @@ async function isDisabled(page: Page, selector: string): Promise<boolean> {
   return page.$eval(selector, (control) =>
     control instanceof HTMLInputElement || control instanceof HTMLButtonElement ? control.disabled : false,
   );
-}
-
-async function status(page: Page): Promise<string> {
-  return page.$eval('#status', (element) => element.textContent);
 }
 
 // Pixels of the canvas that are neither paper nor the grid's light lines
@@ -137,11 +83,7 @@ async function inkedPixels(page: Page): Promise<number> {
   );
 }
 
-const browser = await launch({
-  executablePath: process.env.CHROMIUM ?? '/usr/bin/chromium',
-  args: ['--no-sandbox', '--disable-gpu'],
-});
-const problems: string[] = [];
+const browser = await launchBrowser();
 // Where the page's downloads go, removed at the end
 const downloads = await mkdtemp(join(tmpdir(), 'opensloper-design-'));
 try {
@@ -149,12 +91,12 @@ try {
   const session = await page.createCDPSession();
   await session.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
   await page.setViewport({ width: 1200, height: 800 });
-  page.on('pageerror', (error: unknown) => {
-    problems.push(`page error: ${String(error)}`);
-  });
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      problems.push(`console: ${message.text()}`);
+  const problems = watchProblems(page);
+  // Opening and saving through uploads and downloads, as where the browser
+  // has no File System Access (files.ts drives that)
+  await page.evaluateOnNewDocument(() => {
+    for (const name of ['showOpenFilePicker', 'showSaveFilePicker', 'showDirectoryPicker']) {
+      Object.defineProperty(window, name, { value: undefined });
     }
   });
   // Counts the scenes asked of the engine, in body data, to check an idle page asks nothing
@@ -587,6 +529,6 @@ try {
   );
 } finally {
   await browser.close();
-  server.close();
+  close();
   await rm(downloads, { recursive: true, force: true });
 }

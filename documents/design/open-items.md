@@ -4,7 +4,7 @@ Part of the [OpenSloper design](../opensloper-design-document.md). Everything no
 
 ## Roadmap
 
-1. **Web version**: the engine in WebAssembly under a TypeScript editor, with a Django server (see [Web version](web-version.md)). The spike works; the editor and server are next. A marketplace for sellers' patterns is postponed until the editor exists, as it would make the site host user content. Encrypted sync, files encrypted in the browser with a key from the user's passphrase so the server holds blobs it cannot read, is the way to offer sync and backup later if users ask for it; whether that is still personal data under PDPA is for a lawyer, and a lost passphrase loses the files.
+1. **Web version**: the engine in WebAssembly under a TypeScript editor, with a Django server (see [Web version](web-version.md)). The spike works; the editor and server are next. A marketplace for sellers' patterns is postponed until the editor exists, as it would make the site host user content. Encrypted sync, files encrypted in the browser with a key from the user's passphrase so the server holds blobs it cannot read, is the way to offer sync and backup later if users ask for it; whether that is still personal data under PDPA is for a lawyer, and a lost passphrase loses the files. The web editor's Save as into another folder keeps the measurement file's path as the pattern recorded it, where the desktop works it out again from the new place; the editor could do so when a granted folder holds both files.
 
 A community release follows once the apps prove easy to use.
 

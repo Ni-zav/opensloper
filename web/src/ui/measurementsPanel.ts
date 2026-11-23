@@ -22,9 +22,29 @@ const MAX_TEST_PERCENT = 20;
 const TEST_TICK_PERCENT = 5;
 const MEASUREMENTS_EXTENSION = '.slm';
 
+// Where Save puts the set's file: by default a download
+export interface MeasurementsSaver {
+  // Readies the file at the path the pattern records, or for a new set the
+  // one suggested, before the edits are made; the path to record, or
+  // undefined when the user cancels
+  prepare(path: string, isNew: boolean): Promise<string | undefined>;
+  write(path: string, text: string): Promise<void>;
+}
+
+const DOWNLOAD_SAVER: MeasurementsSaver = {
+  prepare: async (path) => Promise.resolve(path),
+  write: async (path, text) => {
+    downloadText(baseName(path), text);
+    return Promise.resolve();
+  },
+};
+
 export class MeasurementsPanel extends ListPanel {
   // The pattern's file name, from which a new set's is made
   patternFileName: () => string = () => '';
+  saver: MeasurementsSaver = DOWNLOAD_SAVER;
+  // The set's file as the pattern records it, or '' with none
+  private setFile = '';
   private readonly fileLabel: HTMLElement;
   private readonly sizeRow: HTMLElement;
   private readonly sizeBox: HTMLSelectElement;
@@ -139,6 +159,7 @@ export class MeasurementsPanel extends ListPanel {
     this.pendingCount = numberField(answer, 'pendingCount') ?? 0;
     this.testPercent = numberField(answer, 'testPercent') ?? 0;
     const file = stringField(answer, 'file') ?? '';
+    this.setFile = file;
     this.fileLabel.textContent = file === '' ? STRINGS.measurementsNoSet : baseName(file);
     this.showSizes(stringsField(answer, 'sizes') ?? [], stringField(answer, 'size') ?? '');
     this.updateControls();
@@ -252,12 +273,18 @@ export class MeasurementsPanel extends ListPanel {
   private async save(): Promise<void> {
     const pattern = this.patternFileName();
     const stem = pattern === '' ? STRINGS.measurementsNewFile : pattern.replace(/\.[^.]*$/, '');
-    const answer = await this.document.call('editor_measurements_save', { file: stem + MEASUREMENTS_EXTENSION });
+    const isNew = this.setFile === '';
+    // The file is chosen first, so cancelling leaves the edits waiting
+    const path = await this.saver.prepare(isNew ? stem + MEASUREMENTS_EXTENSION : this.setFile, isNew);
+    if (path === undefined) {
+      return;
+    }
+    const answer = await this.document.call('editor_measurements_save', { file: path });
     if (booleanField(answer, 'done') !== true) {
       this.events.message(stringField(answer, 'reason') ?? '');
       return;
     }
-    downloadText(baseName(stringField(answer, 'file') ?? ''), stringField(answer, 'text') ?? '');
+    await this.saver.write(stringField(answer, 'file') ?? path, stringField(answer, 'text') ?? '');
     this.events.message(stringField(answer, 'message') ?? '');
     this.refresh();
   }

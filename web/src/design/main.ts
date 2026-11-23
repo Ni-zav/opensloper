@@ -1,7 +1,10 @@
 // The web design app, as Sloper.Design.MainForm: starts the engine, builds
 // the toolbar and the tools from the engine's tables, opens and saves files
 // as text on the user's machine, and passes keys to the canvas. Nothing is
-// sent anywhere: the files stay in the browser.
+// sent anywhere: the files stay in the browser. Where the browser has File
+// System Access (FileAccess) a pattern saves back to the file it came from
+// and its measurement file is found beside it; elsewhere files are uploaded
+// and downloaded.
 import { PatternDocument } from '../document/patternDocument.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
 import { numberField, stringField } from '../engine/replies.ts';
@@ -9,6 +12,7 @@ import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
+import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { PropertiesPanel } from '../ui/properties.ts';
@@ -22,6 +26,7 @@ const ICONS = {
   open: 'folder-open',
   measurements: 'ruler-measure',
   save: 'device-floppy',
+  saveAs: 'file-pencil',
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
   fit: 'zoom-scan',
@@ -32,7 +37,6 @@ const ICONS = {
   measurementsTab: 'ruler-measure',
 } as const;
 
-const PATTERN_EXTENSION = '.sloper';
 const DEFAULT_FILE_NAME = 'pattern.sloper';
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -51,6 +55,15 @@ const measurementsInput = element('measurements-input', HTMLInputElement);
 
 function showMessage(text: string): void {
   status.textContent = text;
+}
+
+// A message with a button that does something about it, as finding a file
+function showAction(text: string, caption: string, action: () => void): void {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = caption;
+  button.addEventListener('click', action);
+  status.replaceChildren(text, ' ', button);
 }
 
 function showFailure(error: unknown): void {
@@ -93,6 +106,10 @@ class DesignApp {
   private readonly redoButton: HTMLButtonElement;
   // The measurement file the open pattern names, while it has none
   private wantedMeasurements = '';
+  // Files in place, where the browser can; the pattern's file and its set's when opened so
+  private readonly files = FileAccess.create();
+  private patternHandle: FileSystemFileHandle | undefined;
+  private measurementsHandle: FileSystemFileHandle | undefined;
 
   constructor(engine: Engine, tables: Tables) {
     this.document = new PatternDocument(engine);
@@ -140,6 +157,29 @@ class DesignApp {
     );
     this.measurements = new MeasurementsPanel(this.document, this.listEvents());
     this.measurements.patternFileName = () => this.document.fileName;
+    if (this.files !== undefined) {
+      const files = this.files;
+      // The file it is written to, chosen before the edits are made
+      let target: FileSystemFileHandle | undefined;
+      this.measurements.saver = {
+        prepare: async (path, isNew) => {
+          target = await this.measurementsTarget(files, path);
+          if (target === undefined || !(await files.mayWrite(target))) {
+            return undefined;
+          }
+          // A new set is recorded where it was put, when the pattern's folder is known
+          const recorded =
+            isNew && this.patternHandle !== undefined ? await files.pathBetween(this.patternHandle, target) : undefined;
+          return recorded ?? (isNew ? target.name : path);
+        },
+        write: async (_path, text) => {
+          // The tab then says what was saved
+          if (target !== undefined && (await files.write(target, text))) {
+            this.measurementsHandle = target;
+          }
+        },
+      };
+    }
     side.addSection('measurements', STRINGS.tabMeasurements, ICONS.measurementsTab, this.measurements);
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
       this.run(this.document.undo());
@@ -149,18 +189,22 @@ class DesignApp {
     });
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
-        if (this.mayDropMeasurementEdits()) {
-          openInput.click();
-        }
+        this.open();
       }),
       iconButton(ICONS.measurements, STRINGS.measurements, STRINGS.measurementsHint, () => {
-        if (this.mayDropMeasurementEdits()) {
-          measurementsInput.click();
-        }
+        this.openMeasurements();
       }),
-      iconButton(ICONS.save, STRINGS.save, STRINGS.saveHint, () => {
-        this.run(this.save());
+      iconButton(ICONS.save, STRINGS.save, this.files === undefined ? STRINGS.saveHint : STRINGS.saveToFileHint, () => {
+        this.run(this.save(false));
       }),
+      // A download asks where to put it anyway
+      ...(this.files === undefined
+        ? []
+        : [
+            iconButton(ICONS.saveAs, STRINGS.saveAs, STRINGS.saveAsHint, () => {
+              this.run(this.save(true));
+            }),
+          ]),
       this.undoButton,
       this.redoButton,
       iconButton(ICONS.fit, STRINGS.fit, STRINGS.fitHint, () => {
@@ -178,12 +222,13 @@ class DesignApp {
       toolsBar.append(button);
     }
     openInput.addEventListener('change', () => {
-      this.run(this.openFiles([...(openInput.files ?? [])]));
+      this.run(this.openFiles([...(openInput.files ?? [])].map((file) => ({ file, handle: undefined }))));
       openInput.value = '';
     });
     measurementsInput.addEventListener('change', () => {
       const file = measurementsInput.files?.[0];
       if (file !== undefined) {
+        this.measurementsHandle = undefined;
         this.run(this.useMeasurements(file));
       }
       measurementsInput.value = '';
@@ -219,6 +264,95 @@ class DesignApp {
       } else {
         showFailure(error);
       }
+    });
+  }
+
+  private open(): void {
+    if (!this.mayDropMeasurementEdits()) {
+      return;
+    }
+    const files = this.files;
+    if (files === undefined) {
+      openInput.click();
+      return;
+    }
+    this.run(
+      files
+        .openPattern(this.patternHandle)
+        .then(async (handles) =>
+          this.openFiles(await Promise.all(handles.map(async (handle) => ({ file: await handle.getFile(), handle })))),
+        ),
+    );
+  }
+
+  private openMeasurements(): void {
+    if (!this.mayDropMeasurementEdits()) {
+      return;
+    }
+    const files = this.files;
+    if (files === undefined) {
+      measurementsInput.click();
+      return;
+    }
+    this.run(
+      files.openMeasurements(this.patternHandle ?? this.measurementsHandle).then(async (handle) => {
+        if (handle !== undefined) {
+          await this.useMeasurementsFile(files, handle);
+        }
+        return undefined;
+      }),
+    );
+  }
+
+  // Recorded by its path from the pattern when a granted folder holds both, else by its name
+  private async useMeasurementsFile(files: FileAccess, handle: FileSystemFileHandle): Promise<void> {
+    const path = this.patternHandle === undefined ? undefined : await files.pathBetween(this.patternHandle, handle);
+    await this.useMeasurements(await handle.getFile(), path);
+    this.measurementsHandle = handle;
+  }
+
+  // The set's file to write: the one it came from, else the one the pattern
+  // names in a granted folder, else one the user chooses
+  private async measurementsTarget(files: FileAccess, path: string): Promise<FileSystemFileHandle | undefined> {
+    if (this.measurementsHandle !== undefined) {
+      return this.measurementsHandle;
+    }
+    if (this.patternHandle !== undefined) {
+      const found = await files.findBeside(this.patternHandle, path, true);
+      if (found.file !== undefined) {
+        return found.file;
+      }
+    }
+    return files.chooseSave(baseName(path), 'measurements', this.patternHandle);
+  }
+
+  // Looks in the granted folders, asking leave to read them, then has the
+  // user choose the folder that holds the pattern and its measurements
+  private async findMeasurements(): Promise<void> {
+    const files = this.files;
+    const pattern = this.patternHandle;
+    const wanted = this.wantedMeasurements;
+    if (files === undefined || pattern === undefined || wanted === '') {
+      return;
+    }
+    let found = await files.findBeside(pattern, wanted, true);
+    if (found.file === undefined && found.needsLeave === undefined) {
+      if ((await files.grantFolder(pattern)) === undefined) {
+        this.offerFind(wanted);
+        return;
+      }
+      found = await files.findBeside(pattern, wanted, false);
+    }
+    if (found.file === undefined) {
+      showMessage(STRINGS.needsMeasurements(wanted));
+    } else if (this.patternHandle === pattern) {
+      await this.useMeasurementsFile(files, found.file);
+    }
+  }
+
+  private offerFind(wanted: string): void {
+    showAction(STRINGS.findMeasurements(wanted), STRINGS.findMeasurementsButton, () => {
+      this.run(this.findMeasurements());
     });
   }
 
@@ -264,7 +398,7 @@ class DesignApp {
       showMessage(STRINGS.exampleMissing(baseName(path)));
       return;
     }
-    await this.openPattern(pattern);
+    await this.openPattern(pattern, undefined);
     if (this.wantedMeasurements === '') {
       return;
     }
@@ -330,39 +464,59 @@ class DesignApp {
   }
 
   // A pattern file, and its measurement file when it is among those chosen
-  private async openFiles(files: File[]): Promise<void> {
-    const pattern = files.find((file) => file.name.toLowerCase().endsWith(PATTERN_EXTENSION));
+  // or, with File System Access, in a granted folder that holds the pattern
+  private async openFiles(chosen: { file: File; handle: FileSystemFileHandle | undefined }[]): Promise<void> {
+    const pattern = chosen.find((each) => each.file.name.toLowerCase().endsWith(PATTERN_EXTENSION));
     if (pattern === undefined) {
-      if (files[0] !== undefined) {
-        showMessage(STRINGS.notAPattern(files[0].name));
+      if (chosen[0] !== undefined) {
+        showMessage(STRINGS.notAPattern(chosen[0].file.name));
       }
       return;
     }
-    await this.openPattern(pattern);
-    if (this.wantedMeasurements === '') {
+    await this.openPattern(pattern.file, pattern.handle);
+    const wanted = this.wantedMeasurements;
+    if (wanted === '') {
       return;
     }
-    const measurements = files.find((file) => file.name === baseName(this.wantedMeasurements));
-    if (measurements === undefined) {
-      showMessage(STRINGS.needsMeasurements(this.wantedMeasurements));
+    const measurements = chosen.find((each) => each.file.name === baseName(wanted));
+    if (measurements !== undefined) {
+      await this.useMeasurements(measurements.file);
+      this.measurementsHandle = measurements.handle;
+      return;
+    }
+    if (this.files === undefined || pattern.handle === undefined) {
+      showMessage(STRINGS.needsMeasurements(wanted));
+      return;
+    }
+    // Reading a folder the browser has not let the page read since it was
+    // granted needs a click on the button offered
+    const found = await this.files.findBeside(pattern.handle, wanted, false);
+    if (found.file === undefined) {
+      this.offerFind(wanted);
     } else {
-      await this.useMeasurements(measurements);
+      await this.useMeasurementsFile(this.files, found.file);
     }
   }
 
-  // Opens the pattern, noting the measurement file it names
-  private async openPattern(pattern: File): Promise<void> {
+  // Opens the pattern, noting the measurement file it names, and the file it
+  // came from when the browser gives it
+  private async openPattern(pattern: File, handle: FileSystemFileHandle | undefined): Promise<void> {
     const answer = await this.document.call('open', { text: await pattern.text() });
+    this.patternHandle = handle;
+    this.measurementsHandle = undefined;
     this.document.fileName = pattern.name;
     this.updateState();
     showMessage(STRINGS.opened(pattern.name, numberField(answer, 'objects') ?? 0));
     this.wantedMeasurements = stringField(answer, 'measurementsFile') ?? '';
   }
 
-  // The pattern keeps the file it names when this is it; another is recorded beside the pattern
-  private async useMeasurements(file: File): Promise<void> {
+  // The pattern keeps the file it names when this is it; another is recorded
+  // by its path from the pattern when that is known, else beside the pattern
+  private async useMeasurements(file: File, path?: string): Promise<void> {
     const params: { text: string; file?: string } = { text: await file.text() };
-    if (baseName(this.wantedMeasurements) !== file.name) {
+    if (path !== undefined && path !== this.wantedMeasurements) {
+      params.file = path;
+    } else if (path === undefined && baseName(this.wantedMeasurements) !== file.name) {
       params.file = file.name;
     }
     await this.document.call('use_measurements', params);
@@ -370,13 +524,62 @@ class DesignApp {
     showMessage(STRINGS.measurementsUsed(file.name));
   }
 
-  // Downloads the pattern file; the browser asks where, or puts it in Downloads
-  private async save(): Promise<void> {
+  // Writes the pattern to its file, or one the user chooses for a new one or
+  // with Save as; without File System Access it is downloaded, and the
+  // browser asks where or puts it in Downloads
+  private async save(saveAs: boolean): Promise<void> {
+    const name = this.document.fileName === '' ? DEFAULT_FILE_NAME : this.document.fileName;
+    const files = this.files;
+    if (files === undefined) {
+      const answer = await this.document.call('save', { text: true });
+      downloadText(name, stringField(answer, 'text') ?? '');
+      return;
+    }
+    // Leave to write is asked while the click still counts, before the engine is
+    let handle = saveAs ? undefined : this.patternHandle;
+    if (handle !== undefined && !(await files.mayWrite(handle))) {
+      showMessage(STRINGS.writeRefused(handle.name));
+      return;
+    }
+    handle ??= await files.chooseSave(name, 'pattern', this.patternHandle ?? this.measurementsHandle);
+    if (handle === undefined) {
+      return;
+    }
     const answer = await this.document.call('save', { text: true });
-    downloadText(
-      this.document.fileName === '' ? DEFAULT_FILE_NAME : this.document.fileName,
-      stringField(answer, 'text') ?? '',
-    );
+    if (!(await files.write(handle, stringField(answer, 'text') ?? ''))) {
+      showMessage(STRINGS.writeRefused(handle.name));
+      return;
+    }
+    this.patternHandle = handle;
+    this.document.fileName = handle.name;
+    this.updateState();
+    showMessage(STRINGS.saved(handle.name));
+  }
+
+  // Open, Save, Save as and Measurements work from anywhere, a field being
+  // typed in committing first as it loses the focus
+  private fileKeyDown(event: KeyboardEvent): boolean {
+    const command = ['open', 'save', 'saveAs', 'openMeasurements'].find((name) => {
+      const shortcut = parseShortcut(this.tables.shortcuts.get(name) ?? '');
+      return shortcut !== undefined && matchesShortcut(event, shortcut);
+    });
+    if (command === undefined) {
+      return false;
+    }
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    switch (command) {
+      case 'open':
+        this.open();
+        break;
+      case 'openMeasurements':
+        this.openMeasurements();
+        break;
+      default:
+        this.run(this.save(command === 'saveAs'));
+    }
+    return true;
   }
 
   private isShowLabelsKey(event: KeyboardEvent): boolean {
@@ -385,6 +588,10 @@ class DesignApp {
   }
 
   private keyDown(event: KeyboardEvent): void {
+    if (this.fileKeyDown(event)) {
+      event.preventDefault();
+      return;
+    }
     if (
       event.target instanceof HTMLInputElement ||
       event.target instanceof HTMLSelectElement ||

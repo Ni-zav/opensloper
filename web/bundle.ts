@@ -1,12 +1,35 @@
 // Bundles the web pages with esbuild, each with the engine's worker, and
 // copies what they load beside them: the design app into out/design, with the
 // toolbar icons and the example patterns of the user guide, and the spike's page into engine/out/browser. The engine
-// (engine_lib.wasm) is built first by ./opensloper-make.sh web. Node runs this
-// TypeScript as it is.
-import { access, copyFile, cp, mkdir } from 'node:fs/promises';
+// (engine_lib.wasm) is built first by ./opensloper-make.sh web. Last comes the
+// design app's service worker (sw.js), given the list of every other file and
+// a version made from their contents, so it can keep them for offline use and
+// a new build installs a new one. Node runs this TypeScript as it is.
+import { createHash } from 'node:crypto';
+import { access, copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 import { build } from 'esbuild';
 
 const ENGINE = 'engine/out/browser/engine_lib.wasm';
+const DESIGN = 'out/design';
+const SERVICE_WORKER = 'sw.js';
+
+// What the browser needs to offer to install the app
+const MANIFEST = {
+  name: 'OpenSloper',
+  short_name: 'OpenSloper',
+  description: 'Parametric sewing pattern drafting',
+  start_url: '.',
+  scope: '.',
+  display: 'standalone',
+  background_color: '#f2f1ed',
+  theme_color: '#f2f1ed',
+  icons: [
+    { src: 'opensloper-design.svg', sizes: 'any', type: 'image/svg+xml' },
+    { src: 'opensloper-design-192.png', sizes: '192x192', type: 'image/png' },
+    { src: 'opensloper-design-512.png', sizes: '512x512', type: 'image/png' },
+  ],
+};
 
 async function bundle(entries: string[], outdir: string): Promise<void> {
   await build({
@@ -27,7 +50,9 @@ try {
   process.exit(2);
 }
 
-await mkdir('out/design', { recursive: true });
+// A clean folder, so the service worker keeps no file an older build left
+await rm(DESIGN, { recursive: true, force: true });
+await mkdir(DESIGN, { recursive: true });
 await bundle(['src/design/main.ts', 'src/engine/worker.ts'], 'out/design');
 await copyFile('src/design/index.html', 'out/design/index.html');
 await copyFile(ENGINE, 'out/design/engine_lib.wasm');
@@ -39,6 +64,39 @@ await cp('../docs/examples', 'out/design/examples', {
   filter: (source) => !source.endsWith('.sdrape'),
 });
 await copyFile('../resources/opensloper-design.svg', 'out/design/opensloper-design.svg');
+for (const size of [192, 512]) {
+  // oxlint-disable-next-line no-await-in-loop
+  await copyFile(
+    `../resources/web/opensloper-design-${String(size)}.png`,
+    `out/design/opensloper-design-${String(size)}.png`,
+  );
+}
+await writeFile('out/design/manifest.webmanifest', `${JSON.stringify(MANIFEST, undefined, 2)}\n`);
+
+// Every file of the app, with / between folders as URLs have them, and a
+// version that changes when any of them does
+const files = (await readdir(DESIGN, { recursive: true, withFileTypes: true }))
+  .filter((entry) => entry.isFile())
+  .map((entry) => relative(DESIGN, join(entry.parentPath, entry.name)).split(sep).join('/'))
+  .filter((file) => file !== SERVICE_WORKER)
+  // A new array from filter, sorted so the version does not hang on the order files are read in
+  // oxlint-disable-next-line unicorn/no-array-sort
+  .sort();
+const hash = createHash('sha256');
+for (const file of files) {
+  hash.update(file);
+  // oxlint-disable-next-line no-await-in-loop
+  hash.update(await readFile(join(DESIGN, file)));
+}
+await build({
+  entryPoints: ['src/design/serviceWorker.ts'],
+  bundle: true,
+  format: 'iife',
+  target: 'es2022',
+  outfile: join(DESIGN, SERVICE_WORKER),
+  define: { SW_FILES: JSON.stringify(files), SW_VERSION: JSON.stringify(hash.digest('hex').slice(0, 16)) },
+  logLevel: 'warning',
+});
 
 await bundle(['engine/browser/main.ts', 'src/engine/worker.ts'], 'engine/out/browser');
 await copyFile('engine/browser/index.html', 'engine/out/browser/index.html');

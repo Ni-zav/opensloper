@@ -5,16 +5,16 @@ it: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
 Worker, under an editor in plain TypeScript. Files stay on the user's
 machine: the page opens and saves them as text, and sends nothing anywhere.
 
-| Folder          | What it is                                                                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                      |
-| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                 |
-| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels                                                      |
-| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                          |
-| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units   |
-| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                              |
-| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts` and `files.ts` drive the built app in headless Chromium, `browser.ts` serves it for them |
-| `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                                                     |
+| Folder          | What it is                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                    |
+| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                               |
+| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels                                                                    |
+| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                        |
+| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units                 |
+| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                            |
+| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts`, `files.ts` and `offline.ts` drive the built app in headless Chromium, `browser.ts` serves it for them |
+| `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                                                                   |
 
 So far the canvas draws the scene (pieces with their marks, notches and
 direction, edges, selected seams, notes and callouts, markers, points and
@@ -41,6 +41,8 @@ darts, own allowances, ends, grainline, material and fill, and a note's text,
 size, look and font, with formula suggestions under a formula's row.
 Work not yet saved is kept in the browser (OPFS) and offered back after
 the tab that had it closes.
+A service worker keeps the app for offline use and installation, with an
+Update button when a new build is ready.
 
 ## Setting up
 
@@ -62,7 +64,9 @@ python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design
 ```
 
 The app is then at `http://127.0.0.1:8766/`; a module worker does not load
-from `file://`. Open a `.sloper` file, choosing its measurement file with it,
+from `file://`. Its service worker answers from the build it
+kept, so after rebuilding, use the Update button (or the browser's developer
+tools) to load the new one. Open a `.sloper` file, choosing its measurement file with it,
 or later with Measurements….
 
 `npm run check` runs `tsc`, Oxlint and Prettier, as the TypeScript section of

@@ -24,6 +24,9 @@ export const STRINGS = {
   findMeasurements: (file: string): string =>
     `The pattern uses the measurement file ${file}: find it in the folder that holds them, or choose it with Measurements…`,
   findMeasurementsButton: 'Find it…',
+  // A new version of the app, which the service worker has ready
+  update: 'Update',
+  updateHint: 'A new version of OpenSloper is ready: reload into it. Work not saved is kept and offered again.',
   // Work in progress a closed tab left
   workLeftOver: (name: string, when: string): string => `Unsaved work on ${name} from ${when} was kept`,
   workOpen: 'Open it',

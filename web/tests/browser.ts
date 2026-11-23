@@ -4,7 +4,7 @@
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, relative } from 'node:path';
 import { launch, type Browser, type Page } from 'puppeteer-core';
 
 const ROOT = 'out/design';
@@ -15,17 +15,29 @@ const TYPES: Record<string, string> = {
   '.js': 'text/javascript',
   '.wasm': 'application/wasm',
   '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webmanifest': 'application/manifest+json',
+  '.sloper': 'application/json',
+  '.slm': 'application/json',
 };
 
-// Serves the app until close is called
-export async function serveApp(): Promise<{ port: number; close: () => void }> {
+export interface ServeOptions {
+  // The port to listen on, as when serving again after going offline; a free one by default
+  port?: number;
+  // Changes a file as it is served, by its path under out/design, as a new build would
+  alter?: (file: string, data: Buffer) => Buffer;
+}
+
+// Serves the app until close is called, which drops every connection, so
+// the page is offline until it is served again
+export async function serveApp(options: ServeOptions = {}): Promise<{ port: number; close: () => void }> {
   const server = createServer((request, response) => {
     const path = normalize(join(ROOT, decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)));
     const file = path.endsWith('/') || path === ROOT ? join(path, 'index.html') : path;
     readFile(file)
       .then((data) => {
         response.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
-        response.end(data);
+        response.end(options.alter === undefined ? data : options.alter(relative(ROOT, file), data));
         return undefined;
       })
       .catch(() => {
@@ -33,7 +45,7 @@ export async function serveApp(): Promise<{ port: number; close: () => void }> {
         response.end();
       });
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(options.port ?? 0, '127.0.0.1', resolve));
   const address: string | AddressInfo | null = server.address();
   if (address === null || typeof address === 'string') {
     throw new Error('the server has no port');
@@ -42,6 +54,7 @@ export async function serveApp(): Promise<{ port: number; close: () => void }> {
     port: address.port,
     close: () => {
       server.close();
+      server.closeAllConnections();
     },
   };
 }

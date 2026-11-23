@@ -9,6 +9,9 @@
 # The LCL's resource loader fails with a range check error on smaller PNG
 # entries, and bitmaps at 256 px would make each file 380 KB.
 #
+# The web design app's manifest takes PNGs at 192 and 512 px too, which
+# browsers want before they offer to install it (resources/web).
+#
 # Needs rsvg-convert (librsvg), ImageMagick 7 (magick) and python3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -53,3 +56,9 @@ make_icon opensloper-design src/design/opensloper_design.ico
 make_icon opensloper-measure src/measurements/opensloper_measurements.ico
 make_icon opensloper-publish src/publish/opensloper_publish.ico
 make_icon opensloper-drape src/drape/opensloper_drape.ico
+
+mkdir -p resources/web
+for size in 192 512; do
+  rsvg-convert -w "$size" -h "$size" resources/opensloper-design.svg -o "resources/web/opensloper-design-$size.png"
+  echo "resources/web/opensloper-design-$size.png"
+done

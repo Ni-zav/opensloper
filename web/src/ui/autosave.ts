@@ -115,7 +115,7 @@ export class Autosave {
     });
     window.addEventListener('pagehide', () => {
       if (this.timer !== undefined) {
-        this.flush();
+        void this.flush();
       }
     });
   }
@@ -151,13 +151,15 @@ export class Autosave {
     await this.removeWork(work.id);
   }
 
-  // Writes the work now, as the tab closes, rather than after the delay
-  flush(): void {
+  // Writes the work now, as the tab closes, rather than after the delay;
+  // resolves once it is written
+  async flush(): Promise<void> {
     if (this.timer !== undefined) {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
     this.enqueueWrite();
+    await this.queue;
   }
 
   private changed(): void {

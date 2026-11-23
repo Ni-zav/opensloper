@@ -238,6 +238,7 @@ try {
   await waitForData(other, 'ready', 'true');
   await waitForStatus(other, 'Unsaved work on copy.sloper');
   await other.click('#status button:last-of-type');
+  await other.waitForFunction(() => document.querySelector('#status')?.textContent === '', { timeout: TIMEOUT_MS });
   await other.reload();
   await waitForData(other, 'ready', 'true');
   await new Promise((resolve) => setTimeout(resolve, IDLE_MS));

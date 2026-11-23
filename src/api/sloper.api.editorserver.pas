@@ -66,6 +66,7 @@ type
     function DoObjectsAt(Params: TJSONObject): TJSONData;
     function DoObjectsInBox(Params: TJSONObject): TJSONData;
     function DoHandles(Params: TJSONObject): TJSONData;
+    function DoBounds(Params: TJSONObject): TJSONData;
     // The snap of a place given as a group of x, y and radius
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
@@ -121,6 +122,18 @@ resourcestring
     'or null, and `handle`, the handle of a selected curve there (`edge` and `field`, its length field), or null';
   rsEditorObjectsSelection = 'The selected objects'' IDs, whose callouts'' tips and curves'' handles lie over ' +
     'everything else';
+  rsEditorBounds = 'The box round objects, as the canvas shows or zooms to a selection';
+  rsEditorBoundsTargets = 'The objects'' IDs';
+  rsEditorBoundsReturns = '`bounds`, minX, minY, maxX and maxY in mm, or null when none of them has a place';
+  rsEditorListClick = 'The selection after a click on a row of a list: a click selects the row, Ctrl or Cmd adds or ' +
+    'removes it, Shift selects from the anchor to it in list order.';
+  rsEditorListVisible = 'The keys of the rows listed, in list order: object IDs, or measurement keys';
+  rsEditorListSelected = 'The keys of the selected rows';
+  rsEditorListAnchor = 'The row the last plain or toggling click chose, from which Shift selects';
+  rsEditorListClicked = 'The clicked row''s key';
+  rsEditorListToggle = 'Ctrl or Cmd was held';
+  rsEditorListExtend = 'Shift was held';
+  rsEditorListClickReturns = '`selection`, the keys selected, in list order for a range';
   rsEditorHandles = 'The handles of the selected curves, to draw and drag: the end of each tangent line, set by an ' +
     'angle and a length.';
   rsEditorHandlesReturns = '`handles`, each with `edge`, `field` (its length field, which names it for a drag), ' +
@@ -293,6 +306,15 @@ begin
     AddApiParam(Built, 'minY', apNumber, True, rsEditorMinY);
     AddApiParam(Built, 'maxX', apNumber, True, rsEditorMaxX);
     AddApiParam(Built, 'maxY', apNumber, True, rsEditorMaxY);
+    AddApiMethod(Built, 'editor_bounds', rsEditorBounds, rsEditorBoundsReturns, True);
+    AddApiParam(Built, 'ids', apReferences, True, rsEditorBoundsTargets);
+    AddApiMethod(Built, 'editor_list_click', rsEditorListClick, rsEditorListClickReturns, True);
+    AddApiParam(Built, 'visible', apTexts, True, rsEditorListVisible);
+    AddApiParam(Built, 'selected', apTexts, True, rsEditorListSelected);
+    AddApiParam(Built, 'anchor', apText, False, rsEditorListAnchor);
+    AddApiParam(Built, 'clicked', apText, True, rsEditorListClicked);
+    AddApiParam(Built, 'toggle', apFlag, False, rsEditorListToggle);
+    AddApiParam(Built, 'extend', apFlag, False, rsEditorListExtend);
     AddApiMethod(Built, 'editor_handles', rsEditorHandles, rsEditorHandlesReturns, True);
     AddApiParam(Built, 'selection', apReferences, True, rsEditorSelection);
     AddApiMethod(Built, 'editor_tool_snap', rsEditorToolSnap, rsEditorToolSnapReturns, True);
@@ -745,6 +767,47 @@ begin
       Answer.Add('handle', TJSONNull.Create);
   end;
   Result := Answer;
+end;
+
+function TEditorApiServer.DoBounds(Params: TJSONObject): TJSONData;
+var
+  Bounds: TRect2;
+begin
+  if ObjectsBounds(Document.Pattern, KeysParam(Params, 'ids'), Bounds) then
+    Result := TJSONObject.Create(['bounds', RectToJSON(Bounds)])
+  else
+    Result := TJSONObject.Create(['bounds', TJSONNull.Create]);
+end;
+
+// A list of text, as row keys are given
+function TextsParam(Params: TJSONObject; const AName: string): TStringArray;
+var
+  List: TJSONData;
+  Index: integer;
+begin
+  Result := nil;
+  List := Params.Find(AName);
+  if not Assigned(List) or (List.JSONType <> jtArray) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+  SetLength(Result, List.Count);
+  for Index := 0 to List.Count - 1 do
+    if List.Items[Index].JSONType in [jtString, jtNumber] then
+      Result[Index] := List.Items[Index].AsString
+    else
+      raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+end;
+
+function DoListClick(Params: TJSONObject): TJSONData;
+var
+  Clicked: string;
+begin
+  Clicked := OptionalString(Params, 'clicked');
+  if Clicked = '' then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['clicked']));
+  // Object IDs go back as numbers, measurement keys as text
+  Result := TJSONObject.Create(['selection', KeysToJSON(SelectionAfterClick(TextsParam(Params, 'visible'),
+    TextsParam(Params, 'selected'), OptionalString(Params, 'anchor'), Clicked, BooleanParam(Params, 'toggle'),
+    BooleanParam(Params, 'extend')))]);
 end;
 
 function TEditorApiServer.DoHandles(Params: TJSONObject): TJSONData;
@@ -1431,6 +1494,8 @@ begin
     'editor_objects_at': Result := DoObjectsAt(Params);
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
     'editor_handles': Result := DoHandles(Params);
+    'editor_bounds': Result := DoBounds(Params);
+    'editor_list_click': Result := DoListClick(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);
     'editor_label_keys': Result := DoLabelKeys(Params);

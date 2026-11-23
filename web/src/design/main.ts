@@ -7,8 +7,13 @@ import { Engine, EngineError } from '../engine/engine.ts';
 import { numberField, stringField } from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
+import type { ListPanelEvents } from '../ui/listPanel.ts';
+import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
+import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
+import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { VariablesPanel } from '../ui/variablesPanel.ts';
 
 // The desktop's icons for the toolbar's commands (APP_ICON_NAMES)
 const ICONS = {
@@ -18,6 +23,10 @@ const ICONS = {
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
   fit: 'zoom-scan',
+  // The side panel's tabs
+  objectsTab: 'list-tree',
+  variablesTab: 'variable',
+  measurementsTab: 'ruler-measure',
 } as const;
 
 const PATTERN_EXTENSION = '.sloper';
@@ -69,6 +78,7 @@ class DesignApp {
   private readonly document: PatternDocument;
   private readonly tables: Tables;
   private readonly canvas: PatternCanvas;
+  private readonly objects: ObjectsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
   private readonly redoButton: HTMLButtonElement;
@@ -82,9 +92,34 @@ class DesignApp {
       message: showMessage,
       selectionChanged: (ids) => {
         document.body.dataset.selection = ids.join(' ');
+        this.objects.showSelection(ids);
       },
       failed: showFailure,
     });
+    this.objects = new ObjectsPanel(this.document, {
+      ...this.listEvents(),
+      select: (keys) => {
+        this.canvas.select([...keys]);
+        this.run(this.canvas.revealSelection());
+      },
+      zoom: () => {
+        this.run(this.canvas.zoomToSelection());
+      },
+    });
+    const side = new SideTabs(element('side', HTMLElement));
+    side.addSection('objects', STRINGS.tabObjects, ICONS.objectsTab, this.objects);
+    side.addSection(
+      'variables',
+      STRINGS.tabVariables,
+      ICONS.variablesTab,
+      new VariablesPanel(this.document, this.listEvents()),
+    );
+    side.addSection(
+      'measurements',
+      STRINGS.tabMeasurements,
+      ICONS.measurementsTab,
+      new MeasurementsPanel(this.document, this.listEvents()),
+    );
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
       this.run(this.document.undo());
     });
@@ -159,6 +194,16 @@ class DesignApp {
         showFailure(error);
       }
     });
+  }
+
+  // What a list tells the app; its rows' choices stay in the list unless a tab says otherwise
+  private listEvents(): ListPanelEvents {
+    return {
+      select: () => undefined,
+      zoom: () => undefined,
+      message: showMessage,
+      failed: showFailure,
+    };
   }
 
   // The role new edges get, as the desktop's role box

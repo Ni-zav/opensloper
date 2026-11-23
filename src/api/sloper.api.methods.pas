@@ -47,6 +47,7 @@ type
     apMaterial,     // a material's ID or name
     apChoice,     // one of the words in Choices
     apNames,      // a list of words from Choices
+    apTexts,      // a list of text
     apList,       // a list of objects, whose members follow as list[].member
     apGroup,      // an object, whose members follow as group.member
     apMembers);   // the members of the chosen type, as on the operations page

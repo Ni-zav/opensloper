@@ -106,6 +106,7 @@ resourcestring
   rsDocKindText = 'text';
   rsDocKindSize = 'number';
   rsDocKindList = 'list';
+  rsDocKindTexts = 'list of text';
   rsDocKindListOf = 'list, each %s';
   rsDocKindSizeOrNull = 'number or null';
   rsDocKindFormula = 'formula';
@@ -550,6 +551,7 @@ begin
     apMaterial: Result := rsDocApiKindMaterial;
     apChoice: Result := Format(rsDocKindChoice, [CodedList(Param.Choices)]);
     apNames: Result := Format(rsDocApiKindNames, [CodedList(Param.Choices)]);
+    apTexts: Result := rsDocKindTexts;
     apList: Result := rsDocKindList;
     apGroup: Result := rsDocKindGroup;
     else

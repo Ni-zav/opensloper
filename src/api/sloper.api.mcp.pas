@@ -156,12 +156,13 @@ begin
     apReferences: Result.Add('items', TJSONObject.Create(['type', IdOrName]));
     apChoice: Result.Add('enum', ChoiceArray(Param.Choices));
     apNames: Result.Add('items', TJSONObject.Create(['enum', ChoiceArray(Param.Choices)]));
+    apTexts: Result.Add('items', TJSONObject.Create(['type', 'string']));
     apList: Result.Add('items', TJSONObject.Create);
     apGroup: AddObjectSchema(Result, Method, Param.Name + '.');
   end;
   case Param.Kind of
     apChoice: Result.Add('type', 'string');
-    apReferences, apNames, apList: Result.Add('type', 'array');
+    apReferences, apNames, apTexts, apList: Result.Add('type', 'array');
   end;
   if Param.Kind = apList then
     AddObjectSchema(Result.Objects['items'], Method, Param.Name + '[].');

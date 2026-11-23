@@ -166,7 +166,7 @@ export interface Tables {
 
 const STATES: readonly EvalState[] = ['valid', 'dirty', 'error', 'invalid', 'blocked'];
 
-function stateField(record: JsonRecord): EvalState {
+export function stateField(record: JsonRecord): EvalState {
   const value = stringField(record, 'state');
   return STATES.find((state) => state === value) ?? 'invalid';
 }

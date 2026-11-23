@@ -173,6 +173,25 @@ try {
   await new Promise((resolve) => setTimeout(resolve, IDLE_MS));
   assert.equal((await calls()) - callsBefore, 0, 'an idle page asks the engine for nothing');
 
+  // The side panel's lists: choosing an object selects it on the canvas, search narrows them
+  const shownRows = async (): Promise<number> => (await page.$$('.list-panel:not([hidden]) tbody tr')).length;
+  await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
+  const allRows = await shownRows();
+  const firstKey = await page.$eval('.list-panel:not([hidden]) tbody tr', (row) => (row as HTMLElement).dataset.key);
+  await page.click('.list-panel:not([hidden]) tbody tr');
+  await waitForData(page, 'selection', firstKey ?? '');
+  await page.type('.list-panel:not([hidden]) input[type=search]', 'curve');
+  await page.waitForFunction(
+    (before) => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length < before,
+    {},
+    allRows,
+  );
+  await page.click('.side-column [data-tab="measurements"]');
+  await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
+  await page.click('.side-column [data-tab="objects"]');
+  await page.keyboard.press('Escape');
+  await waitForData(page, 'selection', '');
+
   const canvas = await page.$('#canvas');
   const box = await canvas?.boundingBox();
   assert.ok(box !== null && box !== undefined, 'the canvas has a place');
@@ -324,7 +343,7 @@ try {
   }
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
-    `Design app: opened, drew ${String(inked)} pixels; added, dragged and undid a point; drew a line, a curve, ` +
+    `Design app: opened, drew ${String(inked)} pixels; chose from the lists; added, dragged and undid a point; drew a line, a curve, ` +
       `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything. ` +
       (await status(page)),
   );

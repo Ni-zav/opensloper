@@ -313,6 +313,7 @@ begin
     apReferences: Result := 'list[int | str]';
     apChoice: Result := LiteralType(Param.Choices);
     apNames: Result := 'list[' + LiteralType(Param.Choices) + ']';
+    apTexts: Result := 'list[str]';
     apList: Result := 'list[dict[str, Any]]';
     apGroup: Result := 'dict[str, Any]';
     else

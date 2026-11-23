@@ -111,6 +111,9 @@ type
     // A callout's tip snaps as it moves, changing nothing until it is dropped
     procedure TestDragCalloutTip;
     procedure TestCalloutTipRefusals;
+    procedure TestBounds;
+    // A list's click, Ctrl+click and Shift+click
+    procedure TestListClick;
   private
     // A callout from B, its text at (150, -40); its ID
     function AddCallout: integer;
@@ -1084,6 +1087,33 @@ begin
   Call('set_locked', '{"id": ' + IntToStr(Callout) + ', "locked": true}');
   Call('editor_drag_begin', '{"id": ' + IntToStr(Callout) + ', "tip": true}');
   AssertEquals('locked', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestBounds;
+var
+  Bounds: TJSONArray;
+begin
+  AddSquare;
+  Call('editor_bounds', '{"ids": ["A", "C"]}');
+  Bounds := Answer.Arrays['bounds'];
+  AssertNear('left', 0, Bounds.Floats[0], TOLERANCE);
+  AssertNear('bottom', 100, Bounds.Floats[3], TOLERANCE);
+  Call('editor_bounds', '{"ids": []}');
+  AssertTrue('nothing', Answer.Nulls['bounds']);
+end;
+
+procedure TTestEditorServer.TestListClick;
+const
+  Visible = '"visible": ["1", "2", "3", "chest"]';
+begin
+  Call('editor_list_click', '{' + Visible + ', "selected": ["1"], "anchor": "1", "clicked": "3"}');
+  AssertEquals('a click', '[3]', Answer.Arrays['selection'].AsJSON);
+  Call('editor_list_click', '{' + Visible + ', "selected": ["1"], "anchor": "1", "clicked": "3", "toggle": true}');
+  AssertEquals('added', '[1, 3]', Answer.Arrays['selection'].AsJSON);
+  Call('editor_list_click', '{' + Visible + ', "selected": ["2"], "anchor": "2", "clicked": "chest", "extend": true}');
+  AssertEquals('a range, keys as text', '[2, 3, "chest"]', Answer.Arrays['selection'].AsJSON);
+  Call('editor_list_click', '{' + Visible + ', "selected": []}');
+  AssertEquals('no row', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 initialization

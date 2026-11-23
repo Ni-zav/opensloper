@@ -27,7 +27,7 @@ import {
   type Scene,
   type Tables,
 } from '../editor/scene.ts';
-import { ViewTransform, ZOOM_STEP, type Vec2 } from '../editor/view.ts';
+import { ViewTransform, ZOOM_STEP, type Rect2, type Vec2 } from '../editor/view.ts';
 import {
   ClickTool,
   SNAP_KINDS,
@@ -256,6 +256,35 @@ export class PatternCanvas implements CanvasToolHost {
     } else {
       this.repaint();
     }
+  }
+
+  // Brings the selection into view without zooming in, as when it is chosen in a list
+  async revealSelection(): Promise<void> {
+    const bounds = await this.selectionBounds();
+    if (bounds !== undefined) {
+      this.autoFit = false;
+      this.view.reveal(bounds, this.element.clientWidth, this.element.clientHeight, FIT_MARGIN);
+      this.repaint();
+    }
+  }
+
+  // Fills the window with the selection, as double-clicking it in a list
+  async zoomToSelection(): Promise<void> {
+    const bounds = await this.selectionBounds();
+    if (bounds !== undefined) {
+      this.autoFit = false;
+      this.view.fit(bounds, this.element.clientWidth, this.element.clientHeight, FIT_MARGIN);
+      this.zoomed();
+    }
+  }
+
+  private async selectionBounds(): Promise<Rect2 | undefined> {
+    const answer = await this.document.read('editor_bounds', { ids: numericIds(this.selection) });
+    const [minX, minY, maxX, maxY] = numbersField(answer, 'bounds') ?? [];
+    if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) {
+      return undefined;
+    }
+    return { minX, minY, maxX, maxY };
   }
 
   // Escape: drops a drag, then the tool's step, then the selection

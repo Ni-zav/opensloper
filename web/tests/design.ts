@@ -370,6 +370,28 @@ try {
   await page.click(field('locked'));
   await waitForData(page, 'undo', 'Unlock');
   await page.waitForSelector(`${field('x')}:not([readonly])`, { timeout: TIMEOUT_MS });
+  // Its x's formula suggestions: the wand opens and closes them, hovering one previews it,
+  // and Alt+Down, Down and Enter take the first
+  const suggestion = '.suggest-list li[role="option"]';
+  await page.click('[data-row="x"] .property-wand');
+  await page.waitForSelector(suggestion, { timeout: TIMEOUT_MS });
+  await page.hover(suggestion);
+  await page.click('[data-row="x"] .property-wand');
+  await page.waitForFunction(() => document.querySelector('.suggest-list') === null, { timeout: TIMEOUT_MS });
+  await page.$eval(field('x'), (shown) => {
+    if (shown instanceof HTMLInputElement) {
+      shown.focus();
+    }
+  });
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.up('Alt');
+  await page.waitForSelector(suggestion, { timeout: TIMEOUT_MS });
+  const taken = await page.$eval(`${suggestion} .suggest-formula`, (shown) => shown.textContent);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await waitForData(page, 'undo', 'Change X');
+  assert.equal(await fieldText('x'), taken, 'the suggestion taken');
   await retype('name', pointName);
   await waitForData(page, 'undo', 'Rename');
 
@@ -422,6 +444,13 @@ try {
   await waitForData(page, 'undo', 'Change fold');
   await page.select('.property-value[data-row="fillColor"] select', '1');
   await waitForData(page, 'undo', 'Change fill');
+  // An edge given its own allowance: its new row takes the cursor
+  await page.select('.property-value[data-row="ownAllowance"] select', '1');
+  await waitForData(page, 'undo', 'Add edge allowance');
+  await page.waitForFunction(
+    () => document.activeElement?.closest('.property-value')?.getAttribute('data-row')?.endsWith('.allowance') === true,
+    { timeout: TIMEOUT_MS },
+  );
   await chooseTool(page, 'Notch');
   await clickAt(page, box, 130, 300);
   await waitForData(page, 'undo', 'Add notch');
@@ -473,14 +502,22 @@ try {
   }
   await page.mouse.up();
   await waitForData(page, 'undo', 'Move note');
-  // Its text retyped in the Properties tab, on two lines, and made bold
+  // Its text retyped in the Properties tab, drawn on the canvas as it is typed, then on two
+  // lines, and made bold
   await page.waitForSelector('.property-value[data-row="noteText"] textarea', { timeout: TIMEOUT_MS });
+  const inkBefore = await inkedPixels(page);
   await page.$eval('.property-value[data-row="noteText"] textarea', (shown) => {
     if (shown instanceof HTMLTextAreaElement) {
       shown.focus();
       shown.select();
     }
   });
+  await page.keyboard.type('Cut 2 on fold WWWWWWWWWWWWWWWW');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok((await inkedPixels(page)) > inkBefore, 'the text typed shows on the canvas');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('a');
+  await page.keyboard.up('Control');
   await page.keyboard.type('Cut 2');
   await page.keyboard.press('Enter');
   await page.keyboard.type('on fold');
@@ -543,7 +580,7 @@ try {
   }
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
-    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, as a piece and a note; drew a line, a curve, ` +
+    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
       `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),

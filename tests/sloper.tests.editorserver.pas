@@ -120,6 +120,13 @@ type
     procedure TestMeasurementEdits;
     procedure TestMeasurementsNewSet;
     procedure TestMeasurementSizeAndScale;
+    // With a size table, each suggestion's values at the first and last
+    // sizes, and the preview of where it puts the point at them
+    procedure TestSuggestGraded;
+    // Formula rows say when the suggestions button shows
+    procedure TestSuggestRows;
+    // A note drawn with its text as typed, draft values worked out, changing nothing
+    procedure TestNotePreview;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
     // Its edits, each one undo step, refused with the reason
@@ -917,6 +924,8 @@ procedure TTestEditorServer.TestDragOneField;
 begin
   AddSquare;
   Call('editor_drag_begin', '{"name": "C", "field": "x"}');
+  AssertEquals('a line to keep to', 'line', Answer.Objects['guide'].Strings['kind']);
+  AssertNear('level with it', 100, Answer.Objects['guide'].Floats['y1'], TOLERANCE);
   Call('editor_drag_to', '{"x": 130, "y": 160}');
   AssertNear('across', 130, Answer.Floats['x'], TOLERANCE);
   AssertNear('not down', 100, Answer.Floats['y'], TOLERANCE);
@@ -1513,6 +1522,68 @@ begin
   Call('editor_list_measurements');
   AssertEquals('still that size', '38', Answer.Strings['size']);
   AssertNear('the new value', 190, PointXOf(Self, 'A'), TOLERANCE);
+end;
+
+procedure TTestEditorServer.TestSuggestGraded;
+var
+  Items: TJSONArray;
+  Item: TJSONObject;
+  Index: integer;
+begin
+  Call('use_measurements', '{"text": "' + StringToJSONString(SIZE_TABLE) + '", "file": "block.slm"}');
+  Answer;
+  Call('add_point', '{"type": "freePoint", "name": "A", "x": 0, "y": 0}');
+  Call('add_point', '{"type": "freePoint", "name": "B", "x": 175, "y": 0}');
+  Call('add_edge', '{"type": "line", "start": "A", "end": "B", "role": "outline"}');
+  Answer;
+  Call('editor_suggest', '{"name": "B", "field": "x"}');
+  AssertEquals('first and last sizes', '["36", "38"]', Answer.Arrays['sizes'].AsJSON);
+  Items := Answer.Arrays['items'];
+  Item := nil;
+  for Index := 0 to Items.Count - 1 do
+    if Items.Objects[Index].Strings['text'] = '@waist/4' then
+      Item := Items.Objects[Index];
+  AssertNotNull('a quarter waist is suggested', Item);
+  AssertTrue('its range', Pos('185', Item.Strings['range']) > 0);
+  AssertTrue('every size', Pos('38', Item.Strings['sizeValues']) > 0);
+  Call('editor_suggest_preview', '{"name": "B", "field": "x", "text": "@waist/4", "value": 175}');
+  AssertNear('the point would go', 175, Answer.Objects['position'].Floats['x'], TOLERANCE);
+  AssertEquals('a ghost for each end of the table', 2, Answer.Arrays['ghosts'].Count);
+  AssertNear('at the largest size', 185, Answer.Arrays['ghosts'].Objects[1].Arrays['point'].Floats[0], TOLERANCE);
+  // Kept through a drag, which changes only the point
+  Call('editor_drag_begin', '{"name": "B", "field": "x"}');
+  Call('editor_drag_to', '{"x": 180, "y": 0}');
+  Call('editor_suggest', '{"name": "B", "field": "x"}');
+  AssertEquals('still graded', 2, Answer.Arrays['sizes'].Count);
+  Call('editor_drag_cancel');
+end;
+
+procedure TTestEditorServer.TestSuggestRows;
+begin
+  AddSquare;
+  Call('editor_properties', '{"selection": ["B"]}');
+  AssertTrue('a number can be suggested for', PropertyRow('x').Get('suggest', False));
+  Call('set_locked', '{"name": "B", "locked": true}');
+  Call('editor_properties', '{"selection": ["B"]}');
+  AssertFalse('not once locked', PropertyRow('x').Get('suggest', False));
+  Call('editor_suggest_preview', '{"name": "B", "field": "x", "text": "1", "value": 1}');
+  AssertEquals('refused', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestNotePreview;
+var
+  IdNote: string;
+begin
+  AddSquare;
+  Call('add_note', '{"text": "Fold", "x": 10, "y": 20}');
+  IdNote := IntToStr(Answer.Integers['id']);
+  Call('editor_note_preview', '{"id": ' + IdNote + ', "text": "Cut 2\nWidth {= 50 * 2} mm"}');
+  AssertEquals('as typed, line by line', '["Cut 2", "Width 100 mm"]', Answer.Objects['note'].Arrays['lines'].AsJSON);
+  AssertEquals('the same note', StrToInt(IdNote), Answer.Objects['note'].Integers['id']);
+  Call('get_object', '{"id": ' + IdNote + '}');
+  AssertEquals('unchanged', 'Fold', Answer.Strings['text']);
+  Call('editor_note_preview', '{"name": "B", "text": "x"}');
+  AssertEquals('only a note', RPC_REFUSED, ErrorCode);
 end;
 
 initialization

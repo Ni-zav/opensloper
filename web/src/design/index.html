@@ -247,6 +247,82 @@
       .property-problem {
         grid-column: 1 / -1;
       }
+      .property-formula {
+        display: flex;
+        gap: 2px;
+        align-items: stretch;
+      }
+      .property-formula input {
+        flex: 1;
+        min-width: 0;
+      }
+      .property-wand {
+        flex: none;
+        width: 24px;
+        padding: 0;
+        border: none;
+        background: none;
+        cursor: pointer;
+      }
+      .property-wand[hidden] {
+        display: none;
+      }
+      .property-wand img {
+        width: 16px;
+        height: 16px;
+        vertical-align: middle;
+      }
+      .property-wand:hover {
+        background: #e8e6df;
+      }
+      /* A formula row's suggestions, under it across both columns */
+      .suggest-list {
+        grid-column: 1 / -1;
+        max-height: 16em;
+        margin: 0;
+        padding: 2px 0;
+        overflow-y: auto;
+        list-style: none;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .suggest-list li {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto 4.5em;
+        gap: 0 8px;
+        padding: 2px 6px;
+        cursor: pointer;
+      }
+      .suggest-list li.suggest-none {
+        display: block;
+        color: #80868f;
+        cursor: default;
+      }
+      .suggest-formula {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .suggest-value,
+      .suggest-delta {
+        text-align: right;
+        white-space: nowrap;
+      }
+      .suggest-delta,
+      .suggest-range {
+        color: #80868f;
+      }
+      .suggest-range {
+        grid-column: 1 / -1;
+        padding-left: 6px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .suggest-list li.chosen,
+      .suggest-list li:not(.suggest-none):hover {
+        background: #e3edf9;
+      }
       .list-header {
         display: flex;
         flex-direction: column;

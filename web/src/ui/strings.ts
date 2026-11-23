@@ -88,6 +88,11 @@ export const STRINGS = {
   measurementsTestOn: (percent: string): string => `${percent}%, editing paused`,
   measurementsTestPaused: 'Save or revert the edits to try other sizes',
   measurementsTestReset: 'Reset',
+  // The Properties tab's formula suggestions
+  suggestHint: 'Suggest formulas that give this value (Alt+Down)',
+  suggestNone: (tolerance: string): string => `No formulas within ${tolerance}; the nearest:`,
+  suggestSizeRange: (first: string, last: string, range: string): string => `${first}–${last}: ${range}`,
+  suggestNoValue: '-',
   discardMeasurementEdits: 'The measurement edits in bold are not saved. Drop them?',
   // Shown in the title while the pattern has changes not saved
   modifiedMark: '•',

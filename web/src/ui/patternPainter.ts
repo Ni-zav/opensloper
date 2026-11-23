@@ -72,6 +72,10 @@ const FADED_ALPHA = 150;
 const FULL_ALPHA = 255;
 // Laid over what an isolated piece does not use
 const DIM_WASH_ALPHA = 200;
+// The line a drag locked to one field follows, and a suggestion's ghost point, in pixels
+const FIELD_GUIDE_WIDTH = 1;
+const GHOST_RADIUS = 6;
+const GHOST_WIDTH = 1.5;
 
 interface Rgba {
   red: number;
@@ -98,6 +102,10 @@ const ERROR_INK = rgba(209, 52, 56);
 const BLOCKED_INK = rgba(226, 140, 40);
 const SEAM_INK_A = rgba(214, 96, 37);
 const SEAM_INK_B = rgba(20, 140, 120);
+// A suggestion's object at the smallest and largest sizes
+const GRADE_GHOST_INK = rgba(196, 48, 140, 160);
+// The faint line a drag locked to one field follows
+const GUIDE_INK = rgba(37, 116, 214, 90);
 const WHITE = rgba(255, 255, 255);
 
 function css(color: Rgba): string {
@@ -161,6 +169,27 @@ export interface PaintState {
   tipHandles: boolean;
   // The callout whose tip is being dragged, where it snapped and its leader there
   draggedTip: DraggedTip | undefined;
+  // While a point is dragged by one field, the path it keeps to
+  fieldGuide: FieldGuide | undefined;
+  // The formula suggestion being hovered
+  suggestPreview: SuggestPreview | undefined;
+}
+
+// The path a drag of one field keeps the point on, in model mm: a line
+// through two places, drawn past both, or a circle
+export type FieldGuide = { kind: 'line'; from: Vec2; to: Vec2 } | { kind: 'circle'; centre: Vec2; radius: number };
+
+// A suggestion's object at one size: polylines (flat x, y lists) and its point
+export interface GradeGhost {
+  lines: number[][];
+  point: Vec2 | undefined;
+}
+
+// Where a hovered formula suggestion would put the point, if it places one,
+// and its object at the first and last sizes
+export interface SuggestPreview {
+  position: Vec2 | undefined;
+  ghosts: GradeGhost[];
 }
 
 export interface DraggedTip {
@@ -423,6 +452,86 @@ export class PatternPainter {
         context.lineWidth = 1;
       }
     }
+  }
+
+  // Dashed across the whole canvas, or round the circle
+  drawFieldGuide(): void {
+    const guide = this.paintState().fieldGuide;
+    if (guide === undefined) {
+      return;
+    }
+    const view = this.paintState().view;
+    const context = this.context;
+    context.strokeStyle = css(GUIDE_INK);
+    context.lineWidth = FIELD_GUIDE_WIDTH;
+    context.setLineDash(CONSTRUCTION_DASH.map((length) => length * FIELD_GUIDE_WIDTH));
+    context.beginPath();
+    if (guide.kind === 'line') {
+      const start = view.toScreen(guide.from);
+      const finish = view.toScreen(guide.to);
+      const length = Math.hypot(finish.x - start.x, finish.y - start.y);
+      if (length === 0) {
+        context.setLineDash([]);
+        return;
+      }
+      // Past both edges of the canvas from anywhere on it
+      const reach = 2 * (this.width + this.height) + Math.hypot(start.x - this.width / 2, start.y - this.height / 2);
+      const across = ((finish.x - start.x) / length) * reach;
+      const down = ((finish.y - start.y) / length) * reach;
+      context.moveTo(start.x - across, start.y - down);
+      context.lineTo(start.x + across, start.y + down);
+    } else {
+      const centre = view.toScreen(guide.centre);
+      context.arc(centre.x, centre.y, guide.radius * view.scale, 0, 2 * Math.PI);
+    }
+    context.stroke();
+    context.setLineDash([]);
+  }
+
+  // The hovered suggestion's object at the smallest and largest sizes, and
+  // the dashed ring where it would put the point
+  drawSuggestPreview(): void {
+    const preview = this.paintState().suggestPreview;
+    if (preview === undefined) {
+      return;
+    }
+    const view = this.paintState().view;
+    const context = this.context;
+    context.lineWidth = GHOST_WIDTH;
+    context.setLineDash(CONSTRUCTION_DASH.map((length) => length * GHOST_WIDTH));
+    context.strokeStyle = css(GRADE_GHOST_INK);
+    for (const ghost of preview.ghosts) {
+      context.beginPath();
+      for (const line of ghost.lines) {
+        for (let index = 0; index + 1 < line.length; index += 2) {
+          const at = view.toScreen({ x: line[index] ?? 0, y: line[index + 1] ?? 0 });
+          if (index === 0) {
+            context.moveTo(at.x, at.y);
+          } else {
+            context.lineTo(at.x, at.y);
+          }
+        }
+      }
+      if (ghost.point !== undefined) {
+        const spot = view.toScreen(ghost.point);
+        context.moveTo(spot.x + GHOST_RADIUS, spot.y);
+        context.arc(spot.x, spot.y, GHOST_RADIUS, 0, 2 * Math.PI);
+      }
+      context.stroke();
+    }
+    if (preview.position !== undefined) {
+      const at = view.toScreen(preview.position);
+      context.strokeStyle = css(SELECTED_INK);
+      context.beginPath();
+      context.arc(at.x, at.y, GHOST_RADIUS, 0, 2 * Math.PI);
+      context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = css(HOVER_HALO);
+      context.beginPath();
+      context.arc(at.x, at.y, POINT_RADIUS, 0, 2 * Math.PI);
+      context.fill();
+    }
+    context.setLineDash([]);
   }
 
   drawBox(): void {

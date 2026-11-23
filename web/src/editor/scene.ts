@@ -258,26 +258,29 @@ export function parseScene(result: JsonRecord): Scene {
       chevronsB: numbersField(record, 'chevronsB') ?? [],
     }),
   );
-  const notes = recordsField(result, 'notes').map((record): SceneNote =>
-    Object.assign(sceneObject(record), {
-      print: booleanField(record, 'print') ?? true,
-      lines: stringsField(record, 'lines') ?? [],
-      size: numberField(record, 'size') ?? 0,
-      lineHeight: numberField(record, 'lineHeight') ?? 0,
-      align: ALIGNS.find((align) => align === stringField(record, 'align')) ?? 'left',
-      boxed: booleanField(record, 'boxed') ?? false,
-      font: stringField(record, 'font') ?? '',
-      bold: booleanField(record, 'bold') ?? false,
-      italic: booleanField(record, 'italic') ?? false,
-      box: rectField(record, 'box'),
-      frame: rectField(record, 'frame'),
-      anchor: stringField(record, 'anchor') ?? 'free',
-      anchorAt: pointField(record, 'anchorAt'),
-      leader: stringField(record, 'leader') ?? 'none',
-      leaderStrokes: numbersField(record, 'leaderStrokes') ?? [],
-    }),
-  );
+  const notes = recordsField(result, 'notes').map(parseNote);
   return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, seams, notes, points };
+}
+
+// One of the scene's notes, as editor_note_preview gives one too
+export function parseNote(record: JsonRecord): SceneNote {
+  return Object.assign(sceneObject(record), {
+    print: booleanField(record, 'print') ?? true,
+    lines: stringsField(record, 'lines') ?? [],
+    size: numberField(record, 'size') ?? 0,
+    lineHeight: numberField(record, 'lineHeight') ?? 0,
+    align: ALIGNS.find((align) => align === stringField(record, 'align')) ?? 'left',
+    boxed: booleanField(record, 'boxed') ?? false,
+    font: stringField(record, 'font') ?? '',
+    bold: booleanField(record, 'bold') ?? false,
+    italic: booleanField(record, 'italic') ?? false,
+    box: rectField(record, 'box'),
+    frame: rectField(record, 'frame'),
+    anchor: stringField(record, 'anchor') ?? 'free',
+    anchorAt: pointField(record, 'anchorAt'),
+    leader: stringField(record, 'leader') ?? 'none',
+    leaderStrokes: numbersField(record, 'leaderStrokes') ?? [],
+  });
 }
 
 export function parseTables(result: JsonRecord): Tables {

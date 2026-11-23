@@ -29,7 +29,8 @@ interface
 
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
-  Sloper.Core.Geometry, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits;
+  Sloper.Core.Geometry, Sloper.Core.Evaluator, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits,
+  Sloper.Editor.SuggestionGrade;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -49,6 +50,13 @@ type
     FDragTip, FTipMoved: boolean;
     FTipSnap: TSnap;
     FTipClick: TVec2;
+    // The values at each size of the field whose suggestions were last asked
+    // for, kept while it stays the same and the pattern does not change, or
+    // changes only by a drag, as making it copies the pattern for every size
+    FGrade: TGradeCheck;
+    FGradeKey, FGradeField: string;
+    // The grade check for the object's field, made again when out of date
+    function GradeFor(Node: TEvalNode; const FieldName: string): TGradeCheck;
     function DoTipTo(Params: TJSONObject): TJSONData;
     function DoTipEnd(Cancel: boolean): TJSONData;
     procedure RequireDrag;
@@ -98,6 +106,8 @@ type
     function DoMeasurementSize(Params: TJSONObject): TJSONData;
     function DoMeasurementScale(Params: TJSONObject): TJSONData;
     function DoSuggest(Params: TJSONObject): TJSONData;
+    function DoSuggestPreview(Params: TJSONObject): TJSONData;
+    function DoNotePreview(Params: TJSONObject): TJSONData;
   protected
     function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; override;
   public
@@ -159,7 +169,8 @@ resourcestring
   rsEditorPropertiesReturns = '`id`, the object shown, or null; `title`, what to show instead when none is; ' +
     '`locked`, its rows are read-only apart from `locked`; `rows`, each with `id`, `kind` (text, name, formula, ' +
     'choice, check, button, problem, number, longText, font or color), `caption` and `text` (a check''s box caption, ' +
-    'a color row''s own colour or ""), a formula row''s `field`, a choice row''s `choices` and `choice` (its index, ' +
+    'a color row''s own colour or ""), a formula row''s `field` and `suggest`, true when editor_suggest can suggest ' +
+    'formulas for it, a choice row''s `choices` and `choice` (its index, ' +
     'or -1), a font row''s `choices` (the default font''s caption) and a color row''s (following the material, its ' +
     'own), a color row''s `color` as drawn, a check row''s `checked`, a number row''s `value`, `min`, `max`, `step` ' +
     'and `decimals`, `enabled` false when it cannot be changed now, and a `hint` when it has one';
@@ -296,7 +307,21 @@ resourcestring
   rsEditorSuggestValue = 'The value to match, in mm, degrees or a ratio, as while dragging; the field''s own value ' +
     'when left out';
   rsEditorSuggestReturns = '`kind` (length, angle or ratio), `tolerance` in words, `items` within it, each with ' +
-    '`text`, `value`, `valueText`, `delta` and `deltaText`, and `nearest`, the closest of all, or null';
+    '`text`, `value`, `valueText`, `delta` and `deltaText`, and `nearest`, the closest of all, or null; with a size ' +
+    'table, `sizes`, its first and last sizes, and on each item `range`, its values at them, and `sizeValues`, its ' +
+    'value at every size, in words';
+  rsEditorSuggestPreview = 'What a suggestion would make of the object: where the point would go, and the object ' +
+    'at the smallest and largest sizes of the table.';
+  rsEditorSuggestText = 'The suggested formula';
+  rsEditorNotePreview = 'A note as editor_scene draws it, with its text as typed and not yet committed, as the ' +
+    'canvas shows it while the text is typed in the Properties tab; nothing changes.';
+  rsEditorNotePreviewTarget = 'The note, by ID or name';
+  rsEditorNotePreviewText = 'The text as typed, with names, and draft values in [ ] worked out';
+  rsEditorNotePreviewReturns = '`note`, as one of editor_scene''s `notes`';
+  rsEditorSuggestItemValue = 'Its value, as editor_suggest gives it';
+  rsEditorSuggestPreviewReturns = '`position`, where the point would go (`x`, `y`), or null when the field does ' +
+    'not place a point; `ghosts`, one for the first size and one for the last, each with `lines` (polylines, flat ' +
+    'lists x, y, x, y, in mm) and `point` (x, y) or null; empty without a size table';
   rsEditorCannotSuggest = 'No formula can be suggested for the %s of %s';
   rsEditorChanges = 'What changed since this was last asked, as the desktop document tells its panels, with what ' +
     'undo and redo would do and whether the pattern is modified. The editor asks after each call that may change ' +
@@ -313,7 +338,9 @@ resourcestring
   rsEditorDragRadius = 'For a callout''s tip, how far round the place to snap, in mm';
   rsEditorDragField = 'For a point, the one field to change, as while formula suggestions are open on it; by default ' +
     'every field a drag sets';
-  rsEditorDragBeginReturns = '`x` and `y`, where the point, the note''s top left or the handle''s end is now, in mm';
+  rsEditorDragBeginReturns = '`x` and `y`, where the point, the note''s top left or the handle''s end is now, in mm; ' +
+    'for a point dragged by one field, `guide`, the path it keeps to: `kind` line (through `x1`, `y1` and `x2`, ' +
+    '`y2`) or circle (`cx`, `cy`, `radius`), or null for a place along an edge';
   rsEditorDragTo = 'Moves the object being dragged as near the place as its operation allows; a point along an edge ' +
     'stays on the edge.';
   rsEditorDragX = 'Where the point, the note''s top left, the handle''s end or the tip goes across, in mm';
@@ -328,6 +355,7 @@ resourcestring
   rsEditorNotDraggable = '%s is not a point or a note';
   rsEditorNoHandle = '%s has no handle %s';
   rsEditorNotCallout = '%s is not a callout';
+  rsEditorNotNote = '%s is not a note';
   rsEditorNoDrag = 'No drag is open: call editor_drag_begin first';
   rsEditorDragOpen = 'A drag is already open';
   rsEditorTables = 'The design app''s tables the editor reads instead of copying: its canvas tools, its commands with ' +
@@ -341,7 +369,7 @@ resourcestring
 implementation
 
 uses
-  TypInfo, Math, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
+  TypInfo, Math, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
@@ -483,6 +511,15 @@ begin
     AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
     AddApiParam(Built, 'field', apText, True, rsEditorField);
     AddApiParam(Built, 'value', apNumber, False, rsEditorSuggestValue);
+    AddApiMethod(Built, 'editor_note_preview', rsEditorNotePreview, rsEditorNotePreviewReturns, True);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorNotePreviewTarget);
+    AddApiParam(Built, 'text', apText, True, rsEditorNotePreviewText);
+    AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
+    AddApiMethod(Built, 'editor_suggest_preview', rsEditorSuggestPreview, rsEditorSuggestPreviewReturns, True);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
+    AddApiParam(Built, 'field', apText, True, rsEditorField);
+    AddApiParam(Built, 'text', apText, True, rsEditorSuggestText);
+    AddApiParam(Built, 'value', apNumber, True, rsEditorSuggestItemValue);
     AddApiMethod(Built, 'editor_tables', rsEditorTables, rsEditorTablesReturns, True);
     AddApiMethod(Built, 'editor_changes', rsEditorChanges, rsEditorChangesReturns, True);
     AddApiMethod(Built, 'editor_drag_begin', rsEditorDragBegin, rsEditorDragBeginReturns);
@@ -667,17 +704,17 @@ begin
     Result := LeaderStrokes(Start, Tip, Note.Leader);
 end;
 
-// A note as the canvas draws it: its text with fields filled in, line by
-// line, its look, where its text and frame are, and its leader
-function NoteToSceneJSON(Pattern: TPattern; Note: TNoteObject; const PatternValues: TFieldValues): TJSONObject;
+// A note as the canvas draws it: its text (Shown, as the note shows it or
+// as typed) with fields filled in, line by line, its look, where its text
+// and frame are, and its leader
+function NoteToSceneJSON(Pattern: TPattern; Note: TNoteObject; const PatternValues: TFieldValues;
+  const Shown: string): TJSONObject;
 var
   Values: TFieldValues;
-  Shown: string;
   Lines: TJSONArray;
   Line: string;
   Frame: TRect2;
 begin
-  Shown := Note.ShownText;
   Values := NoteFieldValues(Pattern, Note, PatternValues, Shown);
   Frame := NoteFrame(Note, Values, Shown);
   Result := SceneObject(Pattern, Note);
@@ -782,7 +819,8 @@ begin
     if not Pattern.View.HideAnnotations then
       for Index := 0 to Pattern.ObjectCount - 1 do
         if (Pattern.Objects[Index] is TNoteObject) and Pattern.Objects[Index].HasResult and not Pattern.IsHidden(Pattern.Objects[Index]) then
-          List.Add(NoteToSceneJSON(Pattern, TNoteObject(Pattern.Objects[Index]), Values));
+          List.Add(NoteToSceneJSON(Pattern, TNoteObject(Pattern.Objects[Index]), Values,
+            TNoteObject(Pattern.Objects[Index]).ShownText));
 
     // Drawn while selected, each side in its colour with its direction
     List := TJSONArray.Create;
@@ -967,7 +1005,7 @@ const
   PROPERTY_ROW_KIND_NAMES: array[TPropertyRowKind] of string = ('text', 'name', 'formula', 'choice', 'check', 'button',
     'problem', 'number', 'longText', 'font', 'color');
 
-function PropertyRowToJSON(const Row: TPropertyRow): TJSONObject;
+function PropertyRowToJSON(Pattern: TPattern; Node: TEvalNode; const Row: TPropertyRow): TJSONObject;
 var
   Choices: TJSONArray;
   Choice: string;
@@ -976,7 +1014,12 @@ begin
     'text', Row.Text]);
   case Row.Kind of
     prkFormula:
+    begin
       Result.Add('field', Row.Field);
+      // The suggestions button shows
+      if CanSuggest(Pattern, Node, Row.Field) then
+        Result.Add('suggest', True);
+    end;
     prkChoice:
       Result.Add('choice', Row.Choice);
     prkCheck:
@@ -1032,7 +1075,7 @@ begin
     Answer.Add('title', '');
     Answer.Add('locked', Document.Pattern.IsLocked(Node));
     for Row in PropertyRows(Document.Pattern, Node) do
-      Rows.Add(PropertyRowToJSON(Row));
+      Rows.Add(PropertyRowToJSON(Document.Pattern, Node, Row));
   end
   else
   begin
@@ -1449,11 +1492,35 @@ begin
   Result := TJSONObject.Create(['testPercent', Percent]);
 end;
 
-function SuggestionToJSON(const Suggestion: TSuggestion; Kind: TSuggestionKind; Pattern: TPattern): TJSONObject;
+function SuggestionToJSON(const Suggestion: TSuggestion; Kind: TSuggestionKind; Pattern: TPattern;
+  Grade: TGradeCheck): TJSONObject;
+var
+  Values: TSizeValues;
 begin
   Result := TJSONObject.Create(['text', Suggestion.Text, 'value', ReportFloat(Suggestion.Value), 'valueText',
     SuggestionValueText(Suggestion.Value, Kind, Pattern.Units), 'delta', ReportFloat(Suggestion.Delta), 'deltaText',
     SuggestionDeltaText(Suggestion.Delta, Kind, Pattern.Units)]);
+  if not Assigned(Grade) then
+    Exit;
+  Values := Grade.Values(Suggestion.Text);
+  Result.Add('range', SizeRangeText(Values, Kind, Pattern.Units));
+  Result.Add('sizeValues', SizeValuesText(Grade, Values, Kind, Pattern.Units));
+end;
+
+function TEditorApiServer.GradeFor(Node: TEvalNode; const FieldName: string): TGradeCheck;
+begin
+  if Assigned(FGrade) and ((FGradeKey <> Node.Key) or (FGradeField <> FieldName)) then
+    FreeAndNil(FGrade);
+  // Never made during a drag, as it copies the pattern for each size
+  if not Assigned(FGrade) and Document.ChangeOpen then
+    Exit(nil);
+  if not Assigned(FGrade) then
+  begin
+    FGrade := TGradeCheck.Create(Document.Pattern, Node, FieldName);
+    FGradeKey := Node.Key;
+    FGradeField := FieldName;
+  end;
+  Result := FGrade;
 end;
 
 function TEditorApiServer.DoSuggest(Params: TJSONObject): TJSONData;
@@ -1465,8 +1532,9 @@ var
   Source: TSuggestionSource;
   Found: TSuggestions;
   Suggestion: TSuggestion;
-  Items: TJSONArray;
+  Items, Sizes: TJSONArray;
   Answer: TJSONObject;
+  Grade: TGradeCheck;
 begin
   Pattern := Document.Pattern;
   Node := FindTarget(Params);
@@ -1475,24 +1543,92 @@ begin
     raise EApiError.Create(RPC_REFUSED, Format(rsEditorCannotSuggest, [FieldName, Node.DisplayName]));
   if not OptionalNumber(Params, 'value', Target) then
     SuggestionTarget(Pattern, Node, FieldName, Target);
+  Grade := GradeFor(Node, FieldName);
   Source := TSuggestionSource.Create(Pattern, Node, FieldName);
   try
     Found := Source.Match(Target);
     Answer := TJSONObject.Create;
     Answer.Add('kind', SUGGESTION_KIND_NAMES[Source.Kind]);
     Answer.Add('tolerance', SuggestionToleranceText(Source.Kind, Pattern.Units));
+    // During a drag the grade check of before it serves, or none
+    if Assigned(Grade) and Grade.Available then
+    begin
+      Sizes := TJSONArray.Create([Grade.Sizes[0], Grade.Sizes[Grade.SizeCount - 1]]);
+      Answer.Add('sizes', Sizes);
+    end
+    else
+      Grade := nil;
     Items := TJSONArray.Create;
     Answer.Add('items', Items);
     for Suggestion in Found.Items do
-      Items.Add(SuggestionToJSON(Suggestion, Source.Kind, Pattern));
+      Items.Add(SuggestionToJSON(Suggestion, Source.Kind, Pattern, Grade));
     if Found.HasNearest then
-      Answer.Add('nearest', SuggestionToJSON(Found.Nearest, Source.Kind, Pattern))
+      Answer.Add('nearest', SuggestionToJSON(Found.Nearest, Source.Kind, Pattern, Grade))
     else
       Answer.Add('nearest', TJSONNull.Create);
     Result := Answer;
   finally
     FreeAndNil(Source);
   end;
+end;
+
+function GhostToJSON(const Ghost: TGradeGhost): TJSONObject;
+var
+  Lines: TJSONArray;
+  Line: TVec2Array;
+begin
+  Lines := TJSONArray.Create;
+  for Line in Ghost.Lines do
+    Lines.Add(LineToJSON(Line));
+  Result := TJSONObject.Create(['lines', Lines]);
+  if Ghost.HasPoint then
+    Result.Add('point', TJSONArray.Create([ReportFloat(Ghost.Point.X), ReportFloat(Ghost.Point.Y)]))
+  else
+    Result.Add('point', TJSONNull.Create);
+end;
+
+// As the desktop's suggestion list does when a row is hovered
+function TEditorApiServer.DoSuggestPreview(Params: TJSONObject): TJSONData;
+var
+  Pattern: TPattern;
+  Node: TEvalNode;
+  FieldName, FormulaText: string;
+  Position: TVec2;
+  Grade: TGradeCheck;
+  Ghosts: TJSONArray;
+  Ghost: TGradeGhost;
+  Answer: TJSONObject;
+begin
+  Pattern := Document.Pattern;
+  Node := FindTarget(Params);
+  FieldName := RequireString(Params, 'field');
+  FormulaText := RequireString(Params, 'text');
+  if not CanSuggest(Pattern, Node, FieldName) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsEditorCannotSuggest, [FieldName, Node.DisplayName]));
+  Answer := TJSONObject.Create;
+  if (Node is TPointObject) and FieldPosition(Pattern, TPointObject(Node), FieldName, RequireNumber(Params, 'value'),
+    Position) then
+    Answer.Add('position', TJSONObject.Create(['x', ReportFloat(Position.X), 'y', ReportFloat(Position.Y)]))
+  else
+    Answer.Add('position', TJSONNull.Create);
+  Ghosts := TJSONArray.Create;
+  Answer.Add('ghosts', Ghosts);
+  Grade := GradeFor(Node, FieldName);
+  if Assigned(Grade) then
+    for Ghost in Grade.Ghosts(FormulaText) do
+      Ghosts.Add(GhostToJSON(Ghost));
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoNotePreview(Params: TJSONObject): TJSONData;
+var
+  Node: TEvalNode;
+begin
+  Node := FindTarget(Params);
+  if not (Node is TNoteObject) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsEditorNotNote, [Node.DisplayName]));
+  Result := TJSONObject.Create(['note', NoteToSceneJSON(Document.Pattern, TNoteObject(Node), FieldValuesFor(Params),
+    NotePreviewText(Document.Pattern, RequireString(Params, 'text')))]);
 end;
 
 // An enumeration's value as the API names it: without its prefix, starting
@@ -1559,12 +1695,16 @@ begin
   if Assigned(Document) then
     Document.RemoveListener(@DocumentChanged);
   FreeAndNil(FPending);
+  FreeAndNil(FGrade);
   inherited Destroy;
 end;
 
 procedure TEditorApiServer.DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
 begin
   FChanges := FChanges + Changes;
+  // A drag changes only the field's own object, which no candidate reads
+  if (Changes * [dcPattern, dcObjectsReplaced, dcMeasurements] <> []) and not ADocument.ChangeOpen then
+    FreeAndNil(FGrade);
 end;
 
 function TEditorApiServer.DoChanges: TJSONData;
@@ -1603,6 +1743,20 @@ begin
       FDragHandle]));
 end;
 
+function GuideToJSON(const Guide: TFieldGuide): TJSONData;
+begin
+  case Guide.Kind of
+    fgLine:
+      Result := TJSONObject.Create(['kind', 'line', 'x1', ReportFloat(Guide.Start.X), 'y1', ReportFloat(Guide.Start.Y),
+        'x2', ReportFloat(Guide.Finish.X), 'y2', ReportFloat(Guide.Finish.Y)]);
+    fgCircle:
+      Result := TJSONObject.Create(['kind', 'circle', 'cx', ReportFloat(Guide.Centre.X), 'cy',
+        ReportFloat(Guide.Centre.Y), 'radius', ReportFloat(Guide.Radius)]);
+    else
+      Result := TJSONNull.Create;
+  end;
+end;
+
 function TEditorApiServer.DragPosition: TJSONObject;
 var
   Node: TEvalNode;
@@ -1618,6 +1772,8 @@ begin
   else
     At := TPointObject(Node).Position;
   Result := TJSONObject.Create(['x', ReportFloat(At.X), 'y', ReportFloat(At.Y)]);
+  if FDragField <> '' then
+    Result.Add('guide', GuideToJSON(FieldGuide(Document.Pattern, TPointObject(Node), FDragField)));
 end;
 
 procedure TEditorApiServer.RequireDrag;
@@ -1911,6 +2067,8 @@ begin
     'editor_measurement_size': Result := DoMeasurementSize(Params);
     'editor_measurement_scale': Result := DoMeasurementScale(Params);
     'editor_suggest': Result := DoSuggest(Params);
+    'editor_suggest_preview': Result := DoSuggestPreview(Params);
+    'editor_note_preview': Result := DoNotePreview(Params);
     'editor_changes': Result := DoChanges;
     'editor_drag_begin': Result := DoDragBegin(Params);
     'editor_drag_to': Result := DoDragTo(Params);

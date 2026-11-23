@@ -116,7 +116,19 @@ class DesignApp {
         this.run(this.canvas.zoomToSelection());
       },
     });
-    this.properties = new PropertiesPanel(this.document, { message: showMessage, failed: showFailure });
+    this.properties = new PropertiesPanel(this.document, {
+      message: showMessage,
+      failed: showFailure,
+      suggestChanged: (id, field) => {
+        this.canvas.setFieldLock(id, field);
+      },
+      suggestPreview: (preview) => {
+        this.canvas.showSuggestPreview(preview);
+      },
+      noteText: (id, text) => {
+        this.canvas.showNoteText(id, text);
+      },
+    });
     const side = new SideTabs(element('side', HTMLElement));
     side.addSection('properties', STRINGS.tabProperties, ICONS.propertiesTab, this.properties);
     side.addSection('objects', STRINGS.tabObjects, ICONS.objectsTab, this.objects);

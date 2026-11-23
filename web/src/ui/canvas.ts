@@ -15,16 +15,19 @@ import {
   numberField,
   numbersField,
   stringField,
+  type JsonRecord,
 } from '../engine/replies.ts';
 import {
   EMPTY_SCENE,
   parseHandle,
   parseHandles,
+  parseNote,
   parseScene,
   sceneBounds,
   type CurveHandle,
   type HandleRef,
   type Scene,
+  type SceneNote,
   type Tables,
 } from '../editor/scene.ts';
 import { ViewTransform, ZOOM_STEP, type Rect2, type Vec2 } from '../editor/view.ts';
@@ -39,7 +42,13 @@ import {
 } from './canvasTools.ts';
 import { LatestOnly } from './latestOnly.ts';
 import { NoteEditor } from './noteEditor.ts';
-import { PatternPainter, type DraggedTip, type SnapMarker } from './patternPainter.ts';
+import {
+  PatternPainter,
+  type DraggedTip,
+  type FieldGuide,
+  type SnapMarker,
+  type SuggestPreview,
+} from './patternPainter.ts';
 
 // A press that moves further than this, in pixels, is a drag, not a click
 const DRAG_THRESHOLD = 4;
@@ -105,6 +114,19 @@ function distance(from: Vec2, to: Vec2): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
 }
 
+// The path a drag by one field keeps to, as editor_drag_begin and _to give it
+function parseGuide(answer: JsonRecord): FieldGuide | undefined {
+  const guide = answer.guide;
+  if (!isRecord(guide)) {
+    return undefined;
+  }
+  const number = (name: string): number => numberField(guide, name) ?? 0;
+  if (stringField(guide, 'kind') === 'circle') {
+    return { kind: 'circle', centre: { x: number('cx'), y: number('cy') }, radius: number('radius') };
+  }
+  return { kind: 'line', from: { x: number('x1'), y: number('y1') }, to: { x: number('x2'), y: number('y2') } };
+}
+
 function sameHandle(one: HandleRef | undefined, other: HandleRef | undefined): boolean {
   return one?.edge === other?.edge && one?.field === other?.field;
 }
@@ -154,6 +176,17 @@ export class PatternCanvas implements CanvasToolHost {
   private dragTip = false;
   private draggedTip: DraggedTip | undefined;
   private dragOffset: Vec2 = { x: 0, y: 0 };
+  // While a field's formula suggestions are open, dragging its point changes
+  // only that field, along the guide drawn while it is dragged
+  private lockId = '';
+  private lockField = '';
+  private fieldGuide: FieldGuide | undefined;
+  // Where the suggestion being hovered would put things
+  private suggestPreview: SuggestPreview | undefined;
+  // A note drawn with the text being typed for it in the Properties tab
+  private readonly notePreviews: LatestOnly<{ id: string; text: string } | undefined>;
+  private previewNote: SceneNote | undefined;
+  private previewNoteId: string | undefined;
   private generation = -1;
   // Fit each new scene to the window: from opening a pattern until the user
   // zooms, pans or edits, since its measurements may come after it and
@@ -193,6 +226,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.drags = new LatestOnly(async (at) => this.dragTo(at), fail);
     this.labelQueue = new LatestOnly(async () => this.loadLabels(), fail);
     this.handleQueue = new LatestOnly(async () => this.loadHandles(), fail);
+    this.notePreviews = new LatestOnly(async (typed) => this.loadNotePreview(typed), fail);
     document.addListener(this.listener);
     this.resizer = new ResizeObserver(() => {
       this.resize();
@@ -446,17 +480,80 @@ export class PatternCanvas implements CanvasToolHost {
       hoverHandle: this.hoverHandle,
       tipHandles: this.tool === SELECT_TOOL,
       draggedTip: this.draggedTip,
+      fieldGuide: this.mode === 'dragging' ? this.fieldGuide : undefined,
+      suggestPreview: this.suggestPreview,
     });
     this.painter.drawGrid();
     this.painter.drawPattern(this.scene, this.tables);
     this.painter.drawSeams(this.scene);
-    this.painter.drawNotes(this.scene);
+    const preview = this.previewNote;
+    this.painter.drawNotes(
+      preview === undefined
+        ? this.scene
+        : { ...this.scene, notes: this.scene.notes.map((note) => (note.id === preview.id ? preview : note)) },
+    );
     if (this.tool === SELECT_TOOL) {
       this.painter.drawHandles();
     }
     this.painter.drawLabels(this.scene);
     this.painter.drawSnap();
     this.painter.drawBox();
+    this.painter.drawFieldGuide();
+    this.painter.drawSuggestPreview();
+  }
+
+  // While a field's formula suggestions are open, dragging its point changes
+  // only that field; empty strings unlock
+  setFieldLock(id: string, field: string): void {
+    this.lockId = id;
+    this.lockField = field;
+  }
+
+  // Draws the note with the text being typed for it, or as it is when undefined
+  showNoteText(id: string | undefined, text = ''): void {
+    this.previewNoteId = id;
+    if (id === undefined) {
+      this.notePreviews.clear();
+      // Kept until a scene asked for by a commit comes, so the old text never shows between
+      this.scenes
+        .idle()
+        .then(() => {
+          if (this.previewNoteId === undefined && this.previewNote !== undefined) {
+            this.previewNote = undefined;
+            this.repaint();
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          this.report(error);
+        });
+      return;
+    }
+    this.notePreviews.push({ id, text });
+  }
+
+  private async loadNotePreview(typed: { id: string; text: string } | undefined): Promise<void> {
+    if (typed === undefined) {
+      return;
+    }
+    const answer = await this.document.read('editor_note_preview', {
+      id: Number(typed.id),
+      text: typed.text,
+      fileName: this.document.fileName,
+    });
+    const note = answer.note;
+    // Ended while the engine worked
+    if (this.previewNoteId !== typed.id) {
+      return;
+    }
+    this.previewNote = isRecord(note) ? parseNote(note) : undefined;
+    this.repaint();
+  }
+
+  // A hovered suggestion's ghosts, or undefined to take them away
+  showSuggestPreview(preview: SuggestPreview | undefined): void {
+    this.suggestPreview = preview;
+    this.repaint();
   }
 
   private resize(): void {
@@ -729,7 +826,11 @@ export class PatternCanvas implements CanvasToolHost {
       this.repaint();
       return;
     }
-    await this.beginDrag(point.id, targetParams(point), point);
+    const params: Record<string, unknown> = { ...targetParams(point) };
+    if (point.id === this.lockId && note === undefined) {
+      params.field = this.lockField;
+    }
+    await this.beginDrag(point.id, params, point);
   }
 
   private async startHandleDrag(handle: HandleRef): Promise<void> {
@@ -744,7 +845,7 @@ export class PatternCanvas implements CanvasToolHost {
   // Opens the drag in the engine, keeping the press's offset from where the object is
   private async beginDrag(id: string, params: object, from: Vec2): Promise<void> {
     try {
-      await this.document.call('editor_drag_begin', params);
+      this.fieldGuide = parseGuide(await this.document.call('editor_drag_begin', params));
     } catch (error: unknown) {
       this.mode = 'refused';
       this.dragTip = false;
@@ -776,6 +877,7 @@ export class PatternCanvas implements CanvasToolHost {
       x: model.x + this.dragOffset.x,
       y: model.y + this.dragOffset.y,
     });
+    this.fieldGuide = parseGuide(answer);
     // As on the desktop, only a drag that cannot follow says why
     if (booleanField(answer, 'moved') === false) {
       this.events.message(stringField(answer, 'reason') ?? '');
@@ -806,6 +908,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.dragId = '';
     const tip = this.dragTip;
     this.dragTip = false;
+    this.fieldGuide = undefined;
     if (id === '') {
       return;
     }

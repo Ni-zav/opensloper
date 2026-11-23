@@ -120,7 +120,13 @@ type
     procedure TestMeasurementEdits;
     procedure TestMeasurementsNewSet;
     procedure TestMeasurementSizeAndScale;
+    // The Properties tab's rows for a point, an edge, several objects and none
+    procedure TestProperties;
+    // Its edits, each one undo step, refused with the reason
+    procedure TestPropertyEdits;
   private
+    // The row with this id in the last editor_properties answer
+    function PropertyRow(const RowId: string): TJSONObject;
     // A callout from B, its text at (150, -40); its ID
     function AddCallout: integer;
   end;
@@ -1157,6 +1163,113 @@ begin
   AssertEquals('its step', 'Delete variable', Answer.Strings['undo']);
   Call('editor_variable_delete', '{"name": "A"}');
   AssertEquals('not a variable', RPC_REFUSED, ErrorCode);
+end;
+
+function TTestEditorServer.PropertyRow(const RowId: string): TJSONObject;
+var
+  Index: integer;
+  Rows: TJSONArray;
+begin
+  Rows := Answer.Arrays['rows'];
+  for Index := 0 to Rows.Count - 1 do
+    if Rows.Objects[Index].Strings['id'] = RowId then
+      Exit(Rows.Objects[Index]);
+  Fail('No row ' + RowId + ' in ' + Rows.AsJSON);
+  Result := nil;
+end;
+
+procedure TTestEditorServer.TestProperties;
+var
+  Rows: TJSONArray;
+  Ids: string;
+  Index, IdA: integer;
+begin
+  AddSquare;
+  IdA := IdOf('A');
+  Call('editor_properties', '{"selection": [' + IntToStr(IdA) + ']}');
+  AssertEquals('shown', IdA, Answer.Integers['id']);
+  Rows := Answer.Arrays['rows'];
+  Ids := '';
+  for Index := 0 to Rows.Count - 1 do
+    Ids := Ids + Rows.Objects[Index].Strings['id'] + ' ';
+  AssertEquals('in order', 'type name locked x y marker markedOn result problem ', Ids);
+  AssertEquals('its name', 'A', PropertyRow('name').Strings['text']);
+  AssertEquals('edited', 'name', PropertyRow('name').Strings['kind']);
+  AssertEquals('a formula', 'formula', PropertyRow('x').Strings['kind']);
+  AssertEquals('its field', 'x', PropertyRow('x').Strings['field']);
+  AssertEquals('its formula', '0', PropertyRow('x').Strings['text']);
+  AssertEquals('plain', 0, PropertyRow('marker').Integers['choice']);
+  AssertEquals('markers', 5, PropertyRow('marker').Arrays['choices'].Count);
+  AssertFalse('unlocked', PropertyRow('locked').Booleans['checked']);
+  AssertTrue('with a hint', PropertyRow('locked').Strings['hint'] <> '');
+  AssertEquals('no problem', '', PropertyRow('problem').Strings['text']);
+  Call('editor_properties', '{"selection": ["Line_A_B"]}');
+  AssertEquals('its type can change', 'choice', PropertyRow('type').Strings['kind']);
+  AssertEquals('a line', 0, PropertyRow('type').Integers['choice']);
+  AssertEquals('outline', 1, PropertyRow('role').Integers['choice']);
+  AssertEquals('its length', 'Length', PropertyRow('result').Strings['caption']);
+  Call('editor_properties', '{"selection": ["A", "B"]}');
+  AssertTrue('none shown', Answer.Nulls['id']);
+  AssertEquals('how many', '2 objects selected', Answer.Strings['title']);
+  AssertEquals('no rows', 0, Answer.Arrays['rows'].Count);
+  Call('editor_properties', '{"selection": []}');
+  AssertEquals('nothing', 'Nothing selected', Answer.Strings['title']);
+end;
+
+procedure TTestEditorServer.TestPropertyEdits;
+var
+  IdA, IdEdge: string;
+begin
+  AddSquare;
+  IdA := IntToStr(IdOf('A'));
+  // A line made a curve is named after its new type, so it is found by ID
+  IdEdge := IntToStr(IdOf('Line_B_C'));
+  Call('editor_property_set', '{"id": ' + IdA + ', "row": "name", "text": "Front"}');
+  AssertTrue('renamed', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Rename', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdA + ', "field": "x", "text": "12 +"}');
+  AssertFalse('refused', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['reason'] <> '');
+  AssertTrue('and where', Answer.Integers['errorPos'] > 0);
+  Call('editor_property_set', '{"id": ' + IdA + ', "field": "x", "text": "12 * 2"}');
+  AssertTrue('a formula', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Change X', Answer.Strings['undo']);
+  Call('get_object', '{"name": "Front"}');
+  AssertEquals('moved', 24, Answer.Get('x', 0.0), TOLERANCE);
+  Call('editor_property_set', '{"id": ' + IdA + ', "row": "marker", "value": 1}');
+  AssertTrue('a hole', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdA + ']}');
+  AssertTrue('its size shows', Assigned(PropertyRow('markerSize')));
+  Call('editor_property_set', '{"id": ' + IdA + ', "row": "marker", "value": 9}');
+  AssertFalse('no such marker', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdA + ', "row": "locked", "value": 1}');
+  AssertTrue('locked', Answer.Booleans['done']);
+  Call('editor_properties', '{"selection": [' + IdA + ']}');
+  AssertTrue('shown locked', Answer.Booleans['locked']);
+  Call('editor_property_set', '{"id": ' + IdA + ', "field": "x", "text": "5"}');
+  AssertFalse('a locked point keeps its formulas', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['reason'] <> '');
+  Call('editor_property_set', '{"id": ' + IdA + ', "row": "locked", "value": 0}');
+  Call('editor_changes');
+  AssertEquals('its step', 'Unlock', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdEdge + ', "row": "role", "value": 3}');
+  AssertTrue('a stitch line', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Change role', Answer.Strings['undo']);
+  Call('editor_property_set', '{"id": ' + IdEdge + ', "row": "type", "value": 1}');
+  AssertTrue('a curve', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Change edge type', Answer.Strings['undo']);
+  Call('editor_properties', '{"selection": [' + IdEdge + ']}');
+  AssertEquals('a curve now', 1, PropertyRow('type').Integers['choice']);
+  Call('editor_property_set', '{"id": ' + IdEdge + ', "row": "flip"}');
+  AssertFalse('not a seam', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdEdge + ', "row": "nonsense", "value": 0}');
+  AssertFalse('no such row', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdEdge + '}');
+  AssertEquals('which row', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 const

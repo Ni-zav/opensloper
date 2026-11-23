@@ -73,6 +73,8 @@ type
     function DoVariableAdd: TJSONData;
     function DoVariableDelete(Params: TJSONObject): TJSONData;
     function DoVariableSet(Params: TJSONObject): TJSONData;
+    function DoProperties(Params: TJSONObject): TJSONData;
+    function DoPropertySet(Params: TJSONObject): TJSONData;
     // The snap of a place given as a group of x, y and radius
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
@@ -151,6 +153,22 @@ resourcestring
   rsEditorVariableText = 'What the cell holds';
   rsEditorVariableSetReturns = '`done`, false when refused, with the `reason` and `errorPos`, where in a formula the ' +
     'problem is, in characters from 1 (0 for none)';
+  rsEditorProperties = 'What the Properties tab shows for a selection: one object''s rows in order, or what the ' +
+    'selection is when it is not one object. A repeat''s first point shows the repeat.';
+  rsEditorPropertiesSelection = 'The selected objects, by ID, name, or key as the scene gives a repeat''s points';
+  rsEditorPropertiesReturns = '`id`, the object shown, or null; `title`, what to show instead when none is; ' +
+    '`locked`, its rows are read-only apart from `locked`; `rows`, each with `id`, `kind` (text, name, formula, ' +
+    'choice, check, button or problem), `caption` and `text`, a formula row''s `field`, a choice row''s `choices` and ' +
+    '`choice` (its index, or -1), a check row''s `checked`, and a `hint` when it has one';
+  rsEditorPropertyTarget = 'The object, by ID or name';
+  rsEditorPropertySet = 'Commits a row of the Properties tab as one undo step: the name or a formula as typed with ' +
+    'names (`text`), or a choice, check or button (`value`). What the row already holds makes no step.';
+  rsEditorPropertyRow = 'The row''s `id`, as editor_properties gives it';
+  rsEditorPropertyField = 'A formula row''s field, in place of `row`';
+  rsEditorPropertyText = 'What the name or formula field holds';
+  rsEditorPropertyValue = 'A choice''s index, 1 or 0 for a check; a button ignores it';
+  rsEditorPropertySetReturns = '`done`, false when refused, with the `reason` and, for a formula, `errorPos`, where ' +
+    'the problem is, in characters from 1 (0 for none)';
   rsEditorBounds = 'The box round objects, as the canvas shows or zooms to a selection';
   rsEditorBoundsTargets = 'The objects'' IDs';
   rsEditorBoundsReturns = '`bounds`, minX, minY, maxX and maxY in mm, or null when none of them has a place';
@@ -319,7 +337,7 @@ uses
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements;
+  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -378,6 +396,14 @@ begin
     AddApiParam(Built, 'id', apTarget, True, rsEditorVariableTarget);
     AddApiParam(Built, 'column', apChoice, True, rsEditorVariableColumn, string.Join(', ', VARIABLE_COLUMN_NAMES));
     AddApiParam(Built, 'text', apText, True, rsEditorVariableText);
+    AddApiMethod(Built, 'editor_properties', rsEditorProperties, rsEditorPropertiesReturns, True);
+    AddApiParam(Built, 'selection', apTexts, True, rsEditorPropertiesSelection);
+    AddApiMethod(Built, 'editor_property_set', rsEditorPropertySet, rsEditorPropertySetReturns);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorPropertyTarget);
+    AddApiParam(Built, 'row', apText, False, rsEditorPropertyRow);
+    AddApiParam(Built, 'field', apText, False, rsEditorPropertyField);
+    AddApiParam(Built, 'text', apText, False, rsEditorPropertyText);
+    AddApiParam(Built, 'value', apWhole, False, rsEditorPropertyValue);
     AddApiMethod(Built, 'editor_bounds', rsEditorBounds, rsEditorBoundsReturns, True);
     AddApiParam(Built, 'ids', apReferences, True, rsEditorBoundsTargets);
     AddApiMethod(Built, 'editor_list_click', rsEditorListClick, rsEditorListClickReturns, True);
@@ -923,6 +949,103 @@ begin
   Result := TJSONObject.Create(['selection', KeysToJSON(SelectionAfterClick(TextsParam(Params, 'visible'),
     TextsParam(Params, 'selected'), OptionalString(Params, 'anchor'), Clicked, BooleanParam(Params, 'toggle'),
     BooleanParam(Params, 'extend')))]);
+end;
+
+const
+  // As TPropertyRowKind
+  PROPERTY_ROW_KIND_NAMES: array[TPropertyRowKind] of string = ('text', 'name', 'formula', 'choice', 'check', 'button',
+    'problem');
+
+function PropertyRowToJSON(const Row: TPropertyRow): TJSONObject;
+var
+  Choices: TJSONArray;
+  Choice: string;
+begin
+  Result := TJSONObject.Create(['id', Row.Id, 'kind', PROPERTY_ROW_KIND_NAMES[Row.Kind], 'caption', Row.Caption,
+    'text', Row.Text]);
+  case Row.Kind of
+    prkFormula:
+      Result.Add('field', Row.Field);
+    prkChoice:
+    begin
+      Choices := TJSONArray.Create;
+      for Choice in Row.Choices do
+        Choices.Add(Choice);
+      Result.Add('choices', Choices);
+      Result.Add('choice', Row.Choice);
+    end;
+    prkCheck:
+      Result.Add('checked', Row.Checked);
+  end;
+  if Row.Hint <> '' then
+    Result.Add('hint', Row.Hint);
+end;
+
+function TEditorApiServer.DoProperties(Params: TJSONObject): TJSONData;
+var
+  Keys: TStringArray;
+  Node: TEvalNode;
+  Rows: TJSONArray;
+  Row: TPropertyRow;
+  Answer: TJSONObject;
+begin
+  // Keys as the canvas holds them, so a repeat's point not yet used is shown too
+  Keys := TextsParam(Params, 'selection');
+  Node := nil;
+  if Length(Keys) = 1 then
+  begin
+    Node := Document.Pattern.FindNode(Keys[0]);
+    if not Assigned(Node) then
+      Node := Document.Pattern.FindObject(Keys[0]);
+    if Assigned(Node) then
+      Node := Document.Pattern.FindNode(PropertyKey(Document.Pattern, Node.Key));
+  end;
+  Answer := TJSONObject.Create;
+  Rows := TJSONArray.Create;
+  if Assigned(Node) then
+  begin
+    Answer.Add('id', KeyToJSON(Node.Key));
+    Answer.Add('title', '');
+    Answer.Add('locked', Document.Pattern.IsLocked(Node));
+    for Row in PropertyRows(Document.Pattern, Node) do
+      Rows.Add(PropertyRowToJSON(Row));
+  end
+  else
+  begin
+    Answer.Add('id', TJSONNull.Create);
+    if Length(Keys) > 1 then
+      Answer.Add('title', Format(rsPropMany, [Length(Keys)]))
+    else
+      Answer.Add('title', rsPropNothing);
+    Answer.Add('locked', False);
+  end;
+  Answer.Add('rows', Rows);
+  Result := Answer;
+end;
+
+// A refused value is an answer, not an error: the field keeps it, with the reason
+function TEditorApiServer.DoPropertySet(Params: TJSONObject): TJSONData;
+var
+  Node: TEvalNode;
+  Row, Field, Reason: string;
+  ErrorPos: integer;
+  Done: boolean;
+begin
+  Node := FindTarget(Params);
+  Row := OptionalString(Params, 'row');
+  Field := OptionalString(Params, 'field');
+  ErrorPos := 0;
+  if Field <> '' then
+    Done := CommitPropertyField(Document, Node, Field, RequireString(Params, 'text'), Reason, ErrorPos)
+  else if Row = PROPERTY_ROW_NAME then
+    Done := CommitPropertyField(Document, Node, '', RequireString(Params, 'text'), Reason, ErrorPos)
+  else if Row = PROPERTY_ROW_FLIP then
+    Done := CommitPropertyRow(Document, Node, Row, 0, Reason)
+  else if Row <> '' then
+    Done := CommitPropertyRow(Document, Node, Row, RequireWhole(Params, 'value'), Reason)
+  else
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['row']));
+  Result := TJSONObject.Create(['done', Done, 'reason', Reason, 'errorPos', ErrorPos]);
 end;
 
 function TEditorApiServer.DoHandles(Params: TJSONObject): TJSONData;
@@ -1736,6 +1859,8 @@ begin
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
     'editor_handles': Result := DoHandles(Params);
     'editor_bounds': Result := DoBounds(Params);
+    'editor_properties': Result := DoProperties(Params);
+    'editor_property_set': Result := DoPropertySet(Params);
     'editor_variable_add': Result := DoVariableAdd;
     'editor_variable_delete': Result := DoVariableDelete(Params);
     'editor_variable_set': Result := DoVariableSet(Params);

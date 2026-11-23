@@ -34,7 +34,7 @@ interface
 uses
   Classes, SysUtils, Generics.Collections, Controls, StdCtrls, Forms, Graphics, LCLType, Buttons, Sloper.Core.Geometry, Sloper.Core.Draft,
   Sloper.Core.Evaluator, Sloper.Document.PatternDocument, Sloper.UI.FormulaCompleter, Sloper.UI.FormulaSuggest, Sloper.Editor.Suggestion,
-  Sloper.Editor.SuggestionGrade;
+  Sloper.Editor.SuggestionGrade, Sloper.Editor.PropertyRows;
 
 type
   // One line of text that cuts itself to the label's width with an ellipsis
@@ -90,10 +90,6 @@ type
     Wand: TSpeedButton;
     List: TFormulaSuggestList;
   end;
-
-  // Where a section's rows go, top to bottom: every section adds its rows
-  // for one place before any section adds rows for the next
-  TSectionPlace = (spType, spName, spFields, spRows, spResult, spEnd);
 
   TPropertiesPanel = class;
 
@@ -221,7 +217,6 @@ type
     procedure EditClick(Sender: TObject);
     procedure UpdateCompletion(Edit: TEdit; Explicit: boolean);
     procedure SetEditText(Edit: TEdit; const AText: string);
-    function EditableKey(const Key: string): string;
     procedure CommitEdit(Edit: TEdit);
     function OriginalText(Edit: TEdit): string;
   protected
@@ -273,6 +268,11 @@ type
     procedure BeginEdit(const Description: string);
     // Records the change when Done, else puts the pattern back
     function EndEdit(Done: boolean; const MergeKey: string = ''): boolean;
+    // Around a step from Sloper.Editor.PropertyRows, which begins and commits
+    // the change itself, as BeginEdit and EndEdit are around one of the
+    // panel's own: EndStep says why it was refused, when it was
+    procedure BeginStep;
+    procedure EndStep(Done: boolean; const Reason: string);
     // A change that adds or removes rows, so it runs once the handler of the
     // control that asked has returned, through the section's QueuedChangeDue.
     // A later change replaces one still waiting.
@@ -294,29 +294,7 @@ type
     procedure FocusFormulaRow(const FieldName: string);
   end;
 
-  // What a role is called in the app
 resourcestring
-  rsPropNothing = 'Nothing selected';
-  rsPropMany = '%d objects selected';
-  rsPropType = 'Type';
-  rsPropName = 'Name';
-  rsPropRole = 'Role';
-  rsPropRepeatFrom = 'From';
-  rsPropRepeatTo = 'To';
-  rsPropRepeatEdge = 'Along';
-  rsPropEnds = 'Ends';
-  rsPropEndsInclude = 'Include the ends';
-  rsPropEndsExclude = 'Leave out the ends';
-  rsPropChangeEnds = 'Change repeat ends';
-  rsPropMarkedOn = 'Marked on';
-  rsPropMarker = 'Marker';
-  rsPropMarkerPlain = 'Plain';
-  rsPropMarkerHole = 'Hole';
-  rsPropMarkerButton = 'Button';
-  rsPropMarkerMatch = 'Match dot';
-  rsPropMarkerButtonhole = 'Buttonhole';
-  rsPropChangeMarker = 'Change marker';
-  rsPropPosition = 'Position';
   rsPropNoteText = 'Text';
   rsPropNoteSize = 'Size (points)';
   rsPropNotePrint = 'Print';
@@ -346,25 +324,6 @@ resourcestring
   rsPropNoteItalic = 'Italic';
   rsPropChangeNoteFont = 'Change note font';
   rsPropNoteTextHint = 'Draft values go in {= }, such as {=Line_A_B.length}';
-  rsPropLength = 'Length';
-  rsPropPerimeter = 'Perimeter';
-  rsPropSideA = 'Side A';
-  rsPropSideB = 'Side B';
-  rsPropSeamLengths = 'Lengths';
-  rsPropSeamDifference = 'Difference';
-  rsPropDirection = 'Direction';
-  rsPropFlip = 'Flip';
-  rsPropFlipSeam = 'Flip seam';
-  rsPropMadeBy = 'Made by';
-  rsPropChangeType = 'Change edge type';
-  rsPropEdit = 'Change %s';
-  rsPropRename = 'Rename';
-  rsPropChangeRole = 'Change role';
-  rsPropLocked = 'Locked';
-  // rsPropLockedCaption = 'Cannot be moved or edited';
-  rsPropLockedHint = 'A locked object cannot be moved, edited or deleted, but its formulas still run';
-  rsPropLock = 'Lock';
-  rsPropUnlock = 'Unlock';
   rsPropSuggestHint = 'Suggest formulas that give this value (Alt+Down)';
   // On the suggestions button when the icons are missing
   rsPropSuggestCaption = 'f';
@@ -493,13 +452,6 @@ const
   QUEUED_CONVERT_TYPE = 0;
   QUEUED_MARKER = 1;
 
-// A note's draft value field: value1, value2
-function IsNoteValue(const FieldName: string): boolean;
-begin
-  Result := (Copy(FieldName, 1, Length(NOTE_VALUE_FIELD)) = NOTE_VALUE_FIELD) and
-    (StrToIntDef(Copy(FieldName, Length(NOTE_VALUE_FIELD) + 1, MaxInt), 0) > 0);
-end;
-
 function SameNames(const First, Second: TStringArray): boolean;
 var
   Index: integer;
@@ -510,12 +462,6 @@ begin
     if First[Index] <> Second[Index] then
       Exit(False);
   Result := True;
-end;
-
-// A line, curve or arc the user drew can change type; copies and parts follow other edges
-function CanChangeType(Node: TEvalNode): boolean;
-begin
-  Result := (Node.ClassType = TLineObject) or (Node.ClassType = TCurveObject) or (Node.ClassType = TArcObject);
 end;
 
 { TGridLabel }
@@ -657,23 +603,13 @@ procedure TPropertiesPanel.ShowSelection(const Keys: TStringArray);
 begin
   FSelectionCount := Length(Keys);
   if FSelectionCount = 1 then
-    FKey := EditableKey(Keys[0])
+    if Assigned(FDocument) then
+      FKey := PropertyKey(FDocument.Pattern, Keys[0])
+    else
+      FKey := Keys[0]
   else
     FKey := '';
   Rebuild;
-end;
-
-// A repeat is edited through its first point
-function TPropertiesPanel.EditableKey(const Key: string): string;
-var
-  Node: TEvalNode;
-begin
-  Result := Key;
-  if not Assigned(FDocument) then
-    Exit;
-  Node := FDocument.Pattern.FindNode(Key);
-  if (Node is TRepeatPoint) and (TRepeatPoint(Node).Index = 1) then
-    Result := TRepeatPoint(Node).Source.Key;
 end;
 
 procedure TPropertiesPanel.DocumentChanged(Document: TPatternDocument; Changes: TDocumentChanges);
@@ -718,6 +654,18 @@ begin
   end;
   if FDocument.ChangeRefused then
     Report(FDocument.Pattern.LastError);
+end;
+
+procedure TPropertiesPanel.BeginStep;
+begin
+  FCommitting := True;
+end;
+
+procedure TPropertiesPanel.EndStep(Done: boolean; const Reason: string);
+begin
+  FCommitting := False;
+  if not Done and (Reason <> '') then
+    Report(Reason);
 end;
 
 procedure TPropertiesPanel.Report(const AText: string);
@@ -1336,10 +1284,7 @@ begin
   Node := SelectedNode;
   if not Assigned(Node) then
     Exit;
-  if FRows[Edit.Tag].Kind = frName then
-    Result := Node.DisplayName
-  else
-    Result := FDocument.Pattern.FormulaText(Node, FRows[Edit.Tag].FieldName);
+  Result := PropertyFieldText(FDocument.Pattern, Node, FRows[Edit.Tag].FieldName);
 end;
 
 procedure TPropertiesPanel.RefreshValues;
@@ -1412,19 +1357,12 @@ begin
     for Section in FSections do
       if Section.TakesCommit(Node, Row.FieldName, Edit.Text) then
         Exit;
-  if Row.Kind = frName then
-  begin
-    BeginEdit(rsPropRename);
-    Done := FDocument.Pattern.Rename(Node, Edit.Text);
-  end
-  else
-  begin
-    BeginEdit(Format(rsPropEdit, [FieldCaption(Row.FieldName)]));
-    Done := FDocument.Pattern.SetFormula(Node, Row.FieldName, Edit.Text);
+  FCommitting := True;
+  try
+    Done := CommitPropertyField(FDocument, Node, Row.FieldName, Edit.Text, Reason, ErrorPos);
+  finally
+    FCommitting := False;
   end;
-  Reason := FDocument.Pattern.LastError;
-  ErrorPos := FDocument.Pattern.LastErrorPos;
-  EndEdit(Done);
   if Done then
   begin
     SetEditText(Edit, OriginalText(Edit));
@@ -1716,7 +1654,8 @@ procedure TCommonSection.LockClick(Sender: TObject);
 var
   APanel: TPropertiesPanel;
   Node: TEvalNode;
-  Lock, Done: boolean;
+  Reason: string;
+  Done: boolean;
 begin
   if FFilling then
     Exit;
@@ -1724,13 +1663,9 @@ begin
   Node := APanel.SelectedNode;
   if not Assigned(Node) then
     Exit;
-  Lock := FLockBox.Checked;
-  if Lock then
-    APanel.BeginEdit(rsPropLock)
-  else
-    APanel.BeginEdit(rsPropUnlock);
-  Done := APanel.Document.Pattern.SetLocked(Node, Lock);
-  APanel.EndEdit(Done);
+  APanel.BeginStep;
+  Done := SetLockedStep(APanel.Document, Node, FLockBox.Checked, Reason);
+  APanel.EndStep(Done, Reason);
 end;
 
 procedure TCommonSection.Refresh(Node: TEvalNode);
@@ -1771,10 +1706,7 @@ begin
     spType:
       if CanChangeType(Node) then
       begin
-        if Node is TArcObject then
-          FTypeBox := Panel.AddChoiceRow(rsPropType, [rsTypeArc, rsTypeLine], nil)
-        else
-          FTypeBox := Panel.AddChoiceRow(rsPropType, [rsTypeLine, rsTypeCurve], nil);
+        FTypeBox := Panel.AddChoiceRow(rsPropType, EdgeTypeChoices(Node), nil);
         FTypeBox.ItemIndex := FTypeBox.Items.IndexOf(TypeCaption(Node));
         FTypeBox.OnChange := @TypeChange;
       end;
@@ -1812,28 +1744,14 @@ end;
 procedure TEdgeSection.ConvertType(ItemIndex: integer);
 var
   APanel: TPropertiesPanel;
-  Pattern: TPattern;
   Node: TEvalNode;
-  Wanted, Reason: string;
-  Done: boolean;
+  Reason: string;
 begin
   if not Assigned(FTypeBox) then
     Exit;
   APanel := Panel;
   Node := APanel.SelectedNode;
-  if not (Node is TEdgeObject) or (ItemIndex < 0) or (ItemIndex >= FTypeBox.Items.Count) then
-    Exit;
-  Wanted := FTypeBox.Items[ItemIndex];
-  if Wanted = TypeCaption(Node) then
-    Exit;
-  Pattern := APanel.Document.Pattern;
-  APanel.Document.BeginChange(rsPropChangeType);
-  if Wanted = rsTypeLine then
-    Done := Assigned(Pattern.ConvertToLine(TEdgeObject(Node)))
-  else
-    Done := Assigned(Pattern.ConvertToCurve(TEdgeObject(Node)));
-  Reason := Pattern.LastError;
-  if APanel.Document.Commit(Done) then
+  if not (Node is TEdgeObject) or ConvertEdgeStep(APanel.Document, Node, ItemIndex, Reason) then
     Exit;
   // The box goes back to the type the edge still has
   APanel.Rebuild;
@@ -1843,13 +1761,13 @@ end;
 procedure TEdgeSection.RoleChange(Sender: TObject);
 var
   Node: TEvalNode;
+  Reason: string;
 begin
   Node := Panel.SelectedNode;
-  if not (Node is TEdgeObject) or (Ord(TEdgeObject(Node).Role) = FRoleBox.ItemIndex) then
+  if not (Node is TEdgeObject) or (FRoleBox.ItemIndex < 0) then
     Exit;
-  Panel.BeginEdit(rsPropChangeRole);
-  Panel.Document.Pattern.SetEdgeRole(TEdgeObject(Node), TEdgeRole(FRoleBox.ItemIndex));
-  Panel.EndEdit(True);
+  Panel.BeginStep;
+  Panel.EndStep(SetEdgeRoleStep(Panel.Document, Node, TEdgeRole(FRoleBox.ItemIndex), Reason), Reason);
 end;
 
 { TMarkerSection }
@@ -1861,17 +1779,16 @@ begin
   if Place <> spRows then
     Exit;
   // In the order of TPointMarker
-  FMarkerBox := Panel.AddChoiceRow(rsPropMarker, [rsPropMarkerPlain, rsPropMarkerHole, rsPropMarkerButton, rsPropMarkerMatch,
-    rsPropMarkerButtonhole], @MarkerChange);
+  FMarkerBox := Panel.AddChoiceRow(rsPropMarker, MarkerChoices, @MarkerChange);
   for Index := 0 to Node.FieldCount - 1 do
-    if OwnsField(Node, Node.Fields[Index].Name) then
+    if IsMarkerField(Node.Fields[Index].Name) then
       Panel.AddEditRow(FieldCaption(Node.Fields[Index].Name), frFormula, Node.Fields[Index].Name);
   FMarkedOnText := Panel.AddTextRow(rsPropMarkedOn, '');
 end;
 
 function TMarkerSection.OwnsField(Node: TEvalNode; const FieldName: string): boolean;
 begin
-  Result := (FieldName = MARKER_SIZE_FIELD) or (FieldName = MARKER_ANGLE_FIELD) or (FieldName = MARKER_OFFSET_FIELD);
+  Result := IsMarkerField(FieldName);
 end;
 
 procedure TMarkerSection.Refresh(Node: TEvalNode);
@@ -1905,16 +1822,10 @@ var
   APanel: TPropertiesPanel;
   Node: TEvalNode;
   Reason: string;
-  Done: boolean;
 begin
   APanel := Panel;
   Node := APanel.SelectedNode;
-  if not (Node is TDraftObject) or (TDraftObject(Node).Marker = Marker) then
-    Exit;
-  APanel.Document.BeginChange(rsPropChangeMarker);
-  Done := APanel.Document.Pattern.SetMarker(Node.Key, Marker);
-  Reason := APanel.Document.Pattern.LastError;
-  if APanel.Document.Commit(Done) then
+  if not (Node is TDraftObject) or SetMarkerStep(APanel.Document, Node, Marker, Reason) then
     Exit;
   // The box goes back to the marker the object still has
   APanel.Rebuild;
@@ -1949,7 +1860,7 @@ begin
     Panel.AddTextRow(rsPropRepeatFrom, NameOf(ARepeat.FirstPoint));
     Panel.AddTextRow(rsPropRepeatTo, NameOf(ARepeat.LastPoint));
   end;
-  FEndsBox := Panel.AddChoiceRow(rsPropEnds, [rsPropEndsInclude, rsPropEndsExclude], @EndsChange);
+  FEndsBox := Panel.AddChoiceRow(rsPropEnds, RepeatEndsChoices, @EndsChange);
 end;
 
 procedure TRepeatSection.Refresh(Node: TEvalNode);
@@ -1960,13 +1871,13 @@ end;
 procedure TRepeatSection.EndsChange(Sender: TObject);
 var
   Node: TEvalNode;
+  Reason: string;
 begin
   Node := Panel.SelectedNode;
-  if not (Node is TRepeatObject) or (Ord(not TRepeatObject(Node).IncludeEnds) = FEndsBox.ItemIndex) then
+  if not (Node is TRepeatObject) or (FEndsBox.ItemIndex < 0) then
     Exit;
-  Panel.BeginEdit(rsPropChangeEnds);
-  TRepeatObject(Node).IncludeEnds := FEndsBox.ItemIndex = 0;
-  Panel.EndEdit(True);
+  Panel.BeginStep;
+  Panel.EndStep(SetRepeatEndsStep(Panel.Document, Node, FEndsBox.ItemIndex = 0, Reason), Reason);
 end;
 
 { TSeamSection }
@@ -2009,13 +1920,13 @@ end;
 procedure TSeamSection.FlipClick(Sender: TObject);
 var
   Node: TEvalNode;
+  Reason: string;
 begin
   Node := Panel.SelectedNode;
   if not (Node is TSeamObject) then
     Exit;
-  Panel.BeginEdit(rsPropFlipSeam);
-  TSeamObject(Node).Reversed := not TSeamObject(Node).Reversed;
-  Panel.EndEdit(True);
+  Panel.BeginStep;
+  Panel.EndStep(FlipSeamStep(Panel.Document, Node, Reason), Reason);
 end;
 
 { TNoteSection }

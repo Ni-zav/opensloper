@@ -150,6 +150,70 @@
       .list-panel[hidden] {
         display: none;
       }
+      /* The Properties tab: a caption and a value to a row */
+      .properties {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 6px;
+      }
+      .properties[hidden] {
+        display: none;
+      }
+      .property-grid {
+        display: grid;
+        grid-template-columns: minmax(80px, 35%) minmax(0, 1fr);
+        gap: 4px 8px;
+        align-items: start;
+      }
+      .property-title {
+        grid-column: 1 / -1;
+        color: #80868f;
+      }
+      .property-caption {
+        overflow: hidden;
+        padding: 3px 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .property-value {
+        min-width: 0;
+      }
+      .property-value input[type='text'],
+      .property-value select {
+        box-sizing: border-box;
+        width: 100%;
+        font: inherit;
+      }
+      .property-value input[type='text'] {
+        padding: 2px 5px;
+      }
+      .property-value input.refused {
+        color: #d13438;
+        background: #ffd8d8;
+      }
+      .property-value input[readonly] {
+        color: #5d636b;
+        background: #f1f0ec;
+      }
+      .property-text {
+        display: block;
+        overflow: hidden;
+        padding: 3px 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .property-refusal,
+      .property-problem {
+        color: #d13438;
+      }
+      .property-refusal[hidden],
+      .property-problem[hidden] {
+        display: none;
+      }
+      .property-problem {
+        grid-column: 1 / -1;
+      }
       .list-header {
         display: flex;
         flex-direction: column;

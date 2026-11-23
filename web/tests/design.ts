@@ -1,8 +1,8 @@
 // Drives the built design app (out/design, from npm run build) in headless
 // Chromium as a user would: opens a regression pattern with its measurements,
 // checks the canvas drew it, adds a point with the Point tool, drags it with
-// the Select tool and undoes, then uses each drawing tool and drags a curve's
-// handle, a note and a callout's tip. It edits a measurement and saves the
+// the Select tool and undoes, edits it in the Properties tab, then uses each
+// drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
 // set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
 // this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
 // default, and SCREENSHOT, a file name without .png, keeps a picture of the end.
@@ -52,6 +52,11 @@ if (address === null || typeof address === 'string') {
   throw new Error('the server has no port');
 }
 const { port } = address;
+
+// A row's field or box in the Properties tab
+function field(row: string): string {
+  return `.property-value[data-row="${row}"] input`;
+}
 
 async function bodyData(page: Page, name: string): Promise<string> {
   return page.$eval('body', (body, key) => body.dataset[key] ?? '', name);
@@ -192,6 +197,7 @@ try {
   assert.equal((await calls()) - callsBefore, 0, 'an idle page asks the engine for nothing');
 
   // The side panel's lists: choosing an object selects it on the canvas, search narrows them
+  await page.click('.side-column [data-tab="objects"]');
   const shownRows = async (): Promise<number> => (await page.$$('.list-panel:not([hidden]) tbody tr')).length;
   await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
   const allRows = await shownRows();
@@ -327,6 +333,45 @@ try {
   await page.keyboard.press('z');
   await page.keyboard.up('Control');
   await waitForData(page, 'undo', 'Add point');
+
+  // The Properties tab shows the point: renamed, a formula refused and put back, then one taken,
+  // a marker chosen, which adds the marker's size, the point locked and unlocked, and its name put
+  // back, as the rectangle's corners are named after the points before them
+  await page.click('.side-column [data-tab="properties"]');
+  const fieldText = async (row: string): Promise<string> =>
+    page.$eval(field(row), (shown) => (shown instanceof HTMLInputElement ? shown.value : ''));
+  const retype = async (row: string, text: string): Promise<void> => {
+    await page.$eval(field(row), (shown) => {
+      if (shown instanceof HTMLInputElement) {
+        shown.focus();
+        shown.select();
+      }
+    });
+    await page.keyboard.type(text);
+    await page.keyboard.press('Enter');
+  };
+  await page.waitForSelector(field('name'), { timeout: TIMEOUT_MS });
+  const pointName = await fieldText('name');
+  await retype('name', 'Spot');
+  await waitForData(page, 'undo', 'Rename');
+  await retype('x', '12 +');
+  await page.waitForSelector('[data-row="x"] .property-refusal:not([hidden])', { timeout: TIMEOUT_MS });
+  assert.equal(await fieldText('x'), '12 +', 'kept to fix');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-row="x"] .property-refusal[hidden]', { timeout: TIMEOUT_MS });
+  await retype('y', `${await fieldText('y')} + 0`);
+  await waitForData(page, 'undo', 'Change Y');
+  await page.select('.property-value[data-row="marker"] select', '1');
+  await waitForData(page, 'undo', 'Change marker');
+  await page.waitForSelector(field('markerSize'), { timeout: TIMEOUT_MS });
+  await page.click(field('locked'));
+  await waitForData(page, 'undo', 'Lock');
+  await page.waitForSelector(`${field('x')}[readonly]`, { timeout: TIMEOUT_MS });
+  await page.click(field('locked'));
+  await waitForData(page, 'undo', 'Unlock');
+  await page.waitForSelector(`${field('x')}:not([readonly])`, { timeout: TIMEOUT_MS });
+  await retype('name', pointName);
+  await waitForData(page, 'undo', 'Rename');
 
   // The drawing tools, in the empty space left of the pattern
   await chooseTool(page, 'Line');
@@ -468,7 +513,7 @@ try {
   }
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
-    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point; drew a line, a curve, ` +
+    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab; drew a line, a curve, ` +
       `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),

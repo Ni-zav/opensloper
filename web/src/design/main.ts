@@ -11,6 +11,7 @@ import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
+import { PropertiesPanel } from '../ui/properties.ts';
 import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
@@ -25,6 +26,7 @@ const ICONS = {
   redo: 'arrow-forward-up',
   fit: 'zoom-scan',
   // The side panel's tabs
+  propertiesTab: 'adjustments-horizontal',
   objectsTab: 'list-tree',
   variablesTab: 'variable',
   measurementsTab: 'ruler-measure',
@@ -84,6 +86,7 @@ class DesignApp {
   private readonly tables: Tables;
   private readonly canvas: PatternCanvas;
   private readonly objects: ObjectsPanel;
+  private readonly properties: PropertiesPanel;
   private readonly measurements: MeasurementsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
@@ -99,6 +102,7 @@ class DesignApp {
       selectionChanged: (ids) => {
         document.body.dataset.selection = ids.join(' ');
         this.objects.showSelection(ids);
+        this.properties.showSelection(ids);
       },
       failed: showFailure,
     });
@@ -112,7 +116,9 @@ class DesignApp {
         this.run(this.canvas.zoomToSelection());
       },
     });
+    this.properties = new PropertiesPanel(this.document, { message: showMessage, failed: showFailure });
     const side = new SideTabs(element('side', HTMLElement));
+    side.addSection('properties', STRINGS.tabProperties, ICONS.propertiesTab, this.properties);
     side.addSection('objects', STRINGS.tabObjects, ICONS.objectsTab, this.objects);
     side.addSection(
       'variables',

@@ -387,6 +387,11 @@
         <UnitName Value="Sloper.Editor.PanelEdits"/>
       </Unit>
       <Unit>
+        <Filename Value="../editor/sloper.editor.propertyrows.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Editor.PropertyRows"/>
+      </Unit>
+      <Unit>
         <Filename Value="../ui/sloper.ui.rolespanel.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.UI.RolesPanel"/>

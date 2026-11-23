@@ -26,7 +26,8 @@ unit Sloper.UI.PieceProperties;
 interface
 
 uses
-  Classes, SysUtils, StdCtrls, Spin, Sloper.Core.Evaluator, Sloper.Core.Materials, Sloper.Core.Piece, Sloper.UI.Properties;
+  Classes, SysUtils, StdCtrls, Spin, Sloper.Core.Evaluator, Sloper.Core.Materials, Sloper.Core.Piece, Sloper.UI.Properties,
+  Sloper.Editor.PropertyRows;
 
 type
   TPieceSection = class(TPropertySection)

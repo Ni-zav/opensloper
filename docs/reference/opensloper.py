@@ -467,6 +467,24 @@ class OpenSloper:
             "description": description,
         })
 
+    def import_variables(self, *, path: str | None = None, text: str | None = None) -> Any:
+        """Imports the variables of another pattern file, as one undo step. A variable whose name
+        this pattern has is kept as it is, never overwritten, and an imported formula reading it
+        reads this pattern's one. Refused when the files are in different units.
+
+        Args:
+            path: The other pattern file (.sloper); give this or text.
+            text: The other pattern file's contents, in place of a path.
+
+        Returns:
+            `variables`, those added, each as `get_object` gives it; `kept`, the names this pattern
+            has with another formula; `same`, those it has with the same formula.
+        """
+        return self._send("import_variables", {
+            "path": path,
+            "text": text,
+        })
+
     def add_point(
         self,
         type: Literal["freePoint", "offsetPoint", "alongEdgePoint", "betweenPoint", "intersectPoint", "circleEdgePoint", "circleCirclePoint", "projectPoint"],

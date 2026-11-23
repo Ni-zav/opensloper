@@ -76,6 +76,7 @@ uses
   Sloper.Tests.ConvertEdge,
   Sloper.Tests.MergePoints,
   Sloper.Tests.Fragment,
+  Sloper.Tests.VariableImport,
   Sloper.Tests.Materials,
   Sloper.Tests.MaterialNeeded,
   Sloper.Tests.CLI,

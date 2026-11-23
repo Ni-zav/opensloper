@@ -150,6 +150,13 @@ resourcestring
   rsApiVariableName = 'Its name, used in formulas as #name';
   rsApiVariableFormula = 'Its formula';
   rsApiVariableDescription = 'What it is for';
+  rsApiImportVariables = 'Imports the variables of another pattern file, as one undo step. A variable whose name ' +
+    'this pattern has is kept as it is, never overwritten, and an imported formula reading it reads this ' +
+    'pattern''s one. Refused when the files are in different units.';
+  rsApiImportVariablesPath = 'The other pattern file (.sloper); give this or text';
+  rsApiImportVariablesText = 'The other pattern file''s contents, in place of a path';
+  rsApiReturnsImportVariables = '`variables`, those added, each as `get_object` gives it; `kept`, the names this ' +
+    'pattern has with another formula; `same`, those it has with the same formula';
 
   rsApiAddPoint = 'Adds a point of any type.';
   rsApiAddEdge = 'Adds an edge: a line, curve, curve path, circle, arc or offset edge.';
@@ -598,6 +605,9 @@ begin
   P('name', apText, True, rsApiVariableName);
   P('formula', apFormula, True, rsApiVariableFormula);
   P('description', apText, False, rsApiVariableDescription);
+  Method('import_variables', agObjects, rsApiImportVariables, rsApiReturnsImportVariables);
+  P('path', apText, False, rsApiImportVariablesPath);
+  P('text', apText, False, rsApiImportVariablesText);
   // Drafting
   Method('add_point', agDrafting, rsApiAddPoint, rsApiReturnsObject);
   P('type', apChoice, True, rsApiTypePoint, 'freePoint, offsetPoint, alongEdgePoint, betweenPoint, intersectPoint, ' +

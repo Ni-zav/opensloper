@@ -13,6 +13,38 @@ Changed, Fixed and Removed under each version.
 
 ## 0.7.0
 
+### Added
+
+- Import Variables: the Variables tab's Import… button, or File → Import
+  Variables…, adds the variables of another pattern file in one undo step,
+  so values set up once, such as your usual eases, need not be typed again.
+  A variable the pattern already has is kept, never overwritten, with a
+  warning when the file's formula differs: delete it and import again to
+  take the file's. Both patterns must be in the same unit.
+  `import_variables` does the same in the Automation API, from a path or
+  the file's contents (#79).
+- The skirt and bodice block tutorials can import their variables from the
+  example pattern instead of typing them in (#79).
+- While a field's formula suggestions are open, with Contextual labels the
+  canvas also labels the points and edges the suggestions in view name,
+  such as `Side_seam` in `Side_seam.angle`; scrolling the list changes
+  them. None still shows no labels (#82).
+- In the Automation API, `open` takes a pattern file's contents as `text`
+  in place of a path, `save` can give the contents back as `text` instead
+  of writing a file, `use_measurements` takes a measurement file's
+  contents, and the document's details give `measurementsFile`, the
+  measurement file's name as the pattern records it.
+- A first preview of the web version of the design app (#78), built from
+  the source with `opensloper-make.sh web`; it is not hosted yet. The
+  pattern engine runs in the browser as WebAssembly, and files stay on
+  your computer. It draws and edits patterns with the desktop's tools,
+  side panel tabs (Properties, Objects, Variables, Measurements,
+  Materials and Features), formula completion and suggestions, undo and
+  redo; opens and saves files in place where the browser allows, keeps
+  unsaved work in the browser, works offline as an installable app, opens
+  the user guide's examples, exports the draft as SVG and prints tiled
+  PDFs.
+
 ## 0.6.0
 
 ### Added

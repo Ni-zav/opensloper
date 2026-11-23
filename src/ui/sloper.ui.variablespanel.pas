@@ -17,8 +17,9 @@
 }
 
 // The variables tab of the side panel: the pattern's # variables, edited in
-// the grid, with Add and Delete. Name, formula and description are editable,
-// and each committed cell, add or delete is one undoable change to the pattern.
+// the grid, with Add, Delete and Import. Name, formula and description are
+// editable, and each committed cell, add or delete is one undoable change to
+// the pattern. Import asks the form, which chooses the file.
 unit Sloper.UI.VariablesPanel;
 
 {$mode ObjFPC}{$H+}
@@ -32,7 +33,9 @@ type
   TVariablesPanel = class(TListPanel)
   private
     FButtons: TPanel;
+    FOnImport: TNotifyEvent;
     procedure AddClick(Sender: TObject);
+    procedure ImportClick(Sender: TObject);
     procedure DeleteClick(Sender: TObject);
   protected
     function BuildRows: TListPanelRowArray; override;
@@ -40,11 +43,15 @@ type
     procedure DeleteRequested; override;
   public
     constructor Create(AOwner: TComponent); override;
+    // Import... was clicked: import the variables of another pattern file
+    property OnImport: TNotifyEvent read FOnImport write FOnImport;
   end;
 
 resourcestring
   rsVariablesAdd = '&Add';
   rsVariablesDelete = '&Delete';
+  rsVariablesImport = '&Import...';
+  rsVariablesImportHint = 'Import the variables of another pattern file, keeping those this pattern has';
   rsColumnVariableName = 'Name';
   rsColumnFormula = 'Formula';
   rsColumnVariableValue = 'Value';
@@ -57,7 +64,7 @@ uses
 
 constructor TVariablesPanel.Create(AOwner: TComponent);
 
-  procedure AddButton(const ACaption: string; Click: TNotifyEvent);
+  function AddButton(const ACaption: string; Click: TNotifyEvent): TButton;
   var
     Button: TButton;
   begin
@@ -69,6 +76,8 @@ constructor TVariablesPanel.Create(AOwner: TComponent);
     // Docked left to right in the order of their positions
     Button.Left := FButtons.ControlCount * 100;
     Button.OnClick := Click;
+    Button.ShowHint := True;
+    Result := Button;
   end;
 
 begin
@@ -82,6 +91,7 @@ begin
   SpaceBetween(FButtons);
   AddButton(rsVariablesAdd, @AddClick);
   AddButton(rsVariablesDelete, @DeleteClick);
+  AddButton(rsVariablesImport, @ImportClick).Hint := rsVariablesImportHint;
   SetColumns([rsColumnVariableName, rsColumnFormula, rsColumnVariableValue, rsColumnDescription], [110, 150, 70, 200]);
   SetEditableColumns([True, True, False, True], [False, True, False, False]);
 end;
@@ -126,6 +136,13 @@ begin
   end;
   // The new row is there now, as the panel refreshes on every change
   FocusCell(Key, Ord(vcName), True);
+end;
+
+procedure TVariablesPanel.ImportClick(Sender: TObject);
+begin
+  FinishEditing;
+  if Assigned(FOnImport) then
+    FOnImport(Self);
 end;
 
 procedure TVariablesPanel.DeleteClick(Sender: TObject);

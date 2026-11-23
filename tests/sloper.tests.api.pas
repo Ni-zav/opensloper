@@ -169,6 +169,7 @@ type
     procedure TestBreakPoint;
     procedure TestCopyAndPaste;
     procedure TestAddVariable;
+    procedure TestImportVariables;
     procedure TestAddIsOneUndoStep;
     procedure TestAddRefusals;
     procedure TestRefusedAddLeavesNoChangeOpen;
@@ -2049,6 +2050,40 @@ begin
   AssertNear('value', 10, Answer.Get('value', 0.0));
   Call('add_point', '{"type": "freePoint", "name": "A", "x": "#ease", "y": 0}');
   AssertNear('used', 10, Answer.Get('x', 0.0));
+end;
+
+procedure TTestAPI.TestImportVariables;
+var
+  Other: TPattern;
+  Params: TJSONObject;
+  Text: string;
+begin
+  Other := TPattern.Create;
+  try
+    Other.AddVariable('ease', '20');
+    Other.AddVariable('seam', '15');
+    Other.AddVariable('hem', '#seam + #ease');
+    Text := SavePatternToText(Other);
+  finally
+    FreeAndNil(Other);
+  end;
+  Call('add_variable', '{"name": "ease", "formula": "10"}');
+  Params := TJSONObject.Create(['text', Text]);
+  try
+    Call('import_variables', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  AssertEquals('added', 2, TJSONArray(Answer.Find('variables')).Count);
+  AssertEquals('kept', '["ease"]', Answer.Find('kept').AsJSON);
+  AssertNear('reads the one here', 25, TJSONObject(TJSONArray(Answer.Find('variables'))[1]).Get('value', 0.0));
+  Call('undo');
+  AssertEquals('one undo step', 1, FServer.Document.Pattern.VariableCount);
+  Call('import_variables', '{"text": "{}"}');
+  AssertEquals('not a pattern', RPC_REFUSED, ErrorCode);
+  Call('import_variables', '{}');
+  AssertEquals('neither', RPC_INVALID_PARAMS, ErrorCode);
+  AssertFalse('no change open', FServer.Document.ChangeOpen);
 end;
 
 procedure TTestAPI.TestAddIsOneUndoStep;

@@ -27,7 +27,7 @@ unit Sloper.Editor.PanelEdits;
 interface
 
 uses
-  SysUtils, StrUtils, Sloper.Core.Measurements, Sloper.Core.Pattern, Sloper.Document.PatternDocument;
+  SysUtils, StrUtils, Sloper.Core.Measurements, Sloper.Core.Pattern, Sloper.Core.VariableImport, Sloper.Document.PatternDocument;
 
 type
   // The Variables tab's columns, in order
@@ -126,6 +126,13 @@ function DeleteVariableStep(Document: TPatternDocument; const Key: string; out R
 // Reason saying why and ErrorPos (1-based, 0 for none) where in a formula.
 function CommitVariableCell(Document: TPatternDocument; const Key: string; Column: TVariableColumn; const Text: string;
   out Reason: string; out ErrorPos: integer): boolean;
+// Imports the variables of another pattern file as one undo step, keeping
+// those whose names the pattern has (Sloper.Core.VariableImport). Message
+// says what was imported and what kept; Warning is True when a variable was
+// kept with a formula other than the file's, or nothing could be imported.
+// False with Message as the reason when the file cannot be imported.
+function ImportVariablesStep(Document: TPatternDocument; const FileName: string; out Imported: TVariableImport;
+  out Message: string; out Warning: boolean): boolean;
 
 resourcestring
   rsPanelAddVariable = 'Add variable';
@@ -133,6 +140,18 @@ resourcestring
   rsPanelRenameVariable = 'Rename variable';
   rsPanelVariableFormula = 'Edit variable formula';
   rsPanelVariableDescription = 'Change variable description';
+  rsPanelImportVariables = 'Import variables';
+  // Count, file name
+  rsPanelImported = 'Imported %d variables from %s.';
+  rsPanelImportedOne = 'Imported 1 variable from %s.';
+  rsPanelImportedNone = 'No variables were imported from %s.';
+  rsPanelImportNoVariables = '%s has no variables.';
+  // The names kept
+  rsPanelImportKept = 'Kept %s, which this pattern already has with another formula; delete it and import again to use ' +
+    'the file''s.';
+  rsPanelImportKeptMany = 'Kept %s, which this pattern already has with other formulas; delete one and import again to ' +
+    'use the file''s.';
+  rsPanelImportSame = 'This pattern already has %s.';
   rsPanelNotVariable = 'This variable no longer exists';
   rsPanelBadValue = 'The value must be a number, such as 820 or 41.5';
   rsPanelNoValue = '@%s has no value yet';
@@ -199,6 +218,41 @@ begin
   Result := Document.Pattern.Delete(Node);
   Reason := Document.Pattern.LastError;
   Document.Commit(Result);
+end;
+
+function ImportVariablesStep(Document: TPatternDocument; const FileName: string; out Imported: TVariableImport;
+  out Message: string; out Warning: boolean): boolean;
+var
+  Shown: string;
+  Lines: TStringArray;
+begin
+  Warning := False;
+  Document.BeginChange(rsPanelImportVariables);
+  Result := ImportVariablesFromFile(Document.Pattern, FileName, Imported, Message);
+  // Nothing added is no change, and so no undo step
+  Document.Commit(Result);
+  if not Result then
+    Exit;
+  Shown := ExtractFileName(FileName);
+  Lines := nil;
+  case Length(Imported.Added) of
+    0:
+      if (Length(Imported.Kept) = 0) and (Length(Imported.Same) = 0) then
+        Insert(Format(rsPanelImportNoVariables, [Shown]), Lines, 0)
+      else
+        Insert(Format(rsPanelImportedNone, [Shown]), Lines, 0);
+    1: Insert(Format(rsPanelImportedOne, [Shown]), Lines, 0);
+    else
+      Insert(Format(rsPanelImported, [Length(Imported.Added), Shown]), Lines, 0);
+  end;
+  if Length(Imported.Kept) = 1 then
+    Insert(Format(rsPanelImportKept, [Imported.Kept[0]]), Lines, Length(Lines))
+  else if Length(Imported.Kept) > 1 then
+    Insert(Format(rsPanelImportKeptMany, [string.Join(', ', Imported.Kept)]), Lines, Length(Lines));
+  if (Length(Imported.Added) = 0) and (Length(Imported.Same) > 0) then
+    Insert(Format(rsPanelImportSame, [string.Join(', ', Imported.Same)]), Lines, Length(Lines));
+  Message := string.Join(' ', Lines);
+  Warning := (Length(Imported.Kept) > 0) or (Length(Imported.Added) = 0);
 end;
 
 function CommitVariableCell(Document: TPatternDocument; const Key: string; Column: TVariableColumn; const Text: string;

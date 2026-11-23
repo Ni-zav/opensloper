@@ -36,6 +36,13 @@ and description are all edited in the list, and each change is one undo
 step. A variable can read measurements and
 other variables, but not points or edges.
 
+To reuse variables you set up before, such as your usual eases, click Import…
+in the Variables tab (or File → Import Variables…) and choose another pattern
+file. Its variables are added in one undo step. A variable this pattern already
+has is kept as it is, never overwritten, and you are told when the file's
+formula differs: delete yours and import again to take the file's. Both
+patterns must be in the same unit; convert one first if they are not.
+
 ## Reading objects
 
 A formula can read a point's place or an edge's length and angle, by the

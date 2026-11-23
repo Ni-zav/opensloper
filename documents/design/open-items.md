@@ -26,6 +26,7 @@ Agreed, but not built.
 - **SVG stamps** (#9): a drawing from another app (a logo, an assembly diagram) placed and anchored like a note. Paths only (`<text>` refused, asking for it to be converted), drawn at true size from the SVG's units, and stored in the pattern as path data.
 - **Rounding curved corners** (#54): `AddRoundCorner` takes only straight edges, since `TCornerArc.Compute` places the arc in closed form. Only `Compute` needs a numerical branch: Newton's method for a centre at `radius` from both edges, starting from the straight answer; no solution, a radius too big for the bend, or a tangent point past an edge's end are invalid states. Splitting and moving pieces, notches and seams onto the arc already work for curves.
 - **Role styles in Preferences** (#56): overriding a role's colour, dash and weight.
+- **Importing variables in the web editor** (#79): the desktop's Import… on the Variables tab, reading the other file through the browser's file picker and `import_variables` with its text.
 
 **Publish app**
 

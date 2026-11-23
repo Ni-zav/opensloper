@@ -42,8 +42,10 @@ Its measurements use the names in the measurement catalogue:
 
 Start a new pattern (File → New), choose the measurement file (File →
 Measurements → Open Set…) and save the pattern beside it as
-`bodice-block.sloper`. Then add these variables in the Variables tab, as in the
-skirt tutorial:
+`bodice-block.sloper`. Then add these variables. The quickest way is to save
+[bodice-block.sloper](../examples/bodice-block/bodice-block.sloper) somewhere
+else, click Import… in the Variables tab and choose it; or type them in, as in
+the skirt tutorial:
 
 | Name | Formula | What it is |
 | --- | --- | --- |

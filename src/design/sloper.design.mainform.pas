@@ -81,6 +81,7 @@ type
     procedure MenuFilePublishClick(Sender: TObject);
     procedure MenuFileDrapeClick(Sender: TObject);
     procedure MenuFileExportDraftClick(Sender: TObject);
+    procedure ImportVariablesClick(Sender: TObject);
     procedure MenuFileQuitClick(Sender: TObject);
     procedure MenuEditUndoClick(Sender: TObject);
     procedure MenuEditRedoClick(Sender: TObject);
@@ -270,7 +271,7 @@ uses
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Core.Evaluator, Sloper.Core.Variables,
-  Sloper.API.Server, Sloper.API.Endpoint;
+  Sloper.API.Server, Sloper.API.Endpoint, Sloper.Core.VariableImport, Sloper.Editor.PanelEdits;
 
 const
   // The Claude tab's key in the side panel, and in the settings
@@ -307,6 +308,8 @@ resourcestring
   rsMenuFilePublish = '&Publish...';
   rsMenuFileDrape = '&Drape...';
   rsMenuFileExportDraft = 'E&xport Draft SVG...';
+  rsMenuFileImportVariables = '&Import Variables...';
+  rsImportVariablesTitle = 'Import Variables';
   rsExportDraftFilter = 'SVG (*.svg)|*.svg';
   rsExportDraftUnnamed = 'draft';
   rsExportDraftDone = 'Wrote %s';
@@ -659,6 +662,7 @@ begin
   FGarment.OnHoverPiece := @GarmentHoverPiece;
   FGarment.OnSelectPiece := @GarmentSelectPiece;
   FVariables := TVariablesPanel(AddList('variables', rsTabVariables, aiVariablesTab, TVariablesPanel.Create(Self)));
+  FVariables.OnImport := @ImportVariablesClick;
   FMeasurements := TMeasurementsPanel(AddList('measurements', rsTabMeasurements, aiMeasurements, TMeasurementsPanel.Create(Self)));
   FMeasurements.OnNewSet := @MeasurementsNewSet;
   FMeasurementWatch := TTimer.Create(Self);
@@ -928,7 +932,7 @@ end;
 // The File, Edit and View commands from the form, and the top toolbar
 procedure TMainForm.CreateCommands;
 var
-  DrapeItem: TMenuItem;
+  DrapeItem, ImportItem: TMenuItem;
 begin
   MenuFileNew.Action := FCommands.NewAction(rsMenuFileNew, aiNew, @MenuFileNewClick, CommandShortCut(kcNew));
   MenuFileOpen.Action := FCommands.NewAction(rsMenuFileOpen, aiOpen, @MenuFileOpenClick, CommandShortCut(kcOpen));
@@ -952,6 +956,10 @@ begin
   MenuFile.Insert(MenuFile.IndexOf(MenuFilePublish) + 1, DrapeItem);
   FExportDraftAction := FCommands.NewAction(rsMenuFileExportDraft, aiExportDraft, @MenuFileExportDraftClick);
   MenuFileExportDraft.Action := FExportDraftAction;
+  // Beside the measurements, the other values a pattern reads
+  ImportItem := TMenuItem.Create(MenuFile);
+  ImportItem.Action := FCommands.NewAction(rsMenuFileImportVariables, aiOpen, @ImportVariablesClick);
+  MenuFile.Insert(MenuFile.IndexOf(MenuFileMeasurements) + 1, ImportItem);
   MenuFileQuit.Action := FCommands.NewAction(rsMenuFileQuit, aiQuit, @MenuFileQuitClick, CommandShortCut(kcQuit));
   FUndoAction := FCommands.NewAction(rsMenuEditUndo, aiUndo, @MenuEditUndoClick, CommandShortCut(kcUndo));
   MenuEditUndo.Action := FUndoAction;
@@ -2080,6 +2088,43 @@ begin
   finally
     FreeAndNil(Dialog);
   end;
+end;
+
+// The variables of another pattern file; those this pattern has are kept, with
+// a warning when the file's formula differs. The imported ones are shown in
+// the Variables tab.
+procedure TMainForm.ImportVariablesClick(Sender: TObject);
+var
+  Dialog: TOpenDialog;
+  Imported: TVariableImport;
+  Message: string;
+  Warning: boolean;
+begin
+  Dialog := TOpenDialog.Create(Self);
+  try
+    Dialog.Title := rsImportVariablesTitle;
+    Dialog.Filter := OpenDialog.Filter;
+    Dialog.InitialDir := OpenDialog.InitialDir;
+    if FDocument.FileName <> '' then
+      Dialog.InitialDir := ExtractFileDir(FDocument.FileName);
+    if not Dialog.Execute then
+      Exit;
+    if not ImportVariablesStep(FDocument, Dialog.FileName, Imported, Message, Warning) then
+    begin
+      MessageDlg(Message, mtError, [mbOK], 0);
+      Exit;
+    end;
+  finally
+    FreeAndNil(Dialog);
+  end;
+  if Length(Imported.Added) > 0 then
+  begin
+    FSidePanel.ActiveContent := FVariables.Parent;
+    FVariables.ChooseKeys(Imported.Added);
+  end;
+  StatusBar.Panels[PANEL_MESSAGE].Text := Message;
+  if Warning then
+    MessageDlg(Message, mtWarning, [mbOK], 0);
 end;
 
 // A publish window already showing the pattern's layout comes to the front;

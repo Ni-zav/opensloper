@@ -27,7 +27,7 @@ interface
 
 uses
   fpcunit, testregistry, Sloper.Tests.TestCase, Sloper.Core.Measurements, Sloper.Document.PatternDocument,
-  Sloper.Editor.PanelEdits;
+  Sloper.Core.VariableImport, Sloper.Editor.PanelEdits;
 
 type
   TTestPanelEdits = class(TOSTestCase)
@@ -43,6 +43,9 @@ type
     procedure TearDown; override;
   published
     procedure TestVariableFormulaIsOneStep;
+    // One undo step; a name already here with another formula is kept, with a warning
+    procedure TestImportVariables;
+    procedure TestImportNothingNew;
     procedure TestVariableRename;
     procedure TestVariableDescription;
     procedure TestRefusedFormulaChangesNothing;
@@ -70,7 +73,7 @@ implementation
 
 uses
   SysUtils, Sloper.Core.Materials, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.JSON, Sloper.Core.PatternMaterials,
-  Sloper.Core.Pattern;
+  Sloper.Core.Pattern, Sloper.Core.PatternFile;
 
 procedure TTestPanelEdits.SetUp;
 begin
@@ -89,6 +92,7 @@ begin
   FreeAndNil(FPending);
   FreeAndNil(FDocument);
   DeleteFile(ConcatPaths([FFolder, 'set.slm']));
+  DeleteFile(ConcatPaths([FFolder, 'other.sloper']));
   RemoveDir(FFolder);
 end;
 
@@ -145,6 +149,60 @@ begin
   AssertTrue('undo', FDocument.Undo);
   Variable := TVariable(FDocument.Pattern.FindNode(VariableKey('double_ease')));
   AssertNear('back after one undo', 20, Variable.Value);
+end;
+
+function WriteOther(const Folder: string): string;
+var
+  Other: TPattern;
+  Err: string;
+begin
+  Result := ConcatPaths([Folder, 'other.sloper']);
+  Other := TPattern.Create;
+  try
+    Other.AddVariable('ease', '25');
+    Other.AddVariable('seam', '15');
+    Other.AddVariable('hem', '#seam * 2');
+    if not SavePatternToFile(Other, Result, Err) then
+      raise Exception.Create(Err);
+  finally
+    FreeAndNil(Other);
+  end;
+end;
+
+procedure TTestPanelEdits.TestImportVariables;
+var
+  Imported: TVariableImport;
+  Message: string;
+  Warning: boolean;
+begin
+  AssertTrue(ImportVariablesStep(FDocument, WriteOther(FFolder), Imported, Message, Warning));
+  AssertEquals('added', 2, Length(Imported.Added));
+  AssertNear('worked out', 30, TVariable(FDocument.Pattern.FindNode(VariableKey('hem'))).Value);
+  AssertNear('kept', 10, TVariable(FDocument.Pattern.FindNode(VariableKey('ease'))).Value);
+  AssertTrue('warned', Warning);
+  AssertEquals(Format(rsPanelImported, [2, 'other.sloper']) + ' ' + Format(rsPanelImportKept, ['ease']), Message);
+  AssertEquals('one step', rsPanelImportVariables, FDocument.UndoDescription);
+  AssertTrue('undo', FDocument.Undo);
+  AssertEquals('gone', 2, FDocument.Pattern.VariableCount);
+end;
+
+procedure TTestPanelEdits.TestImportNothingNew;
+var
+  Imported: TVariableImport;
+  Message: string;
+  Warning: boolean;
+  FileName: string;
+begin
+  FileName := WriteOther(FFolder);
+  AssertTrue(ImportVariablesStep(FDocument, FileName, Imported, Message, Warning));
+  AssertTrue(ImportVariablesStep(FDocument, FileName, Imported, Message, Warning));
+  AssertEquals('nothing added', 0, Length(Imported.Added));
+  AssertTrue('warned', Warning);
+  AssertEquals('no second step', 'Import variables', FDocument.UndoDescription);
+  AssertTrue('undo', FDocument.Undo);
+  AssertFalse('only the one step', FDocument.UndoDescription = rsPanelImportVariables);
+  AssertFalse('refused', ImportVariablesStep(FDocument, ConcatPaths([FFolder, 'none.sloper']), Imported, Message, Warning));
+  AssertTrue('why', Message <> '');
 end;
 
 procedure TTestPanelEdits.TestVariableRename;

@@ -106,6 +106,7 @@ type
     function DoRender(Params: TJSONObject): TJSONData;
     function RenderGarment(Params: TJSONObject; const RenderFormat: string): TJSONData;
     function DoAddVariable(Params: TJSONObject): TJSONData;
+    function DoImportVariables(Params: TJSONObject): TJSONData;
     function DoAddPoint(Params: TJSONObject): TJSONData;
     function DoAddEdge(Params: TJSONObject): TJSONData;
     function DoSplitEdge(Params: TJSONObject): TJSONData;
@@ -230,6 +231,7 @@ resourcestring
   rsApiUnknownName = 'There is no object or variable named "%s"';
   rsApiNoFileName = 'The pattern has no file name yet; give a "path"';
   rsApiPathOrText = 'Give either "path" or "text"';
+  rsApiImportVariablesChange = 'Import variables';
   rsApiTextNoMeasurements = 'A pattern given as text takes its measurement file through use_measurements';
   rsApiSaveExtension = '"%s" is not a .sloper file; patterns are saved only as .sloper files';
   rsApiNotAPattern = '"%s" is not a pattern file, so it is not replaced';
@@ -311,7 +313,7 @@ uses
   Sloper.Core.Arrange, Sloper.Core.EvalTypes, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Core.PatternCheck, Sloper.Core.PatternFile, Sloper.Core.Pattern,
   Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.Geometry, Sloper.Core.PieceDetect, Sloper.Core.SeamSuggest, Sloper.Core.Transform,
   Sloper.Core.Features,
-  Sloper.Core.Settings, Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.UnitConvert, Sloper.Core.Fragment, base64,
+  Sloper.Core.Settings, Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.UnitConvert, Sloper.Core.Fragment, Sloper.Core.VariableImport, base64,
   Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.Garment, Sloper.Output.GarmentSVG, Sloper.Output.GarmentPNG,
   Sloper.Output.LayoutExport, Sloper.Core.Version, Sloper.API.Methods;
 
@@ -1485,6 +1487,50 @@ begin
   Description := OptionalString(Params, 'description');
   BeginChange(Format(rsApiAdd, [VARIABLE_TYPE]));
   Result := AddedNode(FDocument.Pattern.AddVariable(VariableName, Formula, Description));
+end;
+
+// Reading a file loses no work, so the design window allows a path too
+function TApiServer.DoImportVariables(Params: TJSONObject): TJSONData;
+var
+  Path, Text, Reason, Key: string;
+  HasText, Done: boolean;
+  Imported: TVariableImport;
+  List: TJSONArray;
+begin
+  Path := OptionalString(Params, 'path');
+  HasText := Assigned(Params.Find('text'));
+  Text := OptionalString(Params, 'text');
+  if (Path = '') = not HasText then
+    raise EApiError.Create(RPC_INVALID_PARAMS, rsApiPathOrText);
+  BeginChange(rsApiImportVariablesChange);
+  if HasText then
+    Done := ImportVariablesFromText(FDocument.Pattern, Text, Imported, Reason)
+  else
+    Done := ImportVariablesFromFile(FDocument.Pattern, Path, Imported, Reason);
+  if not Done then
+  begin
+    FDocument.CancelChange;
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  end;
+  EndChange;
+  Result := TJSONObject.Create;
+  try
+    List := TJSONArray.Create;
+    TJSONObject(Result).Add('variables', List);
+    for Key in Imported.Added do
+      List.Add(NodeToJSON(FDocument, FDocument.Pattern.FindNode(Key)));
+    List := TJSONArray.Create;
+    TJSONObject(Result).Add('kept', List);
+    for Key in Imported.Kept do
+      List.Add(Key);
+    List := TJSONArray.Create;
+    TJSONObject(Result).Add('same', List);
+    for Key in Imported.Same do
+      List.Add(Key);
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
 end;
 
 // Fields as in a pattern file. Inputs are read before the change opens, since
@@ -3042,6 +3088,7 @@ begin
     'redo': Result := DoRedo;
     'render': Result := DoRender(Params);
     'add_variable': Result := DoAddVariable(Params);
+    'import_variables': Result := DoImportVariables(Params);
     'add_point': Result := DoAddPoint(Params);
     'add_edge': Result := DoAddEdge(Params);
     'split_edge': Result := DoSplitEdge(Params);

@@ -96,6 +96,11 @@
         <UnitName Value="Sloper.Tests.Fragment"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.variableimport.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.VariableImport"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.seam.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.Seam"/>

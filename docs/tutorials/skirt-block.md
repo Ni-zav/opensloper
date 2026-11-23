@@ -35,6 +35,11 @@ The block is worked out from a few values that several points share. Make each
 as a variable: in the Variables tab click Add, type its name and press
 ++enter++, then type its formula in the Formula cell.
 
+To skip the typing, save
+[skirt-block.sloper](../examples/skirt-block/skirt-block.sloper) somewhere,
+click Import… in the Variables tab and choose it: its variables are added, the
+same as this table.
+
 | Name | Formula | What it is |
 | --- | --- | --- |
 | `hip_ease` | `40` | Ease added round the hip |

@@ -39,6 +39,8 @@ formulas edited with completion, refused entries kept in red with the reason,
 and choices, boxes, numbers, colours and buttons, with a piece's cut, fold,
 darts, own allowances, ends, grainline, material and fill, and a note's text,
 size, look and font, with formula suggestions under a formula's row.
+Work not yet saved is kept in the browser (OPFS) and offered back after
+the tab that had it closes.
 
 ## Setting up
 

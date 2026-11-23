@@ -92,6 +92,12 @@ try {
   await session.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
   await page.setViewport({ width: 1200, height: 800 });
   const problems = watchProblems(page);
+  // Opening an example over unsaved changes asks first
+  const dialogs: string[] = [];
+  page.on('dialog', (dialog) => {
+    dialogs.push(dialog.message());
+    void dialog.accept();
+  });
   // Opening and saving through uploads and downloads, as where the browser
   // has no File System Access (files.ts drives that)
   await page.evaluateOnNewDocument(() => {
@@ -505,6 +511,7 @@ try {
     const found = await page.evaluate(async (path) => (await fetch(`examples/${path}`)).ok, example);
     assert.ok(found, `the example ${example} is on the site`);
   }
+  const dialogsBefore = dialogs.length;
   await page.select('#examples', 'circle-skirt/circle-skirt.sloper');
   await page.waitForFunction(
     () => document.querySelector('#status')?.textContent === 'Measurements from size-table.slm',
@@ -513,6 +520,11 @@ try {
     },
   );
   assert.equal(await page.title(), 'circle-skirt.sloper — OpenSloper', 'the example opened');
+  assert.deepEqual(
+    dialogs.slice(dialogsBefore),
+    ['The pattern has changes not saved. Drop them?'],
+    'asked before dropping the changes',
+  );
 
   // SCREENSHOT names a PNG file to keep what the canvas shows at the end
   if ((process.env.SCREENSHOT ?? '') !== '') {

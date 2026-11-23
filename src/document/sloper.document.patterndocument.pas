@@ -155,6 +155,11 @@ type
     function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
     // The pattern file's contents, now counted as saved
     function SaveToText: string;
+    // The same contents without counting them saved, as the web editor keeps
+    // work in progress in the browser
+    function SnapshotText: string;
+    // Counts the pattern as not saved, as after work in progress is restored
+    procedure MarkUnsaved;
     // Makes the set in FileName current, or none for ''. Not an undo step,
     // but the pattern records it, so the document becomes modified. On
     // failure the current set is kept.
@@ -590,6 +595,20 @@ begin
   Result := SavePatternToText(FPattern);
   FSavedCount := FUndo.Count;
   FMeasurementsChanged := False;
+  Notify([dcFile]);
+end;
+
+function TPatternDocument.SnapshotText: string;
+begin
+  RequireNoChange;
+  FPattern.MeasurementFile := MeasurementFileFor(FFileName);
+  Result := SavePatternToText(FPattern);
+end;
+
+procedure TPatternDocument.MarkUnsaved;
+begin
+  // As after undoing past the last save: no state of the history is the saved one
+  FSavedCount := -1;
   Notify([dcFile]);
 end;
 

@@ -69,6 +69,8 @@ type
     function DoDragEnd(Cancel: boolean): TJSONData;
     procedure DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
     function DoChanges: TJSONData;
+    function DoSnapshot: TJSONData;
+    function DoMarkUnsaved: TJSONData;
     // The snap for the call's place, radius and anchor
     function CallSnap(Params: TJSONObject): TSnap;
     function FieldValuesFor(Params: TJSONObject): TFieldValues;
@@ -326,6 +328,15 @@ resourcestring
   rsEditorChanges = 'What changed since this was last asked, as the desktop document tells its panels, with what ' +
     'undo and redo would do and whether the pattern is modified. The editor asks after each call that may change ' +
     'something, and updates what the changes name.';
+  rsEditorSnapshot = 'The pattern''s work in progress, for the web editor to keep in the browser so a closed tab ' +
+    'loses nothing: the pattern file''s contents, without counting them saved, and the measurement set given as ' +
+    'text. Refused while a drag is open.';
+  rsEditorSnapshotReturns = '`text`, the pattern file''s contents; `measurementsText`, the set''s file as given ' +
+    'with `use_measurements` and changed since, or null when the set is read from disk or there is none; ' +
+    '`measurementsFile`, where the pattern records the set; `modified`';
+  rsEditorMarkUnsaved = 'Counts the pattern as not saved, as after its work in progress is opened again; not an ' +
+    'undo step.';
+  rsEditorMarkUnsavedReturns = '`modified`, true';
   rsEditorChangesReturns = '`changes`, any of pattern (definitions or results), objectsReplaced (every object is new, ' +
     'as after undo or open), measurements (another set), history, file and view; `generation`, which grows when ' +
     'another pattern is opened; `canUndo`, `canRedo`, `undo` and `redo`, the steps'' names; `modified`';
@@ -522,6 +533,8 @@ begin
     AddApiParam(Built, 'value', apNumber, True, rsEditorSuggestItemValue);
     AddApiMethod(Built, 'editor_tables', rsEditorTables, rsEditorTablesReturns, True);
     AddApiMethod(Built, 'editor_changes', rsEditorChanges, rsEditorChangesReturns, True);
+    AddApiMethod(Built, 'editor_snapshot', rsEditorSnapshot, rsEditorSnapshotReturns, True);
+    AddApiMethod(Built, 'editor_mark_unsaved', rsEditorMarkUnsaved, rsEditorMarkUnsavedReturns);
     AddApiMethod(Built, 'editor_drag_begin', rsEditorDragBegin, rsEditorDragBeginReturns);
     AddApiParam(Built, 'id', apTarget, True, rsEditorDragTarget);
     AddApiParam(Built, 'field', apText, False, rsEditorDragField);
@@ -1720,6 +1733,29 @@ begin
     Document.CanRedo, 'undo', Document.UndoDescription, 'redo', Document.RedoDescription, 'modified', Document.Modified]);
 end;
 
+function TEditorApiServer.DoSnapshot: TJSONData;
+var
+  Answer: TJSONObject;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  Answer := TJSONObject.Create(['text', Document.SnapshotText, 'measurementsFile', Document.Pattern.MeasurementFile,
+    'modified', Document.Modified]);
+  if Document.MeasurementsInMemory then
+    Answer.Add('measurementsText', Document.MeasurementText)
+  else
+    Answer.Add('measurementsText', TJSONNull.Create);
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoMarkUnsaved: TJSONData;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  Document.MarkUnsaved;
+  Result := TJSONObject.Create(['modified', Document.Modified]);
+end;
+
 // The handle of Edge named by its length field, which names one handle of
 // a curve; False when it has none such, as before it is worked out
 function FindHandle(Edge: TEdgeObject; const LengthField: string; out Handle: TCurveHandle): boolean;
@@ -2070,6 +2106,8 @@ begin
     'editor_suggest_preview': Result := DoSuggestPreview(Params);
     'editor_note_preview': Result := DoNotePreview(Params);
     'editor_changes': Result := DoChanges;
+    'editor_snapshot': Result := DoSnapshot;
+    'editor_mark_unsaved': Result := DoMarkUnsaved;
     'editor_drag_begin': Result := DoDragBegin(Params);
     'editor_drag_to': Result := DoDragTo(Params);
     'editor_drag_end': Result := DoDragEnd(False);

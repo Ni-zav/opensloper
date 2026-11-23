@@ -127,6 +127,10 @@ type
     procedure TestSuggestRows;
     // A note drawn with its text as typed, draft values worked out, changing nothing
     procedure TestNotePreview;
+    // Work in progress: the pattern and its set as text, still counted unsaved
+    procedure TestSnapshot;
+    // A pattern opened again from work in progress counts as not saved
+    procedure TestMarkUnsaved;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
     // Its edits, each one undo step, refused with the reason
@@ -1584,6 +1588,40 @@ begin
   AssertEquals('unchanged', 'Fold', Answer.Strings['text']);
   Call('editor_note_preview', '{"name": "B", "text": "x"}');
   AssertEquals('only a note', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestSnapshot;
+begin
+  Call('use_measurements', '{"text": "' + StringToJSONString(SIZE_TABLE) + '", "file": "block.slm"}');
+  Answer;
+  Call('add_point', '{"type": "freePoint", "name": "Spot", "x": "@waist / 4", "y": 0}');
+  Answer;
+  Call('editor_snapshot');
+  AssertTrue('the pattern', Pos('"Spot"', Answer.Strings['text']) > 0);
+  AssertEquals('its set as given', SIZE_TABLE, Answer.Strings['measurementsText']);
+  AssertEquals('where the pattern records it', 'block.slm', Answer.Strings['measurementsFile']);
+  AssertTrue('still unsaved', Answer.Booleans['modified']);
+  Call('editor_changes');
+  AssertTrue('not counted saved', Answer.Booleans['modified']);
+  // The copy opens as the pattern it was
+  Call('editor_snapshot');
+  Call('open', '{"text": "' + StringToJSONString(Answer.Strings['text']) + '"}');
+  AssertEquals('the measurement file it names', 'block.slm', Answer.Strings['measurementsFile']);
+  Call('get_object', '{"name": "Spot"}');
+  AssertEquals('the point kept', 'Spot', Answer.Strings['name']);
+end;
+
+procedure TTestEditorServer.TestMarkUnsaved;
+begin
+  AddSquare;
+  Call('save', '{"text": true}');
+  Call('editor_changes');
+  AssertFalse('saved', Answer.Booleans['modified']);
+  Call('editor_mark_unsaved');
+  AssertTrue('the answer says so', Answer.Booleans['modified']);
+  Call('editor_changes');
+  AssertTrue('unsaved', Answer.Booleans['modified']);
+  AssertEquals('the title changes', '["file"]', Answer.Arrays['changes'].AsJSON);
 end;
 
 initialization

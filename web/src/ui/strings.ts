@@ -24,6 +24,12 @@ export const STRINGS = {
   findMeasurements: (file: string): string =>
     `The pattern uses the measurement file ${file}: find it in the folder that holds them, or choose it with Measurements…`,
   findMeasurementsButton: 'Find it…',
+  // Work in progress a closed tab left
+  workLeftOver: (name: string, when: string): string => `Unsaved work on ${name} from ${when} was kept`,
+  workOpen: 'Open it',
+  workDiscard: 'Discard',
+  workOpened: (name: string): string => `Opened the unsaved work on ${name}; save it to keep it`,
+  discardChanges: 'The pattern has changes not saved. Drop them?',
   undo: 'Undo',
   redo: 'Redo',
   undoStep: (step: string): string => `Undo ${step}`,

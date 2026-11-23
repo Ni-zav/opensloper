@@ -4,6 +4,7 @@
 // folder the user grants once, which the browser keeps (IndexedDB holds the
 // folder's handle, never the files). Elsewhere the app falls back to
 // uploading and downloading. Nothing leaves the machine.
+import { allRecords, FOLDERS_STORE, putRecord } from './browserStore.ts';
 import { STRINGS } from './strings.ts';
 
 // The pickers and permissions, which the DOM library does not declare yet
@@ -44,10 +45,6 @@ const MEASUREMENTS_TYPE: PickerType = {
 // The pickers remember the folder last used under these
 const PATTERNS_ID = 'patterns';
 const MEASUREMENTS_ID = 'measurements';
-
-// Where the granted folders are kept between visits
-const DATABASE = 'opensloper-files';
-const FOLDERS = 'folders';
 
 function isFilePickers(value: object): value is FilePickers {
   return ['showOpenFilePicker', 'showSaveFilePicker', 'showDirectoryPicker'].every(
@@ -132,56 +129,8 @@ async function fileAt(folder: FileSystemDirectoryHandle, parts: string[]): Promi
   }
 }
 
-async function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1);
-    request.addEventListener('upgradeneeded', () => {
-      request.result.createObjectStore(FOLDERS, { autoIncrement: true });
-    });
-    request.addEventListener('success', () => {
-      resolve(request.result);
-    });
-    request.addEventListener('error', () => {
-      reject(request.error ?? new Error(`cannot open ${DATABASE}`));
-    });
-  });
-}
-
 async function storedFolders(): Promise<FileSystemDirectoryHandle[]> {
-  const database = await openDatabase();
-  try {
-    return await new Promise((resolve, reject) => {
-      const request = database.transaction(FOLDERS).objectStore(FOLDERS).getAll();
-      request.addEventListener('success', () => {
-        resolve(
-          request.result.filter((item): item is FileSystemDirectoryHandle => item instanceof FileSystemDirectoryHandle),
-        );
-      });
-      request.addEventListener('error', () => {
-        reject(request.error ?? new Error(`cannot read ${FOLDERS}`));
-      });
-    });
-  } finally {
-    database.close();
-  }
-}
-
-async function storeFolder(folder: FileSystemDirectoryHandle): Promise<void> {
-  const database = await openDatabase();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction(FOLDERS, 'readwrite');
-      transaction.objectStore(FOLDERS).add(folder);
-      transaction.addEventListener('complete', () => {
-        resolve();
-      });
-      transaction.addEventListener('error', () => {
-        reject(transaction.error ?? new Error(`cannot write ${FOLDERS}`));
-      });
-    });
-  } finally {
-    database.close();
-  }
+  return (await allRecords(FOLDERS_STORE)).filter((item) => item instanceof FileSystemDirectoryHandle);
 }
 
 // What a search beside the pattern found: the file, or a folder that holds
@@ -282,7 +231,7 @@ export class FileAccess {
     if (!(await this.isKnown(folder))) {
       this.folders.push(folder);
       try {
-        await storeFolder(folder);
+        await putRecord(FOLDERS_STORE, folder);
       } catch {
         // Kept for this visit only
       }

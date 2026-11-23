@@ -12,6 +12,7 @@ import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
+import { Autosave, type Work } from '../ui/autosave.ts';
 import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
@@ -57,13 +58,16 @@ function showMessage(text: string): void {
   status.textContent = text;
 }
 
-// A message with a button that does something about it, as finding a file
-function showAction(text: string, caption: string, action: () => void): void {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = caption;
-  button.addEventListener('click', action);
-  status.replaceChildren(text, ' ', button);
+// A message with buttons that do something about it, as finding a file
+function showActions(text: string, actions: [caption: string, action: () => void][]): void {
+  status.replaceChildren(text);
+  for (const [caption, action] of actions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = caption;
+    button.addEventListener('click', action);
+    status.append(' ', button);
+  }
 }
 
 function showFailure(error: unknown): void {
@@ -110,6 +114,8 @@ class DesignApp {
   private readonly files = FileAccess.create();
   private patternHandle: FileSystemFileHandle | undefined;
   private measurementsHandle: FileSystemFileHandle | undefined;
+  // Unsaved work kept in the browser, and offered back once the tab that left it has closed
+  private readonly autosave: Autosave;
 
   constructor(engine: Engine, tables: Tables) {
     this.document = new PatternDocument(engine);
@@ -248,6 +254,18 @@ class DesignApp {
     this.document.addListener(() => {
       this.updateState();
     });
+    this.autosave = new Autosave(
+      this.document,
+      () => ({
+        fileName: this.document.fileName,
+        patternHandle: this.patternHandle,
+        measurementsHandle: this.measurementsHandle,
+      }),
+      (kept) => {
+        // For the tests
+        document.body.dataset.workKept = String(kept);
+      },
+    );
     this.useTool(SELECT_TOOL);
     this.updateState();
   }
@@ -255,6 +273,56 @@ class DesignApp {
   async start(): Promise<void> {
     await this.document.refresh();
     this.updateState();
+    this.autosave.start();
+    await this.offerLeftOver();
+  }
+
+  // The newest work a closed tab left, to open again or drop; then the next
+  private async offerLeftOver(): Promise<void> {
+    const [work] = await this.autosave.leftOver();
+    if (work === undefined) {
+      return;
+    }
+    const name = work.fileName === '' ? STRINGS.untitled : work.fileName;
+    showActions(STRINGS.workLeftOver(name, new Date(work.time).toLocaleString()), [
+      [
+        STRINGS.workOpen,
+        () => {
+          this.run(this.openWork(work));
+        },
+      ],
+      [
+        STRINGS.workDiscard,
+        () => {
+          showMessage('');
+          this.run(this.autosave.discard(work).then(async () => this.offerLeftOver()));
+        },
+      ],
+    ]);
+  }
+
+  // Opens the work as it was, still to be saved, with the files it came from
+  private async openWork(work: Work): Promise<void> {
+    if (!this.mayDropChanges()) {
+      return;
+    }
+    const { text, measurementsText } = await this.autosave.texts(work);
+    await this.openPattern(new File([text], work.fileName), work.patternHandle);
+    if (measurementsText !== undefined) {
+      // The pattern keeps the file it records
+      await this.document.call('use_measurements', { text: measurementsText });
+      this.wantedMeasurements = '';
+      this.measurementsHandle = work.measurementsHandle;
+    }
+    this.document.fileName = work.fileName;
+    await this.document.call('editor_mark_unsaved');
+    await this.autosave.discard(work);
+    showMessage(STRINGS.workOpened(work.fileName === '' ? STRINGS.untitled : work.fileName));
+  }
+
+  // Opening something else drops unsaved changes, kept only for this tab, so the user is asked first
+  private mayDropChanges(): boolean {
+    return (!this.document.state.modified || window.confirm(STRINGS.discardChanges)) && this.mayDropMeasurementEdits();
   }
 
   private run(pending: Promise<void>): void {
@@ -268,7 +336,7 @@ class DesignApp {
   }
 
   private open(): void {
-    if (!this.mayDropMeasurementEdits()) {
+    if (!this.mayDropChanges()) {
       return;
     }
     const files = this.files;
@@ -351,9 +419,14 @@ class DesignApp {
   }
 
   private offerFind(wanted: string): void {
-    showAction(STRINGS.findMeasurements(wanted), STRINGS.findMeasurementsButton, () => {
-      this.run(this.findMeasurements());
-    });
+    showActions(STRINGS.findMeasurements(wanted), [
+      [
+        STRINGS.findMeasurementsButton,
+        () => {
+          this.run(this.findMeasurements());
+        },
+      ],
+    ]);
   }
 
   // Another pattern or set drops the measurement edits not saved, so the user is asked first
@@ -383,7 +456,7 @@ class DesignApp {
     box.addEventListener('change', () => {
       const path = box.value;
       box.value = '';
-      if (path !== '' && this.mayDropMeasurementEdits()) {
+      if (path !== '' && this.mayDropChanges()) {
         this.run(this.openExample(path));
       }
     });

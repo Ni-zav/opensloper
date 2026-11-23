@@ -93,12 +93,20 @@ function AddMaterialStep(Document: TPatternDocument): integer;
 // Deletes the material at Index as one undo step; False refuses, with Reason
 function DeleteMaterialStep(Document: TPatternDocument; Index: integer; out Reason: string): boolean;
 
+// Adds a variable named as the next free one, with formula 0, as one undo
+// step; its Key, or False with the Reason
+function AddVariableStep(Document: TPatternDocument; out Key, Reason: string): boolean;
+// Deletes the variable as one undo step; False refuses, with Reason, as when
+// something reads it
+function DeleteVariableStep(Document: TPatternDocument; const Key: string; out Reason: string): boolean;
 // Commits Text to the variable's cell as one undo step. False refuses it, with
 // Reason saying why and ErrorPos (1-based, 0 for none) where in a formula.
 function CommitVariableCell(Document: TPatternDocument; const Key: string; Column: TVariableColumn; const Text: string;
   out Reason: string; out ErrorPos: integer): boolean;
 
 resourcestring
+  rsPanelAddVariable = 'Add variable';
+  rsPanelDeleteVariable = 'Delete variable';
   rsPanelRenameVariable = 'Rename variable';
   rsPanelVariableFormula = 'Edit variable formula';
   rsPanelVariableDescription = 'Change variable description';
@@ -133,9 +141,41 @@ uses
 
 const
   MAX_MEASUREMENT_VALUE = 1e12;
+  NEW_VARIABLE_FORMULA = '0';
   MATERIAL_FIELD_DESCRIPTIONS: array[TMaterialField] of string = (rsPanelRenameMaterial, rsPanelRecolorMaterial, rsPanelMaterialFill,
     rsPanelMaterialAllowance, rsPanelMaterialSize, rsPanelMaterialSize, rsPanelMaterialTurns, rsPanelMaterialFabric);
   TURNS_TEXT: array[boolean] of string = ('false', 'true');
+
+function AddVariableStep(Document: TPatternDocument; out Key, Reason: string): boolean;
+var
+  Variable: TVariable;
+begin
+  Document.BeginChange(rsPanelAddVariable);
+  Variable := Document.Pattern.AddVariable(Document.Pattern.NewVariableName, NEW_VARIABLE_FORMULA);
+  Reason := Document.Pattern.LastError;
+  Key := '';
+  if Assigned(Variable) then
+    Key := Variable.Key;
+  Result := Assigned(Variable);
+  Document.Commit(Result);
+end;
+
+function DeleteVariableStep(Document: TPatternDocument; const Key: string; out Reason: string): boolean;
+var
+  Node: TEvalNode;
+begin
+  Reason := '';
+  Node := Document.Pattern.FindNode(Key);
+  if not (Node is TVariable) then
+  begin
+    Reason := rsPanelNotVariable;
+    Exit(False);
+  end;
+  Document.BeginChange(rsPanelDeleteVariable);
+  Result := Document.Pattern.Delete(Node);
+  Reason := Document.Pattern.LastError;
+  Document.Commit(Result);
+end;
 
 function CommitVariableCell(Document: TPatternDocument; const Key: string; Column: TVariableColumn; const Text: string;
   out Reason: string; out ErrorPos: integer): boolean;

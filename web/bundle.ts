@@ -1,6 +1,6 @@
 // Bundles the web pages with esbuild, each with the engine's worker, and
 // copies what they load beside them: the design app into out/design, with the
-// toolbar icons, and the spike's page into engine/out/browser. The engine
+// toolbar icons and the example patterns of the user guide, and the spike's page into engine/out/browser. The engine
 // (engine_lib.wasm) is built first by ./opensloper-make.sh web. Node runs this
 // TypeScript as it is.
 import { access, copyFile, cp, mkdir } from 'node:fs/promises';
@@ -32,6 +32,12 @@ await bundle(['src/design/main.ts', 'src/engine/worker.ts'], 'out/design');
 await copyFile('src/design/index.html', 'out/design/index.html');
 await copyFile(ENGINE, 'out/design/engine_lib.wasm');
 await cp('../data/icons', 'out/design/icons', { recursive: true });
+// Patterns and measurement files, laid out as in the guide so each finds its
+// measurement file; the drape files are for the drape app
+await cp('../docs/examples', 'out/design/examples', {
+  recursive: true,
+  filter: (source) => !source.endsWith('.sdrape'),
+});
 await copyFile('../resources/opensloper-design.svg', 'out/design/opensloper-design.svg');
 
 await bundle(['engine/browser/main.ts', 'src/engine/worker.ts'], 'engine/out/browser');

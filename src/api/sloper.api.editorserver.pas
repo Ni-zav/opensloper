@@ -67,6 +67,9 @@ type
     function DoObjectsInBox(Params: TJSONObject): TJSONData;
     function DoHandles(Params: TJSONObject): TJSONData;
     function DoBounds(Params: TJSONObject): TJSONData;
+    function DoVariableAdd: TJSONData;
+    function DoVariableDelete(Params: TJSONObject): TJSONData;
+    function DoVariableSet(Params: TJSONObject): TJSONData;
     // The snap of a place given as a group of x, y and radius
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
@@ -122,6 +125,19 @@ resourcestring
     'or null, and `handle`, the handle of a selected curve there (`edge` and `field`, its length field), or null';
   rsEditorObjectsSelection = 'The selected objects'' IDs, whose callouts'' tips and curves'' handles lie over ' +
     'everything else';
+  rsEditorVariableAdd = 'Adds a variable as the Variables tab''s Add does: the next free name, with formula 0, as one ' +
+    'undo step.';
+  rsEditorVariableAddReturns = '`id`, the new variable''s';
+  rsEditorVariableDelete = 'Deletes a variable as the Variables tab does, as one undo step; refused while something ' +
+    'reads it.';
+  rsEditorVariableTarget = 'The variable, by ID or name';
+  rsEditorVariableDeleteReturns = '`done`, true';
+  rsEditorVariableSet = 'Commits a cell of the Variables tab as one undo step: its name, its formula as typed with ' +
+    'names, or its description.';
+  rsEditorVariableColumn = 'The cell''s column';
+  rsEditorVariableText = 'What the cell holds';
+  rsEditorVariableSetReturns = '`done`, false when refused, with the `reason` and `errorPos`, where in a formula the ' +
+    'problem is, in characters from 1 (0 for none)';
   rsEditorBounds = 'The box round objects, as the canvas shows or zooms to a selection';
   rsEditorBoundsTargets = 'The objects'' IDs';
   rsEditorBoundsReturns = '`bounds`, minX, minY, maxX and maxY in mm, or null when none of them has a place';
@@ -260,7 +276,7 @@ uses
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings;
+  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Editor.PanelEdits;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -271,6 +287,9 @@ const
   SNAP_TOOL_NAMES: array[0..6] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'text', 'callout');
   CLICK_TOOL_NAMES: array[0..8] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'piece', 'notch', 'text', 'callout');
   SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical');
+  // The Variables tab's columns that can be edited, as TVariableColumn without the value
+  VARIABLE_COLUMN_NAMES: array[0..2] of string = ('name', 'formula', 'description');
+  VARIABLE_COLUMNS: array[0..2] of TVariableColumn = (vcName, vcFormula, vcDescription);
   OBJECT_FILTER_NAMES: array[TObjectFilter] of string = ('all', 'points', 'edges', 'pieces', 'notes', 'problems');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
   ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
@@ -306,6 +325,13 @@ begin
     AddApiParam(Built, 'minY', apNumber, True, rsEditorMinY);
     AddApiParam(Built, 'maxX', apNumber, True, rsEditorMaxX);
     AddApiParam(Built, 'maxY', apNumber, True, rsEditorMaxY);
+    AddApiMethod(Built, 'editor_variable_add', rsEditorVariableAdd, rsEditorVariableAddReturns);
+    AddApiMethod(Built, 'editor_variable_delete', rsEditorVariableDelete, rsEditorVariableDeleteReturns);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorVariableTarget);
+    AddApiMethod(Built, 'editor_variable_set', rsEditorVariableSet, rsEditorVariableSetReturns);
+    AddApiParam(Built, 'id', apTarget, True, rsEditorVariableTarget);
+    AddApiParam(Built, 'column', apChoice, True, rsEditorVariableColumn, string.Join(', ', VARIABLE_COLUMN_NAMES));
+    AddApiParam(Built, 'text', apText, True, rsEditorVariableText);
     AddApiMethod(Built, 'editor_bounds', rsEditorBounds, rsEditorBoundsReturns, True);
     AddApiParam(Built, 'ids', apReferences, True, rsEditorBoundsTargets);
     AddApiMethod(Built, 'editor_list_click', rsEditorListClick, rsEditorListClickReturns, True);
@@ -767,6 +793,37 @@ begin
       Answer.Add('handle', TJSONNull.Create);
   end;
   Result := Answer;
+end;
+
+function TEditorApiServer.DoVariableAdd: TJSONData;
+var
+  Key, Reason: string;
+begin
+  if not AddVariableStep(Document, Key, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Result := TJSONObject.Create(['id', KeyToJSON(Key)]);
+end;
+
+function TEditorApiServer.DoVariableDelete(Params: TJSONObject): TJSONData;
+var
+  Reason: string;
+begin
+  if not DeleteVariableStep(Document, FindTarget(Params).Key, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Result := TJSONObject.Create(['done', True]);
+end;
+
+// A refused value is an answer, not an error: the cell keeps it, in red, with the reason
+function TEditorApiServer.DoVariableSet(Params: TJSONObject): TJSONData;
+var
+  Column: TVariableColumn;
+  Reason: string;
+  ErrorPos: integer;
+  Done: boolean;
+begin
+  Column := VARIABLE_COLUMNS[ChoiceParam(Params, 'column', VARIABLE_COLUMN_NAMES)];
+  Done := CommitVariableCell(Document, FindTarget(Params).Key, Column, RequireString(Params, 'text'), Reason, ErrorPos);
+  Result := TJSONObject.Create(['done', Done, 'reason', Reason, 'errorPos', ErrorPos]);
 end;
 
 function TEditorApiServer.DoBounds(Params: TJSONObject): TJSONData;
@@ -1495,6 +1552,9 @@ begin
     'editor_objects_in_box': Result := DoObjectsInBox(Params);
     'editor_handles': Result := DoHandles(Params);
     'editor_bounds': Result := DoBounds(Params);
+    'editor_variable_add': Result := DoVariableAdd;
+    'editor_variable_delete': Result := DoVariableDelete(Params);
+    'editor_variable_set': Result := DoVariableSet(Params);
     'editor_list_click': Result := DoListClick(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);

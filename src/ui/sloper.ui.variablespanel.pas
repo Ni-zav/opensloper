@@ -45,8 +45,6 @@ type
 resourcestring
   rsVariablesAdd = '&Add';
   rsVariablesDelete = '&Delete';
-  rsVariablesAddChange = 'Add variable';
-  rsVariablesDeleteChange = 'Delete variable';
   rsColumnVariableName = 'Name';
   rsColumnFormula = 'Formula';
   rsColumnVariableValue = 'Value';
@@ -56,9 +54,6 @@ implementation
 
 uses
   Sloper.Core.Evaluator, Sloper.Core.Variables, Sloper.Editor.ObjectList, Sloper.Editor.PanelEdits, Sloper.UI.Spacing;
-
-const
-  NEW_VARIABLE_FORMULA = '0';
 
 constructor TVariablesPanel.Create(AOwner: TComponent);
 
@@ -119,20 +114,12 @@ end;
 
 procedure TVariablesPanel.AddClick(Sender: TObject);
 var
-  Variable: TVariable;
   Key, Reason: string;
 begin
   if not Assigned(Document) then
     Exit;
   FinishEditing;
-  Document.BeginChange(rsVariablesAddChange);
-  Variable := Document.Pattern.AddVariable(Document.Pattern.NewVariableName, NEW_VARIABLE_FORMULA);
-  Reason := Document.Pattern.LastError;
-  Key := '';
-  if Assigned(Variable) then
-    Key := Variable.Key;
-  Document.Commit(Assigned(Variable));
-  if Key = '' then
+  if not AddVariableStep(Document, Key, Reason) then
   begin
     ShowMessageText(Reason);
     Exit;
@@ -148,20 +135,11 @@ end;
 
 procedure TVariablesPanel.DeleteRequested;
 var
-  Node: TEvalNode;
   Reason: string;
-  Done: boolean;
 begin
   if not Assigned(Document) or (Length(Selection) = 0) then
     Exit;
-  Node := Document.Pattern.FindNode(Selection[0]);
-  if not Assigned(Node) then
-    Exit;
-  Document.BeginChange(rsVariablesDeleteChange);
-  Done := Document.Pattern.Delete(Node);
-  Reason := Document.Pattern.LastError;
-  Document.Commit(Done);
-  if Done then
+  if DeleteVariableStep(Document, Selection[0], Reason) then
     ChooseKeys(nil)
   else
     ShowMessageText(Reason);

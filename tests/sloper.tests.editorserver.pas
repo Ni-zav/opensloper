@@ -114,6 +114,8 @@ type
     procedure TestBounds;
     // A list's click, Ctrl+click and Shift+click
     procedure TestListClick;
+    // The Variables tab's Add, cells and Delete, each one undo step
+    procedure TestVariableEdits;
   private
     // A callout from B, its text at (150, -40); its ID
     function AddCallout: integer;
@@ -1114,6 +1116,43 @@ begin
   AssertEquals('a range, keys as text', '[2, 3, "chest"]', Answer.Arrays['selection'].AsJSON);
   Call('editor_list_click', '{' + Visible + ', "selected": []}');
   AssertEquals('no row', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestVariableEdits;
+var
+  Variable: integer;
+begin
+  AddSquare;
+  Call('editor_variable_add');
+  Variable := Answer.Integers['id'];
+  Call('editor_changes');
+  AssertEquals('its step', 'Add variable', Answer.Strings['undo']);
+  Call('editor_variable_set', '{"id": ' + IntToStr(Variable) + ', "column": "name", "text": " ease "}');
+  AssertTrue('renamed', Answer.Booleans['done']);
+  Call('editor_variable_set', '{"name": "ease", "column": "formula", "text": "12 +"}');
+  AssertFalse('refused', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['reason'] <> '');
+  Call('editor_variable_set', '{"name": "ease", "column": "formula", "text": "12 * 2"}');
+  AssertTrue('a formula', Answer.Booleans['done']);
+  Call('editor_variable_set', '{"name": "ease", "column": "description", "text": "Wearing ease"}');
+  Call('editor_list_variables');
+  AssertEquals('listed', 'ease', Answer.Arrays['rows'].Objects[0].Strings['name']);
+  AssertEquals('its formula', '12 * 2', Answer.Arrays['rows'].Objects[0].Strings['formula']);
+  AssertEquals('its description', 'Wearing ease', Answer.Arrays['rows'].Objects[0].Strings['description']);
+  Call('editor_variable_set', '{"name": "ease", "column": "value", "text": "3"}');
+  AssertEquals('the value is worked out', RPC_INVALID_PARAMS, ErrorCode);
+  // Read by a point, it cannot go
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": "#ease", "y": 0}');
+  Answer;
+  Call('editor_variable_delete', '{"name": "ease"}');
+  AssertEquals('read by E', RPC_REFUSED, ErrorCode);
+  Call('delete', '{"name": "E"}');
+  Call('editor_variable_delete', '{"name": "ease"}');
+  AssertTrue('deleted', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Delete variable', Answer.Strings['undo']);
+  Call('editor_variable_delete', '{"name": "A"}');
+  AssertEquals('not a variable', RPC_REFUSED, ErrorCode);
 end;
 
 initialization

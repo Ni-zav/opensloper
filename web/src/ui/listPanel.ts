@@ -5,10 +5,18 @@
 // (editor_list_click), as SelectionAfterClick decides it on the desktop.
 // Rows are built again after each change while the tab shows, and once it
 // shows again after changes made while it was hidden.
+//
+// A tab can make some of its columns editable. Its rows are then edited in
+// the grid: typing, F2, Enter or a double-click opens the current cell,
+// Enter, Tab or leaving the cell commits it through commitCell, and Escape
+// puts the text back. A refused value keeps its text, with the cell in red and
+// the reason sent to message, until it is committed or Escape is pressed on
+// it. Editable panels choose one row at a time, with a current cell in it.
 import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
 import { EngineError } from '../engine/engine.ts';
 import { idsField } from '../engine/replies.ts';
 import type { EvalState } from '../editor/scene.ts';
+import { FormulaCompleter } from './formulaCompleter.ts';
 import { LatestOnly } from './latestOnly.ts';
 import type { SideTabContent } from './sideTabs.ts';
 import { STRINGS } from './strings.ts';
@@ -28,30 +36,58 @@ export interface ListColumn {
 export interface ListPanelEvents {
   // The user chose rows in the list
   select(keys: readonly string[]): void;
-  // The user double-clicked a row
+  // The user double-clicked a row of a list that cannot be edited
   zoom(): void;
   // A hint or the reason something could not be done
   message(text: string): void;
   failed(error: unknown): void;
 }
 
+// What committing a cell did: refused, with the reason, or done
+export interface CellCommit {
+  done: boolean;
+  reason: string;
+}
+
+// The cell being edited, by key, as rows may move
+interface OpenCell {
+  key: string;
+  column: number;
+  input: HTMLInputElement;
+}
+
+function refusalKey(key: string, column: number): string {
+  return `${key}\t${String(column)}`;
+}
+
 export abstract class ListPanel implements SideTabContent {
   readonly element: HTMLElement;
   protected readonly document: PatternDocument;
   protected readonly header: HTMLElement;
+  protected readonly events: ListPanelEvents;
   // Several rows can be chosen at once with Ctrl or Shift
   protected multiSelect = true;
-  private readonly events: ListPanelEvents;
   private readonly search: HTMLInputElement;
+  private readonly scroller: HTMLElement;
   private readonly body: HTMLTableSectionElement;
   private readonly refreshes: LatestOnly<number>;
   private rows: ListPanelRow[] = [];
   private selected: string[] = [];
   private anchor = '';
   private shown = false;
-  // Changes came while the tab was hidden
+  // Changes came while the tab was hidden, or while a cell was open
   private stale = true;
+  private editable: boolean[] = [];
+  private formula: boolean[] = [];
+  private currentColumn = 0;
+  private open: OpenCell | undefined;
+  // Refused text by row and column, shown over the value it would have replaced
+  private readonly refusals = new Map<string, string>();
+  private completer: FormulaCompleter | undefined;
   private readonly listener = (_document: PatternDocument, changes: ReadonlySet<DocumentChange>): void => {
+    if (changes.has('objectsReplaced')) {
+      this.refusals.clear();
+    }
     if (changes.has('pattern') || changes.has('objectsReplaced') || changes.has('measurements')) {
       this.refresh();
     }
@@ -72,8 +108,12 @@ export abstract class ListPanel implements SideTabContent {
       this.refresh();
     });
     this.header.append(this.search);
-    const scroller = window.document.createElement('div');
-    scroller.className = 'list-scroller';
+    this.scroller = window.document.createElement('div');
+    this.scroller.className = 'list-scroller';
+    this.scroller.tabIndex = 0;
+    this.scroller.addEventListener('keydown', (event) => {
+      this.gridKey(event);
+    });
     const table = window.document.createElement('table');
     table.className = 'list-grid';
     const widths = window.document.createElement('colgroup');
@@ -91,11 +131,17 @@ export abstract class ListPanel implements SideTabContent {
     this.body.addEventListener('mousedown', (event) => {
       this.rowPressed(event);
     });
-    this.body.addEventListener('dblclick', () => {
-      this.events.zoom();
+    this.body.addEventListener('dblclick', (event) => {
+      if (this.isEditable) {
+        if (!(event.target instanceof HTMLInputElement)) {
+          this.openCell('');
+        }
+      } else {
+        this.events.zoom();
+      }
     });
-    scroller.append(table);
-    this.element.append(this.header, scroller);
+    this.scroller.append(table);
+    this.element.append(this.header, this.scroller);
     this.refreshes = new LatestOnly(
       async () => this.loadRows(),
       (error) => {
@@ -107,6 +153,29 @@ export abstract class ListPanel implements SideTabContent {
 
   // What the tab lists, for the search text
   protected abstract buildRows(search: string): Promise<ListPanelRow[]>;
+
+  // Makes the edit; done false refuses it, with the reason shown to the user
+  protected async commitCell(_key: string, _column: number, _text: string): Promise<CellCommit> {
+    return Promise.resolve({ done: false, reason: '' });
+  }
+
+  // The object or variable a formula column's row is, for completion
+  protected completionTarget(key: string): number | undefined {
+    return /^\d+$/.test(key) ? Number(key) : undefined;
+  }
+
+  // Delete was pressed in the list
+  protected deleteRequested(): void {
+    // Nothing to delete in a plain list
+  }
+
+  // Turns on editing in the grid. Formula columns offer name completion.
+  protected setEditableColumns(editable: readonly boolean[], formula: readonly boolean[]): void {
+    this.editable = [...editable];
+    this.formula = [...formula];
+    this.multiSelect = false;
+    this.currentColumn = Math.max(0, this.editable.indexOf(true));
+  }
 
   // Keys of the selected rows
   get selection(): readonly string[] {
@@ -134,15 +203,36 @@ export abstract class ListPanel implements SideTabContent {
   // Stops listening to the document, so a closed panel is not kept alive
   dispose(): void {
     this.document.removeListener(this.listener);
+    this.completer?.dispose();
   }
 
-  // Builds the rows again, now when the tab shows, else when it next does
+  // Builds the rows again, now when the tab shows and no cell is open, else
+  // when it next shows or the cell closes
   protected refresh(): void {
-    if (this.shown) {
+    if (this.shown && this.open === undefined) {
       this.stale = false;
       this.refreshes.push(0);
     } else {
       this.stale = true;
+    }
+  }
+
+  // Waits for the rows asked for so far
+  protected async rowsLoaded(): Promise<void> {
+    await this.refreshes.idle();
+  }
+
+  // Selects the row as the user would, and moves to its cell, opening it when edit is set
+  protected focusCell(key: string, column: number, edit: boolean): void {
+    this.selected = [key];
+    this.anchor = key;
+    this.currentColumn = column;
+    this.paintSelection();
+    this.events.select(this.selected);
+    if (edit) {
+      this.openCell('');
+    } else {
+      this.scroller.focus();
     }
   }
 
@@ -154,9 +244,25 @@ export abstract class ListPanel implements SideTabContent {
     }
   }
 
+  private get isEditable(): boolean {
+    return this.editable.includes(true);
+  }
+
   private async loadRows(): Promise<void> {
-    this.rows = await this.buildRows(this.search.value);
-    const rows = this.rows.map((row) => {
+    const rows = await this.buildRows(this.search.value);
+    // A cell opened while the rows were asked for: they come again when it closes
+    if (this.open !== undefined) {
+      this.stale = true;
+      return;
+    }
+    this.rows = rows;
+    const shown = new Set(this.rows.map((row) => row.key));
+    for (const key of this.refusals.keys()) {
+      if (!shown.has(key.split('\t')[0] ?? '')) {
+        this.refusals.delete(key);
+      }
+    }
+    const lines = this.rows.map((row) => {
       const line = window.document.createElement('tr');
       line.dataset.key = row.key;
       if (row.state === 'error' || row.state === 'invalid') {
@@ -164,35 +270,55 @@ export abstract class ListPanel implements SideTabContent {
       } else if (row.state === 'blocked') {
         line.classList.add('blocked');
       }
-      for (const text of row.cells) {
+      for (const [column, value] of row.cells.entries()) {
         const cell = window.document.createElement('td');
+        const refused = this.refusals.get(refusalKey(row.key, column));
+        const text = refused ?? value;
         cell.textContent = text;
         cell.title = text;
+        cell.classList.toggle('refused', refused !== undefined);
         line.append(cell);
       }
       return line;
     });
-    this.body.replaceChildren(...rows);
+    this.body.replaceChildren(...lines);
     this.paintSelection();
   }
 
   private paintSelection(): void {
     const chosen = new Set(this.selected);
     for (const line of this.body.rows) {
-      line.classList.toggle('selected', chosen.has(line.dataset.key ?? ''));
+      const selected = chosen.has(line.dataset.key ?? '');
+      line.classList.toggle('selected', selected);
+      for (const [column, cell] of [...line.cells].entries()) {
+        cell.classList.toggle('current', selected && this.isEditable && column === this.currentColumn);
+      }
     }
   }
 
   private rowPressed(event: MouseEvent): void {
-    // The second press of a double-click leaves the selection for the zoom
+    // The second press of a double-click leaves the selection for the zoom or the edit
     if (event.button !== 0 || event.detail > 1 || !(event.target instanceof Element)) {
       return;
     }
-    const key = event.target.closest('tr')?.dataset.key;
-    if (key === undefined) {
+    if (event.target instanceof HTMLInputElement) {
+      return;
+    }
+    const cell = event.target.closest('td');
+    const key = cell?.parentElement?.dataset.key;
+    if (cell === null || key === undefined) {
       return;
     }
     event.preventDefault();
+    this.scroller.focus();
+    if (this.isEditable) {
+      this.currentColumn = cell.cellIndex;
+      // Moving along a row of an editable list is not a new choice
+      if (this.selected.length === 1 && this.selected[0] === key) {
+        this.paintSelection();
+        return;
+      }
+    }
     const toggle = this.multiSelect && (event.ctrlKey || event.metaKey);
     const extend = this.multiSelect && event.shiftKey;
     this.chooseRow(key, toggle, extend).catch((error: unknown) => {
@@ -215,5 +341,168 @@ export abstract class ListPanel implements SideTabContent {
     }
     this.paintSelection();
     this.events.select(this.selected);
+  }
+
+  // Arrows move, Enter, F2 or typing opens the current cell, Delete asks the tab
+  private gridKey(event: KeyboardEvent): void {
+    if (event.target !== this.scroller) {
+      return;
+    }
+    const index = this.rows.findIndex((row) => row.key === this.selected[0]);
+    let handled = true;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const next = this.rows[Math.max(0, Math.min(this.rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))];
+      if (next !== undefined) {
+        this.chooseRow(next.key, false, false).catch((error: unknown) => {
+          this.report(error);
+        });
+        this.body.querySelector(`tr[data-key="${CSS.escape(next.key)}"]`)?.scrollIntoView({ block: 'nearest' });
+      }
+    } else if (this.isEditable && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      this.moveColumn(event.key === 'ArrowRight' ? 1 : -1, false);
+    } else if (this.isEditable && (event.key === 'Enter' || event.key === 'F2')) {
+      this.openCell('');
+    } else if (this.isEditable && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // Typing replaces the cell's text, as in a spreadsheet
+      this.openCell(event.key);
+    } else if (event.key === 'Delete') {
+      this.deleteRequested();
+    } else {
+      handled = false;
+    }
+    if (handled) {
+      // The list's keys are not the app's shortcuts
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  // To the next or previous column, editable ones only when editableOnly
+  private moveColumn(step: number, editableOnly: boolean): void {
+    let column = this.currentColumn;
+    for (let count = 0; count < this.editable.length; count++) {
+      column = Math.max(0, Math.min(this.editable.length - 1, column + step));
+      if (!editableOnly || this.editable[column] === true) {
+        break;
+      }
+    }
+    this.currentColumn = column;
+    this.paintSelection();
+  }
+
+  // Opens the current cell of the selected row; typed, when given, replaces its text
+  private openCell(typed: string): void {
+    const key = this.selected[0];
+    const column = this.currentColumn;
+    if (key === undefined || this.editable[column] !== true || this.open !== undefined) {
+      return;
+    }
+    const row = this.rows.find((each) => each.key === key);
+    const cell = this.body.querySelector(`tr[data-key="${CSS.escape(key)}"]`)?.children[column];
+    if (row === undefined || !(cell instanceof HTMLTableCellElement)) {
+      return;
+    }
+    const input = window.document.createElement('input');
+    input.className = 'cell-editor';
+    input.value = typed === '' ? (this.refusals.get(refusalKey(key, column)) ?? row.cells[column] ?? '') : typed;
+    cell.replaceChildren(input);
+    cell.classList.add('editing');
+    this.open = { key, column, input };
+    input.focus();
+    if (typed === '') {
+      input.select();
+    }
+    input.addEventListener('keydown', (event) => {
+      this.editorKey(event);
+    });
+    input.addEventListener('input', () => {
+      this.updateCompletion(false);
+    });
+    input.addEventListener('blur', () => {
+      this.closeCell(true, 0);
+    });
+    if (typed !== '') {
+      this.updateCompletion(false);
+    }
+  }
+
+  private editorKey(event: KeyboardEvent): void {
+    if (this.completer?.handleKey(event) === true) {
+      event.stopPropagation();
+      return;
+    }
+    if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
+      this.updateCompletion(true);
+    } else if (event.key === 'Enter') {
+      this.closeCell(true, 0);
+    } else if (event.key === 'Tab') {
+      this.closeCell(true, event.shiftKey ? -1 : 1);
+    } else if (event.key === 'Escape') {
+      this.closeCell(false, 0);
+    } else {
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+        this.completer?.hide();
+      }
+      // Keys typed in the cell are the cell's, not the app's shortcuts
+      event.stopPropagation();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  private updateCompletion(explicit: boolean): void {
+    const open = this.open;
+    if (open === undefined || this.formula[open.column] !== true) {
+      return;
+    }
+    this.completer ??= new FormulaCompleter(this.document, (error) => {
+      this.report(error);
+    });
+    this.completer.update(open.input, this.completionTarget(open.key), explicit);
+  }
+
+  // Closes the open cell, committing its text when commit is set, then moves step columns along
+  private closeCell(commit: boolean, step: number): void {
+    const open = this.open;
+    if (open === undefined) {
+      return;
+    }
+    this.open = undefined;
+    this.completer?.hide();
+    const text = open.input.value;
+    const id = refusalKey(open.key, open.column);
+    const row = this.rows.find((each) => each.key === open.key);
+    const unchanged = text === (row?.cells[open.column] ?? '') && !this.refusals.has(id);
+    if (!commit) {
+      this.refusals.delete(id);
+    }
+    if (step !== 0) {
+      this.moveColumn(step, true);
+    }
+    this.scroller.focus();
+    if (!commit || unchanged) {
+      this.refresh();
+      return;
+    }
+    // The cell shows what was typed until the rows come back
+    open.input.replaceWith(text);
+    this.commit(open, text).catch((error: unknown) => {
+      this.report(error);
+      this.refresh();
+    });
+  }
+
+  private async commit(open: OpenCell, text: string): Promise<void> {
+    const id = refusalKey(open.key, open.column);
+    const result = await this.commitCell(open.key, open.column, text);
+    if (result.done) {
+      this.refusals.delete(id);
+    } else {
+      this.refusals.set(id, text);
+      this.events.message(result.reason);
+    }
+    // A change refreshed the rows already; a refusal changed nothing, so show it now
+    this.refresh();
   }
 }

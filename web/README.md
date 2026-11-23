@@ -23,11 +23,13 @@ with the wheel, pans with the middle button, selects by clicking and boxing,
 and drags points, notes, curve handles and callout tips as one undo step;
 every drawing tool of the desktop's works (Point, Line, Curve, Circle,
 Rectangle, Piece, Notch, Seam, Text and Callout), and a note's text is typed
-over the canvas. Open, Measurements, Save, Undo, Redo, Fit, the role box and
-the labels mode are on the toolbar. The side panel has the Objects,
-Variables and Measurements tabs, searchable, with the Objects tab following
-the canvas selection and setting it; editing in the lists and the Properties
-tab follow the same pattern.
+over the canvas. Open, Measurements, Save, Undo, Redo, Fit, the user guide's
+example patterns (copied from `docs/examples` when the app is built), the
+role box and the labels mode are on the toolbar. The side panel has the
+Objects, Variables and Measurements tabs, searchable, with the Objects tab
+following the canvas selection and setting it and the Variables tab edited
+in the grid, with name completion in formulas; editing measurements and the
+Properties tab follow the same pattern.
 
 ## Setting up
 

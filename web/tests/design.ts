@@ -186,6 +186,40 @@ try {
     {},
     allRows,
   );
+  // A variable added, named and given a formula in the Variables tab, each one undo step
+  await page.click('.side-column [data-tab="variables"]');
+  await page.click('.list-panel:not([hidden]) .list-buttons button:first-child');
+  await waitForData(page, 'undo', 'Add variable');
+  await page.waitForSelector('input.cell-editor', { timeout: TIMEOUT_MS });
+  await page.keyboard.type('ease');
+  await page.keyboard.press('Enter');
+  await waitForData(page, 'undo', 'Rename variable');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('12 +');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.list-panel:not([hidden]) td.refused', { timeout: TIMEOUT_MS });
+  assert.notEqual(await status(page), '', 'says why the formula was refused');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('12 * 2');
+  await page.keyboard.press('Enter');
+  await waitForData(page, 'undo', 'Edit variable formula');
+  // The refusal clears once the rows come back
+  await page.waitForFunction(() => document.querySelector('.list-panel:not([hidden]) td.refused') === null, {
+    timeout: TIMEOUT_MS,
+  });
+  // Ctrl+Space offers every name; Escape closes the list, then the cell
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Space');
+  await page.keyboard.up('Control');
+  await page.waitForSelector('.completer:not([hidden]) li', { timeout: TIMEOUT_MS });
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelector('input.cell-editor') === null, { timeout: 3000 });
+  await page.click('.list-panel:not([hidden]) .list-buttons button:last-child');
+  await waitForData(page, 'undo', 'Delete variable');
   await page.click('.side-column [data-tab="measurements"]');
   await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
   await page.click('.side-column [data-tab="objects"]');
@@ -335,6 +369,24 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok((await inkedPixels(page)) > unlabelled + MIN_INKED_PIXELS, 'labels drawn');
 
+  // Every example listed is on the site, and one opens with the measurement file it names beside it
+  const examples = await page.$$eval('#examples option', (options) =>
+    options.map((option) => option.value).filter((value) => value !== ''),
+  );
+  for (const example of examples) {
+    // oxlint-disable-next-line no-await-in-loop
+    const found = await page.evaluate(async (path) => (await fetch(`examples/${path}`)).ok, example);
+    assert.ok(found, `the example ${example} is on the site`);
+  }
+  await page.select('#examples', 'circle-skirt/circle-skirt.sloper');
+  await page.waitForFunction(
+    () => document.querySelector('#status')?.textContent === 'Measurements from size-table.slm',
+    {
+      timeout: TIMEOUT_MS,
+    },
+  );
+  assert.equal(await page.title(), 'circle-skirt.sloper — OpenSloper', 'the example opened');
+
   // SCREENSHOT names a PNG file to keep what the canvas shows at the end
   if ((process.env.SCREENSHOT ?? '') !== '') {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20);
@@ -343,8 +395,8 @@ try {
   }
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
-    `Design app: opened, drew ${String(inked)} pixels; chose from the lists; added, dragged and undid a point; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything. ` +
+    `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point; drew a line, a curve, ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; opened an example. ` +
       (await status(page)),
   );
 } finally {

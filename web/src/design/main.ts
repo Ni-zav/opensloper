@@ -74,6 +74,15 @@ function baseName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
 
+// A file from the site, named as its address ends; undefined when it cannot be had
+async function fetchFile(address: URL): Promise<File | undefined> {
+  const response = await fetch(address);
+  if (!response.ok) {
+    return undefined;
+  }
+  return new File([await response.text()], baseName(address.pathname));
+}
+
 class DesignApp {
   private readonly document: PatternDocument;
   private readonly tables: Tables;
@@ -141,6 +150,7 @@ class DesignApp {
       iconButton(ICONS.fit, STRINGS.fit, STRINGS.fitHint, () => {
         this.canvas.fitAll();
       }),
+      this.exampleBox(),
       this.roleBox(),
       this.labelBox(),
     );
@@ -206,6 +216,45 @@ class DesignApp {
     };
   }
 
+  // The user guide's example patterns, fetched from the site as any page is
+  private exampleBox(): HTMLSelectElement {
+    const box = document.createElement('select');
+    box.id = 'examples';
+    box.title = STRINGS.examplesHint;
+    box.add(new Option(STRINGS.examples, '', true, true));
+    for (const [path, caption] of STRINGS.exampleCaptions) {
+      box.add(new Option(caption, path));
+    }
+    box.addEventListener('change', () => {
+      const path = box.value;
+      box.value = '';
+      if (path !== '') {
+        this.run(this.openExample(path));
+      }
+    });
+    return box;
+  }
+
+  // The example and the measurement file it names, from beside it on the site
+  private async openExample(path: string): Promise<void> {
+    const address = new URL(`examples/${path}`, window.location.href);
+    const pattern = await fetchFile(address);
+    if (pattern === undefined) {
+      showMessage(STRINGS.exampleMissing(baseName(path)));
+      return;
+    }
+    await this.openPattern(pattern);
+    if (this.wantedMeasurements === '') {
+      return;
+    }
+    const measurements = await fetchFile(new URL(this.wantedMeasurements, address));
+    if (measurements === undefined) {
+      showMessage(STRINGS.needsMeasurements(this.wantedMeasurements));
+    } else {
+      await this.useMeasurements(measurements);
+    }
+  }
+
   // The role new edges get, as the desktop's role box
   private roleBox(): HTMLSelectElement {
     const box = document.createElement('select');
@@ -268,11 +317,7 @@ class DesignApp {
       }
       return;
     }
-    const answer = await this.document.call('open', { text: await pattern.text() });
-    this.document.fileName = pattern.name;
-    this.updateState();
-    showMessage(STRINGS.opened(pattern.name, numberField(answer, 'objects') ?? 0));
-    this.wantedMeasurements = stringField(answer, 'measurementsFile') ?? '';
+    await this.openPattern(pattern);
     if (this.wantedMeasurements === '') {
       return;
     }
@@ -282,6 +327,15 @@ class DesignApp {
     } else {
       await this.useMeasurements(measurements);
     }
+  }
+
+  // Opens the pattern, noting the measurement file it names
+  private async openPattern(pattern: File): Promise<void> {
+    const answer = await this.document.call('open', { text: await pattern.text() });
+    this.document.fileName = pattern.name;
+    this.updateState();
+    showMessage(STRINGS.opened(pattern.name, numberField(answer, 'objects') ?? 0));
+    this.wantedMeasurements = stringField(answer, 'measurementsFile') ?? '';
   }
 
   // The pattern keeps the file it names when this is it; another is recorded beside the pattern

@@ -2,13 +2,15 @@
 // Chromium as a user would: opens a regression pattern with its measurements,
 // checks the canvas drew it, adds a point with the Point tool, drags it with
 // the Select tool and undoes, then uses each drawing tool and drags a curve's
-// handle, a note and a callout's tip. Serves the app itself on a free port. Node runs
+// handle, a note and a callout's tip. It edits a measurement and saves the
+// set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
 // this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
 // default, and SCREENSHOT, a file name without .png, keeps a picture of the end.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { launch, type Page } from 'puppeteer-core';
 
@@ -86,6 +88,18 @@ async function clickAt(page: Page, origin: { x: number; y: number }, x: number, 
   await page.mouse.click(origin.x + x, origin.y + y);
 }
 
+// The Measurements tab's button, by its caption
+function measurementButton(caption: 'Add' | 'Save' | 'Revert'): string {
+  return `.list-panel:not([hidden]) .list-buttons button:nth-child(${String(['Add', 'Save', 'Revert'].indexOf(caption) + 1)})`;
+}
+
+// Whether the control is disabled
+async function isDisabled(page: Page, selector: string): Promise<boolean> {
+  return page.$eval(selector, (control) =>
+    control instanceof HTMLInputElement || control instanceof HTMLButtonElement ? control.disabled : false,
+  );
+}
+
 async function status(page: Page): Promise<string> {
   return page.$eval('#status', (element) => element.textContent);
 }
@@ -123,8 +137,12 @@ const browser = await launch({
   args: ['--no-sandbox', '--disable-gpu'],
 });
 const problems: string[] = [];
+// Where the page's downloads go, removed at the end
+const downloads = await mkdtemp(join(tmpdir(), 'opensloper-design-'));
 try {
   const page = await browser.newPage();
+  const session = await page.createCDPSession();
+  await session.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
   await page.setViewport({ width: 1200, height: 800 });
   page.on('pageerror', (error: unknown) => {
     problems.push(`page error: ${String(error)}`);
@@ -220,8 +238,63 @@ try {
   await page.waitForFunction(() => document.querySelector('input.cell-editor') === null, { timeout: 3000 });
   await page.click('.list-panel:not([hidden]) .list-buttons button:last-child');
   await waitForData(page, 'undo', 'Delete variable');
+  // A measurement's value edited is kept in bold until Save makes it and downloads the set
   await page.click('.side-column [data-tab="measurements"]');
   await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
+  assert.equal(await page.$eval('#measurement-file', (label) => label.textContent), 'skirt-small.slm', 'the set');
+  await page.click('.list-panel:not([hidden]) tbody tr:first-child td:nth-child(2)');
+  await page.keyboard.type('eight');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.list-panel:not([hidden]) td.refused', { timeout: TIMEOUT_MS });
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('777.5');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.list-panel:not([hidden]) tr.marked', { timeout: TIMEOUT_MS });
+  assert.ok(await isDisabled(page, '#measurement-test'), 'no test sizes while edits wait');
+  await page.click(measurementButton('Save'));
+  await page.waitForFunction(() => document.querySelector('.list-panel:not([hidden]) tr.marked') === null, {
+    timeout: TIMEOUT_MS,
+  });
+  let saved = '';
+  for (let tries = 0; tries < 50 && !saved.includes('777.5'); tries++) {
+    // oxlint-disable-next-line no-await-in-loop
+    saved = await readFile(join(downloads, 'skirt-small.slm'), 'utf8').catch(() => '');
+    // oxlint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.ok(saved.includes('777.5'), 'the set downloaded with the edit');
+  // Add gives a new key to name; Revert drops it
+  await page.click(measurementButton('Add'));
+  await page.waitForSelector('input.cell-editor', { timeout: TIMEOUT_MS });
+  await page.keyboard.type('seat');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.list-panel:not([hidden]) tr.marked[data-key="seat"]', { timeout: TIMEOUT_MS });
+  await page.click(measurementButton('Revert'));
+  await page.waitForFunction(() => document.querySelector('.list-panel:not([hidden]) tr.marked') === null, {
+    timeout: TIMEOUT_MS,
+  });
+  // A test size pauses editing until it is reset
+  await page.$eval('#measurement-test', (slider) => {
+    if (slider instanceof HTMLInputElement) {
+      slider.value = '5';
+      slider.dispatchEvent(new Event('input'));
+    }
+  });
+  const addDisabled = async (disabled: boolean): Promise<void> => {
+    await page.waitForFunction(
+      (add, wanted) => {
+        const button = document.querySelector(add);
+        return button instanceof HTMLButtonElement && button.disabled === wanted;
+      },
+      { timeout: TIMEOUT_MS },
+      measurementButton('Add'),
+      disabled,
+    );
+  };
+  await addDisabled(true);
+  await page.click('.measurement-test button');
+  await addDisabled(false);
   await page.click('.side-column [data-tab="objects"]');
   await page.keyboard.press('Escape');
   await waitForData(page, 'selection', '');
@@ -396,10 +469,12 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; opened an example. ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; ` +
+      `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),
   );
 } finally {
   await browser.close();
   server.close();
+  await rm(downloads, { recursive: true, force: true });
 }

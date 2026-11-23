@@ -161,13 +161,14 @@ type
     function UseMeasurements(const FileName: string; out ErrorMessage: string): boolean;
     // The same with the set's file given as Text. Reference is where the
     // pattern records it, relative to the pattern's folder with "/"; '' keeps
-    // the one it has. Nothing is read or written for it, so
-    // ChangeMeasurements is refused until a set is used from a file.
+    // the one it has. Nothing is read or written for it: ChangeMeasurements
+    // changes MeasurementText, for whoever supplied it to save.
     function UseMeasurementsText(const Text, Reference: string; out ErrorMessage: string): boolean;
     // A small edit to the current measurement file: it is re-read, this key
     // changed or added, and written, then the set is loaded again and the
-    // pattern re-evaluated. Not an undo step and does not modify the pattern,
-    // since the set is not part of it. On failure nothing changes.
+    // pattern re-evaluated. A set given as text is changed in
+    // MeasurementText instead. Not an undo step and does not modify the
+    // pattern, since the set is not part of it. On failure nothing changes.
     function ChangeMeasurement(const Key: string; Value: double; const Description: string;
       out Change: TMeasurementChange; out ErrorMessage: string): boolean;
     // Several such edits, with one write of the file; on failure none is made
@@ -228,6 +229,8 @@ type
     property MeasurementPath: string read FMeasurementPath;
     // The set, or the pattern, came as text, so no file is read or written for it
     property MeasurementsInMemory: boolean read FMeasurementsInMemory;
+    // The measurement file's contents as last read, or as changed in memory
+    property MeasurementText: string read FMeasurementText;
     // Why the pattern's measurement file could not be loaded, or ''
     property MeasurementError: string read FMeasurementError;
     property MeasurementScale: double read GetMeasurementScale;
@@ -256,7 +259,6 @@ resourcestring
   rsDocumentNoChange = 'No change is open';
   rsDocumentBadSnapshot = 'Could not restore the pattern: %s';
   rsDocumentNoMeasurements = 'There is no measurement file';
-  rsDocumentMeasurementsInMemory = 'The measurement file was given as text, so it cannot be changed here';
 
 implementation
 
@@ -622,22 +624,22 @@ begin
     ErrorMessage := rsDocumentNoMeasurements;
     Exit(False);
   end;
-  if FMeasurementsInMemory then
-  begin
-    ErrorMessage := rsDocumentMeasurementsInMemory;
-    Exit(False);
-  end;
   Size := '';
   if Assigned(FMeasurements) then
     Size := FMeasurements.SizeName;
-  if not ChangeMeasurementsInFile(FMeasurementPath, Edits, Changes, ErrorMessage, Size) then
+  if FMeasurementsInMemory then
+  begin
+    if not ChangeMeasurementsInText(FMeasurementText, Edits, Changes, SetText, ErrorMessage, Size) then
+      Exit(False);
+  end
+  else if not ChangeMeasurementsInFile(FMeasurementPath, Edits, Changes, ErrorMessage, Size) or not ReadTextFile(FMeasurementPath, SetText, ErrorMessage) then
     Exit(False);
   NewSet := TMeasurementSet.Create;
   try
-    if not ReadTextFile(FMeasurementPath, SetText, ErrorMessage) or not NewSet.LoadFromText(SetText, ErrorMessage) then
+    if not NewSet.LoadFromText(SetText, ErrorMessage) then
       Exit(False);
     NewSet.SelectSize(Size);
-    SetMeasurementSet(NewSet, FMeasurementPath, SetText);
+    SetMeasurementSet(NewSet, FMeasurementPath, SetText, FMeasurementsInMemory);
     NewSet := nil;
   finally
     FreeAndNil(NewSet);

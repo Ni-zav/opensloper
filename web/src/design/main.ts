@@ -8,6 +8,7 @@ import { numberField, stringField } from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
+import { baseName, downloadText } from '../ui/download.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
@@ -69,11 +70,6 @@ function iconButton(icon: string, caption: string, hint: string, action: () => v
   return button;
 }
 
-// The last part of a path with /, as the pattern records its measurement file
-function baseName(path: string): string {
-  return path.slice(path.lastIndexOf('/') + 1);
-}
-
 // A file from the site, named as its address ends; undefined when it cannot be had
 async function fetchFile(address: URL): Promise<File | undefined> {
   const response = await fetch(address);
@@ -88,6 +84,7 @@ class DesignApp {
   private readonly tables: Tables;
   private readonly canvas: PatternCanvas;
   private readonly objects: ObjectsPanel;
+  private readonly measurements: MeasurementsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
   private readonly redoButton: HTMLButtonElement;
@@ -123,12 +120,9 @@ class DesignApp {
       ICONS.variablesTab,
       new VariablesPanel(this.document, this.listEvents()),
     );
-    side.addSection(
-      'measurements',
-      STRINGS.tabMeasurements,
-      ICONS.measurementsTab,
-      new MeasurementsPanel(this.document, this.listEvents()),
-    );
+    this.measurements = new MeasurementsPanel(this.document, this.listEvents());
+    this.measurements.patternFileName = () => this.document.fileName;
+    side.addSection('measurements', STRINGS.tabMeasurements, ICONS.measurementsTab, this.measurements);
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
       this.run(this.document.undo());
     });
@@ -137,10 +131,14 @@ class DesignApp {
     });
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
-        openInput.click();
+        if (this.mayDropMeasurementEdits()) {
+          openInput.click();
+        }
       }),
       iconButton(ICONS.measurements, STRINGS.measurements, STRINGS.measurementsHint, () => {
-        measurementsInput.click();
+        if (this.mayDropMeasurementEdits()) {
+          measurementsInput.click();
+        }
       }),
       iconButton(ICONS.save, STRINGS.save, STRINGS.saveHint, () => {
         this.run(this.save());
@@ -206,6 +204,11 @@ class DesignApp {
     });
   }
 
+  // Another pattern or set drops the measurement edits not saved, so the user is asked first
+  private mayDropMeasurementEdits(): boolean {
+    return !this.measurements.hasPending || window.confirm(STRINGS.discardMeasurementEdits);
+  }
+
   // What a list tells the app; its rows' choices stay in the list unless a tab says otherwise
   private listEvents(): ListPanelEvents {
     return {
@@ -228,7 +231,7 @@ class DesignApp {
     box.addEventListener('change', () => {
       const path = box.value;
       box.value = '';
-      if (path !== '') {
+      if (path !== '' && this.mayDropMeasurementEdits()) {
         this.run(this.openExample(path));
       }
     });
@@ -352,11 +355,10 @@ class DesignApp {
   // Downloads the pattern file; the browser asks where, or puts it in Downloads
   private async save(): Promise<void> {
     const answer = await this.document.call('save', { text: true });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([stringField(answer, 'text') ?? ''], { type: 'application/json' }));
-    link.download = this.document.fileName === '' ? DEFAULT_FILE_NAME : this.document.fileName;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    downloadText(
+      this.document.fileName === '' ? DEFAULT_FILE_NAME : this.document.fileName,
+      stringField(answer, 'text') ?? '',
+    );
   }
 
   private isShowLabelsKey(event: KeyboardEvent): boolean {

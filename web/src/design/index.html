@@ -189,6 +189,9 @@
         text-overflow: ellipsis;
         border-bottom: 1px solid #f0efea;
       }
+      .list-grid tr.marked td {
+        font-weight: 600;
+      }
       .list-grid tr.failed td {
         color: #d13438;
       }
@@ -231,6 +234,28 @@
         gap: 6px;
         padding: 6px;
         border-top: 1px solid #d8d6cf;
+      }
+      /* The Measurements tab's set, sizes and test size */
+      .measurement-set,
+      .measurement-test {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 0;
+        padding: 4px 6px 6px;
+        border: 1px solid #d8d6cf;
+      }
+      .measurement-test {
+        margin: 6px 6px 0;
+      }
+      .measurement-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .measurement-row > span,
+      .measurement-row > select {
+        flex: 1;
       }
       .list-buttons button {
         border-color: #c8c5bc;

@@ -70,7 +70,6 @@ type
     procedure AddClick(Sender: TObject);
     procedure SaveClick(Sender: TObject);
     procedure RevertClick(Sender: TObject);
-    function PendingRow(Index: integer): TListPanelRow;
   protected
     function BuildRows: TListPanelRowArray; override;
     function CellEditable(const Key: string; Column: integer): boolean; override;
@@ -122,7 +121,7 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.EvalTypes, Sloper.Core.JSON, Sloper.Core.Measurements, Sloper.Editor.ObjectList, Sloper.UI.Spacing;
+  Sloper.Core.EvalTypes, Sloper.Core.Measurements, Sloper.UI.Spacing;
 
 const
   // Test size steps, in percent either way
@@ -350,30 +349,11 @@ begin
   FTestSlider.Position := 0;
 end;
 
-function TMeasurementsPanel.PendingRow(Index: integer): TListPanelRow;
-var
-  Item: TPendingMeasurement;
-  ValueText: string;
-begin
-  Item := FPending[Index];
-  ValueText := '';
-  if Item.HasValue then
-    ValueText := FormatJSONFloat(Item.Value);
-  Result := Default(TListPanelRow);
-  Result.Key := Item.Key;
-  Result.State := esValid;
-  Result.Marked := True;
-  Result.Cells := [Format(rsMeasurementsEdited, [Item.Key]), ValueText, Item.Description];
-end;
-
 function TMeasurementsPanel.BuildRows: TListPanelRowArray;
 var
-  Rows: TMeasurementRowArray;
-  Index, Count, PendingIndex: integer;
-  Listed: array of boolean;
-  LowerSearch: string;
+  Rows: TMeasurementPanelRowArray;
+  Index: integer;
 begin
-  Result := nil;
   if Document.MeasurementPath <> FPendingPath then
   begin
     FPending.Clear;
@@ -383,21 +363,14 @@ begin
   UpdateSizes;
   UpdateTest;
   UpdateButtons;
-  Rows := MeasurementRows(Document.Pattern, Document.Measurements, SearchText);
-  Listed := nil;
-  SetLength(Listed, FPending.Count);
-  SetLength(Result, Length(Rows) + FPending.Count);
+  Rows := FPending.Rows(Document.Pattern, Document.Measurements, SearchText);
+  Result := nil;
+  SetLength(Result, Length(Rows));
   for Index := 0 to High(Rows) do
   begin
-    PendingIndex := FPending.IndexOf(Rows[Index].Key);
-    if PendingIndex >= 0 then
-    begin
-      Listed[PendingIndex] := True;
-      Result[Index] := PendingRow(PendingIndex);
-      Continue;
-    end;
+    Result[Index] := Default(TListPanelRow);
     Result[Index].Key := Rows[Index].Key;
-    Result[Index].Marked := False;
+    Result[Index].Marked := Rows[Index].Pending;
     if Rows[Index].Missing then
     begin
       Result[Index].State := esError;
@@ -406,33 +379,21 @@ begin
     else
     begin
       Result[Index].State := esValid;
-      Result[Index].Cells := [Rows[Index].Key, Rows[Index].Value, Rows[Index].Description];
+      if Rows[Index].Pending then
+        Result[Index].Cells := [Format(rsMeasurementsEdited, [Rows[Index].Key]), Rows[Index].Value, Rows[Index].Description]
+      else
+        Result[Index].Cells := [Rows[Index].Key, Rows[Index].Value, Rows[Index].Description];
     end;
   end;
-  // New keys from Add come last, when the search lets them through
-  Count := Length(Rows);
-  LowerSearch := LowerCase(Trim(SearchText));
-  for Index := 0 to FPending.Count - 1 do
-    if not Listed[Index] and FPending[Index].IsNew and ((LowerSearch = '') or (Pos(LowerSearch, LowerCase(FPending[Index].Key)) > 0)) then
-    begin
-      Result[Count] := PendingRow(Index);
-      Inc(Count);
-    end;
-  SetLength(Result, Count);
 end;
 
 // Nothing is edited while trying sizes, since the values shown are scaled;
 // a key is only edited on a row made by Add
 function TMeasurementsPanel.CellEditable(const Key: string; Column: integer): boolean;
-var
-  Index: integer;
 begin
   Result := Assigned(Document) and not Testing and inherited CellEditable(Key, Column);
   if Result and (Column = Ord(mcKey)) then
-  begin
-    Index := FPending.IndexOf(Key);
-    Result := (Index >= 0) and FPending[Index].IsNew;
-  end;
+    Result := FPending.KeyEditable(Key);
 end;
 
 function TMeasurementsPanel.CellEditText(const Key: string; Column: integer; const Shown: string): string;
@@ -498,12 +459,11 @@ begin
     Exit;
   // A new file is read with no edits, so they are kept for it
   FPendingPath := Document.MeasurementPath;
-  if not Document.ChangeMeasurements(Edits, Changes, Reason) then
+  if not FPending.Save(Document, Changes, Reason) then
   begin
     ShowMessageText(Reason);
     Exit;
   end;
-  FPending.Clear;
   Refresh;
   ShowMessageText(MeasurementsSavedText(Changes, Document.MeasurementPath));
   Result := True;

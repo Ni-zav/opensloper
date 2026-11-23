@@ -27,7 +27,7 @@ unit Sloper.Editor.PanelEdits;
 interface
 
 uses
-  SysUtils, StrUtils, Sloper.Core.Measurements, Sloper.Document.PatternDocument;
+  SysUtils, StrUtils, Sloper.Core.Measurements, Sloper.Core.Pattern, Sloper.Document.PatternDocument;
 
 type
   // The Variables tab's columns, in order
@@ -47,6 +47,21 @@ type
     // Made by Add, so its key can still be changed
     IsNew: boolean;
   end;
+
+  // A row of the Measurements tab, with the unsaved edits over the set's
+  TMeasurementPanelRow = record
+    Key: string;
+    // As the set gives it, or the edit's; empty while an edit has none
+    Value: string;
+    Description: string;
+    // The pattern uses this key, but neither the set nor an edit has it
+    Missing: boolean;
+    // An unsaved edit
+    Pending: boolean;
+    // Made by Add, so its key can still be changed
+    IsNew: boolean;
+  end;
+  TMeasurementPanelRowArray = array of TMeasurementPanelRow;
 
   // The Measurements tab's unsaved edits, by key, in the order first made
   TPendingMeasurements = class
@@ -70,6 +85,14 @@ type
     // Every edit, ready for TPatternDocument.ChangeMeasurements; False when
     // one has no value yet
     function Edits(out AEdits: TMeasurementEditArray; out Reason: string): boolean;
+    // The tab's rows: MeasurementRows for Search, each edited one replaced
+    // by its edit, then the keys Add made that Search lets through
+    function Rows(Pattern: TPattern; MeasurementSet: TMeasurementSet; const Search: string): TMeasurementPanelRowArray;
+    // Whether Key's key cell can be edited: only a row Add made
+    function KeyEditable(const Key: string): boolean;
+    // Writes every edit to the document's measurement file, or its set in
+    // memory, and clears them; False refuses, with Reason, keeping them
+    function Save(Document: TPatternDocument; out Changes: TMeasurementChangeArray; out Reason: string): boolean;
     property Items[Index: integer]: TPendingMeasurement read GetItem; default;
   end;
 
@@ -113,6 +136,7 @@ resourcestring
   rsPanelNotVariable = 'This variable no longer exists';
   rsPanelBadValue = 'The value must be a number, such as 820 or 41.5';
   rsPanelNoValue = '@%s has no value yet';
+  rsPanelTestingSizes = 'Set the test size back to 0% to edit measurements';
   rsPanelKeyFixed = 'Only a new measurement''s key can be changed here';
   rsPanelNewKey = 'measurement';
   // Count, file name
@@ -530,6 +554,74 @@ begin
     AEdits[Index].Description := FItems[Index].Description;
   end;
   Result := True;
+end;
+
+function TPendingMeasurements.KeyEditable(const Key: string): boolean;
+var
+  Index: integer;
+begin
+  Index := IndexOf(Key);
+  Result := (Index >= 0) and FItems[Index].IsNew;
+end;
+
+function TPendingMeasurements.Rows(Pattern: TPattern; MeasurementSet: TMeasurementSet; const Search: string): TMeasurementPanelRowArray;
+var
+  SetRows: TMeasurementRowArray;
+  Index, RowCount, PendingIndex: integer;
+  Listed: array of boolean;
+  LowerSearch: string;
+
+  function PendingRow(ItemIndex: integer): TMeasurementPanelRow;
+  begin
+    Result := Default(TMeasurementPanelRow);
+    Result.Key := FItems[ItemIndex].Key;
+    if FItems[ItemIndex].HasValue then
+      Result.Value := FormatJSONFloat(FItems[ItemIndex].Value);
+    Result.Description := FItems[ItemIndex].Description;
+    Result.Pending := True;
+    Result.IsNew := FItems[ItemIndex].IsNew;
+  end;
+
+begin
+  Result := nil;
+  SetRows := MeasurementRows(Pattern, MeasurementSet, Search);
+  Listed := nil;
+  SetLength(Listed, Length(FItems));
+  SetLength(Result, Length(SetRows) + Length(FItems));
+  for Index := 0 to High(SetRows) do
+  begin
+    PendingIndex := IndexOf(SetRows[Index].Key);
+    if PendingIndex >= 0 then
+    begin
+      Listed[PendingIndex] := True;
+      Result[Index] := PendingRow(PendingIndex);
+      Continue;
+    end;
+    Result[Index] := Default(TMeasurementPanelRow);
+    Result[Index].Key := SetRows[Index].Key;
+    Result[Index].Value := SetRows[Index].Value;
+    Result[Index].Description := SetRows[Index].Description;
+    Result[Index].Missing := SetRows[Index].Missing;
+  end;
+  RowCount := Length(SetRows);
+  LowerSearch := LowerCase(Trim(Search));
+  for Index := 0 to High(FItems) do
+    if not Listed[Index] and FItems[Index].IsNew and ((LowerSearch = '') or (Pos(LowerSearch, LowerCase(FItems[Index].Key)) > 0)) then
+    begin
+      Result[RowCount] := PendingRow(Index);
+      Inc(RowCount);
+    end;
+  SetLength(Result, RowCount);
+end;
+
+function TPendingMeasurements.Save(Document: TPatternDocument; out Changes: TMeasurementChangeArray; out Reason: string): boolean;
+var
+  AEdits: TMeasurementEditArray;
+begin
+  Changes := nil;
+  Result := Edits(AEdits, Reason) and Document.ChangeMeasurements(AEdits, Changes, Reason);
+  if Result then
+    Clear;
 end;
 
 end.

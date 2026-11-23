@@ -680,8 +680,13 @@ begin
   AssertFalse('not read', FDocument.CheckMeasurementFile);
   AssertFalse('not read again', FDocument.CheckMeasurementFile);
   AssertNear('as given', 180, PointX('A'));
-  AssertFalse('not written', FDocument.ChangeMeasurement('waist', 900, '', Change, Err));
-  AssertEquals(rsDocumentMeasurementsInMemory, Err);
+  // Changed in memory, not on disk
+  AssertTrue(Err, FDocument.ChangeMeasurement('waist', 880, '', Change, Err));
+  AssertNear('changed', 220, PointX('A'));
+  AssertTrue('still in memory', FDocument.MeasurementsInMemory);
+  AssertTrue('in its text', Pos('880', FDocument.MeasurementText) > 0);
+  AssertTrue(ReadTextFile(ConcatPaths([FFolder, 'sets', 'bill.slm']), SetText, Err));
+  AssertTrue('not written', (Pos('800', SetText) > 0) and (Pos('880', SetText) = 0));
   AssertTrue(Err, FDocument.UseMeasurements(ConcatPaths([FFolder, 'sets', 'bill.slm']), Err));
   AssertFalse('from a file again', FDocument.MeasurementsInMemory);
   AssertTrue(Err, FDocument.ChangeMeasurement('waist', 900, '', Change, Err));

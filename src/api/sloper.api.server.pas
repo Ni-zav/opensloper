@@ -219,6 +219,7 @@ const
   API_WITHHELD = '(withheld)';
 
 resourcestring
+  rsApiMeasurementsInMemory = 'The measurement file was given as text, so set_measurement cannot change it';
   rsApiMeasurementsWithheld = 'The user keeps their measurements from assistants (Edit → Preferences → Design); ' +
     'work from the pattern''s formulas and the measurement keys missing_measurements lists';
   rsApiNotRequest = 'The request must be a JSON-RPC 2.0 object with a method';
@@ -1140,6 +1141,9 @@ var
   Info: TJSONObject;
 begin
   CheckMeasurementsShared;
+  // A set given as text changes only in memory, where no reply could hand it back
+  if FDocument.MeasurementsInMemory then
+    raise EApiError.Create(RPC_REFUSED, rsApiMeasurementsInMemory);
   Key := RequireString(Params, 'key');
   if not GetJSONNumber(Params, 'value', Value) then
     raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['value']));

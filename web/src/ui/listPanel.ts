@@ -25,6 +25,8 @@ export interface ListPanelRow {
   key: string;
   cells: string[];
   state: EvalState;
+  // Shown in bold, as an unsaved edit
+  marked?: boolean;
 }
 
 export interface ListColumn {
@@ -43,10 +45,12 @@ export interface ListPanelEvents {
   failed(error: unknown): void;
 }
 
-// What committing a cell did: refused, with the reason, or done
+// What committing a cell did: refused, with the reason, or done; key is the
+// row's key afterwards when the edit changed it
 export interface CellCommit {
   done: boolean;
   reason: string;
+  key?: string;
 }
 
 // The cell being edited, by key, as rows may move
@@ -159,6 +163,16 @@ export abstract class ListPanel implements SideTabContent {
     return Promise.resolve({ done: false, reason: '' });
   }
 
+  // Whether the row's cell can be opened; by default its column decides
+  protected cellEditable(_key: string, column: number): boolean {
+    return this.editable[column] === true;
+  }
+
+  // The text an opened cell starts with, from the text it shows
+  protected cellEditText(_key: string, _column: number, shown: string): string {
+    return shown;
+  }
+
   // The object or variable a formula column's row is, for completion
   protected completionTarget(key: string): number | undefined {
     return /^\d+$/.test(key) ? Number(key) : undefined;
@@ -236,6 +250,11 @@ export abstract class ListPanel implements SideTabContent {
     }
   }
 
+  // Drops the refused text kept in cells, as when the edits are reverted
+  protected clearRefusals(): void {
+    this.refusals.clear();
+  }
+
   protected report(error: unknown): void {
     if (error instanceof EngineError) {
       this.events.message(error.message);
@@ -265,6 +284,7 @@ export abstract class ListPanel implements SideTabContent {
     const lines = this.rows.map((row) => {
       const line = window.document.createElement('tr');
       line.dataset.key = row.key;
+      line.classList.toggle('marked', row.marked === true);
       if (row.state === 'error' || row.state === 'invalid') {
         line.classList.add('failed');
       } else if (row.state === 'blocked') {
@@ -327,6 +347,14 @@ export abstract class ListPanel implements SideTabContent {
   }
 
   private async chooseRow(key: string, toggle: boolean, extend: boolean): Promise<void> {
+    // One row at a time needs no asking, and keys typed straight after the click find it chosen
+    if (!this.multiSelect) {
+      this.selected = [key];
+      this.anchor = key;
+      this.paintSelection();
+      this.events.select(this.selected);
+      return;
+    }
     const answer = await this.document.read('editor_list_click', {
       visible: this.visibleKeys,
       selected: this.selected,
@@ -394,7 +422,7 @@ export abstract class ListPanel implements SideTabContent {
   private openCell(typed: string): void {
     const key = this.selected[0];
     const column = this.currentColumn;
-    if (key === undefined || this.editable[column] !== true || this.open !== undefined) {
+    if (key === undefined || !this.cellEditable(key, column) || this.open !== undefined) {
       return;
     }
     const row = this.rows.find((each) => each.key === key);
@@ -404,7 +432,10 @@ export abstract class ListPanel implements SideTabContent {
     }
     const input = window.document.createElement('input');
     input.className = 'cell-editor';
-    input.value = typed === '' ? (this.refusals.get(refusalKey(key, column)) ?? row.cells[column] ?? '') : typed;
+    input.value =
+      typed === ''
+        ? (this.refusals.get(refusalKey(key, column)) ?? this.cellEditText(key, column, row.cells[column] ?? ''))
+        : typed;
     cell.replaceChildren(input);
     cell.classList.add('editing');
     this.open = { key, column, input };
@@ -473,7 +504,8 @@ export abstract class ListPanel implements SideTabContent {
     const text = open.input.value;
     const id = refusalKey(open.key, open.column);
     const row = this.rows.find((each) => each.key === open.key);
-    const unchanged = text === (row?.cells[open.column] ?? '') && !this.refusals.has(id);
+    const unchanged =
+      text === this.cellEditText(open.key, open.column, row?.cells[open.column] ?? '') && !this.refusals.has(id);
     if (!commit) {
       this.refusals.delete(id);
     }
@@ -493,11 +525,36 @@ export abstract class ListPanel implements SideTabContent {
     });
   }
 
+  // The row's key changed: the selection and a cell opened meanwhile follow it
+  private rekey(from: string, to: string): void {
+    this.selected = this.selected.map((key) => (key === from ? to : key));
+    if (this.anchor === from) {
+      this.anchor = to;
+    }
+    if (this.open?.key === from) {
+      this.open.key = to;
+    }
+    for (const row of this.rows) {
+      if (row.key === from) {
+        row.key = to;
+      }
+    }
+    for (const line of this.body.rows) {
+      if (line.dataset.key === from) {
+        line.dataset.key = to;
+      }
+    }
+    this.paintSelection();
+  }
+
   private async commit(open: OpenCell, text: string): Promise<void> {
     const id = refusalKey(open.key, open.column);
     const result = await this.commitCell(open.key, open.column, text);
     if (result.done) {
       this.refusals.delete(id);
+      if (result.key !== undefined && result.key !== open.key) {
+        this.rekey(open.key, result.key);
+      }
     } else {
       this.refusals.set(id, text);
       this.events.message(result.reason);

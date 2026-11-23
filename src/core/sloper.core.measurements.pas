@@ -166,6 +166,10 @@ function ChangeMeasurementInFile(const FileName, Key: string; Value: double; con
 // once: either every edit is made or, on failure, none is.
 function ChangeMeasurementsInFile(const FileName: string; const Edits: TMeasurementEditArray;
   out Changes: TMeasurementChangeArray; out ErrorMessage: string; const Size: string = ''): boolean;
+// The same for a file's contents, given as Text, giving NewText, for a set
+// that is not on disk
+function ChangeMeasurementsInText(const Text: string; const Edits: TMeasurementEditArray;
+  out Changes: TMeasurementChangeArray; out NewText, ErrorMessage: string; const Size: string = ''): boolean;
 // Which of Keys the set cannot give, in the order of Keys
 function MissingMeasurements(const Keys: TStringArray; MeasurementSet: TMeasurementSet): TMissingMeasurementArray;
 // The set as a table, tab separated with a heading, for scripts: one value
@@ -703,11 +707,11 @@ begin
   Result := LoadFromText(Text, ErrorMessage);
 end;
 
-// Reads the file and picks the size, ready for edits
-function OpenMeasurementsForEdit(MeasurementSet: TMeasurementSet; const FileName, Size: string; out ErrorMessage: string): boolean;
+// Reads the file's contents and picks the size, ready for edits
+function LoadMeasurementsForEdit(MeasurementSet: TMeasurementSet; const Text, Size: string; out ErrorMessage: string): boolean;
 begin
   Result := False;
-  if not MeasurementSet.LoadFromFile(FileName, ErrorMessage) then
+  if not MeasurementSet.LoadFromText(Text, ErrorMessage) then
     Exit;
   if (MeasurementSet.SizeCount > 0) and (Size = '') then
   begin
@@ -720,6 +724,14 @@ begin
     Exit;
   end;
   Result := True;
+end;
+
+// Reads the file and picks the size, ready for edits
+function OpenMeasurementsForEdit(MeasurementSet: TMeasurementSet; const FileName, Size: string; out ErrorMessage: string): boolean;
+var
+  Text: string;
+begin
+  Result := ReadTextFile(FileName, Text, ErrorMessage) and LoadMeasurementsForEdit(MeasurementSet, Text, Size, ErrorMessage);
 end;
 
 function ApplyMeasurementEdit(MeasurementSet: TMeasurementSet; const Key: string; Value: double; const Description: string;
@@ -769,18 +781,19 @@ begin
   end;
 end;
 
-function ChangeMeasurementsInFile(const FileName: string; const Edits: TMeasurementEditArray;
-  out Changes: TMeasurementChangeArray; out ErrorMessage: string; const Size: string): boolean;
+function ChangeMeasurementsInText(const Text: string; const Edits: TMeasurementEditArray;
+  out Changes: TMeasurementChangeArray; out NewText, ErrorMessage: string; const Size: string): boolean;
 var
   MeasurementSet: TMeasurementSet;
   Index: integer;
 begin
   Result := False;
   Changes := nil;
+  NewText := '';
   ErrorMessage := '';
   MeasurementSet := TMeasurementSet.Create;
   try
-    if not OpenMeasurementsForEdit(MeasurementSet, FileName, Size, ErrorMessage) then
+    if not LoadMeasurementsForEdit(MeasurementSet, Text, Size, ErrorMessage) then
       Exit;
     SetLength(Changes, Length(Edits));
     for Index := 0 to High(Edits) do
@@ -790,12 +803,23 @@ begin
         Changes := nil;
         Exit;
       end;
-    Result := WriteTextFileAtomic(FileName, MeasurementSet.SaveToText, ErrorMessage);
-    if not Result then
-      Changes := nil;
+    NewText := MeasurementSet.SaveToText;
+    Result := True;
   finally
     FreeAndNil(MeasurementSet);
   end;
+end;
+
+function ChangeMeasurementsInFile(const FileName: string; const Edits: TMeasurementEditArray;
+  out Changes: TMeasurementChangeArray; out ErrorMessage: string; const Size: string): boolean;
+var
+  Text, NewText: string;
+begin
+  Changes := nil;
+  Result := ReadTextFile(FileName, Text, ErrorMessage) and ChangeMeasurementsInText(Text, Edits, Changes, NewText,
+    ErrorMessage, Size) and WriteTextFileAtomic(FileName, NewText, ErrorMessage);
+  if not Result then
+    Changes := nil;
 end;
 
 function MissingMeasurements(const Keys: TStringArray; MeasurementSet: TMeasurementSet): TMissingMeasurementArray;

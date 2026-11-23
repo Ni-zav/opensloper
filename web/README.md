@@ -27,9 +27,11 @@ over the canvas. Open, Measurements, Save, Undo, Redo, Fit, the user guide's
 example patterns (copied from `docs/examples` when the app is built), the
 role box and the labels mode are on the toolbar. The side panel has the
 Objects, Variables and Measurements tabs, searchable, with the Objects tab
-following the canvas selection and setting it and the Variables tab edited
-in the grid, with name completion in formulas; editing measurements and the
-Properties tab follow the same pattern.
+following the canvas selection and setting it, the Variables tab edited in
+the grid, with name completion in formulas, and the Measurements tab edited
+in the grid too, its edits in bold until Save downloads the measurement file,
+with the size box and the test size; the Properties tab follows the same
+pattern.
 
 ## Setting up
 

@@ -29,11 +29,14 @@ interface
 
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
-  Sloper.Core.Geometry, Sloper.Editor.Snap, Sloper.Core.Drag;
+  Sloper.Core.Geometry, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits;
 
 type
   TEditorApiServer = class(TApiServer)
   private
+    FPending: TPendingMeasurements;
+    // The measurement file the pending edits are for
+    FPendingPath: string;
     // What the document has said changed since editor_changes last answered
     FChanges: TDocumentChanges;
     // The point, note or curve being dragged, and the one field a point's drag
@@ -82,6 +85,16 @@ type
     function DoListObjects(Params: TJSONObject): TJSONData;
     function DoListVariables(Params: TJSONObject): TJSONData;
     function DoListMeasurements(Params: TJSONObject): TJSONData;
+    // The Measurements tab's unsaved edits, dropped when another set is used
+    function Pending: TPendingMeasurements;
+    procedure CheckNotTesting;
+    procedure CheckNothingPending;
+    function DoMeasurementAdd: TJSONData;
+    function DoMeasurementSet(Params: TJSONObject): TJSONData;
+    function DoMeasurementsSave(Params: TJSONObject): TJSONData;
+    function DoMeasurementsRevert: TJSONData;
+    function DoMeasurementSize(Params: TJSONObject): TJSONData;
+    function DoMeasurementScale(Params: TJSONObject): TJSONData;
     function DoSuggest(Params: TJSONObject): TJSONData;
   protected
     function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; override;
@@ -219,7 +232,37 @@ resourcestring
     '`stateText`';
   rsEditorListMeasurements = 'The rows of the Measurements tab: the measurement file''s measurements whose key or ' +
     'description contain the search, then those the pattern uses that the file lacks.';
-  rsEditorListMeasurementsReturns = '`rows`, each with `key`, `value`, `description` and `missing`';
+  rsEditorListMeasurementsReturns = '`rows`, each with `key`, `value`, `description`, `missing`, `pending` (an unsaved ' +
+    'edit) and `isNew` (made by editor_measurement_add, so its key can be changed); `file`, the measurement file as ' +
+    'the pattern records it, or empty; `sizes`, a size table''s sizes, and `size`, the one used; `testPercent`, the ' +
+    'test size; and `pendingCount`, how many edits are unsaved';
+  rsEditorMeasurementAdd = 'Adds an unsaved measurement to the Measurements tab, as its Add does: the first free key ' +
+    'of measurement, measurement2 and so on, with no value yet.';
+  rsEditorMeasurementAddReturns = '`key`, the new row''s';
+  rsEditorMeasurementSet = 'Commits a cell of the Measurements tab as an unsaved edit, kept until ' +
+    'editor_measurements_save writes them all or editor_measurements_revert drops them. Only a new row''s key can ' +
+    'change.';
+  rsEditorMeasurementKey = 'The row''s key';
+  rsEditorMeasurementColumn = 'The cell''s column';
+  rsEditorMeasurementText = 'What the cell holds: a value in mm, with a point for decimals';
+  rsEditorMeasurementSetReturns = '`done`, false when refused, with the `reason`; `key`, the row''s key afterwards';
+  rsEditorMeasurementsSave = 'Makes the unsaved edits to the measurement set and gives the file''s new contents back ' +
+    'to be saved; nothing is written. With no set, a new one is made, which the pattern records.';
+  rsEditorMeasurementsFile = 'Where the pattern records a new set, relative to the pattern''s folder with /, when it ' +
+    'has none';
+  rsEditorMeasurementsSaveReturns = '`done`, false when refused, with the `reason`; `text`, the set''s file, ' +
+    '`file`, as the pattern records it, and `message`, what was saved, in words';
+  rsEditorMeasurementsRevert = 'Drops the Measurements tab''s unsaved edits.';
+  rsEditorMeasurementsRevertReturns = '`done`, true';
+  rsEditorMeasurementSize = 'Uses another size of a size table; refused while edits are unsaved.';
+  rsEditorMeasurementSizeName = 'The size, as the table names it';
+  rsEditorMeasurementSizeReturns = '`size`, the one used';
+  rsEditorMeasurementScale = 'Tries the pattern with every measurement larger or smaller; nothing is saved. Refused ' +
+    'while edits are unsaved.';
+  rsEditorMeasurementPercent = 'How much larger, in percent, from -20 to 20; 0 is as measured';
+  rsEditorMeasurementScaleReturns = '`testPercent`, as set';
+  rsEditorNewMeasurementsFile = 'Name the new measurement file with `file`';
+  rsEditorPendingMeasurements = 'Save or revert the measurement edits first';
   rsEditorSuggest = 'Formulas that give about the value of an object''s field, from its measurements, variables and ' +
     'the objects it may read, best first.';
   rsEditorSuggestTarget = 'The object, by ID or name';
@@ -272,11 +315,11 @@ resourcestring
 implementation
 
 uses
-  TypInfo, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
+  TypInfo, Math, Sloper.API.Rpc, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Draft,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Editor.PanelEdits;
+  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -290,6 +333,9 @@ const
   // The Variables tab's columns that can be edited, as TVariableColumn without the value
   VARIABLE_COLUMN_NAMES: array[0..2] of string = ('name', 'formula', 'description');
   VARIABLE_COLUMNS: array[0..2] of TVariableColumn = (vcName, vcFormula, vcDescription);
+  MEASUREMENT_COLUMN_NAMES: array[TMeasurementColumn] of string = ('key', 'value', 'description');
+  // The test size's reach, in percent either way, as the desktop's slider
+  MAX_TEST_PERCENT = 20;
   OBJECT_FILTER_NAMES: array[TObjectFilter] of string = ('all', 'points', 'edges', 'pieces', 'notes', 'problems');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
   ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
@@ -384,6 +430,18 @@ begin
     AddApiParam(Built, 'search', apText, False, rsEditorSearch);
     AddApiMethod(Built, 'editor_list_measurements', rsEditorListMeasurements, rsEditorListMeasurementsReturns, True);
     AddApiParam(Built, 'search', apText, False, rsEditorSearch);
+    AddApiMethod(Built, 'editor_measurement_add', rsEditorMeasurementAdd, rsEditorMeasurementAddReturns);
+    AddApiMethod(Built, 'editor_measurement_set', rsEditorMeasurementSet, rsEditorMeasurementSetReturns);
+    AddApiParam(Built, 'key', apText, True, rsEditorMeasurementKey);
+    AddApiParam(Built, 'column', apChoice, True, rsEditorMeasurementColumn, string.Join(', ', MEASUREMENT_COLUMN_NAMES));
+    AddApiParam(Built, 'text', apText, True, rsEditorMeasurementText);
+    AddApiMethod(Built, 'editor_measurements_save', rsEditorMeasurementsSave, rsEditorMeasurementsSaveReturns);
+    AddApiParam(Built, 'file', apText, False, rsEditorMeasurementsFile);
+    AddApiMethod(Built, 'editor_measurements_revert', rsEditorMeasurementsRevert, rsEditorMeasurementsRevertReturns);
+    AddApiMethod(Built, 'editor_measurement_size', rsEditorMeasurementSize, rsEditorMeasurementSizeReturns);
+    AddApiParam(Built, 'size', apText, True, rsEditorMeasurementSizeName);
+    AddApiMethod(Built, 'editor_measurement_scale', rsEditorMeasurementScale, rsEditorMeasurementScaleReturns);
+    AddApiParam(Built, 'percent', apWhole, True, rsEditorMeasurementPercent);
     AddApiMethod(Built, 'editor_suggest', rsEditorSuggest, rsEditorSuggestReturns, True);
     AddApiParam(Built, 'id', apTarget, True, rsEditorSuggestTarget);
     AddApiParam(Built, 'field', apText, True, rsEditorField);
@@ -1101,16 +1159,141 @@ begin
   Result := TJSONObject.Create(['rows', Rows]);
 end;
 
+function TEditorApiServer.Pending: TPendingMeasurements;
+begin
+  if not Assigned(FPending) then
+    FPending := TPendingMeasurements.Create;
+  if Document.MeasurementPath <> FPendingPath then
+  begin
+    FPending.Clear;
+    FPendingPath := Document.MeasurementPath;
+  end;
+  Result := FPending;
+end;
+
+// The values shown while trying sizes are scaled, so none is edited then
+procedure TEditorApiServer.CheckNotTesting;
+begin
+  // Exactly 1 is no test, so this is not a tolerance compare
+  if Document.MeasurementScale <> 1 then
+    raise EApiError.Create(RPC_REFUSED, rsPanelTestingSizes);
+end;
+
+procedure TEditorApiServer.CheckNothingPending;
+begin
+  if Pending.Count > 0 then
+    raise EApiError.Create(RPC_REFUSED, rsEditorPendingMeasurements);
+end;
+
 function TEditorApiServer.DoListMeasurements(Params: TJSONObject): TJSONData;
 var
-  Row: TMeasurementRow;
-  Rows: TJSONArray;
+  Row: TMeasurementPanelRow;
+  Rows, Sizes: TJSONArray;
+  Size: string;
+  Index: integer;
 begin
   CheckMeasurementsShared;
   Rows := TJSONArray.Create;
-  for Row in MeasurementRows(Document.Pattern, Document.Measurements, OptionalString(Params, 'search')) do
-    Rows.Add(TJSONObject.Create(['key', Row.Key, 'value', Row.Value, 'description', Row.Description, 'missing', Row.Missing]));
-  Result := TJSONObject.Create(['rows', Rows]);
+  for Row in Pending.Rows(Document.Pattern, Document.Measurements, OptionalString(Params, 'search')) do
+    Rows.Add(TJSONObject.Create(['key', Row.Key, 'value', Row.Value, 'description', Row.Description, 'missing', Row.Missing,
+      'pending', Row.Pending, 'isNew', Row.IsNew]));
+  Sizes := TJSONArray.Create;
+  Size := '';
+  if Assigned(Document.Measurements) then
+  begin
+    for Index := 0 to Document.Measurements.SizeCount - 1 do
+      Sizes.Add(Document.Measurements.Sizes[Index]);
+    Size := Document.Measurements.SizeName;
+  end;
+  Result := TJSONObject.Create(['rows', Rows, 'file', Document.Pattern.MeasurementFile, 'sizes', Sizes, 'size', Size,
+    'testPercent', Round((Document.MeasurementScale - 1) * 100), 'pendingCount', Pending.Count]);
+end;
+
+function TEditorApiServer.DoMeasurementAdd: TJSONData;
+begin
+  CheckMeasurementsShared;
+  CheckNotTesting;
+  Result := TJSONObject.Create(['key', Pending.AddNew(Document.Measurements)]);
+end;
+
+// A refused value is an answer, not an error: the cell keeps it, in red, with the reason
+function TEditorApiServer.DoMeasurementSet(Params: TJSONObject): TJSONData;
+var
+  Key, NewKey, Reason: string;
+  Done: boolean;
+begin
+  CheckMeasurementsShared;
+  CheckNotTesting;
+  Key := RequireString(Params, 'key');
+  Done := Pending.CommitCell(Document.Measurements, Key, TMeasurementColumn(ChoiceParam(Params, 'column',
+    MEASUREMENT_COLUMN_NAMES)), RequireString(Params, 'text'), NewKey, Reason);
+  Result := TJSONObject.Create(['done', Done, 'reason', Reason, 'key', NewKey]);
+end;
+
+function TEditorApiServer.DoMeasurementsSave(Params: TJSONObject): TJSONData;
+var
+  Changes: TMeasurementChangeArray;
+  Reason, NewFile: string;
+  Empty: TMeasurementSet;
+begin
+  CheckMeasurementsShared;
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  if (Pending.Count > 0) and (Document.MeasurementPath = '') then
+  begin
+    NewFile := OptionalString(Params, 'file');
+    if NewFile = '' then
+      raise EApiError.Create(RPC_INVALID_PARAMS, rsEditorNewMeasurementsFile);
+    Empty := TMeasurementSet.Create;
+    try
+      if not Document.UseMeasurementsText(Empty.SaveToText, NewFile, Reason) then
+        raise EApiError.Create(RPC_REFUSED, Reason);
+    finally
+      FreeAndNil(Empty);
+    end;
+    // The new set is the one the edits are for
+    FPendingPath := Document.MeasurementPath;
+  end;
+  if Pending.Count = 0 then
+    Exit(TJSONObject.Create(['done', True, 'reason', '', 'text', Document.MeasurementText, 'file',
+      Document.Pattern.MeasurementFile, 'message', '']));
+  if not Pending.Save(Document, Changes, Reason) then
+    Exit(TJSONObject.Create(['done', False, 'reason', Reason]));
+  Result := TJSONObject.Create(['done', True, 'reason', '', 'text', Document.MeasurementText, 'file',
+    Document.Pattern.MeasurementFile, 'message', MeasurementsSavedText(Changes, Document.Pattern.MeasurementFile)]);
+end;
+
+function TEditorApiServer.DoMeasurementsRevert: TJSONData;
+begin
+  Pending.Clear;
+  Result := TJSONObject.Create(['done', True]);
+end;
+
+function TEditorApiServer.DoMeasurementSize(Params: TJSONObject): TJSONData;
+var
+  Size: string;
+begin
+  CheckMeasurementsShared;
+  CheckNothingPending;
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  Size := RequireString(Params, 'size');
+  if not Document.SelectMeasurementSize(Size) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsMeasurementUnknownSize, [Size]));
+  Result := TJSONObject.Create(['size', Document.Measurements.SizeName]);
+end;
+
+function TEditorApiServer.DoMeasurementScale(Params: TJSONObject): TJSONData;
+var
+  Percent: integer;
+begin
+  CheckMeasurementsShared;
+  CheckNothingPending;
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsApiBusy);
+  Percent := Max(-MAX_TEST_PERCENT, Min(MAX_TEST_PERCENT, RequireWhole(Params, 'percent')));
+  Document.SetMeasurementScale(1 + Percent / 100);
+  Result := TJSONObject.Create(['testPercent', Percent]);
 end;
 
 function SuggestionToJSON(const Suggestion: TSuggestion; Kind: TSuggestionKind; Pattern: TPattern): TJSONObject;
@@ -1222,6 +1405,7 @@ destructor TEditorApiServer.Destroy;
 begin
   if Assigned(Document) then
     Document.RemoveListener(@DocumentChanged);
+  FreeAndNil(FPending);
   inherited Destroy;
 end;
 
@@ -1565,6 +1749,12 @@ begin
     'editor_list_objects': Result := DoListObjects(Params);
     'editor_list_variables': Result := DoListVariables(Params);
     'editor_list_measurements': Result := DoListMeasurements(Params);
+    'editor_measurement_add': Result := DoMeasurementAdd;
+    'editor_measurement_set': Result := DoMeasurementSet(Params);
+    'editor_measurements_save': Result := DoMeasurementsSave(Params);
+    'editor_measurements_revert': Result := DoMeasurementsRevert;
+    'editor_measurement_size': Result := DoMeasurementSize(Params);
+    'editor_measurement_scale': Result := DoMeasurementScale(Params);
     'editor_suggest': Result := DoSuggest(Params);
     'editor_changes': Result := DoChanges;
     'editor_drag_begin': Result := DoDragBegin(Params);

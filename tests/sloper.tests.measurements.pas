@@ -56,6 +56,7 @@ type
     procedure TestMissingFile;
     procedure TestSizeTable;
     procedure TestSizeTableRoundTrip;
+    procedure TestChangeInText;
     procedure TestPersonalSetHasNoSizes;
     procedure TestBadSizeTables;
     procedure TestNoValueForSize;
@@ -191,6 +192,33 @@ procedure TTestMeasurements.TestSizeTableRoundTrip;
 begin
   LoadTable;
   AssertEquals(TABLE_TEXT, FSet.SaveToText);
+end;
+
+procedure TTestMeasurements.TestChangeInText;
+var
+  Edits: TMeasurementEditArray;
+  Changes: TMeasurementChangeArray;
+  NewText, Err: string;
+begin
+  Edits := nil;
+  SetLength(Edits, 2);
+  Edits[0].Key := 'hip';
+  Edits[0].Value := 940;
+  Edits[1].Key := 'seat';
+  Edits[1].Value := 960;
+  Edits[1].Description := 'Seat';
+  AssertFalse('a table needs a size', ChangeMeasurementsInText(TABLE_TEXT, Edits, Changes, NewText, Err));
+  AssertEquals(rsMeasurementNeedsSize, Err);
+  AssertTrue(Err, ChangeMeasurementsInText(TABLE_TEXT, Edits, Changes, NewText, Err, '38'));
+  AssertEquals(2, Length(Changes));
+  AssertFalse('hip had no value', Changes[0].HadValue);
+  AssertTrue('seat added', Changes[1].Added);
+  AssertTrue(Err, FSet.LoadFromText(NewText, Err));
+  AssertTrue(FSet.SelectSize('38'));
+  AssertNear('hip', 940, FSet.Find('hip').Value);
+  AssertNear('seat', 960, FSet.Find('seat').Value);
+  AssertNear('waist kept', 740.5, FSet.Find('waist').Value);
+  AssertFalse('a bad key', ChangeMeasurementsInText(TABLE_TEXT, [Default(TMeasurementEdit)], Changes, NewText, Err, '38'));
 end;
 
 procedure TTestMeasurements.TestPersonalSetHasNoSizes;

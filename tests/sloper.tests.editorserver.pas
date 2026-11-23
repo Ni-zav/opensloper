@@ -116,6 +116,10 @@ type
     procedure TestListClick;
     // The Variables tab's Add, cells and Delete, each one undo step
     procedure TestVariableEdits;
+    // The Measurements tab's unsaved edits, saved to a set given as text
+    procedure TestMeasurementEdits;
+    procedure TestMeasurementsNewSet;
+    procedure TestMeasurementSizeAndScale;
   private
     // A callout from B, its text at (150, -40); its ID
     function AddCallout: integer;
@@ -124,7 +128,7 @@ type
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.API.Mcp;
+  Sloper.Core.JSON, Sloper.API.Mcp, Sloper.Editor.PanelEdits;
 
 const
   TOLERANCE = 1e-6;
@@ -1153,6 +1157,115 @@ begin
   AssertEquals('its step', 'Delete variable', Answer.Strings['undo']);
   Call('editor_variable_delete', '{"name": "A"}');
   AssertEquals('not a variable', RPC_REFUSED, ErrorCode);
+end;
+
+const
+  PERSONAL_SET = '{"format": "measurements", "version": 1, "units": "mm", "measurements": [' +
+    '{"key": "waist", "value": 720, "description": "Waist"}]}';
+  SIZE_TABLE = '{"format": "measurements", "version": 1, "units": "mm", "sizes": ["36", "38"], "measurements": [' +
+    '{"key": "waist", "values": [700, 740]}]}';
+
+function PointXOf(Server: TTestEditorServer; const AName: string): double;
+begin
+  Server.Call('get_object', '{"name": "' + AName + '"}');
+  Result := Server.Answer.Get('x', 0.0);
+end;
+
+procedure TTestEditorServer.TestMeasurementEdits;
+var
+  Rows: TJSONArray;
+  Key, Text: string;
+begin
+  Call('use_measurements', '{"text": "' + StringToJSONString(PERSONAL_SET) + '", "file": "me.slm"}');
+  Answer;
+  Call('add_point', '{"type": "freePoint", "name": "A", "x": "@waist / 4", "y": 0}');
+  Answer;
+  Call('set_measurement', '{"key": "waist", "value": 800}');
+  AssertEquals('the API leaves a set given as text alone', RPC_REFUSED, ErrorCode);
+  Call('editor_measurement_set', '{"key": "waist", "column": "value", "text": "eight"}');
+  AssertFalse('not a number', Answer.Booleans['done']);
+  AssertEquals(rsPanelBadValue, Answer.Strings['reason']);
+  Call('editor_measurement_set', '{"key": "waist", "column": "value", "text": "800"}');
+  AssertTrue('kept', Answer.Booleans['done']);
+  Call('editor_measurement_set', '{"key": "waist", "column": "key", "text": "hip"}');
+  AssertFalse('only a new key changes', Answer.Booleans['done']);
+  AssertNear('not made yet', 180, PointXOf(Self, 'A'), TOLERANCE);
+  Call('editor_measurement_add');
+  Key := Answer.Strings['key'];
+  AssertEquals('the first free key', 'measurement', Key);
+  Call('editor_measurement_set', '{"key": "measurement", "column": "key", "text": "seat"}');
+  AssertEquals('renamed', 'seat', Answer.Strings['key']);
+  Call('editor_measurements_save');
+  AssertFalse('seat has no value', Answer.Booleans['done']);
+  Call('editor_measurement_set', '{"key": "seat", "column": "value", "text": "960.5"}');
+  Call('editor_list_measurements');
+  AssertEquals('two pending', 2, Answer.Integers['pendingCount']);
+  AssertEquals('the file', 'me.slm', Answer.Strings['file']);
+  Rows := Answer.Arrays['rows'];
+  AssertEquals('the edit over the set', '800', Rows.Objects[0].Strings['value']);
+  AssertTrue('marked', Rows.Objects[0].Booleans['pending']);
+  AssertEquals('the new key last', 'seat', Rows.Objects[1].Strings['key']);
+  AssertTrue('new', Rows.Objects[1].Booleans['isNew']);
+  Call('editor_measurement_size', '{"size": "38"}');
+  AssertEquals('not while edits wait', RPC_REFUSED, ErrorCode);
+  Call('editor_measurements_save');
+  AssertTrue('saved', Answer.Booleans['done']);
+  Text := Answer.Strings['text'];
+  AssertTrue('the file''s new text', (Pos('800', Text) > 0) and (Pos('seat', Text) > 0));
+  AssertEquals('as recorded', 'me.slm', Answer.Strings['file']);
+  AssertTrue('says so', Answer.Strings['message'] <> '');
+  AssertNear('worked out again', 200, PointXOf(Self, 'A'), TOLERANCE);
+  Call('editor_list_measurements');
+  AssertEquals('none pending', 0, Answer.Integers['pendingCount']);
+  Call('editor_measurement_set', '{"key": "waist", "column": "description", "text": "Natural waist"}');
+  Call('editor_measurements_revert');
+  Call('editor_list_measurements');
+  AssertEquals('dropped', 0, Answer.Integers['pendingCount']);
+  AssertEquals('as saved', 'Waist', Answer.Arrays['rows'].Objects[0].Strings['description']);
+end;
+
+procedure TTestEditorServer.TestMeasurementsNewSet;
+begin
+  Call('editor_measurement_add');
+  Call('editor_measurement_set', '{"key": "measurement", "column": "value", "text": "500"}');
+  Call('editor_measurements_save');
+  AssertEquals('needs a name', RPC_INVALID_PARAMS, ErrorCode);
+  Call('editor_measurements_save', '{"file": "sets/me.slm"}');
+  AssertTrue('made', Answer.Booleans['done']);
+  AssertEquals('as recorded', 'sets/me.slm', Answer.Strings['file']);
+  AssertTrue('with the edit', Pos('500', Answer.Strings['text']) > 0);
+  Call('editor_list_measurements');
+  AssertEquals('the pattern records it', 'sets/me.slm', Answer.Strings['file']);
+  AssertEquals('listed', 'measurement', Answer.Arrays['rows'].Objects[0].Strings['key']);
+end;
+
+procedure TTestEditorServer.TestMeasurementSizeAndScale;
+begin
+  Call('use_measurements', '{"text": "' + StringToJSONString(SIZE_TABLE) + '", "file": "block.slm"}');
+  Answer;
+  Call('add_point', '{"type": "freePoint", "name": "A", "x": "@waist / 4", "y": 0}');
+  Call('editor_list_measurements');
+  AssertEquals('sizes', 2, Answer.Arrays['sizes'].Count);
+  AssertEquals('the first size', '36', Answer.Strings['size']);
+  Call('editor_measurement_size', '{"size": "38"}');
+  AssertEquals('used', '38', Answer.Strings['size']);
+  AssertNear('that size', 185, PointXOf(Self, 'A'), TOLERANCE);
+  Call('editor_measurement_size', '{"size": "99"}');
+  AssertEquals('not in the table', RPC_REFUSED, ErrorCode);
+  Call('editor_measurement_scale', '{"percent": 10}');
+  AssertEquals('tried', 10, Answer.Integers['testPercent']);
+  AssertNear('larger', 203.5, PointXOf(Self, 'A'), TOLERANCE);
+  Call('editor_measurement_set', '{"key": "waist", "column": "value", "text": "760"}');
+  AssertEquals('not while trying sizes', RPC_REFUSED, ErrorCode);
+  Call('editor_measurement_scale', '{"percent": 50}');
+  AssertEquals('kept within reach', 20, Answer.Integers['testPercent']);
+  Call('editor_measurement_scale', '{"percent": 0}');
+  Call('editor_measurement_set', '{"key": "waist", "column": "value", "text": "760"}');
+  Call('editor_measurements_save');
+  AssertTrue('saved to that size', Pos('760', Answer.Strings['text']) > 0);
+  Call('editor_list_measurements');
+  AssertEquals('still that size', '38', Answer.Strings['size']);
+  AssertNear('the new value', 190, PointXOf(Self, 'A'), TOLERANCE);
 end;
 
 initialization

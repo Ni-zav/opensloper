@@ -4,6 +4,7 @@
 // column, giving the canvas the room; clicking any icon opens it again. A
 // tab can sit at the foot of the column, as the Problems tab does in every
 // app, and show a count on its icon.
+import { STRINGS } from './strings.ts';
 
 // What a tab holds: told when it shows and hides, so a hidden list need not
 // follow every change
@@ -24,6 +25,7 @@ interface Section {
 export class SideTabs {
   readonly element: HTMLElement;
   private readonly column: HTMLElement;
+  private readonly toggle: HTMLButtonElement;
   // The tabs kept at the foot of the column
   private readonly foot: HTMLElement;
   private readonly page: HTMLElement;
@@ -32,11 +34,23 @@ export class SideTabs {
   private readonly body: HTMLElement;
   private readonly sections: Section[] = [];
   private openKey = '';
-  private folded = false;
+  private folded: boolean;
 
-  constructor(element: HTMLElement) {
+  constructor(element: HTMLElement, folded: boolean) {
     this.element = element;
+    this.folded = folded;
     this.element.classList.add('side-tabs');
+    const rail = document.createElement('div');
+    rail.className = 'side-rail';
+    this.toggle = document.createElement('button');
+    this.toggle.type = 'button';
+    const toggleIcon = document.createElement('img');
+    toggleIcon.src = 'icons/layout-sidebar-right.svg';
+    toggleIcon.alt = '';
+    this.toggle.append(toggleIcon);
+    this.toggle.addEventListener('click', () => {
+      this.setFolded(!this.folded);
+    });
     this.column = document.createElement('div');
     this.column.className = 'side-column';
     this.column.setAttribute('role', 'tablist');
@@ -46,6 +60,8 @@ export class SideTabs {
     this.column.append(this.foot);
     this.page = document.createElement('div');
     this.page.className = 'side-page';
+    this.page.id = `${element.id}-page`;
+    this.toggle.setAttribute('aria-controls', this.page.id);
     const title = document.createElement('div');
     title.className = 'side-title';
     this.titleIcon = document.createElement('img');
@@ -55,7 +71,9 @@ export class SideTabs {
     this.body = document.createElement('div');
     this.body.className = 'side-body';
     this.page.append(title, this.body);
-    this.element.append(this.column, this.page);
+    rail.append(this.toggle, this.column);
+    this.element.append(rail, this.page);
+    this.setFolded(folded);
     this.column.addEventListener('keydown', (event) => {
       this.columnKey(event);
     });
@@ -90,9 +108,12 @@ export class SideTabs {
     }
     content.element.hidden = true;
     this.body.append(content.element);
-    this.sections.push({ key, caption, icon, button, badge, content });
+    const section = { key, caption, icon, button, badge, content };
+    this.sections.push(section);
     if (this.openKey === '') {
-      this.open(key);
+      this.choose(section, this.folded);
+    } else {
+      button.setAttribute('aria-selected', 'false');
     }
   }
 
@@ -101,10 +122,14 @@ export class SideTabs {
     if (section === undefined) {
       return;
     }
-    this.openKey = key;
+    this.choose(section, false);
+  }
+
+  private choose(section: Section, folded: boolean): void {
+    this.openKey = section.key;
     this.titleIcon.src = `icons/${section.icon}.svg`;
     this.titleText.textContent = section.caption;
-    this.setFolded(false);
+    this.setFolded(folded);
   }
 
   // The tab's name, on its icon's tooltip and its title while open
@@ -138,6 +163,9 @@ export class SideTabs {
     this.folded = folded;
     this.page.hidden = folded;
     this.element.classList.toggle('folded', folded);
+    this.toggle.title = folded ? STRINGS.showSidePanel : STRINGS.hideSidePanel;
+    this.toggle.setAttribute('aria-label', this.toggle.title);
+    this.toggle.setAttribute('aria-expanded', String(!folded));
     for (const section of this.sections) {
       const shown = !folded && section.key === this.openKey;
       section.button.classList.toggle('chosen', section.key === this.openKey);

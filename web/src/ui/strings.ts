@@ -101,6 +101,8 @@ export const STRINGS = {
   ],
   exampleMissing: (name: string): string => `The example ${name} could not be fetched`,
   // The side panel's tabs
+  showSidePanel: 'Show side panel',
+  hideSidePanel: 'Hide side panel',
   tabProperties: 'Properties',
   tabObjects: 'Objects',
   tabVariables: 'Variables',

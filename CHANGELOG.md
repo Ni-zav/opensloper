@@ -64,6 +64,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- The web Design app starts with its side panel folded on narrow screens.
+  The side panel button shows or hides it and remembers the selected tab (#91).
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

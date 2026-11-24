@@ -18,6 +18,7 @@ body:
         - opensloper-publish
         - opensloper-drape
         - opensloper-cli
+        - opensloper-web
         - Automation API (opensloper-cli serve)
         - Building or tests
         - Documentation

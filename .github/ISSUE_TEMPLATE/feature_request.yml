@@ -16,6 +16,7 @@ body:
         - opensloper-measurements
         - opensloper-publish
         - opensloper-drape
+        - opensloper-web
         - opensloper-cli
         - Automation API
         - File formats

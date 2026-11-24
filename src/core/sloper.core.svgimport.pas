@@ -1182,6 +1182,8 @@ begin
     try
       Parser := TDOMParser.Create;
       Parser.Options.Namespaces := True;
+      // A stamp needs shapes only. Keep DTD processing out of the importer.
+      Parser.Options.DisallowDoctype := True;
       Stream := TStringStream.Create(SvgText);
       Source := TXMLInputSource.Create(Stream);
       Parser.Parse(Source, Document);

@@ -47,6 +47,7 @@ type
     procedure TestTextRefused;
     procedure TestImageAndClonesRefused;
     procedure TestNotSvg;
+    procedure TestDoctypeRefused;
     procedure TestEmptyRefused;
     procedure TestTransformsAndGroups;
     procedure TestRotation;
@@ -187,6 +188,13 @@ procedure TTestStamps.TestNotSvg;
 begin
   AssertEquals('another kind of XML', rsSvgNotSvg, Refusal('<html><body/></html>'));
   AssertTrue('not XML', Pos(Copy(rsSvgNotXml, 1, 20), Refusal('M 0 0 L 10 10')) = 1);
+end;
+
+procedure TTestStamps.TestDoctypeRefused;
+begin
+  AssertTrue('a stamp does not need a document type',
+    Pos(Copy(rsSvgNotXml, 1, 20), Refusal('<!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg" ' +
+    MM_SIZE + '><rect width="5" height="5"/></svg>')) = 1);
 end;
 
 procedure TTestStamps.TestEmptyRefused;

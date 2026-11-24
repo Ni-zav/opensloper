@@ -522,7 +522,8 @@ begin
     AssertTrue(SetCurrentDir(Folder));
     AssertEquals('a name is looked for on the path only', '', FindBlender(Name));
     AssertEquals('a path is taken as given', Fake, FindBlender(Fake));
-    AssertEquals('a relative path is from the current folder, as typed', Fake, FindBlender(ConcatPaths(['.', Name])));
+    AssertEquals('a relative path is from the current folder', ConcatPaths([GetCurrentDir, Name]),
+      FindBlender(ConcatPaths(['.', Name])));
   finally
     SetCurrentDir(Previous);
     DeleteFile(Fake);

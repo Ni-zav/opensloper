@@ -112,8 +112,14 @@
       .ruler-corner {
         background: #f0efec;
       }
+      /* Sized by the grid alone: without contain, the canvas's own size (its
+         pixels, the CSS size times devicePixelRatio) fed back into the grid
+         at a fractional ratio, such as 1.25, and the left ruler grew each frame */
       .ruler {
         display: block;
+        contain: size;
+        min-width: 0;
+        min-height: 0;
       }
       .ruler-top {
         grid-column: 2;

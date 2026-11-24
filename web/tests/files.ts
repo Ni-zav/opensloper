@@ -10,10 +10,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { KeyInput, Page } from 'puppeteer-core';
+import type { Page } from 'puppeteer-core';
 import {
   bodyData,
   launchBrowser,
+  pressWithMod,
   serveApp,
   status,
   TIMEOUT_MS,
@@ -115,18 +116,6 @@ async function clickToolbar(page: Page, hint: string): Promise<void> {
   await page.click(`#toolbar button[title="${hint}"]`);
 }
 
-async function pressWithControl(page: Page, key: KeyInput, shift = false): Promise<void> {
-  await page.keyboard.down('Control');
-  if (shift) {
-    await page.keyboard.down('Shift');
-  }
-  await page.keyboard.press(key);
-  if (shift) {
-    await page.keyboard.up('Shift');
-  }
-  await page.keyboard.up('Control');
-}
-
 // Adds a point near the canvas's top left with the Point tool
 async function addPoint(page: Page): Promise<void> {
   const canvas = await page.$('#canvas');
@@ -165,7 +154,7 @@ try {
   // A point added and saved in place with the shortcut
   await addPoint(page);
   assert.equal(await bodyData(page, 'modified'), 'true', 'modified');
-  await pressWithControl(page, 's');
+  await pressWithMod(page, 's');
   await waitForStatus(page, 'Saved skirt-pieces.sloper');
   assert.equal(await bodyData(page, 'modified'), 'false', 'saved');
   const savedPattern = await readOpfs(page, PATTERN);
@@ -193,7 +182,7 @@ try {
   await page.reload();
   await waitForData(page, 'ready', 'true');
   await queuePicks(page, PATTERN);
-  await pressWithControl(page, 'o');
+  await pressWithMod(page, 'o');
   await waitForStatus(page, 'Measurements from skirt-small.slm');
 
   // Save as puts it in another folder, which it then saves to
@@ -223,7 +212,7 @@ try {
   assert.equal(await other.title(), '• copy.sloper — OpenSloper', 'still to be saved');
   // Its file came back with it, so Save writes there, and the work kept goes
   const savedCopy = await readOpfs(other, 'copies/copy.sloper');
-  await pressWithControl(other, 's');
+  await pressWithMod(other, 's');
   await waitForStatus(other, 'Saved copy.sloper');
   assert.notEqual(await readOpfs(other, 'copies/copy.sloper'), savedCopy, 'saved to its own file');
   await waitForData(other, 'workKept', 'false');

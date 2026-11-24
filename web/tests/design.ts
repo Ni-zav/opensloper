@@ -5,17 +5,18 @@
 // the Select tool and undoes, edits it in the Properties tab, then uses each
 // drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
 // set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
-// this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
-// default, and SCREENSHOT, a file name without .png, keeps a picture of the end. It opens and saves
+// this TypeScript as it is. CHROMIUM overrides the browser path, and SCREENSHOT,
+// a file name without .png, keeps a picture of the end. It opens and saves
 // through uploads and downloads, as where the browser has no File System Access.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { KeyInput, Page } from 'puppeteer-core';
+import type { Page } from 'puppeteer-core';
 import {
   bodyData,
   launchBrowser,
+  pressWithMod,
   serveApp,
   status,
   TIMEOUT_MS,
@@ -179,9 +180,7 @@ try {
   await page.waitForFunction(() => new Promise((resolve) => requestAnimationFrame(() => resolve(true))));
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.ok(await inkedNear(page, 60, 60), 'the first point is drawn where it was clicked');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', '');
   await page.keyboard.press('s');
 
@@ -209,9 +208,7 @@ try {
   });
   assert.equal(dialogs.length, dialogsBeforeImport + 1, 'a refused import says so in a dialog');
   assert.equal(await bodyData(page, 'undo'), 'Import variables', 'a refused import changes nothing');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', '');
 
   const input = await page.$('input#open-input');
@@ -235,9 +232,7 @@ try {
     page.$eval('.ruler-top', (ruler) => ruler.getBoundingClientRect().height > 0);
   assert.equal(await page.$eval('.ruler-corner', (corner) => corner.textContent), 'mm', 'the rulers count in mm');
   assert.ok(await rulersShown(), 'the rulers show');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('r');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'r');
   assert.ok(!(await rulersShown()), 'the Rulers key hides them');
   await page.click('#toolbar button[title^="Show or hide the rulers"]');
   assert.ok(await rulersShown(), 'the Rulers button shows them');
@@ -380,9 +375,7 @@ try {
   await waitForData(page, 'undo', 'Move point');
   assert.equal(await bodyData(page, 'selection'), added, 'the dragged point stays selected');
 
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add point');
 
   // The Delete key deletes what is selected, as one undo step, and so does
@@ -393,9 +386,7 @@ try {
   await waitForData(page, 'undo', 'Delete');
   await waitForData(page, 'selection', '');
   assert.ok(await isDisabled(page, deleteButton), 'nothing selected, nothing to delete');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add point');
   await page.mouse.click(at.x, at.y);
   await waitForData(page, 'selection', added);
@@ -403,9 +394,7 @@ try {
   await page.click(deleteButton);
   await waitForData(page, 'undo', 'Delete');
   await waitForData(page, 'selection', '');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add point');
   await page.mouse.click(at.x, at.y);
   await waitForData(page, 'selection', added);
@@ -427,12 +416,7 @@ try {
 
   // Copy puts the point's fragment on the clipboard; Paste, the button or the
   // paste key, makes a selected copy of it, and Cut copies and deletes, each one undo step
-  const pressWithControl = async (key: KeyInput): Promise<void> => {
-    await page.keyboard.down('Control');
-    await page.keyboard.press(key);
-    await page.keyboard.up('Control');
-  };
-  await pressWithControl('c');
+  await pressWithMod(page, 'c');
   await waitForStatus(page, 'Copied');
   const fragment = await page.evaluate(async () => navigator.clipboard.readText());
   assert.ok(fragment.length > 0, 'the fragment is on the clipboard');
@@ -440,7 +424,7 @@ try {
   await waitForData(page, 'undo', 'Paste');
   const copy = await bodyData(page, 'selection');
   assert.ok(copy !== '' && copy !== added, 'the copy is selected');
-  await pressWithControl('x');
+  await pressWithMod(page, 'x');
   await waitForData(page, 'undo', 'Cut');
   await waitForData(page, 'selection', '');
   // As the paste key gives it
@@ -453,7 +437,7 @@ try {
   assert.equal(await bodyData(page, 'undo'), 'Paste', 'pasted from the paste key');
   for (const step of ['Cut', 'Paste', 'Add point']) {
     // oxlint-disable-next-line no-await-in-loop
-    await pressWithControl('z');
+    await pressWithMod(page, 'z');
     // oxlint-disable-next-line no-await-in-loop
     await waitForData(page, 'undo', step);
   }
@@ -602,9 +586,7 @@ try {
   await waitForData(page, 'undo', 'Add note');
   await page.waitForSelector('textarea.note-editor', { timeout: TIMEOUT_MS });
   await page.keyboard.type('Cut 2 on fold');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('Enter');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'Enter');
   await waitForData(page, 'undo', 'Change note');
   assert.equal(await page.$('textarea.note-editor'), null, 'the text field closed');
 
@@ -641,12 +623,11 @@ try {
   await page.keyboard.type('Cut 2 on fold WWWWWWWWWWWWWWWW');
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok((await inkedPixels(page)) > inkBefore, 'the text typed shows on the canvas');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('a');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'a');
   await page.keyboard.type('Cut 2');
   await page.keyboard.press('Enter');
   await page.keyboard.type('on fold');
+  // This Properties field uses Ctrl+Enter on every platform.
   await page.keyboard.down('Control');
   await page.keyboard.press('Enter');
   await page.keyboard.up('Control');
@@ -731,9 +712,7 @@ try {
   await page.waitForSelector('#material-width:not(.refused)', { timeout: TIMEOUT_MS });
   assert.ok(await page.$('.materials-dialog[open]'), 'Escape put the field back, leaving the dialog open');
   await page.focus('.materials-dialog .material-grid');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add material');
   await page.click('.materials-left .list-buttons button:last-child');
   await waitForData(page, 'undo', 'Delete material');
@@ -842,9 +821,7 @@ try {
   await page.click('.feature-apply');
   await waitForData(page, 'undo', 'Insert Hem');
   assert.equal(await status(page), 'Hem added along Line_C_J', 'said so');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', undoBefore);
 
   // Every example listed is on the site, and one opens with the measurement file it names beside it

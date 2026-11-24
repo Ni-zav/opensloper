@@ -21,6 +21,8 @@ The editor runs in the browser, since sending every drag to the server would mak
 - **Editor methods.** Methods only a canvas needs are named `editor_`. They have their own table (`EditorMethods`) in `Sloper.API.EditorServer`, whose `TEditorApiServer` answers them on top of the Automation API. The engine and `opensloper-cli serve` both use it. The editor methods are not MCP tools: a mouse position means nothing to Claude, and its tool list stays short. Methods useful to both editors and automation, such as `open` with contents, go in the Automation API itself.
 - **In the module:** `src/core`, `src/document`, `src/editor`, `src/api` and the PDF, SVG and DXF writers. There is no LCL and no BGRABitmap, so `render` gives SVG only. PNG must be reached through something the module can leave out.
 - **Runs in a Web Worker**, so a slow evaluation never freezes the page.
+  A worker reply or request failure includes the request ID. A worker-level
+  error rejects every waiting call, and subsequent calls fail immediately.
 
 ### Shared editing logic
 

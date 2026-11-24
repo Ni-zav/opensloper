@@ -64,6 +64,10 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- The web engine reports a worker call failure to the request that caused
+  it. If the worker stops, pending requests report the failure instead of
+  leaving controls waiting indefinitely.
+
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

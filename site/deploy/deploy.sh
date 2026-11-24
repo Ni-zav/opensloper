@@ -61,7 +61,7 @@ fi
 echo "Copying site/ to $host:$dir"
 ssh "$host" "mkdir -p '$dir'"
 # Readable by Apache, whose user is in the site's group, for /static/ and /design/
-rsync -az --delete --chmod=Du=rwx,go=rx,Fu=rw,go=r \
+rsync -az --delete --chmod=D755,F644 \
   --exclude /venv/ --exclude /static_root/ --exclude /dist/ \
   --exclude /deploy/deploy.local.sh \
   --exclude __pycache__/ --exclude '*.pyc' \

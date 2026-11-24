@@ -15,6 +15,7 @@ import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
 import { FeaturesPanel } from '../ui/featuresPanel.ts';
 import { GarmentPanel } from '../ui/garmentPanel.ts';
+import { ProblemsPanel, type ProblemSubject } from '../ui/problemsPanel.ts';
 import { MaterialsDialog } from '../ui/materialDialog.ts';
 import { PrintDialog } from '../ui/printDialog.ts';
 import { MaterialsPanel } from '../ui/materialPanel.ts';
@@ -52,6 +53,7 @@ const ICONS = {
   featuresTab: 'components',
   materialsTab: 'texture',
   garmentTab: 'shirt',
+  problemsTab: 'alert-triangle',
 } as const;
 
 const DEFAULT_FILE_NAME = 'pattern.sloper';
@@ -138,6 +140,7 @@ class DesignApp {
   private readonly features: FeaturesPanel;
   private readonly materials: MaterialsPanel;
   private readonly garment: GarmentPanel;
+  private readonly problems: ProblemsPanel;
   private readonly materialsDialog: MaterialsDialog;
   private readonly printDialog: PrintDialog;
   private readonly measurements: MeasurementsPanel;
@@ -306,6 +309,26 @@ class DesignApp {
     side.addSection('materials', STRINGS.tabMaterials, ICONS.materialsTab, this.materials);
     this.features = new FeaturesPanel(this.document, { message: showMessage, failed: showFailure });
     side.addSection('features', STRINGS.tabFeatures, ICONS.featuresTab, this.features);
+    this.problems = new ProblemsPanel(this.document, {
+      counted: (count) => {
+        side.setCount('problems', count);
+        side.setCaption('problems', count === 0 ? STRINGS.tabProblems : STRINGS.tabProblemsCount(count));
+      },
+      choose: (subject) => {
+        this.showProblem(subject);
+      },
+      hover: (subject) => {
+        this.canvas.showOutsideHover(subject.kind === 'object' ? subject.id : '');
+      },
+      zoom: (subject) => {
+        if (subject.kind === 'object') {
+          this.run(this.canvas.zoomToSelection());
+        }
+      },
+      failed: showFailure,
+    });
+    // At the foot of the column, as in every app
+    side.addSection('problems', STRINGS.tabProblems, ICONS.problemsTab, this.problems, true);
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
       this.run(this.document.undo());
     });
@@ -741,6 +764,27 @@ class DesignApp {
   }
 
   // What a list tells the app; its rows' choices stay in the list unless a tab says otherwise
+  // A problem with a measurement or variable is shown in its tab, and one with
+  // an object on the canvas, the Problems tab staying open
+  private showProblem(subject: ProblemSubject): void {
+    switch (subject.kind) {
+      case 'measurement':
+        this.side.open('measurements');
+        this.measurements.chooseKeys([subject.key]);
+        break;
+      case 'variable':
+        this.side.open('variables');
+        this.variables.chooseKeys([subject.id]);
+        break;
+      case 'object':
+        this.canvas.select([subject.id]);
+        this.run(this.canvas.revealSelection());
+        break;
+      case 'none':
+        break;
+    }
+  }
+
   private listEvents(): ListPanelEvents {
     return {
       select: () => undefined,

@@ -107,6 +107,10 @@ export const STRINGS = {
   tabFeatures: 'Features',
   tabMaterials: 'Materials',
   tabGarment: 'Garment',
+  tabProblems: 'Problems',
+  tabProblemsCount: (count: number): string => `Problems (${String(count)})`,
+  // The Problems tab
+  problemsNone: 'No problems',
   // The Garment tab, as the desktop's Sloper.UI.GarmentPanel
   garmentAllMaterials: 'All materials',
   garmentMaterialHint: "Which material's pieces to show",

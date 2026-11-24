@@ -61,6 +61,7 @@ type
     function GarmentScene(Params: TJSONObject): TGarmentScene;
     function DoGarment(Params: TJSONObject): TJSONData;
     function DoGarmentMarks(Params: TJSONObject): TJSONData;
+    function DoProblems: TJSONData;
     // The grade check for the object's field, made again when out of date
     function GradeFor(Node: TEvalNode; const FieldName: string): TGradeCheck;
     function DoTipTo(Params: TJSONObject): TJSONData;
@@ -391,6 +392,11 @@ resourcestring
     '`right` and `bottom`, or null with none; `pieces`, in drawing order, each with `id`, `name` and `outline`, its ' +
     'seam line as a flat list of x and y in the drawing''s mm; `notes`, what was left out; `materials`, the names ' +
     'to choose from; and `material`, the one shown, empty for all';
+  rsEditorProblems = 'The Problems tab: every problem the pattern has, in words, with what it is about, as the ' +
+    'status bar counts them.';
+  rsEditorProblemsReturns = '`problems`, each with `text` and `kind`: object (with its `id`, on the canvas or a seam), ' +
+    'variable (its `id`), measurement (its `key`) or none; and `blocked`, how many objects fail only because ' +
+    'others do, which are counted rather than listed';
   rsEditorGarmentMarks = 'What the Garment tab marks for a selection: selected pieces are outlined, and a selected ' +
     'seam marked on both its sides, with the stitch line of a dart it closes.';
   rsEditorGarmentSelection = 'The canvas''s selection, by ID';
@@ -502,7 +508,7 @@ uses
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
   Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange, Sloper.Output.GarmentSVG,
-  Sloper.Editor.Garment;
+  Sloper.Editor.Garment, Sloper.Core.Variables;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -666,6 +672,7 @@ begin
     AddApiParam(Built, 'paper', apChoice, False, rsEditorPrintPaper, 'A4, A3, Letter');
     AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
     AddApiMethod(Built, 'editor_materials', rsEditorMaterials, rsEditorMaterialsReturns, True);
+    AddApiMethod(Built, 'editor_problems', rsEditorProblems, rsEditorProblemsReturns, True);
     AddApiMethod(Built, 'editor_garment', rsEditorGarment, rsEditorGarmentReturns, True);
     AddApiParam(Built, 'material', apText, False, rsEditorGarmentMaterial);
     AddApiMethod(Built, 'editor_garment_marks', rsEditorGarmentMarks, rsEditorGarmentMarksReturns, True);
@@ -1977,6 +1984,44 @@ begin
     'notes', TextsToJSON(Scene.Notes), 'materials', Materials, 'material', Shown]);
 end;
 
+function TEditorApiServer.DoProblems: TJSONData;
+var
+  List: TJSONArray;
+  Item: TJSONObject;
+  Problem: TPatternProblem;
+  Node: TEvalNode;
+  BlockedCount: integer;
+begin
+  List := TJSONArray.Create;
+  for Problem in PatternProblemList(Document.Pattern, BlockedCount) do
+  begin
+    Item := TJSONObject.Create(['text', Problem.Text]);
+    Node := nil;
+    if Problem.Key <> '' then
+      Node := Document.Pattern.FindNode(Problem.Key);
+    if Node is TMeasurementNode then
+    begin
+      Item.Add('kind', 'measurement');
+      // Its key without the @ formulas put before it
+      Item.Add('key', Copy(Node.Key, 2, Length(Node.Key) - 1));
+    end
+    else if Node is TVariable then
+    begin
+      Item.Add('kind', 'variable');
+      Item.Add('id', KeyToJSON(Node.Key));
+    end
+    else if Assigned(Node) then
+    begin
+      Item.Add('kind', 'object');
+      Item.Add('id', KeyToJSON(Node.Key));
+    end
+    else
+      Item.Add('kind', 'none');
+    List.Add(Item);
+  end;
+  Result := TJSONObject.Create(['problems', List, 'blocked', BlockedCount]);
+end;
+
 function TEditorApiServer.DoGarmentMarks(Params: TJSONObject): TJSONData;
 var
   Scene: TGarmentScene;
@@ -2731,6 +2776,7 @@ begin
     'editor_export_draft': Result := DoExportDraft(Params);
     'editor_print': Result := DoPrint(Params);
     'editor_materials': Result := DoMaterials;
+    'editor_problems': Result := DoProblems;
     'editor_garment': Result := DoGarment(Params);
     'editor_garment_marks': Result := DoGarmentMarks(Params);
     'editor_material': Result := DoMaterial(Params);

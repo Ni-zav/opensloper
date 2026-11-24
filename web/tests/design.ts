@@ -779,6 +779,35 @@ try {
   await page.click('.garment-export-buttons button.default');
   assert.ok((await downloaded('skirt-pieces-garment.png', '\x89PNG')).startsWith('\x89PNG'), 'the PNG downloaded');
 
+  // The Problems tab, at the foot of the column with the count on its icon:
+  // choosing one selects what it is about on the canvas
+  assert.ok((await page.$('.side-foot [data-tab="problems"]')) !== null, 'at the foot of the column');
+  await page.click('.side-column [data-tab="problems"]');
+  await page.waitForSelector('.problems-list li', { timeout: TIMEOUT_MS });
+  const problemRows = await page.$$eval('.problems-list li', (rows) => rows.map((row) => row.textContent));
+  assert.equal(
+    await page.$eval('[data-tab="problems"] .side-badge', (badge) => badge.textContent),
+    String(problemRows.length),
+    'counted on the icon',
+  );
+  assert.equal(
+    await page.$eval('.side-title span', (title) => title.textContent),
+    `Problems (${String(problemRows.length)})`,
+    'and in the title',
+  );
+  const edgeProblem = problemRows.findIndex((text) => text.includes('is an outline edge in no piece'));
+  assert.ok(edgeProblem >= 0, 'an edge in no piece listed');
+  await page.click(`.problems-list li:nth-child(${String(edgeProblem + 1)})`);
+  await page.waitForFunction(
+    (piece) => document.body.dataset.selection !== '' && document.body.dataset.selection !== piece,
+    { timeout: TIMEOUT_MS },
+    garmentPiece.id,
+  );
+  assert.ok(
+    await page.$eval('.problems-list li.chosen', (row) => row.textContent.includes('is an outline edge in no piece')),
+    'the problem stays chosen',
+  );
+
   // The Features tab: a double hem along the back's bottom edge, chosen in the Objects tab, then undone
   const undoBefore = await bodyData(page, 'undo');
   await page.click('.side-column [data-tab="objects"]');
@@ -851,7 +880,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; exported the draft and printed it to PDF; added, renamed and deleted a material; selected a piece in the Garment tab and exported it; added a hem from the Features tab; ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; exported the draft and printed it to PDF; added, renamed and deleted a material; selected a piece in the Garment tab and exported it; chose a problem; added a hem from the Features tab; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),
   );

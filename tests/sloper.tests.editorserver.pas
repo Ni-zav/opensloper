@@ -35,7 +35,7 @@ type
     procedure Call(const Method: string; const Params: string = '{}');
     function Answer: TJSONObject;
     function ErrorCode: integer;
-    // The ID of the object with this name
+    // The ID of the object with this name; leaves Answer as it was
     function IdOf(const AName: string): integer;
     // A square of four points, A to D, 100 mm a side, with outline edges, made a piece
     procedure AddSquare;
@@ -72,6 +72,7 @@ type
     procedure TestDeleteSelection;
     procedure TestConvertPoint;
     procedure TestGarment;
+    procedure TestProblems;
     // Copy gives the fragment's text, paste makes copies of it; cut is copy and delete
     procedure TestCopyAndPaste;
     // The Variables tab's Import…, from the other file's text
@@ -214,10 +215,24 @@ begin
   Result := TJSONObject(FReply.Find('error')).Get('code', 0);
 end;
 
+// Asks with a reply of its own, so the answer being read stays as it was:
+// IdOf can sit in an assertion beside Answer
 function TTestEditorServer.IdOf(const AName: string): integer;
+var
+  Reply: TJSONObject;
+  Err: string;
 begin
-  Call('get_object', '{"name": "' + AName + '"}');
-  Result := Answer.Get('id', 0);
+  Reply := nil;
+  try
+    if not ParseJSONObject(FServer.HandleLine('{"jsonrpc": "2.0", "id": 1, "method": "get_object", "params": {"name": "' +
+      AName + '"}}'), Reply, Err) then
+      Fail(Err);
+    if not (Reply.Find('result') is TJSONObject) then
+      Fail('No object named ' + AName + ': ' + Reply.AsJSON);
+    Result := TJSONObject(Reply.Find('result')).Get('id', 0);
+  finally
+    FreeAndNil(Reply);
+  end;
 end;
 
 procedure TTestEditorServer.AddSquare;
@@ -563,17 +578,13 @@ end;
 
 // The first selected point, placed from the rest in order
 procedure TTestEditorServer.TestConvertPoint;
-var
-  Selection: string;
 begin
   AddSquare;
   Call('add_point', '{"type": "freePoint", "name": "M", "x": 50, "y": 2}');
   Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('M')) + ', ' + IntToStr(IdOf('Line_A_B')) +
     '], "type": "alongEdgePoint"}');
   AssertTrue(Answer.Strings['message'], Answer.Booleans['done']);
-  // Read before IdOf, which makes a call of its own and replaces the answer
-  Selection := Answer.Arrays['select'].AsJSON;
-  AssertEquals('the point stays selected', '[' + IntToStr(IdOf('M')) + ']', Selection);
+  AssertEquals('the point stays selected', '[' + IntToStr(IdOf('M')) + ']', Answer.Arrays['select'].AsJSON);
   Call('get_object', '{"name": "M"}');
   AssertEquals('alongEdgePoint', Answer.Strings['type']);
   Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('Line_A_B')) + '], "type": "freePoint"}');
@@ -627,6 +638,40 @@ begin
   Lines := Answer.Arrays['lines'];
   AssertEquals('both sides of the seam', 2, Lines.Count);
   AssertEquals('no piece selected', 0, Answer.Arrays['pieces'].Count);
+end;
+
+// The Problems tab's list: each problem with what it is about
+procedure TTestEditorServer.TestProblems;
+const
+  WITH_HIP = '{"format": "measurements", "version": 1, "units": "mm", "measurements": [' +
+    '{"key": "waist", "value": 720}, {"key": "hip", "value": 940}]}';
+  // Another set without the hip, so what reads it fails
+  NO_HIP = '{"format": "measurements", "version": 1, "units": "mm", "measurements": [' +
+    '{"key": "waist", "value": 720}]}';
+var
+  Problems: TJSONArray;
+  Kinds: string;
+  Index: integer;
+begin
+  Call('editor_problems');
+  AssertEquals('none yet', 0, Answer.Arrays['problems'].Count);
+  AddSquare;
+  Call('use_measurements', '{"text": "' + StringToJSONString(WITH_HIP) + '", "file": "me.slm"}');
+  Call('add_point', '{"type": "freePoint", "name": "P", "x": "@hip / 4", "y": 0}');
+  Call('use_measurements', '{"text": "' + StringToJSONString(NO_HIP) + '", "file": "other.slm"}');
+  Call('add_variable', '{"name": "ease", "formula": "1 / 0"}');
+  Call('add_edge', '{"type": "line", "start": "A", "end": "C", "role": "outline"}');
+  Call('editor_problems');
+  Problems := Answer.Arrays['problems'];
+  Kinds := '';
+  for Index := 0 to Problems.Count - 1 do
+    Kinds := Kinds + Problems.Objects[Index].Strings['kind'] + ' ';
+  AssertEquals('one of each', 'measurement variable object ', Kinds);
+  AssertEquals('the measurement by key', 'hip', Problems.Objects[0].Strings['key']);
+  AssertTrue('said in words', Pos('Line_A_C', Problems.Objects[2].Strings['text']) > 0);
+  AssertEquals('the point reading the hip, counted', 1, Answer.Integers['blocked']);
+  AssertEquals('the variable by ID', IdOf('ease'), Problems.Objects[1].Integers['id']);
+  AssertEquals('the edge by ID', IdOf('Line_A_C'), Problems.Objects[2].Integers['id']);
 end;
 
 procedure TTestEditorServer.TestCopyAndPaste;

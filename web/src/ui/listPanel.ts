@@ -77,6 +77,8 @@ export abstract class ListPanel implements SideTabContent {
   private readonly refreshes: LatestOnly<number>;
   private rows: ListPanelRow[] = [];
   private selected: string[] = [];
+  // The selected row is brought into view once it is listed
+  private revealPending = false;
   private anchor = '';
   private shown = false;
   // Changes came while the tab was hidden, or while a cell was open
@@ -214,6 +216,13 @@ export abstract class ListPanel implements SideTabContent {
     this.paintSelection();
   }
 
+  // Selects these rows for something chosen elsewhere, such as a problem,
+  // and brings the first into view, now or once the list is built
+  chooseKeys(keys: readonly string[]): void {
+    this.revealPending = true;
+    this.showSelection(keys);
+  }
+
   // Stops listening to the document, so a closed panel is not kept alive
   dispose(): void {
     this.document.removeListener(this.listener);
@@ -312,6 +321,10 @@ export abstract class ListPanel implements SideTabContent {
       line.classList.toggle('selected', selected);
       for (const [column, cell] of [...line.cells].entries()) {
         cell.classList.toggle('current', selected && this.isEditable && column === this.currentColumn);
+      }
+      if (selected && this.revealPending) {
+        this.revealPending = false;
+        line.scrollIntoView({ block: 'nearest' });
       }
     }
   }

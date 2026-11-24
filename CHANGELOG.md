@@ -64,6 +64,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- A failed file write in the web editor keeps the pattern dirty and preserves
+  its recovery copy (#95).
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

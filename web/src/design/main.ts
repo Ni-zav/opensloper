@@ -162,6 +162,7 @@ class DesignApp {
   private readonly files = FileAccess.create();
   private patternHandle: FileSystemFileHandle | undefined;
   private measurementsHandle: FileSystemFileHandle | undefined;
+  private saving = false;
   // Unsaved work kept in the browser, and offered back once the tab that left it has closed
   private readonly autosave: Autosave;
 
@@ -992,25 +993,48 @@ class DesignApp {
       downloadText(name, stringField(answer, 'text') ?? '');
       return;
     }
-    // Leave to write is asked while the click still counts, before the engine is
-    let handle = saveAs ? undefined : this.patternHandle;
-    if (handle !== undefined && !(await files.mayWrite(handle))) {
-      showMessage(STRINGS.writeRefused(handle.name));
+    if (this.saving) {
       return;
     }
-    handle ??= await files.chooseSave(name, 'pattern', this.patternHandle ?? this.measurementsHandle);
-    if (handle === undefined) {
-      return;
+    this.saving = true;
+    const generation = this.document.state.generation;
+    try {
+      // Leave to write is asked while the click still counts, before the engine is
+      let handle = saveAs ? undefined : this.patternHandle;
+      if (handle !== undefined && !(await files.mayWrite(handle))) {
+        showMessage(STRINGS.writeRefused(handle.name));
+        return;
+      }
+      handle ??= await files.chooseSave(name, 'pattern', this.patternHandle ?? this.measurementsHandle);
+      if (handle === undefined || this.document.state.generation !== generation) {
+        return;
+      }
+      const snapshot = await this.document.read('editor_snapshot');
+      const text = stringField(snapshot, 'text');
+      const revision = numberField(snapshot, 'revision');
+      if (text === undefined || revision === undefined) {
+        throw new Error('Missing pattern snapshot');
+      }
+      if (numberField(snapshot, 'generation') !== generation) {
+        return;
+      }
+      if (!(await files.write(handle, text))) {
+        showMessage(STRINGS.writeRefused(handle.name));
+        return;
+      }
+      await this.document.call('editor_save_complete', { revision });
+      if (this.document.state.generation === generation) {
+        this.patternHandle = handle;
+        this.document.fileName = handle.name;
+        this.updateState();
+        if (this.document.state.modified) {
+          void this.autosave.flush();
+        }
+        showMessage(STRINGS.saved(handle.name));
+      }
+    } finally {
+      this.saving = false;
     }
-    const answer = await this.document.call('save', { text: true });
-    if (!(await files.write(handle, stringField(answer, 'text') ?? ''))) {
-      showMessage(STRINGS.writeRefused(handle.name));
-      return;
-    }
-    this.patternHandle = handle;
-    this.document.fileName = handle.name;
-    this.updateState();
-    showMessage(STRINGS.saved(handle.name));
   }
 
   // Open, Save, Save as and Measurements work from anywhere, a field being

@@ -139,6 +139,7 @@ type
     procedure TestNotePreview;
     // Work in progress: the pattern and its set as text, still counted unsaved
     procedure TestSnapshot;
+    procedure TestSaveComplete;
     // A pattern opened again from work in progress counts as not saved
     procedure TestMarkUnsaved;
     // The Features tab's forms: starting values, the selection, and values that follow a change
@@ -1884,6 +1885,26 @@ begin
   AssertEquals('the measurement file it names', 'block.slm', Answer.Strings['measurementsFile']);
   Call('get_object', '{"name": "Spot"}');
   AssertEquals('the point kept', 'Spot', Answer.Strings['name']);
+end;
+
+procedure TTestEditorServer.TestSaveComplete;
+var
+  Revision: string;
+begin
+  AddSquare;
+  Call('editor_snapshot');
+  AssertTrue('snapshot leaves the pattern dirty', Answer.Booleans['modified']);
+  Revision := IntToStr(Answer.Integers['revision']);
+  Call('add_point', '{"type": "freePoint", "name": "Later", "x": 0, "y": 0}');
+  Answer;
+  Call('editor_save_complete', '{"revision": ' + Revision + '}');
+  AssertTrue('a newer edit stays dirty', Answer.Booleans['modified']);
+  Call('editor_snapshot');
+  Revision := IntToStr(Answer.Integers['revision']);
+  Call('editor_save_complete', '{"revision": ' + Revision + '}');
+  AssertFalse('a write of the current snapshot marks it saved', Answer.Booleans['modified']);
+  Call('editor_changes');
+  AssertFalse('the editor sees the change', Answer.Booleans['modified']);
 end;
 
 procedure TTestEditorServer.TestMarkUnsaved;

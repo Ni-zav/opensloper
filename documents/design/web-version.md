@@ -96,7 +96,7 @@ What needs the evaluated pattern goes behind the API: snapping, completion, the 
 | Method | Does |
 | --- | --- |
 | `editor_changes` | What changed since it last answered (see the proxy, below) |
-| `editor_snapshot`, `editor_mark_unsaved` | Work in progress (see Files and storage) |
+| `editor_snapshot`, `editor_save_complete`, `editor_mark_unsaved` | File writes and work in progress (see Files and storage) |
 
 **The Properties tab's rows.** `editor_properties` gives an object's rows as data. Each has its id, kind, caption and value, whether it can be changed now, and a number's range. The kinds are text, name, formula, choice, check, button, problem, number, long text, font and colour.
 
@@ -161,6 +161,7 @@ File watching is dropped on the web. File formats do not change.
 **Work in progress** is kept in browser storage, so a closed tab loses nothing. It never leaves the machine (`Autosave` in `ui/autosave.ts`).
 
 - A second after each change, while the pattern is not saved, `editor_snapshot` gives the pattern file's text, without counting it saved, and the measurement set's text.
+- When writing directly to a browser file, Save takes the same snapshot. After the write completes, `editor_save_complete` marks it saved only if the document still has that revision. A failed write leaves recovery in place.
 - Both are written to the page's private file system (OPFS) under the tab's own id. A record in IndexedDB keeps when, the file name and the handles of the files they came from. Where the page cannot write OPFS files (some browsers allow it only in workers), the texts go in the record.
 - Saving removes them.
 - Each tab holds a Web Lock while it is open, so work whose lock is free was left by a tab that closed. On starting, the app offers the newest such work in the status bar, to open again or discard, then the next.

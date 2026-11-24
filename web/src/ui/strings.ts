@@ -54,6 +54,8 @@ export const STRINGS = {
   discardChanges: 'The pattern has changes not saved. Drop them?',
   undo: 'Undo',
   redo: 'Redo',
+  delete: 'Delete',
+  deleteHint: 'Delete the selected objects (Delete)',
   undoStep: (step: string): string => `Undo ${step}`,
   redoStep: (step: string): string => `Redo ${step}`,
   fit: 'Fit',

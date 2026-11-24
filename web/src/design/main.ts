@@ -37,6 +37,7 @@ const ICONS = {
   print: 'printer',
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
+  delete: 'trash',
   fit: 'zoom-scan',
   rulers: 'ruler-2',
   // The side panel's tabs
@@ -123,6 +124,7 @@ class DesignApp {
   private readonly measurements: MeasurementsPanel;
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
+  private readonly deleteButton: HTMLButtonElement;
   private readonly redoButton: HTMLButtonElement;
   // The measurement file the open pattern names, while it has none
   private wantedMeasurements = '';
@@ -138,10 +140,17 @@ class DesignApp {
     this.tables = tables;
     const rulers = new CanvasRulers(element('canvas-host', HTMLElement));
     this.rulers = rulers;
+    // As the Delete key; there is nothing to delete until something is selected
+    const deleteButton = iconButton(ICONS.delete, STRINGS.delete, STRINGS.deleteHint, () => {
+      this.run(this.canvas.deleteSelection());
+    });
+    deleteButton.disabled = true;
+    this.deleteButton = deleteButton;
     this.canvas = new PatternCanvas(element('canvas', HTMLCanvasElement), this.document, tables, {
       message: showMessage,
       selectionChanged: (ids) => {
         document.body.dataset.selection = ids.join(' ');
+        deleteButton.disabled = ids.length === 0;
         this.objects.showSelection(ids);
         this.properties.showSelection(ids);
         this.features.showSelection(ids);
@@ -271,6 +280,7 @@ class DesignApp {
           ]),
       this.undoButton,
       this.redoButton,
+      this.deleteButton,
       iconButton(ICONS.exportDraft, STRINGS.exportDraft, STRINGS.exportDraftHint, () => {
         this.run(this.exportDraft());
       }),

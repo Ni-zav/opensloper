@@ -341,9 +341,22 @@ try {
   await page.keyboard.up('Control');
   await waitForData(page, 'undo', 'Add point');
 
-  // The Delete key deletes what is selected, as one undo step
+  // The Delete key deletes what is selected, as one undo step, and so does
+  // the Delete button, which is disabled while nothing is selected
+  const deleteButton = '#toolbar button[title^="Delete the selected objects"]';
   assert.equal(await bodyData(page, 'selection'), added, 'the point is still selected');
   await page.keyboard.press('Delete');
+  await waitForData(page, 'undo', 'Delete');
+  await waitForData(page, 'selection', '');
+  assert.ok(await isDisabled(page, deleteButton), 'nothing selected, nothing to delete');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', 'Add point');
+  await page.mouse.click(at.x, at.y);
+  await waitForData(page, 'selection', added);
+  assert.ok(!(await isDisabled(page, deleteButton)), 'something to delete');
+  await page.click(deleteButton);
   await waitForData(page, 'undo', 'Delete');
   await waitForData(page, 'selection', '');
   await page.keyboard.down('Control');

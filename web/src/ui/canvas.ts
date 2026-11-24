@@ -81,8 +81,8 @@ export const SELECT_TOOL = 'select';
 
 // idle; pressed: the left button is down, not yet moved; starting: a drag or
 // box waits for the engine to say what was pressed; dragging; boxing;
-// panning; refused: a drag the engine refused, until the button goes up
-type CanvasMode = 'idle' | 'pressed' | 'starting' | 'dragging' | 'boxing' | 'panning' | 'refused';
+// panning; cancelling while the engine rolls back; refused until the button goes up
+type CanvasMode = 'idle' | 'pressed' | 'starting' | 'dragging' | 'boxing' | 'panning' | 'cancelling' | 'refused';
 
 export interface CanvasEvents {
   // What the status bar shows: a hint, a snap's description, a reason
@@ -172,6 +172,7 @@ export class PatternCanvas implements CanvasToolHost {
   private snap: SnapMarker | undefined;
   private tool = SELECT_TOOL;
   private mode: CanvasMode = 'idle';
+  private pointerId: number | undefined;
   private pressAt: Vec2 = { x: 0, y: 0 };
   private lastAt: Vec2 = { x: 0, y: 0 };
   private pressShift = false;
@@ -245,6 +246,8 @@ export class PatternCanvas implements CanvasToolHost {
     element.addEventListener('pointerdown', this.pointerDown);
     element.addEventListener('pointermove', this.pointerMove);
     element.addEventListener('pointerup', this.pointerUp);
+    element.addEventListener('pointercancel', this.pointerInterrupted);
+    element.addEventListener('lostpointercapture', this.pointerInterrupted);
     element.addEventListener('pointerleave', this.pointerLeave);
     element.addEventListener('wheel', this.wheel, { passive: false });
     element.addEventListener('dblclick', this.doubleClick);
@@ -394,11 +397,10 @@ export class PatternCanvas implements CanvasToolHost {
   // Escape: drops a drag, then the tool's step, then the selection
   cancel(): void {
     if (this.mode === 'dragging' || this.mode === 'starting') {
-      this.mode = 'refused';
-      this.gesture = this.gesture.then(async () => this.endDrag(true));
+      this.cancelDrag();
       return;
     }
-    if (this.tools.get(this.tool)?.cancel() === true) {
+    if (this.mode === 'cancelling' || this.tools.get(this.tool)?.cancel() === true) {
       return;
     }
     this.select([]);
@@ -746,7 +748,7 @@ export class PatternCanvas implements CanvasToolHost {
   }
 
   private readonly pointerDown = (event: PointerEvent): void => {
-    if (this.mode !== 'idle') {
+    if (this.mode !== 'idle' || this.pointerId !== undefined) {
       return;
     }
     const at = this.screenAt(event);
@@ -770,11 +772,15 @@ export class PatternCanvas implements CanvasToolHost {
     } else {
       return;
     }
+    this.pointerId = event.pointerId;
     this.element.setPointerCapture(event.pointerId);
     event.preventDefault();
   };
 
   private readonly pointerMove = (event: PointerEvent): void => {
+    if (this.pointerId !== event.pointerId && (this.pointerId !== undefined || this.mode !== 'idle')) {
+      return;
+    }
     const at = this.screenAt(event);
     const previous = this.lastAt;
     this.lastAt = at;
@@ -804,12 +810,17 @@ export class PatternCanvas implements CanvasToolHost {
         this.repaint();
         break;
       case 'starting':
+      case 'cancelling':
       case 'refused':
         break;
     }
   };
 
   private readonly pointerUp = (event: PointerEvent): void => {
+    if (this.pointerId !== event.pointerId) {
+      return;
+    }
+    this.pointerId = undefined;
     const at = this.screenAt(event);
     this.lastAt = at;
     switch (this.mode) {
@@ -832,6 +843,7 @@ export class PatternCanvas implements CanvasToolHost {
         // After the drag or box has started, whenever that is
         this.gesture = this.gesture.then(async () => this.finishGesture());
         break;
+      case 'cancelling':
       case 'idle':
         break;
     }
@@ -840,6 +852,33 @@ export class PatternCanvas implements CanvasToolHost {
       this.report(error);
     });
   };
+
+  private readonly pointerInterrupted = (event: PointerEvent): void => {
+    if (this.pointerId !== event.pointerId) {
+      return;
+    }
+    this.pointerId = undefined;
+    if (this.mode === 'starting' || this.mode === 'dragging') {
+      this.cancelDrag();
+    } else if (this.mode !== 'cancelling') {
+      this.mode = 'idle';
+      this.repaint();
+    }
+  };
+
+  private cancelDrag(): void {
+    this.mode = 'cancelling';
+    this.drags.clear();
+    this.gesture = this.gesture
+      .then(async () => this.endDrag(true))
+      .catch((error: unknown) => {
+        this.report(error);
+      })
+      .finally(() => {
+        this.mode = this.pointerId === undefined ? 'idle' : 'refused';
+        this.repaint();
+      });
+  }
 
   private readonly pointerLeave = (): void => {
     this.events.pointerAt(undefined);
@@ -900,6 +939,9 @@ export class PatternCanvas implements CanvasToolHost {
   // A press on a handle, a point or a note drags it; anywhere else draws a selection box
   private async startDragOrBox(): Promise<void> {
     const hits = await this.pressHits;
+    if (this.mode !== 'starting') {
+      return;
+    }
     if (hits.tip !== undefined) {
       // The tip goes where the pointer is, snapped
       this.dragTip = true;
@@ -943,16 +985,17 @@ export class PatternCanvas implements CanvasToolHost {
     try {
       this.fieldGuide = parseGuide(await this.document.call('editor_drag_begin', params));
     } catch (error: unknown) {
-      this.mode = 'refused';
+      if (this.mode === 'starting') {
+        this.mode = 'refused';
+      }
       this.dragTip = false;
       throw error;
     }
     this.dragId = id;
     const pressed = this.view.toModel(this.pressAt);
     this.dragOffset = { x: from.x - pressed.x, y: from.y - pressed.y };
-    if (this.mode === 'refused') {
-      // Escape came while the drag was starting
-      await this.endDrag(true);
+    if (this.mode !== 'starting') {
+      // Cancellation is already queued behind this request.
       return;
     }
     this.mode = 'dragging';
@@ -1024,6 +1067,9 @@ export class PatternCanvas implements CanvasToolHost {
 
   private async finishGesture(): Promise<void> {
     const mode = this.mode;
+    if (mode === 'cancelling') {
+      return;
+    }
     this.mode = 'idle';
     if (mode === 'dragging') {
       this.drags.push(this.lastAt);

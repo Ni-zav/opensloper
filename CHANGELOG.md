@@ -64,6 +64,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- An interrupted touch drag in the web editor rolls back without moving
+  the object on the next click (#96).
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

@@ -13,6 +13,42 @@ Changed, Fixed and Removed under each version.
 
 ## 0.8.0
 
+### Added
+
+- A point's type can be changed in place, when it was placed the wrong
+  way: select it, then what it is to be placed from, and choose the type
+  in Tools → Points → Change To, or the *Change point to…* box in the web
+  version. It becomes a free point, an offset, a point along an edge or
+  between points, an intersection, a circle and edge, two circles or a
+  projection, keeping its name, marker and everything that uses it. It
+  stays where it is, or moves at most 10 mm onto its new edge or crossing,
+  and the status bar says how far; formulas it had become plain numbers,
+  which the formula suggestions can turn back into formulas.
+  `convert_point` does the same in the Automation API (#81).
+- The web version's side panel has a Garment tab, as the desktop's: the
+  pieces as sewn, darts closed and folds opened, shaded, of one material
+  or all. Zoom with the wheel, drag to pan, double-click to fit, or follow
+  the canvas; point at a piece to see it on the canvas, click it to select
+  it there, and a selected piece or seam is marked. Export… downloads the
+  view as SVG or as a PNG of the width you choose (#92).
+- The web version's side panel has a Problems tab at the foot of its
+  column, as on the desktop, with the number of problems on its icon.
+  Choosing a problem selects what it is about on the canvas, or opens the
+  Variables or Measurements tab at its row; pointing at one highlights it,
+  and a double-click zooms to it (#93).
+- The user guide explains formula suggestions, the wand beside a length,
+  angle or ratio in the Properties tab (#80).
+
+### Changed
+
+- The skirt and bodice block tutorials are simpler. Points take the names
+  the app gives them, A, B, C and so on, in the order the steps make them,
+  so you no longer name each one; most lines and curves keep their
+  automatic names too. The variables come from Import… on the finished
+  pattern, and a few lengths are taken from the formula suggestions rather
+  than typed. The example patterns and the Features tutorials follow the
+  new names (#80).
+
 ## 0.7.0
 
 ### Added

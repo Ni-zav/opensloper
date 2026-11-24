@@ -562,13 +562,17 @@ end;
 
 // The first selected point, placed from the rest in order
 procedure TTestEditorServer.TestConvertPoint;
+var
+  Selection: string;
 begin
   AddSquare;
   Call('add_point', '{"type": "freePoint", "name": "M", "x": 50, "y": 2}');
   Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('M')) + ', ' + IntToStr(IdOf('Line_A_B')) +
     '], "type": "alongEdgePoint"}');
   AssertTrue(Answer.Strings['message'], Answer.Booleans['done']);
-  AssertEquals('the point stays selected', '[' + IntToStr(IdOf('M')) + ']', Answer.Arrays['select'].AsJSON);
+  // Read before IdOf, which makes a call of its own and replaces the answer
+  Selection := Answer.Arrays['select'].AsJSON;
+  AssertEquals('the point stays selected', '[' + IntToStr(IdOf('M')) + ']', Selection);
   Call('get_object', '{"name": "M"}');
   AssertEquals('alongEdgePoint', Answer.Strings['type']);
   Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('Line_A_B')) + '], "type": "freePoint"}');

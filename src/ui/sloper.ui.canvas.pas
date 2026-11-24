@@ -44,6 +44,7 @@ type
     FDocument: TPatternDocument;
     FView: TViewTransform;
     FPainter: TPatternPainter;
+    FRoleStyles: TRoleDisplayStyles;
     FSelection: TStringArray;
     FHoverKey: string;
     FOutsideHoverKey: string;
@@ -291,6 +292,7 @@ type
     property OutsideHoverKey: string read FOutsideHoverKey write SetOutsideHoverKey;
     // The grid's spacing in AUnit, from the preferences
     procedure SetGrid(Step: double; AUnit: TMeasureUnit);
+    procedure SetRoleStyles(const Styles: TRoleDisplayStyles);
     // Scroll bars to keep in step with the view
     property HorzBar: TScrollBar read FHorzBar write SetHorzBar;
     property VertBar: TScrollBar read FVertBar write SetVertBar;
@@ -1802,12 +1804,19 @@ end;
 { Drawing }
 
 // What the painter needs to know of the canvas
+procedure TPatternCanvas.SetRoleStyles(const Styles: TRoleDisplayStyles);
+begin
+  FRoleStyles := Styles;
+  Invalidate;
+end;
+
 function TPatternCanvas.PaintState: TPaintState;
 var
   Problem: TPatternProblem;
 begin
   Result := Default(TPaintState);
   Result.View := FView;
+  Result.RoleStyles := FRoleStyles;
   Result.Selection := FSelection;
   Result.HoverKey := FHoverKey;
   if Result.HoverKey = '' then

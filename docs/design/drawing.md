@@ -35,6 +35,10 @@ edges are outlines; choose another kind first in Tools → Draw As, or change an
 edge's role in its properties. Outlines are what pieces are made of;
 construction lines are thin, grey and dashed, and are only guides.
 
+In desktop Design, open **Preferences → Design → Line Styles** to choose a
+colour, line pattern and width for each role. **Reset this role** restores
+its defaults. The Lines tab shows the same styles.
+
 A new curve starts straight. Select it to see its handles, and drag a handle's
 end to shape it, or type its angles and lengths in the properties. Tools →
 Edge → Change to Curve and Change to Line turn one into the other in place.

@@ -97,6 +97,7 @@ export const STRINGS = {
     ['bodice-curve-paths/bodice-curve-paths.sloper', 'Bodice block with curve paths'],
     ['circle-skirt/circle-skirt.sloper', 'Circle skirt'],
     ['tote-bag/tote-bag.sloper', 'Tote bag'],
+    ['card-wallet/card-wallet.sloper', 'Card wallet'],
   ],
   exampleMissing: (name: string): string => `The example ${name} could not be fetched`,
   // The side panel's tabs

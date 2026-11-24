@@ -82,7 +82,7 @@ implementation
 
 uses
   SysUtils, fpjson, ConsoleTools, Sloper.CLI.Arguments, Sloper.Docs.Reference, Sloper.Core.Version, Sloper.Core.JSON,
-  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile,
+  Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Evaluator, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.Transform,
   Sloper.Core.PatternCheck, Sloper.Core.Settings, Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.PatternSources,
   Sloper.Output.LayoutExport, Sloper.Output.Packing, Sloper.Core.Mesher, Sloper.Core.DrapeFile, Sloper.Output.DrapeExport,
   Sloper.Output.BlenderRun, Sloper.Core.AppPaths,
@@ -198,13 +198,15 @@ end;
 // Starts a layout beside the pattern, with every piece placed in rows
 // The drafting canvas as SVG
 // Deletes every object after the one named, newest first, so the pattern is
-// as it was when that object was added: a file lists objects after what they use
+// as it was when that object was added: a file lists objects after what they use.
+// A transform's copies are made with it, so they go or stay with it.
 function KeepUpTo(Pattern: TPattern; const ObjectName: string): boolean;
 var
   Target: TEvalNode;
   Last: TEvalNode;
   Index: integer;
   Listed: boolean;
+  TransformKey: string;
 begin
   // A repeat's points are made when it is evaluated, and stand for the repeat
   Pattern.Evaluate;
@@ -222,6 +224,15 @@ begin
   while Pattern.Objects[Pattern.ObjectCount - 1] <> Target do
   begin
     Last := Pattern.Objects[Pattern.ObjectCount - 1];
+    TransformKey := CopyTransformKey(Last);
+    if TransformKey <> '' then
+    begin
+      // Up to the transform or one of its copies keeps them all
+      if (TransformKey = Target.Key) or (TransformKey = CopyTransformKey(Target)) then
+        Break;
+      // Leaving the transform out takes its copies with it
+      Last := Pattern.FindNode(TransformKey);
+    end;
     if not Pattern.Delete(Last) then
     begin
       WriteLn(CliErr^, Format(rsUpToRefused, [Last.DisplayName, Pattern.LastError]));

@@ -38,6 +38,13 @@ Changed, Fixed and Removed under each version.
   and a double-click zooms to it (#93).
 - The user guide explains formula suggestions, the wand beside a length,
   angle or ratio in the Properties tab (#80).
+- Two tutorials that are not garments (#94). A tote bag: a lined bag sized
+  by its variables, with boxed corners, a patch pocket and straps, a moved
+  copy for the lining, rounded corners, placement lines and materials. A
+  leather card wallet: one folded piece with no seam allowance, a thumb
+  notch shaped by a curve's handles, and stitch holes made with a repeat.
+  The wallet's pattern is among the examples, and in the web version's
+  Examples list.
 
 ### Changed
 
@@ -48,6 +55,14 @@ Changed, Fixed and Removed under each version.
   pattern, and a few lengths are taken from the formula suggestions rather
   than typed. The example patterns and the Features tutorials follow the
   new names (#80).
+- The tote bag example is drafted in the order of its new tutorial, so its
+  points have the app's names and its lining's copies end in `_t1` (#94).
+
+### Fixed
+
+- `opensloper-cli export-draft --upto` stopping before a transform, or at
+  it, no longer fails on the transform's copies: they are left out or kept
+  with it (#94).
 
 ## 0.7.0
 

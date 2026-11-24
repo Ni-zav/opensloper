@@ -1,0 +1,497 @@
+{
+  "format": "pattern",
+  "version": 1,
+  "units": "mm",
+  "notes": "A leather card wallet: one piece folded at the bottom, the front lower than the back, with a thumb notch and saddle-stitched sides. The pattern of the card wallet tutorial.",
+  "measurementFile": "",
+  "identity": "dc12c563-3626-4c9f-af70-53d2aecef22b",
+  "nextId": 53,
+  "variables": [
+    {
+      "id": 1,
+      "name": "width",
+      "formula": "100",
+      "description": "Width of the wallet: a card, 86 mm, with room for the stitching either side"
+    },
+    {
+      "id": 2,
+      "name": "back_height",
+      "formula": "75",
+      "description": "Height of the back, from the fold to its top"
+    },
+    {
+      "id": 3,
+      "name": "front_height",
+      "formula": "60",
+      "description": "Height of the front pocket, from the fold to its open edge"
+    },
+    {
+      "id": 4,
+      "name": "corner",
+      "formula": "8",
+      "description": "Radius of the back's rounded top corners"
+    },
+    {
+      "id": 5,
+      "name": "thumb",
+      "formula": "12",
+      "description": "Half the width of the thumb notch in the front"
+    },
+    {
+      "id": 6,
+      "name": "inset",
+      "formula": "4",
+      "description": "How far in from the edge the stitching runs"
+    },
+    {
+      "id": 7,
+      "name": "spacing",
+      "formula": "4",
+      "description": "Distance between stitch holes: the pricking iron's"
+    }
+  ],
+  "objects": [
+    {
+      "id": 8,
+      "type": "freePoint",
+      "name": "A",
+      "x": "0",
+      "y": "0"
+    },
+    {
+      "id": 9,
+      "type": "offsetPoint",
+      "name": "B",
+      "base": 8,
+      "mode": "polar",
+      "length": "{1}",
+      "angle": "0"
+    },
+    {
+      "id": 10,
+      "type": "offsetPoint",
+      "name": "C",
+      "base": 8,
+      "mode": "polar",
+      "length": "{2} + {3}",
+      "angle": "270"
+    },
+    {
+      "id": 11,
+      "type": "offsetPoint",
+      "name": "D",
+      "base": 9,
+      "mode": "polar",
+      "length": "{2} + {3}",
+      "angle": "270"
+    },
+    {
+      "id": 12,
+      "type": "line",
+      "start": 8,
+      "end": 9,
+      "role": "construction"
+    },
+    {
+      "id": 13,
+      "type": "line",
+      "start": 9,
+      "end": 11,
+      "role": "construction"
+    },
+    {
+      "id": 14,
+      "type": "line",
+      "start": 11,
+      "end": 10,
+      "role": "outline"
+    },
+    {
+      "id": 15,
+      "type": "line",
+      "start": 10,
+      "end": 8,
+      "role": "construction"
+    },
+    {
+      "id": 16,
+      "type": "cornerArc",
+      "vertex": 8,
+      "edgeA": 15,
+      "edgeB": 12,
+      "radius": "{4}",
+      "role": "outline"
+    },
+    {
+      "id": 17,
+      "type": "cornerPoint",
+      "name": "E",
+      "arc": 16,
+      "end": 1
+    },
+    {
+      "id": 18,
+      "type": "cornerPoint",
+      "name": "F",
+      "arc": 16,
+      "end": 2
+    },
+    {
+      "id": 19,
+      "type": "splitPart",
+      "edge": 15,
+      "point": 17,
+      "part": 1,
+      "role": "outline"
+    },
+    {
+      "id": 20,
+      "type": "splitPart",
+      "edge": 15,
+      "point": 17,
+      "part": 2,
+      "role": "construction"
+    },
+    {
+      "id": 21,
+      "type": "splitPart",
+      "edge": 12,
+      "point": 18,
+      "part": 1,
+      "role": "construction"
+    },
+    {
+      "id": 22,
+      "type": "splitPart",
+      "edge": 12,
+      "point": 18,
+      "part": 2,
+      "role": "construction"
+    },
+    {
+      "id": 23,
+      "type": "cornerArc",
+      "vertex": 9,
+      "edgeA": 22,
+      "edgeB": 13,
+      "radius": "{4}",
+      "role": "outline"
+    },
+    {
+      "id": 24,
+      "type": "cornerPoint",
+      "name": "G",
+      "arc": 23,
+      "end": 1
+    },
+    {
+      "id": 25,
+      "type": "cornerPoint",
+      "name": "H",
+      "arc": 23,
+      "end": 2
+    },
+    {
+      "id": 26,
+      "type": "splitPart",
+      "edge": 22,
+      "point": 24,
+      "part": 1,
+      "role": "outline"
+    },
+    {
+      "id": 27,
+      "type": "splitPart",
+      "edge": 22,
+      "point": 24,
+      "part": 2,
+      "role": "construction"
+    },
+    {
+      "id": 28,
+      "type": "splitPart",
+      "edge": 13,
+      "point": 25,
+      "part": 1,
+      "role": "construction"
+    },
+    {
+      "id": 29,
+      "type": "splitPart",
+      "edge": 13,
+      "point": 25,
+      "part": 2,
+      "role": "outline"
+    },
+    {
+      "id": 30,
+      "type": "alongEdgePoint",
+      "name": "I",
+      "edge": 19,
+      "from": "start",
+      "mode": "length",
+      "value": "{3}"
+    },
+    {
+      "id": 31,
+      "type": "alongEdgePoint",
+      "name": "J",
+      "edge": 29,
+      "from": "end",
+      "mode": "length",
+      "value": "{3}"
+    },
+    {
+      "id": 32,
+      "type": "line",
+      "start": 30,
+      "end": 31,
+      "role": "fold"
+    },
+    {
+      "id": 33,
+      "type": "alongEdgePoint",
+      "name": "K",
+      "edge": 14,
+      "from": "start",
+      "mode": "length",
+      "value": "{1} / 2 - {5}"
+    },
+    {
+      "id": 34,
+      "type": "alongEdgePoint",
+      "name": "L",
+      "edge": 14,
+      "from": "end",
+      "mode": "length",
+      "value": "{1} / 2 - {5}"
+    },
+    {
+      "id": 35,
+      "type": "splitPart",
+      "edge": 14,
+      "point": 33,
+      "part": 1,
+      "role": "outline"
+    },
+    {
+      "id": 36,
+      "type": "splitPart",
+      "edge": 14,
+      "point": 33,
+      "part": 2,
+      "role": "outline"
+    },
+    {
+      "id": 37,
+      "type": "splitPart",
+      "edge": 36,
+      "point": 34,
+      "part": 1,
+      "role": "construction"
+    },
+    {
+      "id": 38,
+      "type": "splitPart",
+      "edge": 36,
+      "point": 34,
+      "part": 2,
+      "role": "outline"
+    },
+    {
+      "id": 39,
+      "type": "curve",
+      "start": 33,
+      "end": 34,
+      "angle1": "90",
+      "length1": "{5}",
+      "angle2": "90",
+      "length2": "{5}",
+      "role": "outline"
+    },
+    {
+      "id": 42,
+      "type": "offsetPoint",
+      "name": "M",
+      "base": 30,
+      "mode": "polar",
+      "length": "{6}",
+      "angle": "0"
+    },
+    {
+      "id": 43,
+      "type": "offsetPoint",
+      "name": "N",
+      "base": 42,
+      "mode": "polar",
+      "length": "{3} - {6}",
+      "angle": "270"
+    },
+    {
+      "id": 44,
+      "type": "offsetPoint",
+      "name": "O",
+      "base": 42,
+      "mode": "polar",
+      "length": "{3} - {6}",
+      "angle": "90"
+    },
+    {
+      "id": 45,
+      "type": "line",
+      "start": 44,
+      "end": 43,
+      "role": "stitch"
+    },
+    {
+      "id": 46,
+      "type": "offsetPoint",
+      "name": "P",
+      "base": 31,
+      "mode": "polar",
+      "length": "{6}",
+      "angle": "180"
+    },
+    {
+      "id": 47,
+      "type": "offsetPoint",
+      "name": "Q",
+      "base": 46,
+      "mode": "polar",
+      "length": "{3} - {6}",
+      "angle": "270"
+    },
+    {
+      "id": 48,
+      "type": "offsetPoint",
+      "name": "R",
+      "base": 46,
+      "mode": "polar",
+      "length": "{3} - {6}",
+      "angle": "90"
+    },
+    {
+      "id": 49,
+      "type": "line",
+      "start": 48,
+      "end": 47,
+      "role": "stitch"
+    },
+    {
+      "id": 50,
+      "type": "repeat",
+      "name": "S",
+      "a": 44,
+      "b": 43,
+      "ends": "include",
+      "count": "round({45}.length / {7}) + 1",
+      "markerSize": "1",
+      "marker": "hole"
+    },
+    {
+      "id": 51,
+      "type": "repeat",
+      "name": "T",
+      "a": 48,
+      "b": 47,
+      "ends": "include",
+      "count": "round({49}.length / {7}) + 1",
+      "markerSize": "1",
+      "marker": "hole"
+    },
+    {
+      "id": 41,
+      "type": "piece",
+      "name": "Sleeve",
+      "path": [
+        {
+          "edge": 26,
+          "reversed": false
+        },
+        {
+          "edge": 23,
+          "reversed": false
+        },
+        {
+          "edge": 29,
+          "reversed": false
+        },
+        {
+          "edge": 35,
+          "reversed": false
+        },
+        {
+          "edge": 39,
+          "reversed": false
+        },
+        {
+          "edge": 38,
+          "reversed": false
+        },
+        {
+          "edge": 19,
+          "reversed": false
+        },
+        {
+          "edge": 16,
+          "reversed": false
+        }
+      ],
+      "allowance": "0",
+      "grainline": {
+        "angle": "90"
+      },
+      "markings": [
+        {
+          "kind": "line",
+          "edge": 32
+        },
+        {
+          "kind": "line",
+          "edge": 45
+        },
+        {
+          "kind": "line",
+          "edge": 49
+        },
+        {
+          "kind": "point",
+          "point": 50
+        },
+        {
+          "kind": "point",
+          "point": 51
+        }
+      ],
+      "cut": {
+        "count": 1,
+        "mirrored": false
+      },
+      "material": 40
+    },
+    {
+      "id": 52,
+      "type": "note",
+      "name": "Note",
+      "anchor": {
+        "piece": 41
+      },
+      "dx": "0",
+      "dy": "-15",
+      "text": "Punch the holes,\nfold on the fold line\nand saddle stitch both sides",
+      "size": 8,
+      "print": true,
+      "align": "centre"
+    }
+  ],
+  "materials": [
+    {
+      "id": 40,
+      "name": "Leather",
+      "color": "#8B5A2B",
+      "fill": "tint",
+      "allowance": 0,
+      "fabric": "leather"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ apart to see how they are drafted. Each works out with no problems.
 | --- | --- |
 | [Bodice block with curve paths](../examples/bodice-curve-paths/bodice-curve-paths.sloper) | The [bodice block tutorial](../tutorials/bodice-block.md)'s block, with each armhole drafted as one curve path through the across-back or across-chest point instead of two curves. Curves square to the shoulder, darts, notches, and [seams](../design/pieces.md#seams) checked for length, with 1 cm of ease on the back shoulder |
 | [Circle skirt](../examples/circle-skirt/circle-skirt.sloper) | A knee-length full circle skirt and its buttoned waistband. Arcs drafted from the waist, a piece cut on the fold, a narrower hem allowance, notches placed by distance, and a button marker |
-| [Tote bag](../examples/tote-bag/tote-bag.sloper) | A lined tote with boxed corners, a patch pocket and straps, sized by its variables rather than measurements. Materials, the lining as a moved copy of the body, rounded corners, placement lines, notches, a seam and [notes](../design/notes.md) |
+| [Tote bag](../examples/tote-bag/tote-bag.sloper) | A lined tote with boxed corners, a patch pocket and straps, sized by its variables rather than measurements, drafted step by step in the [tote bag tutorial](../tutorials/tote-bag.md). Materials, the lining as a moved copy of the body, rounded corners, placement lines, notches, seams and [notes](../design/notes.md) |
 
 The bodice and the skirt use
 [size-table.slm](../examples/measurements/size-table.slm), sizes 8 to 16, and

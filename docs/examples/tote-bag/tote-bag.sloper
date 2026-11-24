@@ -5,7 +5,7 @@
   "notes": "A lined tote bag with boxed corners, a patch pocket and two straps. Change the variables to resize it; it needs no measurements. Example pattern: variables, materials, a moved copy for the lining, rounded corners, placement lines, notches, a seam check and notes.",
   "measurementFile": "",
   "identity": "fbd14888-b68f-47fa-8b92-a9512418ca88",
-  "nextId": 107,
+  "nextId": 108,
   "variables": [
     {
       "id": 1,
@@ -69,63 +69,63 @@
       "type": "offsetPoint",
       "name": "B",
       "base": 9,
-      "mode": "cartesian",
-      "dx": "{1}",
-      "dy": "0"
+      "mode": "polar",
+      "length": "{1}",
+      "angle": "0"
     },
     {
       "id": 11,
       "type": "offsetPoint",
       "name": "C",
-      "base": 9,
-      "mode": "cartesian",
-      "dx": "{1}",
-      "dy": "{2} - {3} / 2"
+      "base": 10,
+      "mode": "polar",
+      "length": "{2} - {3} / 2",
+      "angle": "270"
     },
     {
       "id": 12,
       "type": "offsetPoint",
       "name": "D",
       "base": 11,
-      "mode": "cartesian",
-      "dx": "-{3} / 2",
-      "dy": "0"
+      "mode": "polar",
+      "length": "{3} / 2",
+      "angle": "180"
     },
     {
       "id": 13,
       "type": "offsetPoint",
       "name": "E",
       "base": 12,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{3} / 2"
+      "mode": "polar",
+      "length": "{3} / 2",
+      "angle": "270"
     },
     {
       "id": 14,
       "type": "offsetPoint",
-      "name": "H",
+      "name": "F",
       "base": 9,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{2} - {3} / 2"
+      "mode": "polar",
+      "length": "{2} - {3} / 2",
+      "angle": "270"
     },
     {
       "id": 15,
       "type": "offsetPoint",
       "name": "G",
       "base": 14,
-      "mode": "cartesian",
-      "dx": "{3} / 2",
-      "dy": "0"
+      "mode": "polar",
+      "length": "{3} / 2",
+      "angle": "0"
     },
     {
       "id": 16,
       "type": "offsetPoint",
-      "name": "F",
+      "name": "H",
       "base": 15,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{3} / 2"
+      "mode": "polar",
+      "length": "{3} / 2",
+      "angle": "270"
     },
     {
       "id": 17,
@@ -138,7 +138,6 @@
     {
       "id": 18,
       "type": "line",
-      "name": "Side_right",
       "start": 10,
       "end": 11,
       "role": "outline"
@@ -160,7 +159,6 @@
     {
       "id": 21,
       "type": "line",
-      "name": "Base",
       "start": 13,
       "end": 16,
       "role": "outline"
@@ -182,7 +180,6 @@
     {
       "id": 24,
       "type": "line",
-      "name": "Side_left",
       "start": 14,
       "end": 9,
       "role": "outline"
@@ -190,7 +187,7 @@
     {
       "id": 25,
       "type": "alongEdgePoint",
-      "name": "S1",
+      "name": "I",
       "edge": 17,
       "from": "start",
       "mode": "length",
@@ -199,7 +196,7 @@
     {
       "id": 26,
       "type": "alongEdgePoint",
-      "name": "S2",
+      "name": "J",
       "edge": 17,
       "from": "end",
       "mode": "length",
@@ -208,89 +205,98 @@
     {
       "id": 27,
       "type": "alongEdgePoint",
-      "name": "M",
+      "name": "K",
       "edge": 17,
       "from": "start",
-      "mode": "ratio",
-      "value": "0.5"
+      "mode": "length",
+      "value": "{1} / 2"
     },
     {
       "id": 28,
       "type": "offsetPoint",
-      "name": "Snap",
+      "name": "L",
       "base": 27,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "4"
+      "mode": "polar",
+      "length": "4",
+      "angle": "270"
     },
     {
       "id": 29,
       "type": "offsetPoint",
-      "name": "PP",
-      "base": 9,
-      "mode": "cartesian",
-      "dx": "({1} - {4}) / 2",
-      "dy": "10"
+      "name": "M",
+      "base": 27,
+      "mode": "polar",
+      "length": "10",
+      "angle": "270"
     },
     {
       "id": 30,
       "type": "offsetPoint",
-      "name": "I",
+      "name": "N",
       "base": 29,
-      "mode": "cartesian",
-      "dx": "{4}",
-      "dy": "0"
+      "mode": "polar",
+      "length": "{4} / 2",
+      "angle": "180"
     },
     {
       "id": 31,
       "type": "offsetPoint",
-      "name": "J",
+      "name": "O",
       "base": 29,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{5}"
+      "mode": "polar",
+      "length": "{4} / 2",
+      "angle": "0"
     },
     {
       "id": 32,
       "type": "offsetPoint",
-      "name": "K",
+      "name": "P",
       "base": 30,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{31}.y - {29}.y"
+      "mode": "polar",
+      "length": "{5}",
+      "angle": "270"
     },
     {
       "id": 33,
-      "type": "line",
-      "start": 29,
-      "end": 30,
-      "role": "placement"
+      "type": "offsetPoint",
+      "name": "Q",
+      "base": 31,
+      "mode": "polar",
+      "length": "{5}",
+      "angle": "270"
     },
     {
       "id": 34,
       "type": "line",
       "start": 30,
-      "end": 32,
+      "end": 31,
       "role": "placement"
     },
     {
       "id": 35,
       "type": "line",
-      "start": 32,
-      "end": 31,
+      "start": 31,
+      "end": 33,
       "role": "placement"
     },
     {
       "id": 36,
       "type": "line",
-      "start": 31,
-      "end": 29,
+      "start": 33,
+      "end": 32,
       "role": "placement"
     },
     {
       "id": 37,
+      "type": "line",
+      "start": 32,
+      "end": 30,
+      "role": "placement"
+    },
+    {
+      "id": 38,
       "type": "move",
-      "name": "Lining_copy",
+      "name": "Move",
       "sources": [
         9,
         10,
@@ -310,92 +316,82 @@
         23,
         24
       ],
-      "suffix": "_L",
+      "suffix": "_t1",
       "mode": "cartesian",
       "dx": "{1} + 8",
       "dy": "0"
     },
     {
-      "id": 38,
-      "type": "pointCopy",
-      "name": "A_L",
-      "transform": 37,
-      "source": 9
-    },
-    {
       "id": 39,
       "type": "pointCopy",
-      "name": "B_L",
-      "transform": 37,
-      "source": 10
+      "name": "A_t1",
+      "transform": 38,
+      "source": 9
     },
     {
       "id": 40,
       "type": "pointCopy",
-      "name": "C_L",
-      "transform": 37,
-      "source": 11
+      "name": "B_t1",
+      "transform": 38,
+      "source": 10
     },
     {
       "id": 41,
       "type": "pointCopy",
-      "name": "D_L",
-      "transform": 37,
-      "source": 12
+      "name": "C_t1",
+      "transform": 38,
+      "source": 11
     },
     {
       "id": 42,
       "type": "pointCopy",
-      "name": "E_L",
-      "transform": 37,
-      "source": 13
+      "name": "D_t1",
+      "transform": 38,
+      "source": 12
     },
     {
       "id": 43,
       "type": "pointCopy",
-      "name": "F_L",
-      "transform": 37,
-      "source": 16
+      "name": "E_t1",
+      "transform": 38,
+      "source": 13
     },
     {
       "id": 44,
       "type": "pointCopy",
-      "name": "G_L",
-      "transform": 37,
-      "source": 15
+      "name": "H_t1",
+      "transform": 38,
+      "source": 16
     },
     {
       "id": 45,
       "type": "pointCopy",
-      "name": "H_L",
-      "transform": 37,
-      "source": 14
+      "name": "G_t1",
+      "transform": 38,
+      "source": 15
     },
     {
       "id": 46,
       "type": "pointCopy",
-      "name": "Snap_L",
-      "transform": 37,
+      "name": "F_t1",
+      "transform": 38,
+      "source": 14
+    },
+    {
+      "id": 47,
+      "type": "pointCopy",
+      "name": "L_t1",
+      "transform": 38,
       "source": 28,
       "markerSize": "1.5",
       "marker": "hole"
     },
     {
-      "id": 47,
-      "type": "edgeCopy",
-      "name": "Top_L",
-      "transform": 37,
-      "source": 17,
-      "start": 38,
-      "end": 39,
-      "role": "outline"
-    },
-    {
       "id": 48,
       "type": "edgeCopy",
-      "name": "Side_right_L",
-      "transform": 37,
-      "source": 18,
+      "name": "Top_t1",
+      "transform": 38,
+      "source": 17,
       "start": 39,
       "end": 40,
       "role": "outline"
@@ -403,9 +399,9 @@
     {
       "id": 49,
       "type": "edgeCopy",
-      "name": "Line_C_D_L",
-      "transform": 37,
-      "source": 19,
+      "name": "Line_B_C_t1",
+      "transform": 38,
+      "source": 18,
       "start": 40,
       "end": 41,
       "role": "outline"
@@ -413,9 +409,9 @@
     {
       "id": 50,
       "type": "edgeCopy",
-      "name": "Line_D_E_L",
-      "transform": 37,
-      "source": 20,
+      "name": "Line_C_D_t1",
+      "transform": 38,
+      "source": 19,
       "start": 41,
       "end": 42,
       "role": "outline"
@@ -423,9 +419,9 @@
     {
       "id": 51,
       "type": "edgeCopy",
-      "name": "Base_L",
-      "transform": 37,
-      "source": 21,
+      "name": "Line_D_E_t1",
+      "transform": 38,
+      "source": 20,
       "start": 42,
       "end": 43,
       "role": "outline"
@@ -433,9 +429,9 @@
     {
       "id": 52,
       "type": "edgeCopy",
-      "name": "Line_F_G_L",
-      "transform": 37,
-      "source": 22,
+      "name": "Line_E_H_t1",
+      "transform": 38,
+      "source": 21,
       "start": 43,
       "end": 44,
       "role": "outline"
@@ -443,9 +439,9 @@
     {
       "id": 53,
       "type": "edgeCopy",
-      "name": "Line_G_H_L",
-      "transform": 37,
-      "source": 23,
+      "name": "Line_H_G_t1",
+      "transform": 38,
+      "source": 22,
       "start": 44,
       "end": 45,
       "role": "outline"
@@ -453,359 +449,314 @@
     {
       "id": 54,
       "type": "edgeCopy",
-      "name": "Side_left_L",
-      "transform": 37,
-      "source": 24,
+      "name": "Line_G_F_t1",
+      "transform": 38,
+      "source": 23,
       "start": 45,
-      "end": 38,
+      "end": 46,
       "role": "outline"
     },
     {
       "id": 55,
-      "type": "offsetPoint",
-      "name": "PK",
-      "base": 9,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{2} + 8"
+      "type": "edgeCopy",
+      "name": "Line_F_A_t1",
+      "transform": 38,
+      "source": 24,
+      "start": 46,
+      "end": 39,
+      "role": "outline"
     },
     {
       "id": 56,
       "type": "offsetPoint",
-      "name": "L",
-      "base": 55,
-      "mode": "cartesian",
-      "dx": "{4}",
-      "dy": "0"
+      "name": "R",
+      "base": 9,
+      "mode": "polar",
+      "length": "{2} + 8",
+      "angle": "270"
     },
     {
       "id": 57,
       "type": "offsetPoint",
-      "name": "N",
-      "base": 55,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{5}"
+      "name": "S",
+      "base": 56,
+      "mode": "polar",
+      "length": "{4}",
+      "angle": "0"
     },
     {
       "id": 58,
       "type": "offsetPoint",
-      "name": "O",
+      "name": "T",
       "base": 56,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{57}.y - {55}.y"
+      "mode": "polar",
+      "length": "{5}",
+      "angle": "270"
     },
     {
       "id": 59,
-      "type": "line",
-      "name": "Pocket_fold",
-      "start": 55,
-      "end": 56,
-      "role": "outline"
+      "type": "offsetPoint",
+      "name": "U",
+      "base": 57,
+      "mode": "polar",
+      "length": "{5}",
+      "angle": "270"
     },
     {
       "id": 60,
       "type": "line",
+      "name": "Pocket_top",
       "start": 56,
-      "end": 58,
-      "role": "construction"
+      "end": 57,
+      "role": "outline"
     },
     {
       "id": 61,
       "type": "line",
-      "start": 58,
-      "end": 57,
+      "start": 57,
+      "end": 59,
       "role": "construction"
     },
     {
       "id": 62,
       "type": "line",
-      "start": 57,
-      "end": 55,
+      "start": 59,
+      "end": 58,
       "role": "construction"
     },
     {
       "id": 63,
+      "type": "line",
+      "start": 58,
+      "end": 56,
+      "role": "construction"
+    },
+    {
+      "id": 64,
       "type": "cornerArc",
-      "vertex": 58,
-      "edgeA": 60,
-      "edgeB": 61,
+      "vertex": 59,
+      "edgeA": 61,
+      "edgeB": 62,
       "radius": "3",
       "role": "outline"
     },
     {
-      "id": 64,
+      "id": 65,
       "type": "cornerPoint",
-      "name": "P",
-      "arc": 63,
+      "name": "V",
+      "arc": 64,
       "end": 1
     },
     {
-      "id": 65,
-      "type": "cornerPoint",
-      "name": "Q",
-      "arc": 63,
-      "end": 2
-    },
-    {
       "id": 66,
-      "type": "splitPart",
-      "edge": 60,
-      "point": 64,
-      "part": 1,
-      "role": "outline"
+      "type": "cornerPoint",
+      "name": "W",
+      "arc": 64,
+      "end": 2
     },
     {
       "id": 67,
       "type": "splitPart",
-      "edge": 60,
-      "point": 64,
-      "part": 2,
-      "role": "construction"
+      "edge": 61,
+      "point": 65,
+      "part": 1,
+      "role": "outline"
     },
     {
       "id": 68,
       "type": "splitPart",
       "edge": 61,
       "point": 65,
-      "part": 1,
+      "part": 2,
       "role": "construction"
     },
     {
       "id": 69,
       "type": "splitPart",
-      "edge": 61,
-      "point": 65,
-      "part": 2,
+      "edge": 62,
+      "point": 66,
+      "part": 1,
       "role": "construction"
     },
     {
       "id": 70,
-      "type": "cornerArc",
-      "vertex": 57,
-      "edgeA": 69,
-      "edgeB": 62,
-      "radius": "3",
-      "role": "outline"
-    },
-    {
-      "id": 71,
-      "type": "cornerPoint",
-      "name": "R",
-      "arc": 70,
-      "end": 1
-    },
-    {
-      "id": 72,
-      "type": "cornerPoint",
-      "name": "S",
-      "arc": 70,
-      "end": 2
-    },
-    {
-      "id": 73,
       "type": "splitPart",
-      "edge": 69,
-      "point": 71,
-      "part": 1,
-      "role": "outline"
-    },
-    {
-      "id": 74,
-      "type": "splitPart",
-      "edge": 69,
-      "point": 71,
+      "edge": 62,
+      "point": 66,
       "part": 2,
       "role": "construction"
     },
     {
-      "id": 75,
+      "id": 71,
+      "type": "cornerArc",
+      "vertex": 58,
+      "edgeA": 70,
+      "edgeB": 63,
+      "radius": "3",
+      "role": "outline"
+    },
+    {
+      "id": 72,
+      "type": "cornerPoint",
+      "name": "X",
+      "arc": 71,
+      "end": 1
+    },
+    {
+      "id": 73,
+      "type": "cornerPoint",
+      "name": "Y",
+      "arc": 71,
+      "end": 2
+    },
+    {
+      "id": 74,
       "type": "splitPart",
-      "edge": 62,
+      "edge": 70,
       "point": 72,
       "part": 1,
+      "role": "outline"
+    },
+    {
+      "id": 75,
+      "type": "splitPart",
+      "edge": 70,
+      "point": 72,
+      "part": 2,
       "role": "construction"
     },
     {
       "id": 76,
       "type": "splitPart",
-      "edge": 62,
-      "point": 72,
+      "edge": 63,
+      "point": 73,
+      "part": 1,
+      "role": "construction"
+    },
+    {
+      "id": 77,
+      "type": "splitPart",
+      "edge": 63,
+      "point": 73,
       "part": 2,
       "role": "outline"
     },
     {
-      "id": 77,
-      "type": "offsetPoint",
-      "name": "ST",
-      "base": 55,
-      "mode": "cartesian",
-      "dx": "{4} + 8",
-      "dy": "0"
-    },
-    {
       "id": 78,
       "type": "offsetPoint",
-      "name": "T",
-      "base": 77,
-      "mode": "cartesian",
-      "dx": "{6}",
-      "dy": "0"
+      "name": "Z",
+      "base": 57,
+      "mode": "polar",
+      "length": "8",
+      "angle": "0"
     },
     {
       "id": 79,
       "type": "offsetPoint",
-      "name": "U",
-      "base": 77,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{7} * 4"
+      "name": "AA",
+      "base": 78,
+      "mode": "polar",
+      "length": "{6}",
+      "angle": "0"
     },
     {
       "id": 80,
       "type": "offsetPoint",
-      "name": "V",
+      "name": "AB",
       "base": 78,
-      "mode": "cartesian",
-      "dx": "0",
-      "dy": "{79}.y - {77}.y"
+      "mode": "polar",
+      "length": "{7} * 4",
+      "angle": "270"
     },
     {
       "id": 81,
-      "type": "line",
-      "start": 77,
-      "end": 78,
-      "role": "outline"
+      "type": "offsetPoint",
+      "name": "AC",
+      "base": 79,
+      "mode": "polar",
+      "length": "{7} * 4",
+      "angle": "270"
     },
     {
       "id": 82,
       "type": "line",
       "start": 78,
-      "end": 80,
+      "end": 79,
       "role": "outline"
     },
     {
       "id": 83,
       "type": "line",
-      "start": 80,
-      "end": 79,
+      "start": 79,
+      "end": 81,
       "role": "outline"
     },
     {
       "id": 84,
       "type": "line",
-      "start": 79,
-      "end": 77,
+      "start": 81,
+      "end": 80,
       "role": "outline"
     },
     {
       "id": 85,
-      "type": "alongEdgePoint",
-      "name": "T1",
-      "edge": 84,
-      "from": "end",
-      "mode": "ratio",
-      "value": "0.5"
+      "type": "line",
+      "start": 80,
+      "end": 78,
+      "role": "outline"
     },
     {
       "id": 86,
       "type": "alongEdgePoint",
-      "name": "T2",
-      "edge": 82,
-      "from": "start",
-      "mode": "ratio",
-      "value": "0.5"
+      "name": "AD",
+      "edge": 85,
+      "from": "end",
+      "mode": "length",
+      "value": "{7} * 2"
     },
     {
       "id": 87,
+      "type": "alongEdgePoint",
+      "name": "AE",
+      "edge": 83,
+      "from": "start",
+      "mode": "length",
+      "value": "{7} * 2"
+    },
+    {
+      "id": 88,
       "type": "line",
-      "name": "Strap_fold",
-      "start": 85,
-      "end": 86,
+      "start": 86,
+      "end": 87,
       "role": "fold"
     },
     {
-      "id": 91,
-      "type": "piece",
-      "name": "Lining",
-      "path": [
-        {
-          "edge": 48,
-          "reversed": false
-        },
-        {
-          "edge": 49,
-          "reversed": false
-        },
-        {
-          "edge": 50,
-          "reversed": false
-        },
-        {
-          "edge": 51,
-          "reversed": false
-        },
-        {
-          "edge": 52,
-          "reversed": false
-        },
-        {
-          "edge": 53,
-          "reversed": false
-        },
-        {
-          "edge": 54,
-          "reversed": false
-        },
-        {
-          "edge": 47,
-          "reversed": false
-        }
-      ],
-      "allowance": "1",
-      "grainline": {
-        "angle": "90"
-      },
-      "markings": [
-        {
-          "kind": "point",
-          "point": 46
-        }
-      ],
-      "cut": {
-        "count": 2,
-        "mirrored": false
-      },
-      "material": 89
-    },
-    {
-      "id": 92,
+      "id": 93,
       "type": "piece",
       "name": "Pocket",
       "path": [
         {
-          "edge": 66,
+          "edge": 67,
           "reversed": false
         },
         {
-          "edge": 63,
+          "edge": 64,
           "reversed": false
         },
         {
-          "edge": 73,
+          "edge": 74,
           "reversed": false
         },
         {
-          "edge": 70,
+          "edge": 71,
           "reversed": false
         },
         {
-          "edge": 76,
+          "edge": 77,
           "reversed": false
         },
         {
-          "edge": 59,
+          "edge": 60,
           "reversed": false
         }
       ],
@@ -817,18 +768,14 @@
         "count": 1,
         "mirrored": false
       },
-      "foldEdge": 59,
-      "material": 88
+      "foldEdge": 60,
+      "material": 89
     },
     {
-      "id": 93,
+      "id": 94,
       "type": "piece",
       "name": "Strap",
       "path": [
-        {
-          "edge": 82,
-          "reversed": false
-        },
         {
           "edge": 83,
           "reversed": false
@@ -838,7 +785,11 @@
           "reversed": false
         },
         {
-          "edge": 81,
+          "edge": 85,
+          "reversed": false
+        },
+        {
+          "edge": 82,
           "reversed": false
         }
       ],
@@ -849,17 +800,17 @@
       "markings": [
         {
           "kind": "line",
-          "edge": 87
+          "edge": 88
         }
       ],
       "cut": {
         "count": 2,
         "mirrored": false
       },
-      "material": 88
+      "material": 89
     },
     {
-      "id": 90,
+      "id": 91,
       "type": "piece",
       "name": "Body",
       "path": [
@@ -911,10 +862,6 @@
       "markings": [
         {
           "kind": "line",
-          "edge": 33
-        },
-        {
-          "kind": "line",
           "edge": 34
         },
         {
@@ -924,28 +871,86 @@
         {
           "kind": "line",
           "edge": 36
+        },
+        {
+          "kind": "line",
+          "edge": 37
         }
       ],
       "cut": {
         "count": 2,
         "mirrored": false
       },
-      "material": 88
+      "material": 89
     },
     {
-      "id": 94,
+      "id": 92,
+      "type": "piece",
+      "name": "Lining",
+      "path": [
+        {
+          "edge": 49,
+          "reversed": false
+        },
+        {
+          "edge": 50,
+          "reversed": false
+        },
+        {
+          "edge": 51,
+          "reversed": false
+        },
+        {
+          "edge": 52,
+          "reversed": false
+        },
+        {
+          "edge": 53,
+          "reversed": false
+        },
+        {
+          "edge": 54,
+          "reversed": false
+        },
+        {
+          "edge": 55,
+          "reversed": false
+        },
+        {
+          "edge": 48,
+          "reversed": false
+        }
+      ],
+      "allowance": "1",
+      "grainline": {
+        "angle": "90"
+      },
+      "markings": [
+        {
+          "kind": "point",
+          "point": 47
+        }
+      ],
+      "cut": {
+        "count": 2,
+        "mirrored": false
+      },
+      "material": 90
+    },
+    {
+      "id": 95,
       "type": "seam",
-      "name": "Top_seam",
+      "name": "Sides",
       "sideA": [
         {
-          "piece": 90,
-          "edge": 17
+          "piece": 91,
+          "edge": 24
         }
       ],
       "sideB": [
         {
           "piece": 91,
-          "edge": 47
+          "edge": 18
         }
       ],
       "reversed": false,
@@ -953,75 +958,79 @@
       "tolerance": "0.1"
     },
     {
-      "id": 95,
-      "type": "note",
-      "name": "Note",
-      "anchor": {
-        "piece": 90
-      },
-      "dx": "0",
-      "dy": "4",
-      "text": "Finished size\n{={1}} × {={2} - {3} / 2} × {={3}} cm",
-      "size": 12,
-      "print": true,
-      "align": "centre"
-    },
-    {
       "id": 96,
-      "type": "note",
-      "name": "Note2",
-      "anchor": {
-        "piece": 91
-      },
-      "dx": "0",
-      "dy": "4",
-      "text": "Magnetic snap at the hole",
-      "size": 12,
-      "print": true,
-      "align": "centre"
-    },
-    {
-      "id": 97,
-      "type": "note",
-      "name": "Note3",
-      "anchor": {
-        "piece": 92
-      },
-      "dx": "0",
-      "dy": "4",
-      "text": "Turn in the sides and base,\nfold at the top and topstitch\nto the bag at the placement lines",
-      "size": 12,
-      "print": true,
-      "align": "centre"
-    },
-    {
-      "id": 98,
-      "type": "note",
-      "name": "Note4",
-      "anchor": {
-        "piece": 93
-      },
-      "dx": "0",
-      "dy": "4",
-      "text": "Fold the long edges to the centre line, then in half, and topstitch",
-      "size": 12,
-      "print": true,
-      "align": "centre"
-    },
-    {
-      "id": 99,
       "type": "seam",
-      "name": "Sides",
+      "name": "Base_seam",
       "sideA": [
         {
-          "piece": 90,
-          "edge": 24
+          "piece": 91,
+          "edge": 21
         }
       ],
       "sideB": [
         {
-          "piece": 90,
-          "edge": 18
+          "piece": 91,
+          "edge": 21
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 97,
+      "type": "seam",
+      "name": "Corner_left",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 22
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 91,
+          "edge": 23
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 98,
+      "type": "seam",
+      "name": "Corner_right",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 19
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 91,
+          "edge": 20
+        }
+      ],
+      "reversed": false,
+      "ease": "0",
+      "tolerance": "0.1"
+    },
+    {
+      "id": 99,
+      "type": "seam",
+      "name": "Top_seam",
+      "sideA": [
+        {
+          "piece": 91,
+          "edge": 17
+        }
+      ],
+      "sideB": [
+        {
+          "piece": 92,
+          "edge": 48
         }
       ],
       "reversed": false,
@@ -1031,17 +1040,17 @@
     {
       "id": 100,
       "type": "seam",
-      "name": "Base_seam",
+      "name": "Lining_sides",
       "sideA": [
         {
-          "piece": 90,
-          "edge": 21
+          "piece": 92,
+          "edge": 55
         }
       ],
       "sideB": [
         {
-          "piece": 90,
-          "edge": 21
+          "piece": 92,
+          "edge": 49
         }
       ],
       "reversed": false,
@@ -1051,17 +1060,17 @@
     {
       "id": 101,
       "type": "seam",
-      "name": "Corner_left",
+      "name": "Lining_base",
       "sideA": [
         {
-          "piece": 90,
-          "edge": 22
+          "piece": 92,
+          "edge": 52
         }
       ],
       "sideB": [
         {
-          "piece": 90,
-          "edge": 23
+          "piece": 92,
+          "edge": 52
         }
       ],
       "reversed": false,
@@ -1071,17 +1080,17 @@
     {
       "id": 102,
       "type": "seam",
-      "name": "Corner_right",
+      "name": "Lining_corner_left",
       "sideA": [
         {
-          "piece": 90,
-          "edge": 19
+          "piece": 92,
+          "edge": 53
         }
       ],
       "sideB": [
         {
-          "piece": 90,
-          "edge": 20
+          "piece": 92,
+          "edge": 54
         }
       ],
       "reversed": false,
@@ -1091,17 +1100,17 @@
     {
       "id": 103,
       "type": "seam",
-      "name": "Lining_sides",
+      "name": "Lining_corner_right",
       "sideA": [
         {
-          "piece": 91,
-          "edge": 54
+          "piece": 92,
+          "edge": 50
         }
       ],
       "sideB": [
         {
-          "piece": 91,
-          "edge": 48
+          "piece": 92,
+          "edge": 51
         }
       ],
       "reversed": false,
@@ -1110,75 +1119,71 @@
     },
     {
       "id": 104,
-      "type": "seam",
-      "name": "Lining_base",
-      "sideA": [
-        {
-          "piece": 91,
-          "edge": 51
-        }
-      ],
-      "sideB": [
-        {
-          "piece": 91,
-          "edge": 51
-        }
-      ],
-      "reversed": false,
-      "ease": "0",
-      "tolerance": "0.1"
+      "type": "note",
+      "name": "Note",
+      "anchor": {
+        "piece": 91
+      },
+      "dx": "0",
+      "dy": "4",
+      "text": "Finished size\n{={1}} × {={2} - {3} / 2} × {={3}} cm",
+      "size": 12,
+      "print": true,
+      "align": "centre"
     },
     {
       "id": 105,
-      "type": "seam",
-      "name": "Lining_corner_left",
-      "sideA": [
-        {
-          "piece": 91,
-          "edge": 52
-        }
-      ],
-      "sideB": [
-        {
-          "piece": 91,
-          "edge": 53
-        }
-      ],
-      "reversed": false,
-      "ease": "0",
-      "tolerance": "0.1"
+      "type": "note",
+      "name": "Note2",
+      "anchor": {
+        "piece": 92
+      },
+      "dx": "0",
+      "dy": "4",
+      "text": "Magnetic snap at the hole",
+      "size": 12,
+      "print": true,
+      "align": "centre"
     },
     {
       "id": 106,
-      "type": "seam",
-      "name": "Lining_corner_right",
-      "sideA": [
-        {
-          "piece": 91,
-          "edge": 49
-        }
-      ],
-      "sideB": [
-        {
-          "piece": 91,
-          "edge": 50
-        }
-      ],
-      "reversed": false,
-      "ease": "0",
-      "tolerance": "0.1"
+      "type": "note",
+      "name": "Note3",
+      "anchor": {
+        "piece": 93
+      },
+      "dx": "0",
+      "dy": "4",
+      "text": "Turn in the sides and base,\nfold at the top and topstitch\nto the bag at the placement lines",
+      "size": 12,
+      "print": true,
+      "align": "centre"
+    },
+    {
+      "id": 107,
+      "type": "note",
+      "name": "Note4",
+      "anchor": {
+        "piece": 94
+      },
+      "dx": "0",
+      "dy": "4",
+      "text": "Fold the long edges to the centre line, then in half, and topstitch",
+      "size": 12,
+      "print": true,
+      "align": "centre"
     }
   ],
   "materials": [
     {
-      "id": 88,
+      "id": 89,
       "name": "Main",
       "color": "#5B8DB8",
       "fill": "tint",
       "fabric": "canvas"
     },
     {
-      "id": 89,
+      "id": 90,
       "name": "Lining",
       "color": "#C9A66B",
       "fill": "hatch",

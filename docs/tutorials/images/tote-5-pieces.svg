@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1012mm" height="732mm" viewBox="-56 -56 1012 732">
+<rect x="-56" y="-56" width="1012" height="732" fill="#ffffff"/>
+<path data-id="93" data-name="Pocket" d="M 190 460 L 190 590.247 L 189.817 593.953 L 189.236 597.841 L 188.283 601.637 L 186.966 605.312 L 185.298 608.842 L 183.289 612.2 L 180.95 615.36 L 178.293 618.293 L 175.36 620.95 L 172.2 623.289 L 168.842 625.298 L 165.312 626.966 L 161.637 628.283 L 157.841 629.236 L 153.953 629.817 L 150.247 630 L 29.753 630 L 26.047 629.817 L 22.159 629.236 L 18.363 628.283 L 14.688 626.966 L 11.158 625.298 L 7.8 623.289 L 4.64 620.95 L 1.707 618.293 L -0.95 615.36 L -3.289 612.2 L -5.298 608.842 L -6.966 605.312 L -8.283 601.637 L -9.236 597.841 L -9.817 593.953 L -10 590.247 L -10 460 Z" fill="#ceddea" stroke="#202020" stroke-width="1.38"/>
+<path data-id="94" data-name="Strap" d="M 910 460 L 910 580 L 260 580 L 260 460 Z" fill="#ceddea" stroke="#202020" stroke-width="1.38"/>
+<path data-id="91" data-name="Body" d="M 410 -10 L 410 330 L 350 330 L 350 390 L 50 390 L 50 330 L -10 330 L -10 -10 Z" fill="#ceddea" stroke="#202020" stroke-width="1.38"/>
+<path data-id="92" data-name="Lining" d="M 890 -10 L 890 330 L 830 330 L 830 390 L 530 390 L 530 330 L 470 330 L 470 -10 Z" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="92" data-hatch="Lining" d="M 890 0.064 L 879.936 -10 M 890 15.677 L 864.323 -10 M 890 31.29 L 848.71 -10 M 890 46.902 L 833.098 -10 M 890 62.515 L 817.485 -10 M 890 78.128 L 801.872 -10 M 890 93.741 L 786.259 -10 M 890 109.354 L 770.646 -10 M 890 124.967 L 755.033 -10 M 890 140.58 L 739.42 -10 M 890 156.193 L 723.807 -10 M 890 171.806 L 708.194 -10 M 890 187.419 L 692.581 -10 M 890 203.032 L 676.968 -10 M 890 218.645 L 661.355 -10 M 890 234.257 L 645.743 -10 M 890 249.87 L 630.13 -10 M 890 265.483 L 614.517 -10 M 890 281.096 L 598.904 -10 M 890 296.709 L 583.291 -10 M 890 312.322 L 567.678 -10 M 890 327.935 L 552.065 -10 M 876.452 330 L 536.452 -10 M 860.839 330 L 520.839 -10 M 845.226 330 L 505.226 -10 M 830 330.387 L 489.613 -10 M 830 346 L 474 -10 M 830 361.612 L 470 1.612 M 830 377.225 L 470 17.225 M 827.162 390 L 470 32.838 M 811.549 390 L 470 48.451 M 795.936 390 L 470 64.064 M 780.323 390 L 470 79.677 M 764.71 390 L 470 95.29 M 749.097 390 L 470 110.903 M 733.484 390 L 470 126.516 M 717.871 390 L 470 142.129 M 702.258 390 L 470 157.742 M 686.645 390 L 470 173.355 M 671.033 390 L 470 188.967 M 655.42 390 L 470 204.58 M 639.807 390 L 470 220.193 M 624.194 390 L 470 235.806 M 608.581 390 L 470 251.419 M 592.968 390 L 470 267.032 M 577.355 390 L 530 342.645 M 517.355 330 L 470 282.645 M 561.742 390 L 530 358.258 M 501.742 330 L 470 298.258 M 546.129 390 L 530 373.871 M 486.129 330 L 470 313.871 M 530.516 390 L 530 389.484 M 470.516 330 L 470 329.484" fill="none" stroke="#c9a66b" stroke-width="1.38"/>
+<path data-id="61" data-name="Line_S_U" d="M 180 460 L 180 620" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="62" data-name="Line_U_T" d="M 180 620 L 0 620" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="63" data-name="Line_T_R" d="M 0 620 L 0 460" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="68" data-name="Line_V_U" d="M 180 590 L 180 620" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="69" data-name="Line_U_W" d="M 180 620 L 150 620" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="70" data-name="Line_W_T" d="M 150 620 L 0 620" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="75" data-name="Line_X_T" d="M 30 620 L 0 620" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="76" data-name="Line_T_Y" d="M 0 620 L 0 590" fill="none" stroke="#808080" stroke-width="0.736" stroke-dasharray="2.944 2.208"/>
+<path data-id="34" data-name="Line_N_O" d="M 110 100 L 290 100" fill="none" stroke="#1f6fd1" stroke-width="1.035"/>
+<path data-id="35" data-name="Line_O_Q" d="M 290 100 L 290 260" fill="none" stroke="#1f6fd1" stroke-width="1.035"/>
+<path data-id="36" data-name="Line_Q_P" d="M 290 260 L 110 260" fill="none" stroke="#1f6fd1" stroke-width="1.035"/>
+<path data-id="37" data-name="Line_P_N" d="M 110 260 L 110 100" fill="none" stroke="#1f6fd1" stroke-width="1.035"/>
+<path data-id="88" data-name="Line_AD_AE" d="M 260 520 L 910 520" fill="none" stroke="#8a3fc4" stroke-width="1.035" stroke-dasharray="12.42 3.105 2.07 3.105"/>
+<path data-id="17" data-name="Top" d="M 0 0 L 400 0" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="18" data-name="Line_B_C" d="M 400 0 L 400 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="19" data-name="Line_C_D" d="M 400 320 L 340 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="20" data-name="Line_D_E" d="M 340 320 L 340 380" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="21" data-name="Line_E_H" d="M 340 380 L 60 380" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="22" data-name="Line_H_G" d="M 60 380 L 60 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="23" data-name="Line_G_F" d="M 60 320 L 0 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="24" data-name="Line_F_A" d="M 0 320 L 0 0" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="48" data-name="Top_t1" d="M 480 0 L 880 0" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="49" data-name="Line_B_C_t1" d="M 880 0 L 880 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="50" data-name="Line_C_D_t1" d="M 880 320 L 820 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="51" data-name="Line_D_E_t1" d="M 820 320 L 820 380" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="52" data-name="Line_E_H_t1" d="M 820 380 L 540 380" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="53" data-name="Line_H_G_t1" d="M 540 380 L 540 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="54" data-name="Line_G_F_t1" d="M 540 320 L 480 320" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="55" data-name="Line_F_A_t1" d="M 480 320 L 480 0" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="60" data-name="Pocket_top" d="M 0 460 L 180 460" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="64" data-name="Corner_U" d="M 180 590 C 180 597.956 176.839 605.587 171.213 611.213 C 165.587 616.839 157.956 620 150 620" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="67" data-name="Line_S_V" d="M 180 460 L 180 590" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="71" data-name="Corner_T" d="M 30 620 C 22.044 620 14.413 616.839 8.787 611.213 C 3.161 605.587 0 597.956 0 590" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="74" data-name="Line_W_X" d="M 150 620 L 30 620" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="77" data-name="Line_Y_R" d="M 0 590 L 0 460" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="82" data-name="Line_Z_AA" d="M 260 460 L 910 460" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="83" data-name="Line_AA_AC" d="M 910 460 L 910 580" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="84" data-name="Line_AC_AB" d="M 910 580 L 260 580" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="85" data-name="Line_AB_Z" d="M 260 580 L 260 460" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="93" data-marks="Pocket" d="M 90 588 L 90 492 M 90 492 L 85.774 501.063 M 90 492 L 94.226 501.063 M 90 588 L 94.226 578.937 M 90 588 L 85.774 578.937 M 27 480 L 153 480 M 27 480 L 27 460 M 153 480 L 153 460 M 27 460 L 30.381 467.25 M 27 460 L 23.619 467.25 M 153 460 L 156.381 467.25 M 153 460 L 149.619 467.25" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="94" data-marks="Strap" d="M 390 520 L 780 520 M 780 520 L 770.937 515.774 M 780 520 L 770.937 524.226 M 390 520 L 399.063 524.226 M 390 520 L 399.063 515.774" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="91" data-marks="Body" d="M 200 304 L 200 76 M 200 76 L 195.774 85.063 M 200 76 L 204.226 85.063 M 200 304 L 204.226 294.937 M 200 304 L 195.774 294.937 M 140 -10 L 140 -4 M 260 -10 L 260 -4" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="92" data-marks="Lining" d="M 680 304 L 680 76 M 680 76 L 675.774 85.063 M 680 76 L 684.226 85.063 M 680 304 L 684.226 294.937 M 680 304 L 675.774 294.937 M 687.5 40 L 686.929 37.13 M 686.929 37.13 L 685.303 34.697 M 685.303 34.697 L 682.87 33.071 M 682.87 33.071 L 680 32.5 M 680 32.5 L 677.13 33.071 M 677.13 33.071 L 674.697 34.697 M 674.697 34.697 L 673.071 37.13 M 673.071 37.13 L 672.5 40 M 672.5 40 L 673.071 42.87 M 673.071 42.87 L 674.697 45.303 M 674.697 45.303 L 677.13 46.929 M 677.13 46.929 L 680 47.5 M 680 47.5 L 682.87 46.929 M 682.87 46.929 L 685.303 45.303 M 685.303 45.303 L 686.929 42.87 M 686.929 42.87 L 687.5 40" fill="none" stroke="#202020" stroke-width="1.38"/>
+<path data-id="47" data-marker="hole" d="M 687.5 40 L 686.929 37.13 M 686.929 37.13 L 685.303 34.697 M 685.303 34.697 L 682.87 33.071 M 682.87 33.071 L 680 32.5 M 680 32.5 L 677.13 33.071 M 677.13 33.071 L 674.697 34.697 M 674.697 34.697 L 673.071 37.13 M 673.071 37.13 L 672.5 40 M 672.5 40 L 673.071 42.87 M 673.071 42.87 L 674.697 45.303 M 674.697 45.303 L 677.13 46.929 M 677.13 46.929 L 680 47.5 M 680 47.5 L 682.87 46.929 M 682.87 46.929 L 685.303 45.303 M 685.303 45.303 L 686.929 42.87 M 686.929 42.87 L 687.5 40" fill="none" stroke="#202020" stroke-width="1.38"/>
+<circle data-id="9" data-name="A" cx="0" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="10" data-name="B" cx="400" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="11" data-name="C" cx="400" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="12" data-name="D" cx="340" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="13" data-name="E" cx="340" cy="380" r="2.76" fill="#202020"/>
+<circle data-id="14" data-name="F" cx="0" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="15" data-name="G" cx="60" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="16" data-name="H" cx="60" cy="380" r="2.76" fill="#202020"/>
+<circle data-id="25" data-name="I" cx="140" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="26" data-name="J" cx="260" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="27" data-name="K" cx="200" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="28" data-name="L" cx="200" cy="40" r="2.76" fill="#202020"/>
+<circle data-id="29" data-name="M" cx="200" cy="100" r="2.76" fill="#202020"/>
+<circle data-id="30" data-name="N" cx="110" cy="100" r="2.76" fill="#202020"/>
+<circle data-id="31" data-name="O" cx="290" cy="100" r="2.76" fill="#202020"/>
+<circle data-id="32" data-name="P" cx="110" cy="260" r="2.76" fill="#202020"/>
+<circle data-id="33" data-name="Q" cx="290" cy="260" r="2.76" fill="#202020"/>
+<circle data-id="39" data-name="A_t1" cx="480" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="40" data-name="B_t1" cx="880" cy="0" r="2.76" fill="#202020"/>
+<circle data-id="41" data-name="C_t1" cx="880" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="42" data-name="D_t1" cx="820" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="43" data-name="E_t1" cx="820" cy="380" r="2.76" fill="#202020"/>
+<circle data-id="44" data-name="H_t1" cx="540" cy="380" r="2.76" fill="#202020"/>
+<circle data-id="45" data-name="G_t1" cx="540" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="46" data-name="F_t1" cx="480" cy="320" r="2.76" fill="#202020"/>
+<circle data-id="47" data-name="L_t1" cx="680" cy="40" r="2.76" fill="#202020"/>
+<circle data-id="56" data-name="R" cx="0" cy="460" r="2.76" fill="#202020"/>
+<circle data-id="57" data-name="S" cx="180" cy="460" r="2.76" fill="#202020"/>
+<circle data-id="58" data-name="T" cx="0" cy="620" r="2.76" fill="#202020"/>
+<circle data-id="59" data-name="U" cx="180" cy="620" r="2.76" fill="#202020"/>
+<circle data-id="65" data-name="V" cx="180" cy="590" r="2.76" fill="#202020"/>
+<circle data-id="66" data-name="W" cx="150" cy="620" r="2.76" fill="#202020"/>
+<circle data-id="72" data-name="X" cx="30" cy="620" r="2.76" fill="#202020"/>
+<circle data-id="73" data-name="Y" cx="0" cy="590" r="2.76" fill="#202020"/>
+<circle data-id="78" data-name="Z" cx="260" cy="460" r="2.76" fill="#202020"/>
+<circle data-id="79" data-name="AA" cx="910" cy="460" r="2.76" fill="#202020"/>
+<circle data-id="80" data-name="AB" cx="260" cy="580" r="2.76" fill="#202020"/>
+<circle data-id="81" data-name="AC" cx="910" cy="580" r="2.76" fill="#202020"/>
+<circle data-id="86" data-name="AD" cx="260" cy="520" r="2.76" fill="#202020"/>
+<circle data-id="87" data-name="AE" cx="910" cy="520" r="2.76" fill="#202020"/>
+<text x="90" y="540" font-family="sans-serif" font-size="12.88" fill="#202020">Pocket, cut 1 on fold, Main</text>
+<text x="585" y="520" font-family="sans-serif" font-size="12.88" fill="#202020">Strap, cut 2, Main</text>
+<text x="200" y="190" font-family="sans-serif" font-size="12.88" fill="#202020">Body, cut 2, Main</text>
+<text x="680" y="190" font-family="sans-serif" font-size="12.88" fill="#202020">Lining, cut 2, Lining</text>
+<text x="4.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">A</text>
+<text x="404.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">B</text>
+<text x="404.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">C</text>
+<text x="344.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">D</text>
+<text x="344.14" y="371.996" font-family="sans-serif" font-size="12.88" fill="#202020">E</text>
+<text x="4.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">F</text>
+<text x="64.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">G</text>
+<text x="64.14" y="371.996" font-family="sans-serif" font-size="12.88" fill="#202020">H</text>
+<text x="144.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">I</text>
+<text x="264.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">J</text>
+<text x="204.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">K</text>
+<text x="204.14" y="31.996" font-family="sans-serif" font-size="12.88" fill="#202020">L</text>
+<text x="204.14" y="91.996" font-family="sans-serif" font-size="12.88" fill="#202020">M</text>
+<text x="114.14" y="91.996" font-family="sans-serif" font-size="12.88" fill="#202020">N</text>
+<text x="294.14" y="91.996" font-family="sans-serif" font-size="12.88" fill="#202020">O</text>
+<text x="114.14" y="251.996" font-family="sans-serif" font-size="12.88" fill="#202020">P</text>
+<text x="294.14" y="251.996" font-family="sans-serif" font-size="12.88" fill="#202020">Q</text>
+<text x="484.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">A_t1</text>
+<text x="884.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">B_t1</text>
+<text x="884.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">C_t1</text>
+<text x="824.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">D_t1</text>
+<text x="824.14" y="371.996" font-family="sans-serif" font-size="12.88" fill="#202020">E_t1</text>
+<text x="544.14" y="371.996" font-family="sans-serif" font-size="12.88" fill="#202020">H_t1</text>
+<text x="544.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">G_t1</text>
+<text x="484.14" y="311.996" font-family="sans-serif" font-size="12.88" fill="#202020">F_t1</text>
+<text x="684.14" y="31.996" font-family="sans-serif" font-size="12.88" fill="#202020">L_t1</text>
+<text x="4.14" y="451.996" font-family="sans-serif" font-size="12.88" fill="#202020">R</text>
+<text x="184.14" y="451.996" font-family="sans-serif" font-size="12.88" fill="#202020">S</text>
+<text x="4.14" y="611.996" font-family="sans-serif" font-size="12.88" fill="#202020">T</text>
+<text x="184.14" y="611.996" font-family="sans-serif" font-size="12.88" fill="#202020">U</text>
+<text x="184.14" y="581.996" font-family="sans-serif" font-size="12.88" fill="#202020">V</text>
+<text x="154.14" y="611.996" font-family="sans-serif" font-size="12.88" fill="#202020">W</text>
+<text x="34.14" y="611.996" font-family="sans-serif" font-size="12.88" fill="#202020">X</text>
+<text x="4.14" y="581.996" font-family="sans-serif" font-size="12.88" fill="#202020">Y</text>
+<text x="264.14" y="451.996" font-family="sans-serif" font-size="12.88" fill="#202020">Z</text>
+<text x="914.14" y="451.996" font-family="sans-serif" font-size="12.88" fill="#202020">AA</text>
+<text x="264.14" y="571.996" font-family="sans-serif" font-size="12.88" fill="#202020">AB</text>
+<text x="914.14" y="571.996" font-family="sans-serif" font-size="12.88" fill="#202020">AC</text>
+<text x="264.14" y="511.996" font-family="sans-serif" font-size="12.88" fill="#202020">AD</text>
+<text x="914.14" y="511.996" font-family="sans-serif" font-size="12.88" fill="#202020">AE</text>
+<text x="184.14" y="555.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_S_U</text>
+<text x="94.14" y="611.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_U_T</text>
+<text x="4.14" y="531.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_T_R</text>
+<text x="184.14" y="629.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_V_U</text>
+<text x="101.921" y="635.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_U_W</text>
+<text x="11.921" y="635.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_W_T</text>
+<text x="-48.079" y="635.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_X_T</text>
+<text x="4.14" y="596.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_T_Y</text>
+<text x="204.14" y="115.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_N_O</text>
+<text x="294.14" y="171.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_O_Q</text>
+<text x="204.14" y="275.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_Q_P</text>
+<text x="114.14" y="171.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_P_N</text>
+<text x="589.14" y="535.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_AD_AE</text>
+<text x="204.14" y="15.732" font-family="sans-serif" font-size="12.88" fill="#202020">Top</text>
+<text x="404.14" y="151.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_B_C</text>
+<text x="374.14" y="335.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_C_D</text>
+<text x="276.921" y="341.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_D_E</text>
+<text x="204.14" y="371.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_E_H</text>
+<text x="64.14" y="341.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_H_G</text>
+<text x="-33.079" y="335.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_G_F</text>
+<text x="4.14" y="151.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_F_A</text>
+<text x="684.14" y="-8.004" font-family="sans-serif" font-size="12.88" fill="#202020">Top_t1</text>
+<text x="794.819" y="151.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_B_C_t1</text>
+<text x="854.14" y="335.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_C_D_t1</text>
+<text x="734.819" y="341.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_D_E_t1</text>
+<text x="684.14" y="371.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_E_H_t1</text>
+<text x="544.14" y="341.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_H_G_t1</text>
+<text x="436.819" y="335.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_G_F_t1</text>
+<text x="484.14" y="151.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_F_A_t1</text>
+<text x="94.14" y="451.996" font-family="sans-serif" font-size="12.88" fill="#202020">Pocket_top</text>
+<text x="180.87" y="595.616" font-family="sans-serif" font-size="12.88" fill="#202020">Corner_U</text>
+<text x="184.14" y="516.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_S_V</text>
+<text x="-54.292" y="603.209" font-family="sans-serif" font-size="12.88" fill="#202020">Corner_T</text>
+<text x="38.921" y="611.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_W_X</text>
+<text x="4.14" y="553.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_Y_R</text>
+<text x="589.14" y="451.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_Z_AA</text>
+<text x="832.186" y="511.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_AA_AC</text>
+<text x="589.14" y="595.732" font-family="sans-serif" font-size="12.88" fill="#202020">Line_AC_AB</text>
+<text x="189.554" y="499.996" font-family="sans-serif" font-size="12.88" fill="#202020">Line_AB_Z</text>
+<text data-id="104" x="202.201" y="235.292" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">Finished size</text>
+<text data-id="104" x="200" y="240.583" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">40 × 32 × 12 cm</text>
+<text data-id="105" x="680" y="235.292" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">Magnetic snap at the hole</text>
+<text data-id="106" x="96.604" y="585.292" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">Turn in the sides and base,</text>
+<text data-id="106" x="94.403" y="590.583" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">fold at the top and topstitch</text>
+<text data-id="106" x="90" y="595.875" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">to the bag at the placement lines</text>
+<text data-id="107" x="585" y="565.292" font-family="Helvetica, Arial, sans-serif" font-size="4.233" fill="#202020">Fold the long edges to the centre line, then in half, and topstitch</text>
+</svg>

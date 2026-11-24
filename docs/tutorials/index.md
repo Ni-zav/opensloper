@@ -7,6 +7,11 @@ can open it and compare.
   from measurements to two pieces ready to print.
 - [A bodice block](bodice-block.md): a close-fitting block with darts,
   armholes, seams checked for length, and notes.
+- [A tote bag](tote-bag.md): a lined bag sized by its variables, with
+  boxed corners, a pocket and straps; a moved copy for the lining, rounded
+  corners, placement lines and materials.
+- [A leather card wallet](card-wallet.md): one folded piece with no seam
+  allowance, a thumb notch, and stitch holes made with a repeat.
 - [Adding a zip](zip.md): a zip in the skirt block's centre back from the
   Features tab, and what one click of Apply makes.
 - [Adding a dart](darts.md): a second dart in the skirt block's back from

@@ -12,6 +12,7 @@ import { build } from 'esbuild';
 
 const ENGINE = 'engine/out/browser/engine_lib.wasm';
 const DESIGN = 'out/design';
+const MEASUREMENTS = 'out/measurements';
 const SERVICE_WORKER = 'sw.js';
 
 // What the browser needs to offer to install the app
@@ -98,6 +99,12 @@ await build({
   logLevel: 'warning',
 });
 
+await rm(MEASUREMENTS, { recursive: true, force: true });
+await bundle(['src/measurements/main.ts', 'src/engine/worker.ts'], MEASUREMENTS);
+await copyFile('src/measurements/index.html', join(MEASUREMENTS, 'index.html'));
+await copyFile(ENGINE, join(MEASUREMENTS, 'engine_lib.wasm'));
+await copyFile('../resources/opensloper-measure.svg', join(MEASUREMENTS, 'opensloper-measure.svg'));
+
 await bundle(['engine/browser/main.ts', 'src/engine/worker.ts'], 'engine/out/browser');
 await copyFile('engine/browser/index.html', 'engine/out/browser/index.html');
-console.log('Bundled out/design and engine/out/browser');
+console.log('Bundled out/design, out/measurements and engine/out/browser');

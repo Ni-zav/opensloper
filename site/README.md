@@ -21,7 +21,7 @@ Server). Its own packages are pinned in `requirements.txt`.
 
 `site` installs Django into the repository's `venv`, then runs
 `manage.py import_opensloper`, which copies the logo, app icons, tutorial
-drawings and version from the checkout, and `web/out/design`, into
+drawings and version from the checkout, and `web/out/design` and `web/out/measurements`, into
 `imported/`. Run it again after any of those change. While developing,
 Django serves the app and the static files; in production Apache does.
 
@@ -58,7 +58,7 @@ included, by `deploy/deploy.sh`. The server's details stay out of git, in
 `deploy/deploy.local.sh` (copy `deploy.local.sh.example`): `SITE_HOST`, an
 `~/.ssh/config` entry for the site's SSH account, and `SITE_DIR`, a folder
 outside the public `web` folder, such as the ISPConfig site's `private`
-folder, which Apache serves `/static/` and `/design/` from. The environment
+folder, which Apache serves `/static/`, `/design/` and `/measurements/` from. The environment
 file is `SITE_DIR.env`, beside it. The SSH account is the site's web user,
 the one the service runs as, so deploying needs no root.
 

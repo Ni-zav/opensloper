@@ -1,0 +1,233 @@
+<!doctype html>
+<!--
+  OpenSloper - parametric sewing pattern drafting
+  Copyright (C) 2026 The OpenSloper authors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSloper Measurements</title>
+    <link rel="icon" href="opensloper-measure.svg" type="image/svg+xml" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #222428;
+        background: #f2f1ed;
+        font:
+          15px system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 78rem;
+        margin: auto;
+        padding: clamp(1rem, 4vw, 2.5rem);
+      }
+      h1 {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin: 0 0 1rem;
+        font-size: 1.5rem;
+      }
+      h1 img {
+        width: 2rem;
+      }
+      h2 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+      fieldset {
+        padding: 0;
+        border: 0;
+        min-width: 0;
+        margin: 0;
+      }
+      .toolbar,
+      .actions,
+      #add-size {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      button,
+      input,
+      textarea {
+        min-height: 2.35rem;
+        color: inherit;
+        font: inherit;
+      }
+      button,
+      input,
+      textarea,
+      .grid {
+        border: 1px solid #c8c5bc;
+        border-radius: 4px;
+      }
+      button,
+      input,
+      textarea {
+        padding: 0.4rem 0.6rem;
+        background: #fff;
+      }
+      button:not(:disabled) {
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        background: #e3edf9;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      .grid:focus-visible {
+        outline: 2px solid #2574d6;
+        outline-offset: 2px;
+      }
+      button:disabled {
+        opacity: 0.45;
+      }
+      #save {
+        background: #185da9;
+        border-color: #185da9;
+        color: #fff;
+      }
+      #save:hover:not(:disabled) {
+        background: #124d91;
+      }
+      #file-name {
+        overflow-wrap: anywhere;
+      }
+      #status {
+        min-height: 1.5em;
+        margin: 0.65rem 0 1.1rem;
+        color: #4b4b49;
+      }
+      #status[data-error] {
+        color: #9c241b;
+      }
+      .details {
+        display: grid;
+        gap: 0.7rem 1rem;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      }
+      .details label {
+        display: grid;
+        align-content: start;
+        gap: 0.3rem;
+      }
+      textarea {
+        resize: vertical;
+      }
+      .grid-tools {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.6rem 1rem;
+        margin: 1.5rem 0 0.6rem;
+      }
+      #size-name {
+        width: 8rem;
+      }
+      .grid {
+        overflow-x: auto;
+        background: #fff;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+      }
+      thead {
+        background: #e8e6df;
+      }
+      th,
+      td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #d8d6cf;
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      td input {
+        width: 100%;
+        min-width: 8rem;
+      }
+      td.description input {
+        min-width: 12rem;
+      }
+      th input {
+        width: 8rem;
+        margin-bottom: 0.35rem;
+      }
+      .actions {
+        min-width: max-content;
+      }
+      #empty {
+        padding: 0.65rem;
+        margin: 0;
+      }
+      @media (max-width: 38rem) {
+        .details {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1><img src="opensloper-measure.svg" alt="" /> OpenSloper Measurements</h1>
+      <fieldset id="editor" disabled>
+        <div class="toolbar">
+          <button id="new" type="button">New</button>
+          <button id="open" type="button">Open…</button>
+          <input id="file" type="file" accept=".slm" hidden />
+          <button id="save" type="button">Download .slm</button>
+          <button id="undo" type="button" disabled>Undo</button>
+          <button id="redo" type="button" disabled>Redo</button>
+          <span id="file-name">Untitled.slm</span>
+        </div>
+        <p id="status" role="status">Loading the measurements engine…</p>
+        <div class="details">
+          <label>Name <input id="name" /></label>
+          <label>Notes <textarea id="notes" rows="2"></textarea></label>
+        </div>
+        <div class="grid-tools">
+          <h2 id="measurements">Measurements (mm)</h2>
+          <button id="add-row" type="button">Add measurement</button>
+          <form id="add-size">
+            <input id="size-name" aria-label="New size name" placeholder="Size name" required />
+            <button type="submit">Add size</button>
+          </form>
+        </div>
+        <div class="grid" role="region" aria-labelledby="measurements" tabindex="0">
+          <table aria-labelledby="measurements">
+            <thead>
+              <tr id="columns"></tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+          <p id="empty">Add a measurement or open a .slm file.</p>
+        </div>
+      </fieldset>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

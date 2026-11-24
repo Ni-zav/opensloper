@@ -44,6 +44,10 @@ the tab that had it closes.
 A service worker keeps the app for offline use and installation, with an
 Update button when a new build is ready.
 
+The standalone Measurements page opens, edits and downloads `.slm` files,
+including personal sets and size tables. Serve `web/out/measurements` to run
+it directly, or use `/measurements/` on the Django development site.
+
 ## Setting up
 
 Node and npm come from the repository's Python `venv`, through `nodeenv`, so

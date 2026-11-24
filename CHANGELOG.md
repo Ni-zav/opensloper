@@ -15,6 +15,9 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- A standalone Measurements page opens, edits and downloads `.slm` files
+  in the browser, including personal sets and size tables (#84).
+
 - A point's type can be changed in place, when it was placed the wrong
   way: select it, then what it is to be placed from, and choose the type
   in Tools → Points → Change To, or the *Change point to…* box in the web

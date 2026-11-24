@@ -58,6 +58,8 @@ export const STRINGS = {
   redoStep: (step: string): string => `Redo ${step}`,
   fit: 'Fit',
   fitHint: 'Fit everything in the window',
+  rulers: 'Rulers',
+  rulersHint: (keys: string): string => `Show or hide the rulers (${keys})`,
   drawRoleHint: 'The role of the lines and shapes drawn next',
   labelsHint: 'Which objects are labelled',
   labelsContextual: 'Labels: contextual',

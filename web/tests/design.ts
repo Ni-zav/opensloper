@@ -1,7 +1,7 @@
 // Drives the built design app (out/design, from npm run build) in headless
 // Chromium as a user would: adds a point to the empty pattern it starts with
 // and checks it stays where it was clicked, opens a regression pattern with its measurements,
-// checks the canvas drew it, adds a point with the Point tool, drags it with
+// checks the canvas drew it and its rulers, hides and shows them, adds a point with the Point tool, drags it with
 // the Select tool and undoes, edits it in the Properties tab, then uses each
 // drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
 // set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
@@ -186,6 +186,17 @@ try {
   await page.click('#toolbar button[title="Fit everything in the window"]');
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.equal(await inkedPixels(page), inked, 'opened fitted to the window');
+  // The rulers count in the pattern's unit, and the Rulers key hides and shows them
+  const rulersShown = async (): Promise<boolean> =>
+    page.$eval('.ruler-top', (ruler) => ruler.getBoundingClientRect().height > 0);
+  assert.equal(await page.$eval('.ruler-corner', (corner) => corner.textContent), 'mm', 'the rulers count in mm');
+  assert.ok(await rulersShown(), 'the rulers show');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('r');
+  await page.keyboard.up('Control');
+  assert.ok(!(await rulersShown()), 'the Rulers key hides them');
+  await page.click('#toolbar button[title^="Show or hide the rulers"]');
+  assert.ok(await rulersShown(), 'the Rulers button shows them');
   // Fitting after each scene once led to a new scene after each fit, forever
   const calls = async (): Promise<number> => Number(await bodyData(page, 'sceneCalls'));
   const callsBefore = await calls();

@@ -133,7 +133,8 @@ resourcestring
   rsEditorScene = 'What the canvas shows, in drawing order: pieces, then edges, then points. Hidden objects and ' +
     'objects never computed are left out; failing ones are at their last good result.';
   rsEditorTolerance = 'How far a curve''s polyline may stray from it, in mm; default 0.1';
-  rsEditorSceneReturns = '`isolated`, the piece shown alone or null; `pieces`, each with `id`, `name`, `state`, ' +
+  rsEditorSceneReturns = '`unit`, the pattern''s unit (mm, cm or in), which the rulers and grid count in; ' +
+    '`isolated`, the piece shown alone or null; `pieces`, each with `id`, `name`, `state`, ' +
     '`locked`, `dimmed`, `fillColor`, `fillStyle`, its `cutLine`, `marks` (grainline, fold and marking strokes) and ' +
     '`notches`, each a flat list of segments x1, y1, x2, y2, its label''s `caption`, its `middle` (x, y) and its ' +
     '`chevrons` (x, y and angle for each); `notes` (left out while annotations are hidden), each with `print`, ' +
@@ -880,6 +881,7 @@ begin
     Tolerance := MIN_TOLERANCE;
   Scene := TJSONObject.Create;
   try
+    Scene.Add('unit', MEASURE_UNIT_NAMES[Pattern.Units]);
     if Assigned(Pattern.IsolatedPiece) then
       Scene.Add('isolated', KeyToJSON(Pattern.IsolatedPiece.Key))
     else

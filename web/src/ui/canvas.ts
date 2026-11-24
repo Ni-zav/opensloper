@@ -30,6 +30,7 @@ import {
   type SceneNote,
   type Tables,
 } from '../editor/scene.ts';
+import type { MeasureUnit } from '../editor/rulerTicks.ts';
 import { ViewTransform, ZOOM_STEP, type Rect2, type Vec2 } from '../editor/view.ts';
 import {
   ClickTool,
@@ -88,6 +89,10 @@ export interface CanvasEvents {
   message(text: string): void;
   selectionChanged(ids: readonly string[]): void;
   failed(error: unknown): void;
+  // After each frame: the view drawn and the pattern's unit, for the rulers
+  painted(view: ViewTransform, unit: MeasureUnit): void;
+  // The pointer over the canvas, in model mm, or undefined once it leaves
+  pointerAt(model: Vec2 | undefined): void;
 }
 
 // An object as the API takes it: by ID, or by name for a repeat's point not yet given one
@@ -501,7 +506,7 @@ export class PatternCanvas implements CanvasToolHost {
       fieldGuide: this.mode === 'dragging' ? this.fieldGuide : undefined,
       suggestPreview: this.suggestPreview,
     });
-    this.painter.drawGrid();
+    this.painter.drawGrid(this.scene.unit);
     this.painter.drawPattern(this.scene, this.tables);
     this.painter.drawSeams(this.scene);
     const preview = this.previewNote;
@@ -518,6 +523,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.painter.drawBox();
     this.painter.drawFieldGuide();
     this.painter.drawSuggestPreview();
+    this.events.painted(this.view, this.scene.unit);
   }
 
   // While a field's formula suggestions are open, dragging its point changes
@@ -702,6 +708,7 @@ export class PatternCanvas implements CanvasToolHost {
     const at = this.screenAt(event);
     const previous = this.lastAt;
     this.lastAt = at;
+    this.events.pointerAt(this.view.toModel(at));
     switch (this.mode) {
       case 'idle':
         if (this.tool === SELECT_TOOL) {
@@ -765,6 +772,7 @@ export class PatternCanvas implements CanvasToolHost {
   };
 
   private readonly pointerLeave = (): void => {
+    this.events.pointerAt(undefined);
     if (this.mode === 'idle') {
       this.hovers.clear();
       this.tools.get(this.tool)?.leave();

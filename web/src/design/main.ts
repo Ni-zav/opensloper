@@ -21,6 +21,7 @@ import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { PropertiesPanel } from '../ui/properties.ts';
+import { CanvasRulers } from '../ui/ruler.ts';
 import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
@@ -37,6 +38,7 @@ const ICONS = {
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
   fit: 'zoom-scan',
+  rulers: 'ruler-2',
   // The side panel's tabs
   propertiesTab: 'adjustments-horizontal',
   objectsTab: 'list-tree',
@@ -110,6 +112,8 @@ class DesignApp {
   private readonly document: PatternDocument;
   private readonly tables: Tables;
   private readonly canvas: PatternCanvas;
+  private readonly rulers: CanvasRulers;
+  private readonly rulersButton: HTMLButtonElement;
   private readonly objects: ObjectsPanel;
   private readonly properties: PropertiesPanel;
   private readonly features: FeaturesPanel;
@@ -132,6 +136,8 @@ class DesignApp {
   constructor(engine: Engine, tables: Tables) {
     this.document = new PatternDocument(engine);
     this.tables = tables;
+    const rulers = new CanvasRulers(element('canvas-host', HTMLElement));
+    this.rulers = rulers;
     this.canvas = new PatternCanvas(element('canvas', HTMLCanvasElement), this.document, tables, {
       message: showMessage,
       selectionChanged: (ids) => {
@@ -141,6 +147,12 @@ class DesignApp {
         this.features.showSelection(ids);
       },
       failed: showFailure,
+      painted: (view, unit) => {
+        rulers.showView(view, unit);
+      },
+      pointerAt: (model) => {
+        rulers.showPointer(model);
+      },
     });
     this.objects = new ObjectsPanel(this.document, {
       ...this.listEvents(),
@@ -227,6 +239,15 @@ class DesignApp {
     this.redoButton = iconButton(ICONS.redo, STRINGS.redo, STRINGS.redo, () => {
       this.run(this.document.redo());
     });
+    this.rulersButton = iconButton(
+      ICONS.rulers,
+      STRINGS.rulers,
+      STRINGS.rulersHint(this.tables.shortcuts.get('rulers') ?? ''),
+      () => {
+        this.toggleRulers();
+      },
+    );
+    this.rulersButton.classList.add('chosen');
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
         this.open();
@@ -256,6 +277,7 @@ class DesignApp {
       iconButton(ICONS.fit, STRINGS.fit, STRINGS.fitHint, () => {
         this.canvas.fitAll();
       }),
+      this.rulersButton,
       this.exampleBox(),
       this.roleBox(),
       this.labelBox(),
@@ -782,6 +804,12 @@ class DesignApp {
     return true;
   }
 
+  // Shows or hides the rulers, as the desktop's View > Rulers; the button is chosen while they show
+  private toggleRulers(): void {
+    this.rulers.shown = !this.rulers.shown;
+    this.rulersButton.classList.toggle('chosen', this.rulers.shown);
+  }
+
   private isShowLabelsKey(event: KeyboardEvent): boolean {
     const shortcut = parseShortcut(this.tables.shortcuts.get('showLabels') ?? '');
     return shortcut !== undefined && matchesShortcut(event, shortcut);
@@ -823,6 +851,8 @@ class DesignApp {
       this.run(this.document.redo());
     } else if (matches('fit')) {
       this.canvas.fitAll();
+    } else if (matches('rulers')) {
+      this.toggleRulers();
     } else {
       const tool = this.tables.tools.find((each) => {
         const shortcut = parseShortcut(each.keys);

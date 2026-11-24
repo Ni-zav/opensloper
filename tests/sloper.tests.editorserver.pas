@@ -241,6 +241,16 @@ begin
   AssertEquals('edges', 4, Edges.Count);
   AssertEquals('pieces', 1, Pieces.Count);
   AssertTrue('nothing isolated', Answer.Nulls['isolated']);
+  // The rulers and grid count in it
+  AssertEquals('the pattern''s unit', 'mm', Answer.Strings['unit']);
+  Call('convert_units', '{"units": "in"}');
+  Call('editor_scene');
+  AssertEquals('the unit after a conversion', 'in', Answer.Strings['unit']);
+  Call('undo');
+  Call('editor_scene');
+  Points := Answer.Arrays['points'];
+  Edges := Answer.Arrays['edges'];
+  Pieces := Answer.Arrays['pieces'];
 
   Point := Points.Objects[2];
   AssertEquals('point name', 'C', Point.Strings['name']);

@@ -12,6 +12,7 @@ import {
   type LabelRequest,
 } from '../editor/labelPlacement.ts';
 import type { CurveHandle, EvalState, HandleRef, Scene, SceneNote, SceneObject, Tables } from '../editor/scene.ts';
+import { DEFAULT_GRID_STEPS, gridSpacing, MILLIMETRES_PER_UNIT, type MeasureUnit } from '../editor/rulerTicks.ts';
 import type { Rect2, Vec2, ViewTransform } from '../editor/view.ts';
 
 // Screen pixels
@@ -63,10 +64,6 @@ const NOTE_TINT_ACROSS = 2;
 const NOTE_TINT_DOWN = 1;
 // The family a note without one of its own is drawn in
 const DEFAULT_NOTE_FONT = 'system-ui, sans-serif';
-// The grid's lines, in mm, drawn while they are at least this many pixels apart
-const GRID_STEP = 10;
-const GRID_MAJOR_EVERY = 10;
-const GRID_MIN_PIXELS = 6;
 // Alpha of a failing object's ink, of 255
 const FADED_ALPHA = 150;
 const FULL_ALPHA = 255;
@@ -220,11 +217,14 @@ export class PatternPainter {
     this.context.fillRect(0, 0, width, height);
   }
 
-  drawGrid(): void {
+  // The grid in the pattern's unit, at the desktop's default step, its lines
+  // counted in whole steps from the origin so major lines stay put, as
+  // TPatternPainter.DrawGrid
+  drawGrid(unit: MeasureUnit): void {
     const view = this.paintState().view;
-    if (GRID_STEP * view.scale < GRID_MIN_PIXELS) {
-      return;
-    }
+    const spacing = gridSpacing(view.scale * MILLIMETRES_PER_UNIT[unit], DEFAULT_GRID_STEPS[unit], unit);
+    const step = spacing.minor * MILLIMETRES_PER_UNIT[unit];
+    const perMajor = Math.max(1, Math.round(spacing.labelled / spacing.minor));
     const first = view.toModel({ x: 0, y: 0 });
     const last = view.toModel({ x: this.width, y: this.height });
     const context = this.context;
@@ -233,9 +233,9 @@ export class PatternPainter {
       [first.x, last.x, true],
       [first.y, last.y, false],
     ] as const) {
-      for (let step = Math.ceil(low / GRID_STEP); step * GRID_STEP <= high; step++) {
-        const screen = view.toScreen({ x: step * GRID_STEP, y: step * GRID_STEP });
-        context.strokeStyle = css(step % GRID_MAJOR_EVERY === 0 ? GRID_MAJOR : GRID_MINOR);
+      for (let index = Math.floor(low / step); index <= Math.ceil(high / step); index++) {
+        const screen = view.toScreen({ x: index * step, y: index * step });
+        context.strokeStyle = css(index % perMajor === 0 ? GRID_MAJOR : GRID_MINOR);
         context.beginPath();
         // Half a pixel in, so a one pixel line is sharp
         const line = Math.round(across ? screen.x : screen.y) + 0.5;

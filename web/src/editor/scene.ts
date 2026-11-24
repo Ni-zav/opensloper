@@ -11,6 +11,7 @@ import {
   stringField,
   type JsonRecord,
 } from '../engine/replies.ts';
+import { MEASURE_UNITS, type MeasureUnit } from './rulerTicks.ts';
 import type { Rect2, Vec2 } from './view.ts';
 
 export type EvalState = 'valid' | 'dirty' | 'error' | 'invalid' | 'blocked';
@@ -131,6 +132,8 @@ export function parseHandles(result: JsonRecord): CurveHandle[] {
 }
 
 export interface Scene {
+  // The pattern's unit, which the rulers and grid count in
+  unit: MeasureUnit;
   isolated: string;
   pieces: ScenePiece[];
   edges: SceneEdge[];
@@ -182,6 +185,7 @@ function sceneObject(record: JsonRecord): SceneObject {
 }
 
 export const EMPTY_SCENE: Scene = {
+  unit: 'mm',
   isolated: '',
   pieces: [],
   edges: [],
@@ -259,7 +263,8 @@ export function parseScene(result: JsonRecord): Scene {
     }),
   );
   const notes = recordsField(result, 'notes').map(parseNote);
-  return { isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, seams, notes, points };
+  const unit = MEASURE_UNITS.find((each) => each === stringField(result, 'unit')) ?? 'mm';
+  return { unit, isolated: idField(result, 'isolated') ?? '', pieces, edges, markers, seams, notes, points };
 }
 
 // One of the scene's notes, as editor_note_preview gives one too

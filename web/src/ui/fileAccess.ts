@@ -173,6 +173,23 @@ export class FileAccess {
     }
   }
 
+  // Another pattern, to import its variables; undefined when cancelled
+  async openOtherPattern(startIn: FileSystemHandle | undefined): Promise<FileSystemFileHandle | undefined> {
+    try {
+      const [handle] = await this.pickers.showOpenFilePicker({
+        id: PATTERNS_ID,
+        types: [PATTERN_TYPE],
+        ...(startIn === undefined ? {} : { startIn }),
+      });
+      return handle;
+    } catch (error: unknown) {
+      if (cancelled(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
   // A measurement file, starting beside the pattern
   async openMeasurements(startIn: FileSystemHandle | undefined): Promise<FileSystemFileHandle | undefined> {
     try {

@@ -72,6 +72,8 @@ type
     procedure TestDeleteSelection;
     // Copy gives the fragment's text, paste makes copies of it; cut is copy and delete
     procedure TestCopyAndPaste;
+    // The Variables tab's Import…, from the other file's text
+    procedure TestImportVariables;
     procedure TestSeamInScene;
     // Notes as the canvas draws them, fields filled in
     procedure TestNotesInScene;
@@ -168,7 +170,8 @@ type
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64;
+  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64,
+  Sloper.Core.Pattern, Sloper.Core.PatternFile;
 
 const
   TOLERANCE = 1e-6;
@@ -604,6 +607,35 @@ begin
   AssertEquals('nothing selected after', 0, Answer.Arrays['select'].Count);
   Call('editor_scene');
   AssertEquals('E is gone', 4, Answer.Arrays['points'].Count);
+end;
+
+procedure TTestEditorServer.TestImportVariables;
+var
+  Other: TPattern;
+  Params: TJSONObject;
+  Added: integer;
+begin
+  Call('add_variable', '{"name": "ease", "formula": "10"}');
+  Other := TPattern.Create;
+  Params := nil;
+  try
+    Other.AddVariable('ease', '25');
+    Other.AddVariable('seam', '15');
+    Params := TJSONObject.Create(['text', SavePatternToText(Other), 'fileName', 'other.sloper']);
+    Call('editor_variable_import', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+    FreeAndNil(Other);
+  end;
+  AssertTrue('imported', Answer.Booleans['done']);
+  AssertTrue('ease kept, so a warning', Answer.Booleans['warning']);
+  AssertTrue('says so', Pos('other.sloper', Answer.Strings['message']) > 0);
+  AssertEquals('seam added', 1, Answer.Arrays['added'].Count);
+  Added := Answer.Arrays['added'].Integers[0];
+  AssertEquals('seam', IdOf('seam'), Added);
+  Call('editor_variable_import', '{"text": "{}", "fileName": "bad.sloper"}');
+  AssertFalse('refused', Answer.Booleans['done']);
+  AssertTrue('with the reason', Answer.Strings['message'] <> '');
 end;
 
 procedure TTestEditorServer.TestSeamTool;

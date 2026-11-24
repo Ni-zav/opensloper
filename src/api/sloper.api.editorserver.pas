@@ -96,6 +96,7 @@ type
     function DoDelete(Params: TJSONObject): TJSONData;
     function DoCopy(Params: TJSONObject; Cut: boolean): TJSONData;
     function DoPaste(Params: TJSONObject): TJSONData;
+    function DoVariableImport(Params: TJSONObject): TJSONData;
     function DoComplete(Params: TJSONObject): TJSONData;
     function DoListObjects(Params: TJSONObject): TJSONData;
     function DoListVariables(Params: TJSONObject): TJSONData;
@@ -283,6 +284,13 @@ resourcestring
   rsEditorPasteReturns = '`done`, true when it was pasted; `message`, what was pasted, or why not; `select`, the ' +
     'pasted objects';
   rsEditorFragment = 'The fragment''s text, as the clipboard holds it';
+  rsEditorVariableImport = 'Imports the variables of another pattern file, as the Variables tab''s Import...: one undo ' +
+    'step, keeping those whose names this pattern has; refused when the files are in different units.';
+  rsEditorVariableImportReturns = '`done`, false when the file cannot be imported; `message`, what was imported and ' +
+    'kept, or why not; `warning`, true when a variable was kept with another formula or nothing was imported; ' +
+    '`added`, the IDs of the variables added';
+  rsEditorImportText = 'The other pattern file''s contents';
+  rsEditorImportFileName = 'Its name, for the message';
   rsEditorComplete = 'What to offer while a formula is typed: objects, variables, measurements and functions matching ' +
     'the word at the caret; @, # and a dot after an object narrow the list.';
   rsEditorCompleteTarget = 'The object or variable whose formula it is, by ID or name; left out for a new one';
@@ -465,7 +473,7 @@ uses
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
-  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment,
+  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF;
 
 const
@@ -588,6 +596,9 @@ begin
     AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
     AddApiMethod(Built, 'editor_paste', rsEditorPaste, rsEditorPasteReturns);
     AddApiParam(Built, 'text', apText, True, rsEditorFragment);
+    AddApiMethod(Built, 'editor_variable_import', rsEditorVariableImport, rsEditorVariableImportReturns);
+    AddApiParam(Built, 'text', apText, True, rsEditorImportText);
+    AddApiParam(Built, 'fileName', apText, True, rsEditorImportFileName);
     AddApiMethod(Built, 'editor_complete', rsEditorComplete, rsEditorCompleteReturns, True);
     AddApiParam(Built, 'id', apTarget, False, rsEditorCompleteTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorCompleteText);
@@ -2508,6 +2519,20 @@ begin
   Result := EditToJSON(PasteFragmentText(Document, Text));
 end;
 
+function TEditorApiServer.DoVariableImport(Params: TJSONObject): TJSONData;
+var
+  Text, FileName, Message: string;
+  Imported: TVariableImport;
+  Done, Warning: boolean;
+begin
+  Text := RequireString(Params, 'text');
+  FileName := RequireString(Params, 'fileName');
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Done := ImportVariablesTextStep(Document, Text, FileName, Imported, Message, Warning);
+  Result := TJSONObject.Create(['done', Done, 'message', Message, 'warning', Warning, 'added', KeysToJSON(Imported.Added)]);
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -2532,6 +2557,7 @@ begin
     'editor_copy': Result := DoCopy(Params, False);
     'editor_cut': Result := DoCopy(Params, True);
     'editor_paste': Result := DoPaste(Params);
+    'editor_variable_import': Result := DoVariableImport(Params);
     'editor_complete': Result := DoComplete(Params);
     'editor_list_objects': Result := DoListObjects(Params);
     'editor_list_variables': Result := DoListVariables(Params);

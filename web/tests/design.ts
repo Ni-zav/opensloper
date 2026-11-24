@@ -183,6 +183,35 @@ try {
   await waitForData(page, 'undo', '');
   await page.keyboard.press('s');
 
+  // Import… on the Variables tab adds another pattern's variables, chosen in
+  // the tab, as one undo step; one in another unit is refused in a dialog
+  await page.click('.side-column [data-tab="variables"]');
+  const importFrom = async (file: string): Promise<void> => {
+    const [chooser] = await Promise.all([
+      page.waitForFileChooser({ timeout: TIMEOUT_MS }),
+      page.click('.list-panel:not([hidden]) .list-buttons button:nth-child(3)'),
+    ]);
+    await chooser.accept([join(PATTERNS, file)]);
+  };
+  await importFrom('skirt-block.sloper');
+  await waitForData(page, 'undo', 'Import variables');
+  await waitForStatus(page, 'Imported 6 variables from skirt-block.sloper');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.list-panel:not([hidden]) tbody tr.selected').length === 6,
+    { timeout: TIMEOUT_MS },
+  );
+  const dialogsBeforeImport = dialogs.length;
+  await importFrom('bodice-block.sloper');
+  await page.waitForFunction(() => document.querySelector('#status')?.textContent.includes('convert') === true, {
+    timeout: TIMEOUT_MS,
+  });
+  assert.equal(dialogs.length, dialogsBeforeImport + 1, 'a refused import says so in a dialog');
+  assert.equal(await bodyData(page, 'undo'), 'Import variables', 'a refused import changes nothing');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', '');
+
   const input = await page.$('input#open-input');
   assert.ok(input !== null, 'the open input');
   await input.uploadFile(join(PATTERNS, 'skirt-pieces.sloper'), join(PATTERNS, 'skirt-small.slm'));
@@ -262,7 +291,7 @@ try {
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.querySelector('input.cell-editor') === null, { timeout: 3000 });
-  await page.click('.list-panel:not([hidden]) .list-buttons button:last-child');
+  await page.click('.list-panel:not([hidden]) .list-buttons button:nth-child(2)');
   await waitForData(page, 'undo', 'Delete variable');
   // A measurement's value edited is kept in bold until Save makes it and downloads the set
   await page.click('.side-column [data-tab="measurements"]');

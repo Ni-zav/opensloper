@@ -133,6 +133,10 @@ function CommitVariableCell(Document: TPatternDocument; const Key: string; Colum
 // False with Message as the reason when the file cannot be imported.
 function ImportVariablesStep(Document: TPatternDocument; const FileName: string; out Imported: TVariableImport;
   out Message: string; out Warning: boolean): boolean;
+// The same from the other file's contents, as the web editor reads it;
+// ShownName names it in Message
+function ImportVariablesTextStep(Document: TPatternDocument; const Text, ShownName: string; out Imported: TVariableImport;
+  out Message: string; out Warning: boolean): boolean;
 
 resourcestring
   rsPanelAddVariable = 'Add variable';
@@ -220,20 +224,11 @@ begin
   Document.Commit(Result);
 end;
 
-function ImportVariablesStep(Document: TPatternDocument; const FileName: string; out Imported: TVariableImport;
-  out Message: string; out Warning: boolean): boolean;
+// What an import did, for the status bar, and whether it needs saying louder
+procedure DescribeImport(const Imported: TVariableImport; const Shown: string; out Message: string; out Warning: boolean);
 var
-  Shown: string;
   Lines: TStringArray;
 begin
-  Warning := False;
-  Document.BeginChange(rsPanelImportVariables);
-  Result := ImportVariablesFromFile(Document.Pattern, FileName, Imported, Message);
-  // Nothing added is no change, and so no undo step
-  Document.Commit(Result);
-  if not Result then
-    Exit;
-  Shown := ExtractFileName(FileName);
   Lines := nil;
   case Length(Imported.Added) of
     0:
@@ -253,6 +248,29 @@ begin
     Insert(Format(rsPanelImportSame, [string.Join(', ', Imported.Same)]), Lines, Length(Lines));
   Message := string.Join(' ', Lines);
   Warning := (Length(Imported.Kept) > 0) or (Length(Imported.Added) = 0);
+end;
+
+function ImportVariablesStep(Document: TPatternDocument; const FileName: string; out Imported: TVariableImport;
+  out Message: string; out Warning: boolean): boolean;
+begin
+  Warning := False;
+  Document.BeginChange(rsPanelImportVariables);
+  Result := ImportVariablesFromFile(Document.Pattern, FileName, Imported, Message);
+  // Nothing added is no change, and so no undo step
+  Document.Commit(Result);
+  if Result then
+    DescribeImport(Imported, ExtractFileName(FileName), Message, Warning);
+end;
+
+function ImportVariablesTextStep(Document: TPatternDocument; const Text, ShownName: string; out Imported: TVariableImport;
+  out Message: string; out Warning: boolean): boolean;
+begin
+  Warning := False;
+  Document.BeginChange(rsPanelImportVariables);
+  Result := ImportVariablesFromText(Document.Pattern, Text, Imported, Message);
+  Document.Commit(Result);
+  if Result then
+    DescribeImport(Imported, ShownName, Message, Warning);
 end;
 
 function CommitVariableCell(Document: TPatternDocument; const Key: string; Column: TVariableColumn; const Text: string;

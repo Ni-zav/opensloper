@@ -1,11 +1,17 @@
 // The variables tab of the side panel, as Sloper.UI.VariablesPanel: the
 // pattern's variables with their formulas, values and descriptions,
 // searchable, edited in the grid (name, formula with completion, and
-// description), each edit one undo step, with Add and Delete below.
+// description), each edit one undo step, with Add, Delete and Import below.
+// Import asks the app, which chooses the file.
 import type { PatternDocument } from '../document/patternDocument.ts';
 import { booleanField, idField, recordsField, stringField } from '../engine/replies.ts';
 import { stateField } from '../editor/scene.ts';
 import { ListPanel, type CellCommit, type ListPanelEvents, type ListPanelRow } from './listPanel.ts';
+
+export interface VariablesPanelEvents extends ListPanelEvents {
+  // Import… was clicked: import the variables of another pattern file
+  import(): void;
+}
 import { STRINGS } from './strings.ts';
 
 // As TVariableColumn; the value is worked out, so has no name to commit
@@ -13,7 +19,7 @@ const COLUMNS = ['name', 'formula', 'value', 'description'] as const;
 const NAME_COLUMN = 0;
 
 export class VariablesPanel extends ListPanel {
-  constructor(document: PatternDocument, events: ListPanelEvents) {
+  constructor(document: PatternDocument, events: VariablesPanelEvents) {
     super(document, events, [
       { caption: STRINGS.columnName, width: 110 },
       { caption: STRINGS.columnFormula, width: 150 },
@@ -37,7 +43,14 @@ export class VariablesPanel extends ListPanel {
     remove.addEventListener('click', () => {
       this.deleteRequested();
     });
-    buttons.append(add, remove);
+    const importButton = window.document.createElement('button');
+    importButton.type = 'button';
+    importButton.textContent = STRINGS.variablesImport;
+    importButton.title = STRINGS.variablesImportHint;
+    importButton.addEventListener('click', () => {
+      events.import();
+    });
+    buttons.append(add, remove, importButton);
     this.element.append(buttons);
   }
 

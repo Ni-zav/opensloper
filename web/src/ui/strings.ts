@@ -149,6 +149,8 @@ export const STRINGS = {
   columnDescription: 'Description',
   variablesAdd: 'Add',
   variablesDelete: 'Delete',
+  variablesImport: 'Import…',
+  variablesImportHint: 'Import the variables of another pattern file, keeping those this pattern has',
   measurementsKey: 'Key',
   measurementsValue: 'Value (mm)',
   measurementsMissing: 'Missing',

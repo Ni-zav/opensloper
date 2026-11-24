@@ -7,7 +7,7 @@
 // and downloaded.
 import { PatternDocument } from '../document/patternDocument.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
-import { numberField, stringField } from '../engine/replies.ts';
+import { booleanField, idsField, numberField, stringField } from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
@@ -67,6 +67,7 @@ const toolbar = element('toolbar', HTMLElement);
 const toolsBar = element('tools', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
 const measurementsInput = element('measurements-input', HTMLInputElement);
+const importInput = element('import-input', HTMLInputElement);
 
 function showMessage(text: string): void {
   status.textContent = text;
@@ -129,6 +130,8 @@ class DesignApp {
   private readonly rulers: CanvasRulers;
   private readonly rulersButton: HTMLButtonElement;
   private readonly objects: ObjectsPanel;
+  private readonly variables: VariablesPanel;
+  private readonly side: SideTabs;
   private readonly properties: PropertiesPanel;
   private readonly features: FeaturesPanel;
   private readonly materials: MaterialsPanel;
@@ -227,14 +230,16 @@ class DesignApp {
       },
     });
     const side = new SideTabs(element('side', HTMLElement));
+    this.side = side;
+    this.variables = new VariablesPanel(this.document, {
+      ...this.listEvents(),
+      import: () => {
+        this.importVariables();
+      },
+    });
     side.addSection('properties', STRINGS.tabProperties, ICONS.propertiesTab, this.properties);
     side.addSection('objects', STRINGS.tabObjects, ICONS.objectsTab, this.objects);
-    side.addSection(
-      'variables',
-      STRINGS.tabVariables,
-      ICONS.variablesTab,
-      new VariablesPanel(this.document, this.listEvents()),
-    );
+    side.addSection('variables', STRINGS.tabVariables, ICONS.variablesTab, this.variables);
     this.measurements = new MeasurementsPanel(this.document, this.listEvents());
     this.measurements.patternFileName = () => this.document.fileName;
     if (this.files !== undefined) {
@@ -343,6 +348,13 @@ class DesignApp {
     openInput.addEventListener('change', () => {
       this.run(this.openFiles([...(openInput.files ?? [])].map((file) => ({ file, handle: undefined }))));
       openInput.value = '';
+    });
+    importInput.addEventListener('change', () => {
+      const file = importInput.files?.[0];
+      if (file !== undefined) {
+        this.run(this.importVariablesFrom(file));
+      }
+      importInput.value = '';
     });
     measurementsInput.addEventListener('change', () => {
       const file = measurementsInput.files?.[0];
@@ -589,6 +601,39 @@ class DesignApp {
           this.openFiles(await Promise.all(handles.map(async (handle) => ({ file: await handle.getFile(), handle })))),
         ),
     );
+  }
+
+  // The Variables tab's Import…: another pattern's variables, from a file the user chooses
+  private importVariables(): void {
+    const files = this.files;
+    if (files === undefined) {
+      importInput.click();
+      return;
+    }
+    this.run(
+      files.openOtherPattern(this.patternHandle).then(async (handle) => {
+        if (handle !== undefined) {
+          await this.importVariablesFrom(await handle.getFile());
+        }
+        return undefined;
+      }),
+    );
+  }
+
+  // As the desktop, the new variables are chosen in the tab, and a variable
+  // kept or nothing imported is said in a dialog as well as the status bar
+  private async importVariablesFrom(file: File): Promise<void> {
+    const answer = await this.document.call('editor_variable_import', { text: await file.text(), fileName: file.name });
+    const message = stringField(answer, 'message') ?? '';
+    showMessage(message);
+    const added = idsField(answer, 'added');
+    if (added.length > 0) {
+      this.side.open('variables');
+      this.variables.showSelection(added);
+    }
+    if (booleanField(answer, 'done') !== true || booleanField(answer, 'warning') === true) {
+      window.alert(message);
+    }
   }
 
   private openMeasurements(): void {

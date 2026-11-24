@@ -46,6 +46,8 @@ type
     // One undo step; a name already here with another formula is kept, with a warning
     procedure TestImportVariables;
     procedure TestImportNothingNew;
+    // As the web editor imports: from the file's text, named for the message
+    procedure TestImportVariablesText;
     procedure TestVariableRename;
     procedure TestVariableDescription;
     procedure TestRefusedFormulaChangesNothing;
@@ -203,6 +205,35 @@ begin
   AssertFalse('only the one step', FDocument.UndoDescription = rsPanelImportVariables);
   AssertFalse('refused', ImportVariablesStep(FDocument, ConcatPaths([FFolder, 'none.sloper']), Imported, Message, Warning));
   AssertTrue('why', Message <> '');
+end;
+
+procedure TTestPanelEdits.TestImportVariablesText;
+var
+  Imported: TVariableImport;
+  Message: string;
+  Warning: boolean;
+  Other: TPattern;
+  Text: string;
+begin
+  Other := TPattern.Create;
+  try
+    Other.AddVariable('ease', '25');
+    Other.AddVariable('seam', '15');
+    Other.AddVariable('hem', '#seam * 2');
+    Text := SavePatternToText(Other);
+  finally
+    FreeAndNil(Other);
+  end;
+  AssertTrue(ImportVariablesTextStep(FDocument, Text, 'other.sloper', Imported, Message, Warning));
+  AssertEquals('added', 2, Length(Imported.Added));
+  AssertNear('worked out', 30, TVariable(FDocument.Pattern.FindNode(VariableKey('hem'))).Value);
+  AssertTrue('warned', Warning);
+  AssertEquals(Format(rsPanelImported, [2, 'other.sloper']) + ' ' + Format(rsPanelImportKept, ['ease']), Message);
+  AssertEquals('one step', rsPanelImportVariables, FDocument.UndoDescription);
+  AssertFalse('not a pattern', ImportVariablesTextStep(FDocument, 'not a pattern', 'bad.sloper', Imported, Message,
+    Warning));
+  AssertTrue('why', Message <> '');
+  AssertEquals('no step for it', rsPanelImportVariables, FDocument.UndoDescription);
 end;
 
 procedure TTestPanelEdits.TestVariableRename;

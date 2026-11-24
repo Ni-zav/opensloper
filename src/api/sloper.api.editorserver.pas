@@ -30,7 +30,7 @@ interface
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
   Sloper.Core.Geometry, Sloper.Core.Evaluator, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits,
-  Sloper.Editor.SuggestionGrade;
+  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -55,6 +55,12 @@ type
     // changes only by a drag, as making it copies the pattern for every size
     FGrade: TGradeCheck;
     FGradeKey, FGradeField: string;
+    // Keeps the Garment tab's pieces, so only those that changed are built again
+    FGarment: TGarmentBuilder;
+    // The Garment tab's scene: as the canvas shows the pieces, of the call's material
+    function GarmentScene(Params: TJSONObject): TGarmentScene;
+    function DoGarment(Params: TJSONObject): TJSONData;
+    function DoGarmentMarks(Params: TJSONObject): TJSONData;
     // The grade check for the object's field, made again when out of date
     function GradeFor(Node: TEvalNode; const FieldName: string): TGradeCheck;
     function DoTipTo(Params: TJSONObject): TJSONData;
@@ -378,6 +384,18 @@ resourcestring
   rsEditorPrintUnnamed = 'pattern';
   rsEditorMaterials = 'The Materials tab''s list: each material''s row, the cut list they make, and the fills and ' +
     'fabrics a material can have, in words.';
+  rsEditorGarment = 'The Garment tab: the pieces as sewn, darts closed and folds opened, shaded as on the desktop, ' +
+    'as the canvas shows them (hidden pieces left out, an isolated one alone).';
+  rsEditorGarmentMaterial = 'Only the pieces cut from this material, by name; all when empty, left out or not a material''s';
+  rsEditorGarmentReturns = '`svg`, the drawing in mm; `bounds`, the box round the pieces in mm, `left`, `top`, ' +
+    '`right` and `bottom`, or null with none; `pieces`, in drawing order, each with `id`, `name` and `outline`, its ' +
+    'seam line as a flat list of x and y in the drawing''s mm; `notes`, what was left out; `materials`, the names ' +
+    'to choose from; and `material`, the one shown, empty for all';
+  rsEditorGarmentMarks = 'What the Garment tab marks for a selection: selected pieces are outlined, and a selected ' +
+    'seam marked on both its sides, with the stitch line of a dart it closes.';
+  rsEditorGarmentSelection = 'The canvas''s selection, by ID';
+  rsEditorGarmentMarksReturns = '`pieces`, the IDs of the selected pieces shown, and `lines`, the seams'' lines as ' +
+    'flat lists of x and y in the drawing''s mm';
   rsEditorMaterialsReturns = '`rows`, each with `name`, `color` (#RRGGBB), `fill` (tint or hatch), `fillCaption`, ' +
     '`allowance` and `size` in words, and `hatchAngle` in degrees; `cutList`; `unit`, the pattern''s; `fills` and ' +
     '`fabrics`, each choice''s `name` and `caption`';
@@ -483,7 +501,8 @@ uses
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
   Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
-  Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange;
+  Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange, Sloper.Output.GarmentSVG,
+  Sloper.Editor.Garment;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -647,6 +666,11 @@ begin
     AddApiParam(Built, 'paper', apChoice, False, rsEditorPrintPaper, 'A4, A3, Letter');
     AddApiParam(Built, 'fileName', apText, False, rsEditorFileName);
     AddApiMethod(Built, 'editor_materials', rsEditorMaterials, rsEditorMaterialsReturns, True);
+    AddApiMethod(Built, 'editor_garment', rsEditorGarment, rsEditorGarmentReturns, True);
+    AddApiParam(Built, 'material', apText, False, rsEditorGarmentMaterial);
+    AddApiMethod(Built, 'editor_garment_marks', rsEditorGarmentMarks, rsEditorGarmentMarksReturns, True);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorGarmentSelection);
+    AddApiParam(Built, 'material', apText, False, rsEditorGarmentMaterial);
     AddApiMethod(Built, 'editor_material', rsEditorMaterial, rsEditorMaterialReturns, True);
     AddApiParam(Built, 'index', apWhole, True, rsEditorMaterialIndex);
     AddApiMethod(Built, 'editor_material_set', rsEditorMaterialSet, rsEditorMaterialSetReturns);
@@ -735,6 +759,15 @@ begin
   Result := TJSONArray.Create;
   for Key in Keys do
     Result.Add(KeyToJSON(Key));
+end;
+
+function TextsToJSON(const Texts: array of string): TJSONArray;
+var
+  Text: string;
+begin
+  Result := TJSONArray.Create;
+  for Text in Texts do
+    Result.Add(Text);
 end;
 
 function LineToJSON(const Line: TVec2Array): TJSONArray;
@@ -1897,6 +1930,75 @@ begin
     'fills', Fills, 'fabrics', Fabrics]);
 end;
 
+// The material by name, or -1 for all
+function GarmentMaterialIndex(Pattern: TPattern; const AName: string): integer;
+begin
+  if AName <> '' then
+    for Result := 0 to Pattern.MaterialCount - 1 do
+      if Pattern.Materials[Result].Name = AName then
+        Exit;
+  Result := -1;
+end;
+
+function TEditorApiServer.GarmentScene(Params: TJSONObject): TGarmentScene;
+begin
+  if not Assigned(FGarment) then
+    FGarment := TGarmentBuilder.Create;
+  Result := FGarment.Build(Document.Pattern, True);
+  Result := GarmentOfMaterial(Result, GarmentMaterialIndex(Document.Pattern, Params.Get('material', '')));
+end;
+
+function TEditorApiServer.DoGarment(Params: TJSONObject): TJSONData;
+var
+  Scene: TGarmentScene;
+  Pieces, Materials: TJSONArray;
+  Piece: TGarmentPiece;
+  Bounds: TJSONData;
+  Index: integer;
+  Shown: string;
+begin
+  Scene := GarmentScene(Params);
+  Pieces := TJSONArray.Create;
+  for Piece in Scene.Pieces do
+    Pieces.Add(TJSONObject.Create(['id', KeyToJSON(Piece.PieceKey), 'name', Piece.Name, 'outline', LineToJSON(Piece.Outline)]));
+  if Length(Scene.Pieces) = 0 then
+    Bounds := TJSONNull.Create
+  else
+    Bounds := TJSONObject.Create(['left', ReportFloat(Scene.Bounds.MinX), 'top', ReportFloat(Scene.Bounds.MinY), 'right',
+      ReportFloat(Scene.Bounds.MaxX), 'bottom', ReportFloat(Scene.Bounds.MaxY)]);
+  Materials := TJSONArray.Create;
+  for Index := 0 to Document.Pattern.MaterialCount - 1 do
+    Materials.Add(Document.Pattern.Materials[Index].Name);
+  Index := GarmentMaterialIndex(Document.Pattern, Params.Get('material', ''));
+  Shown := '';
+  if Index >= 0 then
+    Shown := Document.Pattern.Materials[Index].Name;
+  Result := TJSONObject.Create(['svg', GarmentToSVG(Scene, DefaultGarmentLight), 'bounds', Bounds, 'pieces', Pieces,
+    'notes', TextsToJSON(Scene.Notes), 'materials', Materials, 'material', Shown]);
+end;
+
+function TEditorApiServer.DoGarmentMarks(Params: TJSONObject): TJSONData;
+var
+  Scene: TGarmentScene;
+  Marks: TGarmentMarks;
+  Selected, Lines: TJSONArray;
+  Piece: TGarmentPiece;
+  Line: TVec2Array;
+  Key: string;
+begin
+  Marks := GarmentSelectionMarks(Document.Pattern, KeysParam(Params, 'selection'));
+  Scene := GarmentScene(Params);
+  Selected := TJSONArray.Create;
+  for Piece in Scene.Pieces do
+    for Key in Marks.SelectedPieces do
+      if Key = Piece.PieceKey then
+        Selected.Add(KeyToJSON(Key));
+  Lines := TJSONArray.Create;
+  for Line in GarmentMarkedLines(Scene, Marks) do
+    Lines.Add(LineToJSON(Line));
+  Result := TJSONObject.Create(['pieces', Selected, 'lines', Lines]);
+end;
+
 // A drag holds the document's change open, and every other change waits for it
 procedure RequireIdle(Document: TPatternDocument);
 begin
@@ -2143,6 +2245,7 @@ begin
     Document.RemoveListener(@DocumentChanged);
   FreeAndNil(FPending);
   FreeAndNil(FGrade);
+  FreeAndNil(FGarment);
   inherited Destroy;
 end;
 
@@ -2628,6 +2731,8 @@ begin
     'editor_export_draft': Result := DoExportDraft(Params);
     'editor_print': Result := DoPrint(Params);
     'editor_materials': Result := DoMaterials;
+    'editor_garment': Result := DoGarment(Params);
+    'editor_garment_marks': Result := DoGarmentMarks(Params);
     'editor_material': Result := DoMaterial(Params);
     'editor_material_set': Result := DoMaterialSet(Params);
     'editor_material_add': Result := DoMaterialAdd;

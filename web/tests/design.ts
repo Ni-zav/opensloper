@@ -741,6 +741,44 @@ try {
   await page.waitForFunction(() => document.querySelector('.materials-dialog[open]') === null, { timeout: TIMEOUT_MS });
   assert.equal((await page.$$(materialRows)).length, materialCount, 'the tab lists them as before');
 
+  // The Garment tab: the pieces as sewn; a click selects one on the canvas,
+  // which outlines it here, and Export… downloads the view as SVG and PNG
+  await page.click('.side-column [data-tab="garment"]');
+  await page.waitForFunction(
+    () =>
+      (document.querySelector('.garment-drawing')?.shadowRoot?.querySelectorAll('polygon[data-id]').length ?? 0) >= 2,
+    { timeout: TIMEOUT_MS },
+  );
+  const garmentPiece = await page.evaluate(() => {
+    const shape = document.querySelector('.garment-drawing')?.shadowRoot?.querySelector('polygon[data-id]');
+    if (!(shape instanceof SVGPolygonElement)) {
+      return undefined;
+    }
+    const shapeBox = shape.getBoundingClientRect();
+    return { id: shape.dataset.id ?? '', x: shapeBox.left + shapeBox.width / 2, y: shapeBox.top + shapeBox.height / 2 };
+  });
+  assert.ok(garmentPiece !== undefined, 'a piece drawn');
+  await page.mouse.click(garmentPiece.x, garmentPiece.y);
+  await waitForData(page, 'selection', garmentPiece.id);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('.garment-drawing')
+        ?.shadowRoot?.querySelector('polygon[stroke="rgb(30, 120, 220)"]') instanceof SVGPolygonElement,
+    { timeout: TIMEOUT_MS },
+  );
+  await page.click('.garment-toolbar button');
+  await page.waitForSelector('.garment-export[open]', { timeout: TIMEOUT_MS });
+  await page.click('.garment-export-buttons button.default');
+  assert.ok((await downloaded('skirt-pieces-garment.svg', '<')).includes('<svg'), 'the SVG downloaded');
+  await page.click('.garment-toolbar button');
+  await page.waitForSelector('.garment-export[open]', { timeout: TIMEOUT_MS });
+  await page.click('.garment-export label:nth-of-type(2) input');
+  await page.click('.garment-export-width input', { count: 3 });
+  await page.type('.garment-export-width input', '200');
+  await page.click('.garment-export-buttons button.default');
+  assert.ok((await downloaded('skirt-pieces-garment.png', '\x89PNG')).startsWith('\x89PNG'), 'the PNG downloaded');
+
   // The Features tab: a double hem along the back's bottom edge, chosen in the Objects tab, then undone
   const undoBefore = await bodyData(page, 'undo');
   await page.click('.side-column [data-tab="objects"]');
@@ -813,7 +851,7 @@ try {
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
-      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; exported the draft and printed it to PDF; added, renamed and deleted a material; added a hem from the Features tab; ` +
+      `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; exported the draft and printed it to PDF; added, renamed and deleted a material; selected a piece in the Garment tab and exported it; added a hem from the Features tab; ` +
       `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
       (await status(page)),
   );

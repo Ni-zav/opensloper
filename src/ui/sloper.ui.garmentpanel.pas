@@ -29,7 +29,7 @@ interface
 
 uses
   Classes, SysUtils, Controls, StdCtrls, ExtCtrls, Graphics, Dialogs, Menus, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry,
-  Sloper.Core.Garment, Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Output.GarmentPNG;
+  Sloper.Core.Garment, Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Garment, Sloper.Output.GarmentPNG;
 
 type
   TGarmentPieceEvent = procedure(Sender: TObject; const PieceKey: string) of object;
@@ -158,7 +158,7 @@ resourcestring
 implementation
 
 uses
-  Math, Sloper.Core.JSON, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Output.GarmentSVG;
+  Math, Sloper.Core.JSON, Sloper.Core.Pattern, Sloper.Output.GarmentSVG;
 
 const
   // At 96 pixels per inch
@@ -521,31 +521,11 @@ end;
 
 // What the canvas has selected, as the drawing marks it
 function TGarmentPanel.Marks: TGarmentMarks;
-var
-  Key: string;
-  Node: TEvalNode;
-  Seam: TSeamObject;
-  Entry: TSeamEntry;
 begin
   Result := Default(TGarmentMarks);
+  if Assigned(FDocument) then
+    Result := GarmentSelectionMarks(FDocument.Pattern, FSelection);
   Result.HoverPiece := FHoverKey;
-  if not Assigned(FDocument) then
-    Exit;
-  for Key in FSelection do
-  begin
-    Node := FDocument.Pattern.FindNode(Key);
-    if Node is TPieceObject then
-      Insert(Key, Result.SelectedPieces, Length(Result.SelectedPieces))
-    else if Node is TSeamObject then
-    begin
-      Seam := TSeamObject(Node);
-      Insert(Seam.Key, Result.SeamKeys, Length(Result.SeamKeys));
-      for Entry in Seam.SideA do
-        Insert(Entry.PieceKey + ':' + Entry.EdgeKey, Result.SeamEdges, Length(Result.SeamEdges));
-      for Entry in Seam.SideB do
-        Insert(Entry.PieceKey + ':' + Entry.EdgeKey, Result.SeamEdges, Length(Result.SeamEdges));
-    end;
-  end;
 end;
 
 function TGarmentPanel.ModelAt(X, Y: integer): TVec2;

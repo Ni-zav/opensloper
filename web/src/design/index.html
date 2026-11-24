@@ -388,6 +388,89 @@
       .print-buttons button:disabled {
         opacity: 0.6;
       }
+      /* The Garment tab: its choices, the drawing and what was left out */
+      .garment {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-height: 0;
+        padding: 6px;
+      }
+      .garment[hidden] {
+        display: none;
+      }
+      .garment-toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .garment-toolbar select {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+      }
+      .garment-toolbar label {
+        white-space: nowrap;
+      }
+      .garment-toolbar button,
+      .garment-export button {
+        padding: 3px 12px;
+        font: inherit;
+        border: 1px solid #c8c5bc;
+        border-radius: 3px;
+        background: #fbfaf7;
+      }
+      .garment-drawing {
+        flex: 1;
+        min-height: 120px;
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+        touch-action: none;
+      }
+      .garment-notes {
+        max-height: 6em;
+        overflow: auto;
+        white-space: pre-wrap;
+        color: #5d636b;
+      }
+      .garment-export {
+        width: min(360px, 90vw);
+        padding: 12px;
+        border: 1px solid #c8c5bc;
+        background: #f2f1ed;
+      }
+      .garment-export::backdrop {
+        background: rgb(0 0 0 / 20%);
+      }
+      .garment-export h2 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+      .garment-export label {
+        display: block;
+        margin: 4px 0;
+      }
+      .garment-export-width input {
+        width: 6em;
+        font: inherit;
+      }
+      .garment-export-reason {
+        min-height: 1.3em;
+        color: #d13438;
+      }
+      .garment-export-buttons {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      .garment-export button.default {
+        color: #fff;
+        background: #2574d6;
+        border-color: #2574d6;
+      }
       /* The Materials tab, and the dialog that edits them */
       .materials {
         display: flex;

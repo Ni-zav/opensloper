@@ -71,6 +71,7 @@ type
     // The Delete key: refused with the reason while something uses an object
     procedure TestDeleteSelection;
     procedure TestConvertPoint;
+    procedure TestGarment;
     // Copy gives the fragment's text, paste makes copies of it; cut is copy and delete
     procedure TestCopyAndPaste;
     // The Variables tab's Import…, from the other file's text
@@ -581,6 +582,51 @@ begin
   AssertEquals('no such type', RPC_INVALID_PARAMS, ErrorCode);
   Call('editor_tables');
   AssertEquals('every type in the box', 8, Answer.Arrays['pointTypes'].Count);
+end;
+
+// The Garment tab: the pieces as sewn, as SVG with their outlines, and the
+// marks of a selection
+procedure TTestEditorServer.TestGarment;
+var
+  Pieces, Lines: TJSONArray;
+  Bounds: TJSONObject;
+  Flap: integer;
+begin
+  AddSquare;
+  Flap := IdOf('Flap');
+  Call('editor_garment');
+  AssertEquals('drawn', 1, Pos('<svg', Answer.Strings['svg']));
+  Pieces := Answer.Arrays['pieces'];
+  AssertEquals('one piece', 1, Pieces.Count);
+  AssertEquals(Flap, Pieces.Objects[0].Integers['id']);
+  AssertEquals('Flap', Pieces.Objects[0].Strings['name']);
+  AssertTrue('its outline, as x and y', Pieces.Objects[0].Arrays['outline'].Count >= 8);
+  Bounds := Answer.Objects['bounds'];
+  AssertEquals('as wide as drafted', 100, Bounds.Floats['right'] - Bounds.Floats['left'], 0.01);
+  AssertEquals('every material shown', '', Answer.Strings['material']);
+  AssertEquals('nothing left out', 0, Answer.Arrays['notes'].Count);
+
+  Call('add_material', '{"name": "Lining"}');
+  Call('editor_garment', '{"material": "Lining"}');
+  AssertEquals('the material shown', 'Lining', Answer.Strings['material']);
+  AssertEquals('none of it', 0, Answer.Arrays['pieces'].Count);
+  AssertTrue('no box round nothing', Answer.Nulls['bounds']);
+  AssertTrue('listed to choose', Pos('"Lining"', Answer.Arrays['materials'].AsJSON) > 0);
+  Call('editor_garment', '{"material": "Velvet"}');
+  AssertEquals('not a material: all of them', '', Answer.Strings['material']);
+  AssertEquals(1, Answer.Arrays['pieces'].Count);
+
+  Call('editor_garment_marks', '{"selection": [' + IntToStr(Flap) + ']}');
+  AssertEquals('the piece outlined', '[' + IntToStr(Flap) + ']', Answer.Arrays['pieces'].AsJSON);
+  AssertEquals('no seam', 0, Answer.Arrays['lines'].Count);
+  Call('editor_garment_marks', '{"selection": [' + IntToStr(Flap) + '], "material": "Lining"}');
+  AssertEquals('not shown, not outlined', 0, Answer.Arrays['pieces'].Count);
+  Call('add_seam', '{"sideA": [{"piece": "Flap", "edge": "Line_A_B"}], "sideB": [{"piece": "Flap", "edge": "Line_C_D"}], ' +
+    '"name": "Sewn"}');
+  Call('editor_garment_marks', '{"selection": [' + IntToStr(IdOf('Sewn')) + ']}');
+  Lines := Answer.Arrays['lines'];
+  AssertEquals('both sides of the seam', 2, Lines.Count);
+  AssertEquals('no piece selected', 0, Answer.Arrays['pieces'].Count);
 end;
 
 procedure TTestEditorServer.TestCopyAndPaste;

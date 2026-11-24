@@ -36,16 +36,6 @@ type
     Scale, Left, Top: double;
   end;
 
-  // What the tab marks over the drawing; empty for an export
-  TGarmentMarks = record
-    // The piece under the pointer, by key
-    HoverPiece: string;
-    SelectedPieces: TStringArray;
-    // The selected seams' edges as "piece:edge", and the seams' own keys,
-    // which name the darts
-    SeamEdges, SeamKeys: TStringArray;
-  end;
-
 const
   GARMENT_PNG_MIN_WIDTH = 16;
   GARMENT_PNG_MAX_WIDTH = 4096;
@@ -372,10 +362,10 @@ var
 begin
   // A selected seam on both its sides, wherever they are
   for Line in Piece.Edges do
-    if Contains(Marks.SeamEdges, Piece.PieceKey + ':' + Line.EdgeKey) then
+    if GarmentEdgeMarked(Marks, Piece, Line) then
       Bitmap.DrawPolyLineAntialias(ToPixels(Frame, Line.Points), SeamMarkColor, SEAM_MARK_WIDTH);
   for Line in Piece.Stitches do
-    if (Line.SeamKey <> '') and Contains(Marks.SeamKeys, Line.SeamKey) then
+    if GarmentStitchMarked(Marks, Line) then
       Bitmap.DrawPolyLineAntialias(ToPixels(Frame, Line.Points), SeamMarkColor, SEAM_MARK_WIDTH);
   if Contains(Marks.SelectedPieces, Piece.PieceKey) then
     Bitmap.DrawPolygonAntialias(ToPixels(Frame, Piece.Outline), MarkColor, MARK_WIDTH);

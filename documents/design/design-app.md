@@ -374,7 +374,7 @@ The **Garment** tab shows each piece as sewn, darts closed and folds opened, sha
 - A material filter shows one material's pieces or all, starting on the first material.
 - The drawing fits the panel; the wheel zooms, a drag pans, a double-click fits. **Follow canvas** uses the canvas's zoom and centre.
 - It is rebuilt after each change while showing, and only the pieces whose fingerprint (everything their finished shape follows from) changed are rebuilt (`TGarmentBuilder`).
-- Hovering names and highlights a piece on the canvas too; a click selects it there. A selected seam is marked on both sides.
+- Hovering names and highlights a piece on the canvas too; a click selects it there. A selected seam is marked on both sides (which lines a selection marks is `Sloper.Editor.Garment`, shared with the web editor).
 - Notes under it say what was left out (a dart left open and why, a failing piece).
 - **Export…** saves SVG or PNG; `render` with `garment` gives the same.
 

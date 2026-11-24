@@ -87,6 +87,16 @@ type
     Bounds: TRect2;
   end;
 
+  // What the tab marks over the drawing; empty for an export
+  TGarmentMarks = record
+    // The piece under the pointer, by key
+    HoverPiece: string;
+    SelectedPieces: TStringArray;
+    // The selected seams' edges as "piece:edge", and the seams' own keys,
+    // which name the darts
+    SeamEdges, SeamKeys: TStringArray;
+  end;
+
   // How the pieces are lit (see Preferences)
   TGarmentLight = record
     Enabled: boolean;
@@ -152,6 +162,10 @@ procedure GarmentSpans(const Piece: TGarmentPiece; Start, Step: double; Count: i
 function GarmentEdgeFacing(const Outline: TVec2Array; const SegmentStart, SegmentEnd: TVec2; const Light: TGarmentLight): double;
 // The unit normal into the piece across the segment from SegmentStart to SegmentEnd
 function GarmentInward(const Outline: TVec2Array; const SegmentStart, SegmentEnd: TVec2): TVec2;
+// A selected seam marks its outline edges on each piece, wherever they are
+function GarmentEdgeMarked(const Marks: TGarmentMarks; const Piece: TGarmentPiece; const Line: TGarmentLine): boolean;
+// and the stitch line of a dart it closes
+function GarmentStitchMarked(const Marks: TGarmentMarks; const Line: TGarmentLine): boolean;
 // The topmost piece under Position, or -1
 function GarmentPieceAt(const Scene: TGarmentScene; const Position: TVec2): integer;
 // The line moved Inset into the piece, each point along the mean of the
@@ -989,6 +1003,26 @@ begin
   Result.Red := EnsureRange(Round(Color.Red * Shade), 0, 255);
   Result.Green := EnsureRange(Round(Color.Green * Shade), 0, 255);
   Result.Blue := EnsureRange(Round(Color.Blue * Shade), 0, 255);
+end;
+
+function KeyListed(const Keys: TStringArray; const Key: string): boolean;
+var
+  Each: string;
+begin
+  Result := False;
+  for Each in Keys do
+    if Each = Key then
+      Exit(True);
+end;
+
+function GarmentEdgeMarked(const Marks: TGarmentMarks; const Piece: TGarmentPiece; const Line: TGarmentLine): boolean;
+begin
+  Result := KeyListed(Marks.SeamEdges, Piece.PieceKey + ':' + Line.EdgeKey);
+end;
+
+function GarmentStitchMarked(const Marks: TGarmentMarks; const Line: TGarmentLine): boolean;
+begin
+  Result := (Line.SeamKey <> '') and KeyListed(Marks.SeamKeys, Line.SeamKey);
 end;
 
 function GarmentPieceAt(const Scene: TGarmentScene; const Position: TVec2): integer;

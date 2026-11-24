@@ -73,3 +73,10 @@ close to the screen but not exact.
 
 Scripts get the same drawing from the Automation API's `render` with
 `"garment": true`; see the [Automation API](../reference/api.md).
+
+## In the web app
+
+The web app's Garment tab works the same way. Its shading uses the defaults
+above, as the web app has no Preferences yet, and is drawn as in the SVG
+export, so it is close to the desktop's but not exact; a PNG export is drawn
+by the browser from that SVG.

@@ -14,6 +14,7 @@ import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
 import { FeaturesPanel } from '../ui/featuresPanel.ts';
+import { GarmentPanel } from '../ui/garmentPanel.ts';
 import { MaterialsDialog } from '../ui/materialDialog.ts';
 import { PrintDialog } from '../ui/printDialog.ts';
 import { MaterialsPanel } from '../ui/materialPanel.ts';
@@ -50,6 +51,7 @@ const ICONS = {
   measurementsTab: 'ruler-measure',
   featuresTab: 'components',
   materialsTab: 'texture',
+  garmentTab: 'shirt',
 } as const;
 
 const DEFAULT_FILE_NAME = 'pattern.sloper';
@@ -135,6 +137,7 @@ class DesignApp {
   private readonly properties: PropertiesPanel;
   private readonly features: FeaturesPanel;
   private readonly materials: MaterialsPanel;
+  private readonly garment: GarmentPanel;
   private readonly materialsDialog: MaterialsDialog;
   private readonly printDialog: PrintDialog;
   private readonly measurements: MeasurementsPanel;
@@ -185,7 +188,8 @@ class DesignApp {
     this.selectionButtons = selectionButtons;
     const pointTypeSelect = this.pointTypeBox();
     this.pointTypeSelect = pointTypeSelect;
-    this.canvas = new PatternCanvas(element('canvas', HTMLCanvasElement), this.document, tables, {
+    const canvasElement = element('canvas', HTMLCanvasElement);
+    this.canvas = new PatternCanvas(canvasElement, this.document, tables, {
       message: showMessage,
       selectionChanged: (ids) => {
         document.body.dataset.selection = ids.join(' ');
@@ -196,10 +200,12 @@ class DesignApp {
         this.objects.showSelection(ids);
         this.properties.showSelection(ids);
         this.features.showSelection(ids);
+        this.garment.showSelection(ids);
       },
       failed: showFailure,
       painted: (view, unit) => {
         rulers.showView(view, unit);
+        this.garment.showCanvasView(view, canvasElement.clientWidth, canvasElement.clientHeight);
       },
       pointerAt: (model) => {
         rulers.showPointer(model);
@@ -244,6 +250,17 @@ class DesignApp {
     });
     side.addSection('properties', STRINGS.tabProperties, ICONS.propertiesTab, this.properties);
     side.addSection('objects', STRINGS.tabObjects, ICONS.objectsTab, this.objects);
+    this.garment = new GarmentPanel(this.document, {
+      hoverPiece: (id) => {
+        this.canvas.showOutsideHover(id);
+      },
+      selectPiece: (id) => {
+        this.canvas.select([id]);
+      },
+      message: showMessage,
+      failed: showFailure,
+    });
+    side.addSection('garment', STRINGS.tabGarment, ICONS.garmentTab, this.garment);
     side.addSection('variables', STRINGS.tabVariables, ICONS.variablesTab, this.variables);
     this.measurements = new MeasurementsPanel(this.document, this.listEvents());
     this.measurements.patternFileName = () => this.document.fileName;

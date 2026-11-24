@@ -428,6 +428,16 @@ export class PatternCanvas implements CanvasToolHost {
     }
   }
 
+  // An object pointed at outside the canvas, such as a piece in the Garment
+  // tab, highlighted as if hovered here; '' takes it away
+  showOutsideHover(id: string): void {
+    if (id !== this.hoverId) {
+      this.hoverId = id;
+      this.relabel();
+      this.repaint();
+    }
+  }
+
   showSeamSides(sideA: number[][], sideB: number[][]): void {
     this.seamA = sideA;
     this.seamB = sideB;

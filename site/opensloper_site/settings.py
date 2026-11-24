@@ -1,7 +1,7 @@
 """Settings for the opensloper.com site.
 
 Development needs nothing set. In production the environment gives
-DJANGO_SECRET_KEY and sets DJANGO_DEBUG=0 (see deploy/opensloper-web.env).
+DJANGO_SECRET_KEY and sets DJANGO_DEBUG=0 (see deploy/opensloper-site.env.example).
 The site keeps no data, so there is no database: no accounts yet, and no
 patterns or measurements ever (the web apps keep those on the user's machine).
 """

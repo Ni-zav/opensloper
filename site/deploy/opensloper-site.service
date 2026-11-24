@@ -1,19 +1,21 @@
 # The opensloper.com site under gunicorn, which Apache passes requests to
-# (apache-directives.conf). Copy to /etc/systemd/system/, set User and Group
-# to the ISPConfig site's web user, then:
+# (apache-directives.conf). deploy.sh fills in the @...@ values for the server
+# (the site's folder, and the SSH account's user and group) in its copy on
+# the server; copy that one to /etc/systemd/system/, then:
 #   systemctl daemon-reload && systemctl enable --now opensloper-site
-# After copying a new site/ to the server: systemctl restart opensloper-site
+# deploy.sh reloads it after each copy (a HUP, which needs no root).
 [Unit]
 Description=opensloper.com (Django under gunicorn)
 After=network.target
 
 [Service]
 Type=simple
-User=web1
-Group=client1
-WorkingDirectory=/srv/opensloper-site
-EnvironmentFile=/etc/opensloper-site.env
-ExecStart=/srv/opensloper-site/venv/bin/gunicorn --bind 127.0.0.1:8001 --workers 2 --access-logfile - opensloper_site.wsgi
+User=@SITE_USER@
+Group=@SITE_GROUP@
+WorkingDirectory=@SITE_DIR@
+EnvironmentFile=@SITE_DIR@.env
+ExecStart=@SITE_DIR@/venv/bin/gunicorn --bind 127.0.0.1:8001 --workers 2 --access-logfile - opensloper_site.wsgi
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 NoNewPrivileges=true
 PrivateTmp=true

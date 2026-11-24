@@ -1,0 +1,5 @@
+# The server deploy.sh copies the site to. Copy to deploy.local.sh (not in git).
+# An ~/.ssh/config entry for the ISPConfig site's SSH account
+SITE_HOST=opensloper
+# The site's folder on the server, outside the public web folder
+SITE_DIR=/var/www/example.com/private/opensloper-site

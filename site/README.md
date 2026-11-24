@@ -9,7 +9,7 @@ Server). Its own packages are pinned in `requirements.txt`.
 | --- | --- |
 | `opensloper_site/` | Settings (from the environment in production), addresses, WSGI |
 | `pages/` | The pages' templates, CSS and pictures, their tests, and `import_opensloper` |
-| `deploy/` | The gunicorn service, its environment file and the Apache directives |
+| `deploy/` | `deploy.sh`, the gunicorn service, its environment file and the Apache directives |
 | `imported/` | What `import_opensloper` copied from the checkout (not in git) |
 
 ## Developing
@@ -54,28 +54,35 @@ The screenshots in `pages/static/pages/images/` are 1280x800 WebP:
 The site runs under gunicorn as a systemd service on the ISPConfig server,
 with Apache in front. The web app's Wasm engine needs the FPC trunk
 cross-compiler, so the site is built here and copied over, `imported/`
-included.
+included, by `deploy/deploy.sh`. The server's details stay out of git, in
+`deploy/deploy.local.sh` (copy `deploy.local.sh.example`): `SITE_HOST`, an
+`~/.ssh/config` entry for the site's SSH account, and `SITE_DIR`, a folder
+outside the public `web` folder, such as the ISPConfig site's `private`
+folder, which Apache serves `/static/` and `/design/` from. The environment
+file is `SITE_DIR.env`, beside it. The SSH account is the site's web user,
+the one the service runs as, so deploying needs no root.
 
-First time, on the server:
-
-1. Make `/srv/opensloper-site` owned by the ISPConfig site's web user, and a
-   venv in it: `python3 -m venv /srv/opensloper-site/venv`.
-2. Copy `deploy/opensloper-site.env.example` to `/etc/opensloper-site.env`
-   (`chmod 600`), with a new secret key.
-3. Copy `deploy/opensloper-site.service` to `/etc/systemd/system/`, with
-   `User` and `Group` set to the site's web user and group.
-4. Paste `deploy/apache-directives.conf` into the site's Apache Directives
-   in ISPConfig, and turn on its Let's Encrypt certificate.
-
-Each release, here and then on the server:
+Each release:
 
 ```
-./opensloper-make.sh web && ./opensloper-make.sh site
-rsync -a --delete --exclude venv --exclude static_root --exclude __pycache__ site/ SERVER:/srv/opensloper-site/
-ssh SERVER 'cd /srv/opensloper-site && venv/bin/pip install -r requirements.txt \
-  && set -a && . /etc/opensloper-site.env && venv/bin/python manage.py collectstatic --noinput \
-  && sudo systemctl restart opensloper-site'
+./opensloper-make.sh web
+site/deploy/deploy.sh      # runs ./opensloper-make.sh site first; --no-build skips it
 ```
+
+The script copies `site/` with rsync, then on the server makes the venv if
+need be, installs `requirements.txt`, writes the environment file with a new
+secret key the first time, fills in the service and Apache directives for the
+server (their `@SITE_DIR@`, `@SITE_USER@` and `@SITE_GROUP@`) in its copies
+there, runs `collectstatic`, and reloads gunicorn with a HUP if
+the service is running.
+
+First time, as root on the server, after the first `deploy.sh`:
+
+1. Copy `SITE_DIR/deploy/opensloper-site.service` to
+   `/etc/systemd/system/`, then
+   `systemctl daemon-reload && systemctl enable --now opensloper-site`.
+2. Paste `SITE_DIR/deploy/apache-directives.conf` into the site's
+   Apache Directives in ISPConfig, and turn on its Let's Encrypt certificate.
 
 The old static page's files in the site's `web` folder (`index.html`,
 `.htaccess` and the rest) are no longer used once the directives are in

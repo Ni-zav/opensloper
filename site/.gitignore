@@ -4,3 +4,4 @@ imported/
 static_root/
 __pycache__/
 *.pyc
+deploy/deploy.local.sh

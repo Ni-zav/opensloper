@@ -22,7 +22,7 @@
 // as it is typed; "Line.length / 10cm" works out to a plain number and is
 // taken. A formula's power of length is worked out from what is certain:
 // suffixed numbers, measurements and length properties are 1, other
-// properties and the results of sin, cos, tan, asin, acos and atan2 are 0,
+// properties and the results of sin, cos, tan, asin, acos, atan2 and bisect are 0,
 // and a plain number multiplying or dividing counts as 0. Plain numbers
 // added to something, and variables, could be either, so they settle nothing.
 // Only formulas with a suffix are judged, so a pattern that never wrote one is
@@ -157,8 +157,8 @@ begin
     Result := UnknownPower(FirstSuffix(First, Second));
 end;
 
-// sin, cos, tan, asin and acos take a plain number, and atan2 two alike;
-// all give a plain number
+// sin, cos, tan, asin and acos take a plain number, bisect two, and atan2
+// two alike; all give a plain number
 function FunctionPower(Formula: TFormula; const Name: string; const Parts: array of TPower): TPower;
 var
   Index: integer;
@@ -173,6 +173,13 @@ begin
     begin
       if (Length(Parts) > 0) and Parts[0].Known and not SameValue(Parts[0].Value, 0, TOLERANCE) and (Parts[0].SuffixToken >= 0) then
         Refuse(Format(rsUnitCheckFunction, [SuffixText(Formula, Parts[0].SuffixToken), Name]), Parts[0].SuffixToken);
+      Result := KnownPower(0, Combined.SuffixToken);
+    end;
+    'bisect':
+    begin
+      for Index := 0 to High(Parts) do
+        if Parts[Index].Known and not SameValue(Parts[Index].Value, 0, TOLERANCE) and (Parts[Index].SuffixToken >= 0) then
+          Refuse(Format(rsUnitCheckFunction, [SuffixText(Formula, Parts[Index].SuffixToken), Name]), Parts[Index].SuffixToken);
       Result := KnownPower(0, Combined.SuffixToken);
     end;
     'atan2':

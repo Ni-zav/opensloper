@@ -140,6 +140,8 @@ procedure TTestUnitCheck.TestInsideAFunction;
 begin
   Refused('angle', 'sin(5cm) * 90', Format(rsUnitCheckFunction, ['5cm', 'sin']), 5);
   Refused('angle', 'atan2(5cm, Hem.angle)', Format(rsUnitCheckFunction, ['5cm', 'atan2']), 7);
+  Refused('angle', 'bisect(Hem.angle, 5cm)', Format(rsUnitCheckFunction, ['5cm', 'bisect']), 19);
+  Taken('angle', 'bisect(Hem.angle, Hem.angle + 180)');
   // A plain number beside a length can be a length in the pattern's unit
   Taken('angle', 'atan2(5cm, 2)');
 end;

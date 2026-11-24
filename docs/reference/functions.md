@@ -19,6 +19,7 @@ Formulas can use these functions. Angles are in degrees, 0° pointing right and 
 | `min(a, b, ...)` | 2 or more | The smallest of two or more values |
 | `max(a, b, ...)` | 2 or more | The largest of two or more values |
 | `round(value)` | 1 | Rounded to the nearest whole number |
+| `bisect(angle, angle)` | 2 | The direction, in degrees, halfway between two directions, the shorter way round |
 
 ## Operators
 

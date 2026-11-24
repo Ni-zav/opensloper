@@ -83,6 +83,7 @@ type
     procedure TestTrigUsesDegrees;
     procedure TestOtherFunctions;
     procedure TestRoundHalfAwayFromZero;
+    procedure TestBisect;
     procedure TestFunctionNamesIgnoreCase;
     procedure TestMeasurementsAndVariables;
     procedure TestObjectProperties;
@@ -453,6 +454,21 @@ begin
   AssertValue('min(3, 1, 2)', 1);
   AssertValue('max(3, 7)', 7);
   AssertValue('max(1, 2, 9, 4)', 9);
+end;
+
+// Halfway the shorter way round, from 0 to 360, even across 0°, where the
+// average of the two angles points the other way
+procedure TTestFormula.TestBisect;
+begin
+  AssertValue('bisect(90, 180)', 135);
+  AssertValue('bisect(180, 90)', 135);
+  AssertValue('bisect(350, 30)', 10);
+  AssertValue('bisect(10, 350)', 0);
+  AssertValue('bisect(270, 0)', 315);
+  AssertValue('bisect(-90, 0)', 315);
+  AssertValue('bisect(45, 45)', 45);
+  AssertEvalError('bisect(0, 180)', rsFormulaBisectOpposite);
+  AssertEvalError('bisect(30, 210)', rsFormulaBisectOpposite);
 end;
 
 procedure TTestFormula.TestRoundHalfAwayFromZero;

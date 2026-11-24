@@ -45,6 +45,10 @@ Changed, Fixed and Removed under each version.
   notch shaped by a curve's handles, and stitch holes made with a repeat.
   The wallet's pattern is among the examples, and in the web version's
   Examples list.
+- A formula function, `bisect(a, b)`, gives the direction halfway between
+  two directions, the shorter way round, so a point on a corner's bisector
+  is `bisect(Chest_line.angle, Side_line.angle + 180)` rather than a long
+  `atan2` formula. Two opposite directions are an error.
 
 ### Changed
 

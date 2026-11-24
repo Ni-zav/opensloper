@@ -190,6 +190,7 @@ resourcestring
   rsFormulaNoValue = 'No value for %s';
   rsFormulaDivideByZero = 'Division by zero';
   rsFormulaSqrtNegative = 'Square root of a negative number';
+  rsFormulaBisectOpposite = 'bisect() has no direction halfway between opposite angles';
   rsFormulaOutOfDomain = '%s() needs a value from -1 to 1';
   rsFormulaNotANumber = 'The result is not a valid number';
   rsFunctionSin = 'Sine of an angle in degrees';
@@ -203,6 +204,7 @@ resourcestring
   rsFunctionMin = 'The smallest of two or more values';
   rsFunctionMax = 'The largest of two or more values';
   rsFunctionRound = 'Rounded to the nearest whole number';
+  rsFunctionBisect = 'The direction, in degrees, halfway between two directions, the shorter way round';
 
 implementation
 
@@ -211,19 +213,23 @@ uses
 
 type
   TFormulaFunction = (ffSin, ffCos, ffTan, ffAsin, ffAcos, ffAtan2, ffSqrt,
-    ffAbs, ffMin, ffMax, ffRound);
+    ffAbs, ffMin, ffMax, ffRound, ffBisect);
 
 const
   FUNCTION_NAMES: array[TFormulaFunction] of string = ('sin', 'cos', 'tan',
-    'asin', 'acos', 'atan2', 'sqrt', 'abs', 'min', 'max', 'round');
+    'asin', 'acos', 'atan2', 'sqrt', 'abs', 'min', 'max', 'round', 'bisect');
   // Minimum and maximum number of arguments; -1 means no maximum
-  FUNCTION_MIN_ARGS: array[TFormulaFunction] of integer = (1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1);
-  FUNCTION_MAX_ARGS: array[TFormulaFunction] of integer = (1, 1, 1, 1, 1, 2, 1, 1, -1, -1, 1);
+  FUNCTION_MIN_ARGS: array[TFormulaFunction] of integer = (1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 2);
+  FUNCTION_MAX_ARGS: array[TFormulaFunction] of integer = (1, 1, 1, 1, 1, 2, 1, 1, -1, -1, 1, 2);
   FUNCTION_DESCRIPTIONS: array[TFormulaFunction] of string = (rsFunctionSin, rsFunctionCos, rsFunctionTan, rsFunctionAsin,
-    rsFunctionAcos, rsFunctionAtan2, rsFunctionSqrt, rsFunctionAbs, rsFunctionMin, rsFunctionMax, rsFunctionRound);
+    rsFunctionAcos, rsFunctionAtan2, rsFunctionSqrt, rsFunctionAbs, rsFunctionMin, rsFunctionMax, rsFunctionRound,
+    rsFunctionBisect);
   // Not translated: they read as part of a formula
   FUNCTION_ARGUMENT_NAMES: array[TFormulaFunction] of string = ('angle', 'angle', 'angle', 'value', 'value', 'dy, dx', 'value',
-    'value', 'a, b, ...', 'a, b, ...', 'value');
+    'value', 'a, b, ...', 'a, b, ...', 'value', 'angle, angle');
+  // Below this length, the two directions added together are taken as
+  // opposite, with no direction halfway between them
+  BISECT_TOLERANCE = 1e-9;
 
 type
   // Raised inside evaluation and parsing only; TFormula turns it into an error state
@@ -415,6 +421,7 @@ function TFunctionNode.Eval(Formula: TFormula; Context: TFormulaContext): double
 var
   Values: array of double;
   Index: integer;
+  SumX, SumY: double;
 begin
   Values := nil;
   SetLength(Values, Length(Args));
@@ -455,6 +462,17 @@ begin
     end;
     // Half away from zero, as people expect; Pascal's Round rounds half to even
     ffRound: Result := Sign(Values[0]) * Floor(Abs(Values[0]) + 0.5);
+    // The two directions added together, from 0 to 360 as a line's angle is
+    ffBisect:
+    begin
+      SumX := Cos(DegToRad(Values[0])) + Cos(DegToRad(Values[1]));
+      SumY := Sin(DegToRad(Values[0])) + Sin(DegToRad(Values[1]));
+      if Hypot(SumX, SumY) < BISECT_TOLERANCE then
+        raise EFormulaError.Create(rsFormulaBisectOpposite, Token);
+      Result := RadToDeg(ArcTan2(SumY, SumX));
+      if Result < 0 then
+        Result := Result + 360;
+    end;
   end;
 end;
 

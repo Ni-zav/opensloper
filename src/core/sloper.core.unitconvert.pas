@@ -487,6 +487,12 @@ begin
           AddConstraint(Parts[0]);
           Result := Constant(0);
         end;
+        'bisect':
+        begin
+          AddConstraint(Parts[0]);
+          AddConstraint(Parts[1]);
+          Result := Constant(0);
+        end;
         'atan2':
         begin
           AddConstraint(Difference(Parts[0], Parts[1]));

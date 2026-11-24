@@ -91,6 +91,7 @@ begin
   AssertFalse('sin', IsValidName('sin'));
   AssertFalse('any case', IsValidName('MAX'));
   AssertTrue('reserved', IsReservedName('atan2'));
+  AssertTrue('reserved', IsReservedName('bisect'));
   AssertTrue('longer name is fine', IsValidName('sine'));
 end;
 

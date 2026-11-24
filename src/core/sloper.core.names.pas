@@ -31,8 +31,8 @@ type
 
 const
   // Formula functions; names may not use them
-  FORMULA_FUNCTION_NAMES: array[0..10] of string = ('sin', 'cos', 'tan', 'asin',
-    'acos', 'atan2', 'sqrt', 'abs', 'min', 'max', 'round');
+  FORMULA_FUNCTION_NAMES: array[0..11] of string = ('sin', 'cos', 'tan', 'asin',
+    'acos', 'atan2', 'sqrt', 'abs', 'min', 'max', 'round', 'bisect');
 
 // Letters, digits and underscore, not starting with a digit, not reserved
 function IsValidName(const Name: string): boolean;

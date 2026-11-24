@@ -76,19 +76,17 @@ the bisector, such as 2.5 cm into the corner of an armhole. There is no
 separate command for it: make an offset point from the corner, and give it the
 distance as its Length and the bisector's direction as its Angle.
 
-The direction is the two sides' directions added together. Each side must
-point away from the corner: a line's angle runs from its start to its end, so
-add 180 to a line that ends at the corner. For a corner at A between
-`Chest_line`, drawn from A, and `Side_line`, drawn to A:
+The direction is `bisect` of the two sides' directions, which gives the
+direction halfway between them. Each side must point away from the corner. A
+line's angle runs from its start to its end, so add 180 to a line that ends
+at the corner. For a corner at A between `Chest_line`, drawn from A, and
+`Side_line`, drawn to A:
 
 ```
-atan2(sin(Chest_line.angle) + sin(Side_line.angle + 180), cos(Chest_line.angle) + cos(Side_line.angle + 180))
+bisect(Chest_line.angle, Side_line.angle + 180)
 ```
 
-The point stays on the bisector when the measurements move the lines. Taking
-the average of the two angles instead, `(Chest_line.angle + Side_line.angle + 180) / 2`,
-points the wrong way whenever the sides' directions are more than 180° apart,
-so use the formula above.
+The point stays on the bisector when the measurements move the lines.
 
 ## Other operations
 

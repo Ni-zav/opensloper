@@ -23,7 +23,6 @@ Agreed, but not built.
 **Design app**
 
 - **Transforms** (#49): a live ghost while dragging, and snapping to existing angles.
-- **Rounding curved corners** (#54): `AddRoundCorner` takes only straight edges, since `TCornerArc.Compute` places the arc in closed form. Only `Compute` needs a numerical branch: Newton's method for a centre at `radius` from both edges, starting from the straight answer; no solution, a radius too big for the bend, or a tangent point past an edge's end are invalid states. Splitting and moving pieces, notches and seams onto the arc already work for curves.
 - **Role styles in Preferences** (#56): overriding a role's colour, dash and weight.
 - **SVG stamps in the web editor** (#89): importing a drawing through a file picker, as File → Import SVG Stamp... does (`AddStampStep`); the web canvas already draws stamps a pattern has.
 - **Preferences in the web editor**: the grid's step per unit, whether the rulers show (kept between visits; for now they show at each start) and printer calibration, kept in the browser.

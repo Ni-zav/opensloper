@@ -75,7 +75,7 @@ function PointConversionCaption(Conversion: TPointConversion): string;
 function PointConversionHint(Conversion: TPointConversion): string;
 function MergeSelection(Document: TPatternDocument; const Selection: TStringArray): TSelectionEdit;
 function BreakSelection(Document: TPatternDocument; const Selection: TStringArray): TSelectionEdit;
-// The two straight edges that meet at the corner
+// The two edges that meet at the corner
 function RoundSelectedCorner(Document: TPatternDocument; const Selection: TStringArray): TSelectionEdit;
 // A repeat between the two selected points or along the one selected edge;
 // other selected objects are left out. Its first point is selected, as that
@@ -146,7 +146,7 @@ resourcestring
   rsSelectionPickPointToBreak = 'Select the point to break first';
   rsSelectionBroken = 'Broke %s into %d points';
   rsSelectionRoundCorner = 'Round corner';
-  rsSelectionPickCornerEdges = 'Select the two straight edges that meet at the corner';
+  rsSelectionPickCornerEdges = 'Select the two edges that meet at the corner';
   rsSelectionAddRepeat = 'Add repeat';
   rsSelectionPickRepeat = 'Select two points, or one line or curve, to repeat along';
   rsSelectionRepeatAdded = 'Added %s; set its count in the properties';

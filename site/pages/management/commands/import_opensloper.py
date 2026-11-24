@@ -47,7 +47,13 @@ class Command(BaseCommand):
     help = "Copy the logo, icons, drawings, version and built web apps from an OpenSloper checkout."
 
     def add_arguments(self, parser):
-        parser.add_argument("repo", type=Path, help="path to an OpenSloper checkout, with the web app built")
+        parser.add_argument(
+            "repo",
+            type=Path,
+            nargs="?",
+            default=settings.BASE_DIR.parent,
+            help="path to an OpenSloper checkout, with the web app built; by default the one the site is in",
+        )
 
     def handle(self, *args, **options):
         repo = options["repo"].expanduser().resolve()

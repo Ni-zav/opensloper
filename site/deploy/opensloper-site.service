@@ -1,0 +1,24 @@
+# The opensloper.com site under gunicorn, which Apache passes requests to
+# (apache-directives.conf). Copy to /etc/systemd/system/, set User and Group
+# to the ISPConfig site's web user, then:
+#   systemctl daemon-reload && systemctl enable --now opensloper-site
+# After copying a new site/ to the server: systemctl restart opensloper-site
+[Unit]
+Description=opensloper.com (Django under gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=web1
+Group=client1
+WorkingDirectory=/srv/opensloper-site
+EnvironmentFile=/etc/opensloper-site.env
+ExecStart=/srv/opensloper-site/venv/bin/gunicorn --bind 127.0.0.1:8001 --workers 2 --access-logfile - opensloper_site.wsgi
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

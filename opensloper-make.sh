@@ -40,6 +40,12 @@ Commands:
                          up, check, test and bundle the TypeScript: the design
                          app into web/out/design; --strip-names takes the
                          function names out of the .wasm files
+  site [--serve [ADDRESS]]
+                         copy the built web Design app (run web first), the
+                         logo, icons, drawings and version into the
+                         opensloper.com site (site/, Django), then check and
+                         test it; --serve then runs it at ADDRESS,
+                         127.0.0.1:8000 by default (site/README.md)
   check [FILE...]        check the coding standards the formatter cannot
                          (errors fail, warnings advise; run before every commit);
                          with no files, also tsc, Oxlint and Prettier on the
@@ -261,6 +267,37 @@ cmd_web() {
     strip_wasm_names web/engine/out/engine_serve.wasm web/engine/out/browser/engine_lib.wasm
   fi
   typescript_step build || exit 1
+}
+
+# The opensloper.com site in site/: Django in the repository's venv (made
+# here if need be), what it shows imported from this checkout, then its
+# checks and tests; --serve runs the development server after
+cmd_site() {
+  local serve=0 address=127.0.0.1:8000
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --serve)
+        serve=1
+        if [ -n "${2:-}" ] && [ "${2#-}" = "$2" ]; then
+          address="$2"
+          shift
+        fi
+        ;;
+      *)
+        echo "site: unknown option $1" >&2
+        exit 2
+        ;;
+    esac
+    shift
+  done
+  [ -d venv ] || python3 -m venv venv
+  ./venv/bin/python -c "import django" 2>/dev/null || ./venv/bin/pip install -r site/requirements.txt
+  ./venv/bin/python site/manage.py import_opensloper . || exit 1
+  ./venv/bin/python site/manage.py check || exit 1
+  ./venv/bin/python site/manage.py test pages || exit 1
+  if [ "$serve" -eq 1 ]; then
+    exec ./venv/bin/python site/manage.py runserver "$address"
+  fi
 }
 
 # Rewrites each .wasm file without its custom sections (id 0), where the
@@ -1103,6 +1140,7 @@ case "$COMMAND" in
   test) cmd_test "$@" ;;
   build) cmd_build "$@" ;;
   web) cmd_web "$@" ;;
+  site) cmd_site "$@" ;;
   check) cmd_check "$@" ;;
   format) cmd_format "$@" ;;
   pr-check) cmd_pr_check "$@" ;;

@@ -509,3 +509,14 @@ jobs:
             gh release create "$TAG" --title "OpenSloper $VERSION" --notes-file notes.md --prerelease="$PRERELEASE" --verify-tag
           fi
           gh release upload "$TAG" dist/* --clobber
+
+  # The docs at docs.opensloper.com follow the release: built again once it is
+  # published, the root from this branch and /dev/ from development
+  docs:
+    name: Publish the docs
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml

@@ -26,6 +26,7 @@ backup/
 
 # Local toolchain settings (see build.local.sh.example)
 /build.local.sh
+/.zensical-build.toml
 /.zensical-offline.toml
 
 # Python bytecode

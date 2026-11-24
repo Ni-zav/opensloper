@@ -57,12 +57,14 @@ Commands:
   pr-check               format, check, test and build, as before a pull
                          request; stops at the first that fails, and lists
                          the files format changed, to commit
-  docs [--serve] [--offline] [--reinstall]
+  docs [--serve] [--offline] [--dev] [--reinstall]
                          regenerate docs/reference/ and build the site into
-                         release/site_docs; --serve previews it, --offline
-                         also builds the copy the downloads ship into
-                         release/site_offline, --reinstall makes the Python
-                         venv again
+                         release/site_docs, named with APP_VERSION; --serve
+                         previews it, --offline also builds the copy the
+                         downloads ship into release/site_offline, --dev
+                         builds it instead as the development docs (named
+                         with the commit, for /dev/) into release/site_dev,
+                         --reinstall makes the Python venv again
   devdocs                build the developer documentation of the code with
                          PasDoc into release/dev_docs (PASDOC names pasdoc
                          when it is not on PATH); not published or packaged
@@ -514,15 +516,20 @@ cmd_pr_check() {
 # (as the GitHub Pages workflow does); this command writes them again first
 # when release/opensloper-cli has been built.
 #
+# The built site is named with APP_VERSION, so readers see which release it
+# describes. --dev names it instead as the development docs, with the commit
+# it was built from, for docs.opensloper.com/dev/ (see docs.yml).
+#
 # --offline also builds the copy of the site that package puts in each
 # download as data/help, read from disk: pages are linked as .../index.html,
 # search works without a server, and the web fonts give way to the system's.
 cmd_docs() {
-  local cli=release/opensloper-cli serve=0 offline=0 reinstall=0 arg topic
+  local cli=release/opensloper-cli serve=0 offline=0 dev=0 reinstall=0 arg topic
   for arg in "$@"; do
     case "$arg" in
       --serve) serve=1 ;;
       --offline) offline=1 ;;
+      --dev) dev=1 ;;
       --reinstall) reinstall=1 ;;
       *)
         echo "docs: unknown option $arg" >&2
@@ -578,21 +585,33 @@ cmd_docs() {
 
   if [ "$serve" -eq 1 ]; then
     ./venv/bin/zensical serve
-  else
-    ./venv/bin/zensical build --clean --strict
+    return
   fi
 
+  # The configuration the site is built with: zensical.toml named with the
+  # version, or as the development docs. Zensical takes the project root from
+  # the configuration's folder, so it is written beside zensical.toml.
+  local version commit stamp=(-e "s|^site_name = \"\(.*\)\"|site_name = \"\1 $(app_version)\"|")
+  if [ "$dev" -eq 1 ]; then
+    version=$(app_version)
+    commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+    stamp=(-e 's|^site_name = "\(.*\)"|site_name = "\1 (development)"|'
+      -e 's|^site_url = "\(.*\)"|site_url = "\1dev/"|'
+      -e 's|^site_dir = .*|site_dir = "release/site_dev"|'
+      -e "s|^copyright = \"|copyright = \"Development docs, built from $commit after $version: they describe what is not released yet. <a href='/'>The released version's docs<\\/a>.<br>|")
+  fi
+  trap 'rm -f .zensical-build.toml .zensical-offline.toml' EXIT
+  sed "${stamp[@]}" zensical.toml > .zensical-build.toml
+  ./venv/bin/zensical build --clean --strict -f .zensical-build.toml
+
   if [ "$offline" -eq 1 ]; then
-    # Zensical takes the project root from the configuration's folder, so the
-    # offline configuration is written beside zensical.toml for the build
     sed -e 's|^site_dir = .*|site_dir = "release/site_offline"\nuse_directory_urls = false|' \
       -e 's|^\[project.theme\]$|&\nfont = false|' \
-      -e '$a\\n[project.plugins.offline]' zensical.toml > .zensical-offline.toml
-    trap 'rm -f .zensical-offline.toml' EXIT
+      -e '$a\\n[project.plugins.offline]' .zensical-build.toml > .zensical-offline.toml
     ./venv/bin/zensical build --clean --strict -f .zensical-offline.toml
-    rm -f .zensical-offline.toml
     echo "Offline copy in release/site_offline"
   fi
+  rm -f .zensical-build.toml .zensical-offline.toml
 }
 
 # devdocs: the developer documentation of the code, from the comments before

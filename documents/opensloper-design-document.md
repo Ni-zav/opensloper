@@ -212,7 +212,14 @@ FPCUnit with the console runner, in `tests/`, run by `opensloper-make.sh test` w
 
 ## Documentation
 
-**User documentation** is Markdown in `docs/`, built with Zensical (the successor to Material for MkDocs) from `zensical.toml` by `opensloper-make.sh docs` into `release/site_docs`, in strict mode so broken links fail, and published by `.github/workflows/docs.yml` on pushes to `development` that touch it. Pages use only common extensions, so another generator would mean rewriting the navigation, not the pages. One site covers every app, since they share concepts, with pages written by task ("Add a size"), not by menu. CC BY-SA 4.0.
+**User documentation** is Markdown in `docs/`, built with Zensical (the successor to Material for MkDocs) from `zensical.toml` by `opensloper-make.sh docs` into `release/site_docs`, in strict mode so broken links fail. `.github/workflows/docs.yml` publishes it to GitHub Pages as two sites:
+
+- **The root** (docs.opensloper.com) is the `release` branch's docs, named with its version. It is built again when `release.yml` publishes a release, so it matches the downloads.
+- **`/dev/`** is the `development` branch's docs, named as development with its commit (`docs --dev`). It is built again on each push to `development` that touches the docs. `robots.txt` keeps it out of search engines.
+
+A deployment replaces the whole site, so each run builds both.
+
+Pages use only common extensions, so another generator would mean rewriting the navigation, not the pages. One site covers every app, since they share concepts, with pages written by task ("Add a size"), not by menu. CC BY-SA 4.0.
 
 **Generated where it can be**, so the code is the single source of truth: `opensloper-cli doc TOPIC` (`src/docs/`) writes the reference pages from the tables the code uses (`functions`, `operations`, `files` and the schemas, `shortcuts`, `icons`, `cli`, `api`) and the Python client. They are committed, so the site builds without a Pascal toolchain, and a test fails while one differs from what the program writes. Tutorial and example patterns live in `docs/examples/` with their measurements; tutorial pictures are drawn by `export-draft --labels --upto=NAME` from `docs/tutorials/images.list`, and tests check every example opens without problems.
 

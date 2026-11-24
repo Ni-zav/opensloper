@@ -1,6 +1,17 @@
 # Builds the user documentation with Zensical and publishes it to GitHub
-# Pages. The reference pages in docs/reference/ are generated from the
-# program and committed (see opensloper-make.sh docs), so no Pascal build is needed here.
+# Pages, as two sites in one:
+#
+# - the root, docs.opensloper.com, from the release branch: the docs of the
+#   released version, named with it;
+# - /dev/, from the development branch: the docs of what is not released yet,
+#   named with the commit, and kept out of search engines by robots.txt.
+#
+# A Pages deployment replaces the whole site, so every run builds both. It runs
+# on pushes to development that touch the docs, and from release.yml once a
+# release is published (workflow_call), so the root changes only with a release.
+#
+# The reference pages in docs/reference/ are generated from the program and
+# committed (see opensloper-make.sh docs), so no Pascal build is needed here.
 # The example and regression files are checked against the file schemas first.
 name: Documentation
 on:
@@ -14,6 +25,7 @@ on:
       - 'check-schemas.py'
       - 'tests/patterns/**'
       - '.github/workflows/docs.yml'
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,18 +40,36 @@ jobs:
     steps:
       - uses: actions/configure-pages@v6
       - uses: actions/checkout@v7
+        with:
+          ref: release
+          path: released
+          fetch-depth: 1
+      - uses: actions/checkout@v7
+        with:
+          ref: development
+          path: development
+          fetch-depth: 1
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
-      - run: pip install -r requirements.txt
-      - run: python3 check-schemas.py docs tests
-      - run: zensical build --clean --strict
+      - name: Build the released docs
+        working-directory: released
+        run: ./opensloper-make.sh docs
+      - name: Build the development docs
+        working-directory: development
+        run: ./opensloper-make.sh docs --dev
+      - name: Put the two together
+        run: |
+          mkdir site
+          cp -R released/release/site_docs/. site/
+          cp -R development/release/site_dev site/dev
+          printf 'User-agent: *\nDisallow: /dev/\n' > site/robots.txt
       # Named for the attempt: a re-run keeps the earlier attempt's artifact,
       # and deploy-pages fails when two have its name
       - uses: actions/upload-pages-artifact@v5
         with:
           name: github-pages-${{ github.run_attempt }}
-          path: release/site_docs
+          path: site
   # A job of its own, as GitHub's Pages workflow has it: deploying in the
   # uploading job sometimes found no artifact yet
   deploy:

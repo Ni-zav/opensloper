@@ -30,7 +30,6 @@ Agreed, but not built.
 
 **Publish app**
 
-- **A window for output and machine profiles** (#57), which are edited in the settings file for now.
 - **True-shape material needed**: the estimate still packs bounding boxes; nesting needs its fold halves and mirrored pairs as shapes.
 - **Raising the publish window on Wayland** (#59), which needs an `xdg-activation` token Qt 5 cannot use.
 

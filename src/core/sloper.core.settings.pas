@@ -152,6 +152,9 @@ function CorrectedCalibration(Current, Expected, Measured: double): double;
 function UserMachineProfiles: TMachineProfileArray;
 // The same for output profiles
 function UserOutputProfiles: TOutputProfileArray;
+// Replace the profiles while keeping other settings in the same file.
+function SaveProfilesToFile(const FileName: string; const Machines: TMachineProfileArray;
+  const Outputs: TOutputProfileArray; out ErrorMessage: string): boolean;
 // Takes out a preset by name, ignoring case, and adds this one
 procedure PutRolePreset(var Presets: TRolePresetArray; const Preset: TRolePreset);
 procedure RemoveRolePreset(var Presets: TRolePresetArray; const AName: string);
@@ -560,6 +563,23 @@ begin
     if not Settings.LoadFromFile(FileName, ErrorMessage) then
       Exit(False);
     Settings.Preferences := Preferences;
+    Result := Settings.SaveToFile(FileName, ErrorMessage);
+  finally
+    FreeAndNil(Settings);
+  end;
+end;
+
+function SaveProfilesToFile(const FileName: string; const Machines: TMachineProfileArray;
+  const Outputs: TOutputProfileArray; out ErrorMessage: string): boolean;
+var
+  Settings: TAppSettings;
+begin
+  Settings := TAppSettings.Create;
+  try
+    if not Settings.LoadFromFile(FileName, ErrorMessage) then
+      Exit(False);
+    Settings.MachineProfiles := Machines;
+    Settings.OutputProfiles := Outputs;
     Result := Settings.SaveToFile(FileName, ErrorMessage);
   finally
     FreeAndNil(Settings);

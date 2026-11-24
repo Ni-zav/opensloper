@@ -122,6 +122,7 @@ type
     procedure RefreshControls;
     procedure RefreshCommands;
     procedure PreferencesClick(Sender: TObject);
+    procedure ProfilesClick(Sender: TObject);
     procedure AboutClick(Sender: TObject);
     procedure UserGuideClick(Sender: TObject);
     procedure WatchTick(Sender: TObject);
@@ -319,6 +320,7 @@ resourcestring
   rsExportSVG = 'Export SVG...';
   rsExportDXF = 'Export DXF...';
   rsExportMachineDXF = 'Export Machine DXF...';
+  rsMenuProfiles = 'Output and Machine Profiles…';
   rsProfile = 'Machine profile';
   rsProfileNone = 'None';
   rsOutputProfile = 'Output profile';
@@ -350,7 +352,7 @@ resourcestring
 implementation
 
 uses
-  LCLType, Math, StrUtils, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
+  LCLType, Math, StrUtils, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles, Sloper.Publish.ProfilesDialog,
   Sloper.Core.Settings, Sloper.Core.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
   Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences, Sloper.UI.AssistantHosts,
   Sloper.Output.LayoutPDF, Sloper.Output.Packing, Sloper.Output.Preview, Sloper.Output.Printing, Sloper.Output.Tiling,
@@ -561,6 +563,7 @@ begin
   FCommands.AddMenuItem(Group, FRedoAction);
   Group.AddSeparator;
   FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuPreferences, aiPreferences, @PreferencesClick, CommandShortCut(kcPreferences)));
+  FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuProfiles, aiPreferences, @ProfilesClick));
   Group := AddMenu(rsMenuView);
   FCommands.AddMenuItem(Group, FZoomInAction);
   FCommands.AddMenuItem(Group, FZoomOutAction);
@@ -1873,6 +1876,18 @@ end;
 procedure TPublishForm.UserGuideClick(Sender: TObject);
 begin
   ShowUserGuide;
+end;
+
+procedure TPublishForm.ProfilesClick(Sender: TObject);
+var
+  Machines: TMachineProfileArray;
+  Outputs: TOutputProfileArray;
+begin
+  if not EditUserProfiles(Self, Machines, Outputs) then
+    Exit;
+  FDocument.Layout.MachineProfiles := Machines;
+  FDocument.Layout.OutputProfiles := Outputs;
+  DocumentChanged(FDocument);
 end;
 
 procedure TPublishForm.PreferencesClick(Sender: TObject);

@@ -47,6 +47,7 @@ type
     procedure TestRulersRoundTrip;
     procedure TestOpenTabsRoundTrip;
     procedure TestSavingPublishTabKeepsTheRest;
+    procedure TestSavingProfilesKeepsOtherSettings;
     procedure TestUnknownLabelModeIsIgnored;
     procedure TestPreferenceDefaults;
     procedure TestPreferencesRoundTrip;
@@ -67,7 +68,7 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.OutputProfiles;
+  SysUtils, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.OutputProfiles, Sloper.Core.MachineProfiles;
 
 const
   NEWER_SETTINGS = '{"format": "opensloper-settings", "version": 999}';
@@ -156,6 +157,38 @@ begin
     AssertFalse('rulers kept', FSettings.ShowRulers);
     AssertEquals('design tab kept', 'variables', FSettings.SideTab);
     AssertEquals('notes', FSettings.PublishTab);
+  finally
+    DeleteFile(FileName);
+  end;
+end;
+
+procedure TTestSettings.TestSavingProfilesKeepsOtherSettings;
+var
+  FileName, Reason: string;
+  Machine: TMachineProfile;
+  Output: TOutputProfile;
+begin
+  FileName := GetTempFileName(GetTempDir, 'oss');
+  try
+    FSettings.SideTab := 'variables';
+    FSettings.Preferences.Calibration.X := 1.01;
+    AssertTrue(Reason, FSettings.SaveToFile(FileName, Reason));
+    Machine := StandardProfile;
+    Machine.Name := 'Workshop';
+    Machine.Lines[ltScore].Layer := 'Fold';
+    Output := FullOutputProfile;
+    Output.Name := 'Paper';
+    Output.Allowance := apNone;
+    AssertTrue(Reason, SaveProfilesToFile(FileName, [Machine], [Output], Reason));
+    AssertTrue(Reason, FSettings.LoadFromFile(FileName, Reason));
+    AssertEquals('design tab kept', 'variables', FSettings.SideTab);
+    AssertNear('calibration kept', 1.01, FSettings.Preferences.Calibration.X);
+    AssertEquals('machine layer', 'Fold', FSettings.MachineProfiles[0].Lines[ltScore].Layer);
+    AssertTrue('paper allowance saved', FSettings.OutputProfiles[0].Allowance = apNone);
+    AssertTrue(Reason, SaveProfilesToFile(FileName, [], [], Reason));
+    AssertTrue(Reason, FSettings.LoadFromFile(FileName, Reason));
+    AssertEquals('machine profile removed', 0, Length(FSettings.MachineProfiles));
+    AssertEquals('output profile removed', 0, Length(FSettings.OutputProfiles));
   finally
     DeleteFile(FileName);
   end;

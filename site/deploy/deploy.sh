@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Deploy the opensloper.com site: copy site/ to the server and set it up.
 #
-# Run from anywhere in the checkout, after ./opensloper-make.sh web:
+# Run from anywhere in the checkout:
 #   site/deploy/deploy.sh [--no-build]
-# It runs ./opensloper-make.sh site (import, check, test) unless --no-build,
-# copies site/ (imported/ included) to the server with rsync, then on the
+# It builds the web app without its function names (./opensloper-make.sh web
+# --strip-names, which needs the FPC trunk cross-compiler) and runs
+# ./opensloper-make.sh site (import, check, test), unless --no-build;
+# copies site/ (imported/ included) to the server with rsync; then on the
 # server makes the venv if need be, installs requirements.txt, writes the
 # environment file with a new secret key the first time, fills in the
 # service and Apache directives for this server, collects the static files
@@ -50,6 +52,7 @@ fi
 
 cd "$root"
 if [ "$build" -eq 1 ]; then
+  ./opensloper-make.sh web --strip-names
   ./opensloper-make.sh site
 fi
 if [ ! -f site/imported/apps/design/index.html ]; then

@@ -65,8 +65,7 @@ the one the service runs as, so deploying needs no root.
 Each release:
 
 ```
-./opensloper-make.sh web
-site/deploy/deploy.sh      # runs ./opensloper-make.sh site first; --no-build skips it
+site/deploy/deploy.sh      # builds with web --strip-names and site first; --no-build skips them
 ```
 
 The script copies `site/` with rsync, then on the server makes the venv if

@@ -70,8 +70,8 @@ yourself:
   front.
 - **Button**, a repeat of five points on the same places with the button
   marker, a circle with a cross the button's size.
-- The extension: **Line_FN_J** out from the neck, **Offset_FN_FC** down
-  the front 1.5 cm out, and **Line_K_FC** back in at the waist. They take
+- The extension: **Line_P_AD** out from the neck, **Offset_P_Q** down
+  the front 1.5 cm out, and **Line_AE_Q** back in at the waist. They take
   the centre front's place in the front's outline.
 - **Centre_front** stays, as a placement line drawn in blue, and prints on
   the front: the buttons are on it, and it is where the fronts overlap.
@@ -107,8 +107,8 @@ The extension and the neckline need finishing inside, and the buttonholes
 need two layers to be sewn through: a front facing does both.
 
 1. In the **Features** tab choose **Facing**.
-2. Click **Front_neck**, then ++shift++ and click **Line_FN_J**, the step
-   out to the extension at the neck, and **Offset_FN_FC**, the extension's
+2. Click **Curve_W_P**, then ++shift++ and click **Line_P_AD**, the step
+   out to the extension at the neck, and **Offset_P_Q**, the extension's
    edge.
 3. Leave the width at `#facing_width`, tick **Interfacing, cut from** and
    leave it as `Interfacing`, then click **Apply**.
@@ -116,7 +116,7 @@ need two layers to be sewn through: a front facing does both.
 The facing's inner edge runs 6 cm in from the neckline and the extension,
 from the shoulder down to the waist. At the neck it leaves out the short step
 out to the extension, which lies inside the facing's width; at the waist it
-runs past **Line_K_FC**, the step back in, which the facing takes whole, and
+runs past **Line_AE_Q**, the step back in, which the facing takes whole, and
 meets the waist. **Facing_Front** and **Interfacing_Front** are cut twice and
 mirrored, as the front is, and **FacingSeam** joins the facing to the
 neckline and the extension. The buttonholes lie inside the facing, so they
@@ -127,7 +127,7 @@ The picture above shows the finished front. To try the facing on its own, see
 
 ## What next
 
-- Face the back's neckline to match: select **Back_neck** and apply a
+- Face the back's neckline to match: select **Curve_A_G** and apply a
   facing, which shares `#facing_width` with the front's.
 - Read [The Features tab](../design/features.md#buttons) for every setting
   of the buttons.

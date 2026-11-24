@@ -25,10 +25,10 @@ well and can be let down later.
 ## 2. Choose the hem and its edges
 
 1. Open the **Features** tab in the side panel and choose **Hem**.
-2. Click the back's hem on the canvas, **Line_C_J**, from the centre back
-   at C to the side at J.
-3. ++shift++ and click the front's hem, **Line_J_F**, from the side to the
-   centre front at F. The tab says *Along Line_C_J, Line_J_F*.
+2. Click the back's hem on the canvas, **Line_C_H**, from the centre back
+   at C to the side at H.
+3. ++shift++ and click the front's hem, **Line_H_F**, from the side to the
+   centre front at F. The tab says *Along Line_C_H, Line_H_F*.
 
 Selecting both hems makes them one step, and they share their depth.
 
@@ -42,7 +42,7 @@ Fill in the settings:
 | Topstitching from the fold | `#hem_depth - 3` | Just short of the turned-under edge, so the stitching catches it |
 | Notch where it turns up | ticked | A notch in the centre back and the side seam marks the fold |
 
-Click **Apply**. The status bar says *Hem added along Line_C_J, Line_J_F*.
+Click **Apply**. The status bar says *Hem added along Line_C_H, Line_H_F*.
 
 ## 3. What Apply made
 
@@ -52,10 +52,10 @@ could any you made yourself:
 - **hem_depth**, a variable of 40 mm, under **Variables**.
 - Each hem has its own allowance, `#hem_depth + 10`: 50 mm, the depth and
   the turn-under. Click the **Back** piece and the row
-  **Allowance, Line_C_J** shows it.
-- Each hem has mirrored ends: **Ends of Line_C_J** in the back's
+  **Allowance, Line_C_H** shows it.
+- Each hem has mirrored ends: **Ends of Line_C_H** in the back's
   properties says *Mirrored* (below).
-- Two stitch lines, **Offset_J_C** and **Offset_F_J**, 37 mm up from each
+- Two stitch lines, **Offset_H_C** and **Offset_F_H**, 37 mm up from each
   hem inside the piece.
 - Notches: on the back in the centre back and the side seam, on the front
   in the side seam, where the hem line meets them. The front's centre front

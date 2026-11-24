@@ -29,25 +29,25 @@ size.
 ## 2. Make the first dart narrower
 
 Open the **Variables** tab and change the formula of `back_dart` from
-`#suppression * 0.3` to `#suppression * 0.15`. The back dart, between P and Q,
-narrows to half its width, as P and Q are placed from `#back_dart`.
+`#suppression * 0.3` to `#suppression * 0.15`. The back dart, between L and M,
+narrows to half its width, as L and M are placed from `#back_dart`.
 
 ## 3. Choose the dart and the edge
 
 1. Open the **Features** tab in the side panel and choose **Dart**.
-2. Click **Back_waist_side** on the canvas, the back's waist from Q to the
-   side at L. The tab says *In Back_waist_side*.
+2. Click **Line_M_I** on the canvas, the back's waist from M to the
+   side at I. The tab says *In Line_M_I*.
 
 Fill in the settings:
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| Middle | empty | Halfway along Back_waist_side, between the first dart and the side |
-| Starts from | The Q end | Where the middle would be measured from, if you gave one |
+| Middle | empty | Halfway along Line_M_I, between the first dart and the side |
+| Starts from | The M end | Where the middle would be measured from, if you gave one |
 | Width | `#back_dart` | The other half of the back's 30%, so the two darts take up what the one did |
 | Depth | `120` | A little shorter than the first dart's 140 mm, as the second dart sits nearer the side |
 | Hole back from the point | `10` | The hole that marks where to stop sewing, 10 mm back from the point, so it is hidden in the dart |
-| Pressed towards | The Q end | Waist darts are pressed towards the centre back |
+| Pressed towards | The M end | Waist darts are pressed towards the centre back |
 
 Click **Apply**. The status bar says *Dart added in Back*.
 
@@ -60,7 +60,7 @@ and follows it when it moves.
 Apply added ordinary objects, which you can select and change as you could
 any you drew:
 
-- **DartMid**, a point halfway along Back_waist_side, and **DartLeg** and
+- **DartMid**, a point halfway along Line_M_I, and **DartLeg** and
   **DartLeg2** half the dart's width either side of it along the edge.
 - **DartApex**, the dart's point, 120 mm from DartMid, square to the waist
   and into the piece.
@@ -70,7 +70,7 @@ any you drew:
   its place in the back's outline.
 - **Dart**, a seam between the legs, which checks that they match and lets
   [the Garment tab](../design/garment.md) close the dart.
-- A notch at each leg, and a hole at **H**, 10 mm back from the point.
+- A notch at each leg, and a hole at **S**, 10 mm back from the point.
 - **Line_DartMid_DartApex**, the dart's centre line, drawn as a fold line.
 - A cap on the back's seam allowance across the new dart (below).
 
@@ -89,9 +89,9 @@ the waist's allowance and open it out again, as you would by hand on paper.
 The skirt's other two darts were drawn by hand, so they have no cap yet:
 
 1. Click the **Back** piece. In its properties, under **Cap on Back_dart**,
-   choose **Pressed towards Line_P_O**, the leg on the centre back side.
+   choose **Pressed towards Line_L_N**, the leg on the centre back side.
 2. Click the **Front** piece. Under **Cap on Front_dart**, choose
-   **Pressed towards Line_V_R**, the leg on the centre front side.
+   **Pressed towards Line_P_R**, the leg on the centre front side.
 
 Each choice is one undo step, and choosing **None** takes the cap off.
 

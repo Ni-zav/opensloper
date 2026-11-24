@@ -27,9 +27,9 @@ shape of the neckline, sewn to it right sides together and turned in.
 ## 2. Choose the facing and its edges
 
 1. Open the **Features** tab in the side panel and choose **Facing**.
-2. Click the back's neckline on the canvas, **Back_neck**.
-3. ++shift++ and click the front's, **Front_neck**. The tab says
-   *Along Back_neck, Front_neck*.
+2. Click the back's neckline on the canvas, **Curve_A_G**.
+3. ++shift++ and click the front's, **Curve_W_P**. The tab says
+   *Along Curve_A_G, Curve_W_P*.
 
 Selecting both makes them one step: the facings share their width, and the
 shoulder seam between the bodice pieces is made between the facings too.
@@ -42,8 +42,8 @@ Fill in the settings:
 | Placement | In place, over the piece | The facing is drawn where it lies on the bodice, as you would trace it |
 | Interfacing, cut from | ticked, `Interfacing` | An interfacing the facing's shape keeps the neckline from stretching. The pattern has no material of that name yet, so Apply adds one |
 
-Click **Apply**. The status bar says *Facing added along Back_neck,
-Front_neck*.
+Click **Apply**. The status bar says *Facing added along Curve_A_G,
+Curve_W_P*.
 
 ## 3. What Apply made
 
@@ -51,11 +51,11 @@ Apply added ordinary objects, which you can change as you could any you made
 yourself:
 
 - **facing_width**, a variable of 6 cm, under **Variables**.
-- Each facing's inner edge, 6 cm in from the neckline: **Offset_A_NB** on
-  the back and **Offset_NF_FN** on the front. Each runs on, or is cut back,
+- Each facing's inner edge, 6 cm in from the neckline: **Offset_A_G** on
+  the back and **Offset_W_P** on the front. Each runs on, or is cut back,
   so that it meets the shoulder and the centre line exactly.
-- Points where the inner edges meet them: **J** on the centre back and **K**
-  on the back shoulder, **L** on the front shoulder and **M** on the centre
+- Points where the inner edges meet them: **AD** on the centre back and **AE**
+  on the back shoulder, **AF** on the front shoulder and **AG** on the centre
   front. The shoulders and centre lines are split there; the bodice pieces
   keep their shape, and the shoulder seam takes both parts of each
   shoulder.

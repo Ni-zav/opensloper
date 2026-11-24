@@ -100,7 +100,6 @@
     {
       "id": 14,
       "type": "line",
-      "name": "Waist_line",
       "start": 10,
       "end": 13,
       "role": "construction"
@@ -117,7 +116,6 @@
     {
       "id": 16,
       "type": "line",
-      "name": "Hip_line",
       "start": 11,
       "end": 15,
       "role": "construction"
@@ -150,7 +148,6 @@
     {
       "id": 20,
       "type": "line",
-      "name": "Hem",
       "start": 12,
       "end": 17,
       "role": "outline"
@@ -167,7 +164,7 @@
     {
       "id": 22,
       "type": "alongEdgePoint",
-      "name": "J",
+      "name": "H",
       "edge": 20,
       "from": "start",
       "mode": "length",
@@ -176,7 +173,7 @@
     {
       "id": 23,
       "type": "alongEdgePoint",
-      "name": "L",
+      "name": "I",
       "edge": 14,
       "from": "start",
       "mode": "length",
@@ -185,7 +182,7 @@
     {
       "id": 24,
       "type": "alongEdgePoint",
-      "name": "M",
+      "name": "J",
       "edge": 14,
       "from": "end",
       "mode": "length",
@@ -194,7 +191,6 @@
     {
       "id": 25,
       "type": "curve",
-      "name": "Back_hip",
       "start": 23,
       "end": 21,
       "angle1": "275",
@@ -206,7 +202,6 @@
     {
       "id": 26,
       "type": "curve",
-      "name": "Front_hip",
       "start": 24,
       "end": 21,
       "angle1": "265",
@@ -218,7 +213,6 @@
     {
       "id": 27,
       "type": "line",
-      "name": "Side_seam",
       "start": 21,
       "end": 22,
       "role": "outline"
@@ -242,7 +236,7 @@
     {
       "id": 30,
       "type": "alongEdgePoint",
-      "name": "N",
+      "name": "K",
       "edge": 14,
       "from": "start",
       "mode": "length",
@@ -251,7 +245,7 @@
     {
       "id": 31,
       "type": "alongEdgePoint",
-      "name": "P",
+      "name": "L",
       "edge": 14,
       "from": "start",
       "mode": "length",
@@ -260,7 +254,7 @@
     {
       "id": 32,
       "type": "alongEdgePoint",
-      "name": "Q",
+      "name": "M",
       "edge": 14,
       "from": "start",
       "mode": "length",
@@ -269,7 +263,7 @@
     {
       "id": 33,
       "type": "offsetPoint",
-      "name": "O",
+      "name": "N",
       "base": 30,
       "mode": "polar",
       "length": "140",
@@ -292,7 +286,7 @@
     {
       "id": 36,
       "type": "alongEdgePoint",
-      "name": "S",
+      "name": "O",
       "edge": 14,
       "from": "end",
       "mode": "length",
@@ -301,7 +295,7 @@
     {
       "id": 37,
       "type": "alongEdgePoint",
-      "name": "V",
+      "name": "P",
       "edge": 14,
       "from": "end",
       "mode": "length",
@@ -310,7 +304,7 @@
     {
       "id": 38,
       "type": "alongEdgePoint",
-      "name": "W",
+      "name": "Q",
       "edge": 14,
       "from": "end",
       "mode": "length",
@@ -342,7 +336,6 @@
     {
       "id": 42,
       "type": "line",
-      "name": "Back_waist_centre",
       "start": 10,
       "end": 31,
       "role": "outline"
@@ -350,7 +343,6 @@
     {
       "id": 43,
       "type": "line",
-      "name": "Back_waist_side",
       "start": 32,
       "end": 23,
       "role": "outline"
@@ -358,7 +350,6 @@
     {
       "id": 44,
       "type": "line",
-      "name": "Front_waist_side",
       "start": 24,
       "end": 38,
       "role": "outline"
@@ -366,7 +357,6 @@
     {
       "id": 45,
       "type": "line",
-      "name": "Front_waist_centre",
       "start": 37,
       "end": 13,
       "role": "outline"
@@ -536,7 +526,7 @@
     {
       "id": 64,
       "type": "betweenPoint",
-      "name": "H",
+      "name": "S",
       "a": 56,
       "b": 53,
       "mode": "length",

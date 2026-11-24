@@ -91,7 +91,7 @@
     {
       "id": 13,
       "type": "offsetPoint",
-      "name": "UB",
+      "name": "D",
       "base": 11,
       "mode": "polar",
       "length": "{3}",
@@ -100,7 +100,7 @@
     {
       "id": 14,
       "type": "offsetPoint",
-      "name": "WB",
+      "name": "E",
       "base": 12,
       "mode": "polar",
       "length": "{3} - {7}",
@@ -117,7 +117,6 @@
     {
       "id": 16,
       "type": "line",
-      "name": "Back_chest_line",
       "start": 11,
       "end": 13,
       "role": "construction"
@@ -125,7 +124,6 @@
     {
       "id": 17,
       "type": "line",
-      "name": "Back_waist_line",
       "start": 12,
       "end": 14,
       "role": "construction"
@@ -133,7 +131,7 @@
     {
       "id": 18,
       "type": "offsetPoint",
-      "name": "D",
+      "name": "F",
       "base": 10,
       "mode": "polar",
       "length": "{5}",
@@ -142,7 +140,7 @@
     {
       "id": 19,
       "type": "offsetPoint",
-      "name": "NB",
+      "name": "G",
       "base": 18,
       "mode": "polar",
       "length": "2",
@@ -151,7 +149,7 @@
     {
       "id": 20,
       "type": "offsetPoint",
-      "name": "SB",
+      "name": "H",
       "base": 19,
       "mode": "polar",
       "length": "@shoulder_length + {9}",
@@ -168,7 +166,6 @@
     {
       "id": 22,
       "type": "curve",
-      "name": "Back_neck",
       "start": 10,
       "end": 19,
       "angle1": "0",
@@ -180,7 +177,7 @@
     {
       "id": 23,
       "type": "alongEdgePoint",
-      "name": "E",
+      "name": "I",
       "edge": 15,
       "from": "start",
       "mode": "length",
@@ -189,7 +186,7 @@
     {
       "id": 24,
       "type": "offsetPoint",
-      "name": "XB",
+      "name": "J",
       "base": 23,
       "mode": "polar",
       "length": "@across_back / 2",
@@ -198,7 +195,6 @@
     {
       "id": 25,
       "type": "curve",
-      "name": "Back_armhole_top",
       "start": 20,
       "end": 24,
       "angle1": "{21}.angle - 90",
@@ -210,7 +206,6 @@
     {
       "id": 26,
       "type": "curve",
-      "name": "Back_armhole_bottom",
       "start": 24,
       "end": 13,
       "angle1": "270",
@@ -222,7 +217,6 @@
     {
       "id": 27,
       "type": "line",
-      "name": "Back_side",
       "start": 13,
       "end": 14,
       "role": "outline"
@@ -230,7 +224,7 @@
     {
       "id": 28,
       "type": "alongEdgePoint",
-      "name": "DB",
+      "name": "K",
       "edge": 17,
       "from": "start",
       "mode": "length",
@@ -239,7 +233,7 @@
     {
       "id": 29,
       "type": "alongEdgePoint",
-      "name": "DB1",
+      "name": "L",
       "edge": 17,
       "from": "start",
       "mode": "length",
@@ -248,7 +242,7 @@
     {
       "id": 30,
       "type": "alongEdgePoint",
-      "name": "DB2",
+      "name": "M",
       "edge": 17,
       "from": "start",
       "mode": "length",
@@ -257,7 +251,7 @@
     {
       "id": 31,
       "type": "offsetPoint",
-      "name": "PB",
+      "name": "N",
       "base": 28,
       "mode": "polar",
       "length": "@neck_back_to_waist - {4} - 2",
@@ -266,7 +260,6 @@
     {
       "id": 32,
       "type": "line",
-      "name": "Back_waist_centre",
       "start": 12,
       "end": 29,
       "role": "outline"
@@ -288,7 +281,6 @@
     {
       "id": 35,
       "type": "line",
-      "name": "Back_waist_side",
       "start": 30,
       "end": 14,
       "role": "outline"
@@ -296,7 +288,7 @@
     {
       "id": 36,
       "type": "offsetPoint",
-      "name": "F",
+      "name": "O",
       "base": 10,
       "mode": "polar",
       "length": "{3} * 2 + 10",
@@ -305,7 +297,7 @@
     {
       "id": 37,
       "type": "offsetPoint",
-      "name": "FN",
+      "name": "P",
       "base": 36,
       "mode": "polar",
       "length": "{5} + 1",
@@ -314,7 +306,7 @@
     {
       "id": 38,
       "type": "offsetPoint",
-      "name": "FC",
+      "name": "Q",
       "base": 36,
       "mode": "polar",
       "length": "@neck_back_to_waist",
@@ -323,7 +315,7 @@
     {
       "id": 39,
       "type": "offsetPoint",
-      "name": "I",
+      "name": "R",
       "base": 36,
       "mode": "polar",
       "length": "{4} * 0.6",
@@ -332,7 +324,7 @@
     {
       "id": 40,
       "type": "offsetPoint",
-      "name": "G",
+      "name": "S",
       "base": 36,
       "mode": "polar",
       "length": "{4}",
@@ -341,7 +333,7 @@
     {
       "id": 41,
       "type": "offsetPoint",
-      "name": "UF",
+      "name": "T",
       "base": 40,
       "mode": "polar",
       "length": "{3}",
@@ -350,7 +342,7 @@
     {
       "id": 42,
       "type": "offsetPoint",
-      "name": "WF",
+      "name": "U",
       "base": 38,
       "mode": "polar",
       "length": "{3} - {7}",
@@ -367,7 +359,6 @@
     {
       "id": 44,
       "type": "line",
-      "name": "Front_chest_line",
       "start": 40,
       "end": 41,
       "role": "construction"
@@ -375,7 +366,6 @@
     {
       "id": 45,
       "type": "line",
-      "name": "Front_waist_line",
       "start": 38,
       "end": 42,
       "role": "construction"
@@ -383,7 +373,7 @@
     {
       "id": 46,
       "type": "offsetPoint",
-      "name": "H",
+      "name": "V",
       "base": 36,
       "mode": "polar",
       "length": "{5}",
@@ -392,7 +382,7 @@
     {
       "id": 47,
       "type": "offsetPoint",
-      "name": "NF",
+      "name": "W",
       "base": 46,
       "mode": "polar",
       "length": "2",
@@ -401,7 +391,7 @@
     {
       "id": 48,
       "type": "offsetPoint",
-      "name": "SF",
+      "name": "X",
       "base": 47,
       "mode": "polar",
       "length": "@shoulder_length",
@@ -418,7 +408,6 @@
     {
       "id": 50,
       "type": "curve",
-      "name": "Front_neck",
       "start": 47,
       "end": 37,
       "angle1": "{49}.angle + 90",
@@ -430,7 +419,7 @@
     {
       "id": 51,
       "type": "offsetPoint",
-      "name": "XF",
+      "name": "Y",
       "base": 39,
       "mode": "polar",
       "length": "@across_chest / 2",
@@ -439,7 +428,6 @@
     {
       "id": 52,
       "type": "curve",
-      "name": "Front_armhole_top",
       "start": 48,
       "end": 51,
       "angle1": "{49}.angle + 90",
@@ -451,7 +439,6 @@
     {
       "id": 53,
       "type": "curve",
-      "name": "Front_armhole_bottom",
       "start": 51,
       "end": 41,
       "angle1": "270",
@@ -463,7 +450,6 @@
     {
       "id": 54,
       "type": "line",
-      "name": "Front_side",
       "start": 41,
       "end": 42,
       "role": "outline"
@@ -471,7 +457,7 @@
     {
       "id": 55,
       "type": "alongEdgePoint",
-      "name": "DF",
+      "name": "Z",
       "edge": 45,
       "from": "start",
       "mode": "length",
@@ -480,7 +466,7 @@
     {
       "id": 56,
       "type": "alongEdgePoint",
-      "name": "DF1",
+      "name": "AA",
       "edge": 45,
       "from": "start",
       "mode": "length",
@@ -489,7 +475,7 @@
     {
       "id": 57,
       "type": "alongEdgePoint",
-      "name": "DF2",
+      "name": "AB",
       "edge": 45,
       "from": "start",
       "mode": "length",
@@ -498,7 +484,7 @@
     {
       "id": 58,
       "type": "offsetPoint",
-      "name": "BP",
+      "name": "AC",
       "base": 55,
       "mode": "polar",
       "length": "@neck_back_to_waist - {4} - 3",
@@ -507,7 +493,6 @@
     {
       "id": 59,
       "type": "line",
-      "name": "Front_waist_centre",
       "start": 38,
       "end": 56,
       "role": "outline"
@@ -529,7 +514,6 @@
     {
       "id": 62,
       "type": "line",
-      "name": "Front_waist_side",
       "start": 57,
       "end": 42,
       "role": "outline"

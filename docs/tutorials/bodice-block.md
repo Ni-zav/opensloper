@@ -42,10 +42,10 @@ Its measurements use the names in the measurement catalogue:
 
 Start a new pattern (File → New), choose the measurement file (File →
 Measurements → Open Set…) and save the pattern beside it as
-`bodice-block.sloper`. Then add these variables. The quickest way is to save
+`bodice-block.sloper`. Then take the variables from the finished pattern, as
+in the skirt tutorial: save
 [bodice-block.sloper](../examples/bodice-block/bodice-block.sloper) somewhere
-else, click Import… in the Variables tab and choose it; or type them in, as in
-the skirt tutorial:
+else, click Import… in the Variables tab and choose it. These are added:
 
 | Name | Formula | What it is |
 | --- | --- | --- |
@@ -65,24 +65,27 @@ narrower by `shaping`: 40% of that goes at the side seam and 60% in the dart.
 ## 2. The back frame
 
 The back is drafted with the centre back on the left, from the back neck at the
-top to the waist at the bottom.
+top to the waist at the bottom. As in the skirt, the app names the points in
+the order you make them, so make them in the order given here.
 
 1. With the Point tool (++p++), make **A** and set X and Y to `0`: the centre
    back neck.
-2. Click straight below A for **B**, Length `#scye_depth`: the centre back at
-   the level of the underarm. Click further below for **C**, Length
-   `@neck_back_to_waist`: the centre back waist.
-3. Click level with B, to its right, for **UB**, Length `#half_width`: the
-   underarm at the side seam. Click right of C for **WB**, Length
+2. Click straight below A, about 20 cm down, for **B**: the centre back at the
+   level of the underarm. Open the wand, **f**, beside its Length and choose
+   `#scye_depth`. Click further below, about 41 cm down, for **C**, the centre
+   back waist, and choose `@neck_back_to_waist` from the wand.
+3. Click level with B, to its right, for **D**, Length `#half_width`: the
+   underarm at the side seam. Click right of C for **E**, Length
    `#half_width - #side_shaping`: the waist at the side seam.
 
-Then draw, with the Line tool (++l++):
+Then draw, with the Line tool (++l++), and name the centre back line
+**Centre_back**, as the piece is folded along it:
 
 | Line | From | To | Role |
 | --- | --- | --- | --- |
-| Centre_back | A | C | Outline |
-| Back_chest_line | B | UB | Construction |
-| Back_waist_line | C | WB | Construction |
+| `Centre_back` | A | C | Outline |
+| `Line_B_D` | B | D | Construction |
+| `Line_C_E` | C | E | Construction |
 
 ![The back frame](images/bodice-1-frame.svg){ .draft }
 
@@ -90,24 +93,26 @@ Then draw, with the Line tool (++l++):
 
 The neck point is the neck's width from centre back and a little above A.
 
-1. Click right of A for **D**, Length `#neck_width`, then straight above D for
-   **NB**, Length `2`. D is only a step on the way: points need no line.
-2. Click right of NB for **SB**, the shoulder point. Set its Length to
+1. Click right of A for **F**, Length `#neck_width`, then straight above F for
+   **G**, Length `2`: the back neck point. F is only a step on the way:
+   points need no line.
+2. Click right of G for **H**, the shoulder point. Set its Length to
    `@shoulder_length + #shoulder_ease` and its Angle to `342`. Angles count
    anticlockwise from pointing right, so 342 is 18° below level: the slope of
    the shoulder.
-3. Draw the line **Back_shoulder** from NB to SB.
+3. Draw the line from G to H and name it **Back_shoulder**: other formulas
+   read its angle, and the name makes them easy to read.
 
-The back neck curves from A, level at first, up to NB, and should meet the
+The back neck curves from A, level at first, up to G, and should meet the
 shoulder square, at a right angle. Rather than work that angle out, let the
-curve read it from the shoulder. Draw the curve **Back_neck** from A to NB with
+curve read it from the shoulder. Draw the curve `Curve_A_G` from A to G with
 the Curve tool (++c++), and set:
 
 | Start angle | Start handle | End angle | End handle |
 | --- | --- | --- | --- |
 | `0` | `#neck_width / 2` | `Back_shoulder.angle + 270` | `1.5` |
 
-`Back_shoulder.angle` is the shoulder line's direction, from NB to SB. The end
+`Back_shoulder.angle` is the shoulder line's direction, from G to H. The end
 angle points back along the curve, so it is a quarter turn from the shoulder,
 down into the neck. Change the shoulder's angle and the neck follows.
 
@@ -119,23 +124,24 @@ The armhole runs from the shoulder point, in past the across-back point, and
 round to the underarm. It is drawn as two curves that meet at the across-back
 point, going straight down there, so the join is smooth.
 
-1. Click on Centre_back, nearer A, for **E**, and set its Distance or ratio to
+1. Click on Centre_back, nearer A, for **I**, and set its Distance or ratio to
    `#scye_depth * 0.55`: the level of the across-back measurement.
-2. Click level with E, to its right, for **XB**, Length `@across_back / 2`.
+2. Click level with I, to its right, for **J**, the across-back point, Length
+   `@across_back / 2`.
 3. Draw two curves, and the side seam:
 
 | Curve | From | To | Start angle | Start handle | End angle | End handle |
 | --- | --- | --- | --- | --- | --- | --- |
-| Back_armhole_top | SB | XB | `Back_shoulder.angle - 90` | `3` | `90` | `3` |
-| Back_armhole_bottom | XB | UB | `270` | `#scye_depth / 4` | `180` | `(#half_width - @across_back / 2) * 0.6` |
+| `Curve_H_J` | H | J | `Back_shoulder.angle - 90` | `3` | `90` | `3` |
+| `Curve_J_D` | J | D | `270` | `#scye_depth / 4` | `180` | `(#half_width - @across_back / 2) * 0.6` |
 
 | Line | From | To | Role |
 | --- | --- | --- | --- |
-| Back_side | UB | WB | Outline |
+| `Line_D_E` | D | E | Outline |
 
-The top curve leaves the shoulder square to it and arrives at XB going straight
-down (its end angle, 90, points back up). The bottom curve leaves XB straight
-down (270) and arrives at UB going level, so the armhole turns smoothly into
+The top curve leaves the shoulder square to it and arrives at J going straight
+down (its end angle, 90, points back up). The bottom curve leaves J straight
+down (270) and arrives at D going level, so the armhole turns smoothly into
 the side seam.
 
 ![The back armhole](images/bodice-3-armhole.svg){ .draft }
@@ -143,23 +149,22 @@ the side seam.
 ## 5. The back dart
 
 The dart is centred on the back waist, its point 2 cm below the chest line.
-Make three points on Back_waist_line, each by clicking on the line nearer C and
+Make three points on `Line_C_E`, each by clicking on the line nearer C and
 typing its Distance or ratio, so all are measured from centre back:
 
 | Point | Distance or ratio | What it is |
 | --- | --- | --- |
-| DB | `#half_width / 2` | The dart's centre |
-| DB1 | `(#half_width - #dart) / 2` | Its side nearer centre back |
-| DB2 | `(#half_width + #dart) / 2` | Its side nearer the side seam |
+| K | `#half_width / 2` | The dart's centre |
+| L | `(#half_width - #dart) / 2` | Its side nearer centre back |
+| M | `(#half_width + #dart) / 2` | Its side nearer the side seam |
 
 Click a little away from points already there, or the click reuses them; the
 point moves to its place when you type the distance. Then click straight above
-DB for **PB**, the dart's point, with Length
+K for **N**, the dart's point, with Length
 `@neck_back_to_waist - #scye_depth - 2`.
 
-Draw the waist and the dart as outlines: **Back_waist_centre** from C to DB1,
-the dart's sides DB1 to PB and PB to DB2, and **Back_waist_side** from DB2 to
-WB.
+Draw the waist and the dart as outlines: C to L, the dart's sides L to N and
+N to M, and M to E.
 
 ![The back with its dart](images/bodice-4-dart.svg){ .draft }
 
@@ -173,58 +178,58 @@ in this order:
 
 | Point | Made | Length | What it is |
 | --- | --- | --- | --- |
-| F | Right of A | `#half_width * 2 + 10` | The top of the centre front, beside the back |
-| FN | Below F | `#neck_width + 1` | The centre front neck |
-| FC | Below F, further | `@neck_back_to_waist` | The centre front waist |
-| I | Below F, further | `#scye_depth * 0.6` | The level of the across-chest measurement |
-| G | Below F, further | `#scye_depth` | The centre front at the level of the underarm |
-| UF | Left of G | `#half_width` | The underarm at the side seam |
-| WF | Left of FC | `#half_width - #side_shaping` | The waist at the side seam |
+| O | Right of A | `#half_width * 2 + 10` | The top of the centre front, beside the back |
+| P | Below O | `#neck_width + 1` | The centre front neck |
+| Q | Below O, further | `@neck_back_to_waist` | The centre front waist |
+| R | Below O, further | `#scye_depth * 0.6` | The level of the across-chest measurement |
+| S | Below O, further | `#scye_depth` | The centre front at the level of the underarm |
+| T | Left of S | `#half_width` | The underarm at the side seam |
+| U | Left of Q | `#half_width - #side_shaping` | The waist at the side seam |
 
-Make I and G before drawing the centre front line, so the clicks find F and not
-the line. Then draw **Centre_front** from FN to FC as an outline, and
-**Front_chest_line** from G to UF and **Front_waist_line** from FC to WF as
-construction.
+Make R and S before drawing the centre front line, so the clicks find O and
+not the line. Then draw the centre front from P to Q as an outline and name it
+**Centre_front**, and `Line_S_T` and `Line_Q_U` as construction.
 
 The neck and shoulder:
 
-1. Click left of F for **H**, Length `#neck_width`, then above H for **NF**,
+1. Click left of O for **V**, Length `#neck_width`, then above V for **W**,
    Length `2`: the front neck point.
-2. Click left of NF for **SF**, Length `@shoulder_length` and Angle `202`:
-   22° below level, going left. The front shoulder slopes more than the back.
-3. Draw **Front_shoulder** from NF to SF, and the curve **Front_neck** from NF
-   to FN, with Start angle `Front_shoulder.angle + 90`, Start handle
-   `#neck_width / 2`, End angle `180` and End handle `#neck_width / 2`. It
-   leaves the shoulder square and arrives at the centre front level.
+2. Click left of W for **X**, the shoulder point, Length `@shoulder_length`
+   and Angle `202`: 22° below level, going left. The front shoulder slopes
+   more than the back.
+3. Draw the line from W to X and name it **Front_shoulder**, and the curve
+   `Curve_W_P` from W to P, with Start angle `Front_shoulder.angle + 90`,
+   Start handle `#neck_width / 2`, End angle `180` and End handle
+   `#neck_width / 2`. It leaves the shoulder square and arrives at the centre
+   front level.
 
-The armhole, from SF past the across-chest point:
+The armhole, from X past the across-chest point:
 
-1. Click level with I, to its left, for **XF**, Length `@across_chest / 2`.
+1. Click level with R, to its left, for **Y**, Length `@across_chest / 2`.
 2. Draw the curves and the side seam:
 
 | Curve | From | To | Start angle | Start handle | End angle | End handle |
 | --- | --- | --- | --- | --- | --- | --- |
-| Front_armhole_top | SF | XF | `Front_shoulder.angle + 90` | `3` | `90` | `3` |
-| Front_armhole_bottom | XF | UF | `270` | `#scye_depth / 4` | `0` | `(#half_width - @across_chest / 2) * 0.6` |
+| `Curve_X_Y` | X | Y | `Front_shoulder.angle + 90` | `3` | `90` | `3` |
+| `Curve_Y_T` | Y | T | `270` | `#scye_depth / 4` | `0` | `(#half_width - @across_chest / 2) * 0.6` |
 
 | Line | From | To | Role |
 | --- | --- | --- | --- |
-| Front_side | UF | WF | Outline |
+| `Line_T_U` | T | U | Outline |
 
 The front dart is under the bust point, half the bust point separation from
-centre front. Make three points on Front_waist_line, clicking nearer FC so they
-are measured from centre front:
+centre front. Make three points on `Line_Q_U`, clicking nearer Q so they are
+measured from centre front. After Z the app goes on to two letters:
 
 | Point | Distance or ratio |
 | --- | --- |
-| DF | `@bust_point_separation / 2` |
-| DF1 | `(@bust_point_separation - #dart) / 2` |
-| DF2 | `(@bust_point_separation + #dart) / 2` |
+| Z | `@bust_point_separation / 2` |
+| AA | `(@bust_point_separation - #dart) / 2` |
+| AB | `(@bust_point_separation + #dart) / 2` |
 
-Click straight above DF for **BP**, the bust point and the dart's point, with
-Length `@neck_back_to_waist - #scye_depth - 3`. Draw **Front_waist_centre**
-from FC to DF1, the dart's sides DF1 to BP and BP to DF2, and
-**Front_waist_side** from DF2 to WF, all as outlines.
+Click straight above Z for **AC**, the bust point and the dart's point, with
+Length `@neck_back_to_waist - #scye_depth - 3`. Draw the waist and the dart
+as outlines: Q to AA, the dart's sides AA to AC and AC to AB, and AB to U.
 
 ![The front](images/bodice-5-front.svg){ .draft }
 
@@ -237,7 +242,7 @@ name them **Back** and **Front**. Then, for each:
   piece is cut once, on the fold, so it opens out to the whole back or front.
 - Set its seam allowance to `1.5`.
 - Mark the across-back and across-chest points, where a sleeve will match:
-  with the Notch tool (++t++), click on XB on the back's armhole and on XF on
+  with the Notch tool (++t++), click on J on the back's armhole and on Y on
   the front's.
 
 ## 8. Seams
@@ -247,7 +252,7 @@ match. The app checks them once it knows they are seams.
 
 Choose the Seam tool (++e++). Click Front_shoulder for side A, press ++tab++,
 click Back_shoulder for side B, and press ++enter++. Do the same for the side
-seam: Front_side, ++tab++, Back_side, ++enter++. Seams are not drawn on the
+seam: `Line_T_U`, ++tab++, `Line_D_E`, ++enter++. Seams are not drawn on the
 canvas: select each in the Objects tab and name them **Shoulder_seam** and
 **Side_seam**.
 
@@ -259,8 +264,8 @@ bar shows no problems. Change `shoulder_ease` to `0` and the shoulder seam
 becomes a problem, until the back shoulder is shortened to match.
 
 Each dart is a seam too, its two sides sewn to each other. With the Seam tool,
-click Line_DB1_PB, press ++tab++, click Line_PB_DB2 and press ++enter++; do
-the same on the front with Line_DF1_BP and Line_BP_DF2, and name them
+click `Line_L_N`, press ++tab++, click `Line_N_M` and press ++enter++; do
+the same on the front with `Line_AA_AC` and `Line_AC_AB`, and name them
 **Back_dart** and **Front_dart**. Their sides are the same length, so they
 match, and the [Garment tab](../design/garment.md) now shows both pieces with
 their darts closed.
@@ -269,12 +274,12 @@ their darts closed.
 
 Notes put instructions on the pattern, and print with their piece.
 
-- With the Text tool (++x++), click on SB. The note hangs from the shoulder
+- With the Text tool (++x++), click on H. The note hangs from the shoulder
   point. Type its text, `Ease the back shoulder` on one line and
   `by {=#shoulder_ease} cm` on the next, set Lines to Centred, and set Across
   to `-4` and Down to `4`, to move it inside the back. The `{= }` part is worked out from the
   pattern, so it reads *by 1 cm*.
-- With the Callout tool (++a++), click on BP, then a little above and to the
+- With the Callout tool (++a++), click on AC, then a little above and to the
   right of it, and type `Bust point`. The callout points at it with an arrow.
 
 ![The finished pieces](images/bodice-6-pieces.svg){ .draft }

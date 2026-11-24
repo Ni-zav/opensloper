@@ -75,6 +75,23 @@ formulas store the object, not its name. The functions, operators and units
 formulas can use are listed in
 [Formula functions and units](../reference/functions.md).
 
+## Formula suggestions
+
+A length, angle or ratio in the Properties tab has a wand button, **f**, at
+its right. Click it, or press ++alt+down++ in the field, and a list opens
+under the field: formulas whose value is close to the field's, such as
+`@waist / 4` for a length of 175 mm, each with how far it is off. Click one,
+or choose it with ++up++ and ++down++ and press ++enter++, and it becomes the
+field's formula. ++escape++ closes the list.
+
+So a point can be placed by eye and then tied to the measurements: click
+roughly where it goes, open the suggestions for its length, and choose the
+one you meant. While the list is open, dragging the point changes only that
+field, and the list follows; when nothing is within 5 mm, it shows the
+nearest. Hover over a suggestion to see on the canvas where it would put the
+point. With Contextual labels, the canvas names the points and edges the
+suggestions in view read, such as `C` for `C.x`.
+
 ## Units
 
 Each pattern has a unit, mm, cm or inches, and every plain number in its

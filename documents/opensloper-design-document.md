@@ -223,7 +223,7 @@ Pages use only common extensions, so another generator would mean rewriting the 
 
 **Generated where it can be**, so the code is the single source of truth: `opensloper-cli doc TOPIC` (`src/docs/`) writes the reference pages from the tables the code uses (`functions`, `operations`, `files` and the schemas, `shortcuts`, `icons`, `cli`, `api`) and the Python client. They are committed, so the site builds without a Pascal toolchain, and a test fails while one differs from what the program writes. Tutorial and example patterns live in `docs/examples/` with their measurements; tutorial pictures are drawn by `export-draft --labels --upto=NAME` from `docs/tutorials/images.list`, and tests check every example opens without problems.
 
-**Developer documentation** is made by PasDoc from the comments before each unit and declaration (`opensloper-make.sh devdocs` into `release/dev_docs`), with `documents/pasdoc-introduction.txt` as its first page. The comments stay in the plain `//` style of the coding standards, with no PasDoc tags. It is not published yet (see Open items).
+**Developer documentation** is made by PasDoc from the comments before each unit and declaration (`opensloper-make.sh devdocs` into `release/dev_docs`), with `documents/pasdoc-introduction.txt` as its first page. The comments stay in the plain `//` style of the coding standards, with no PasDoc tags. GitHub Pages publishes it from `development` at `/dev/pasdoc/`.
 
 `docs/` is the user documentation; `documents/` holds internal notes, including these design files.
 

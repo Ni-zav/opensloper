@@ -67,7 +67,7 @@ Commands:
                          --reinstall makes the Python venv again
   devdocs                build the developer documentation of the code with
                          PasDoc into release/dev_docs (PASDOC names pasdoc
-                         when it is not on PATH); not published or packaged
+                         when it is not on PATH); Pages publishes it under /dev/pasdoc/
   package                pack the built apps for this platform into release/dist:
                          the archive and the installer (.deb, .dmg or setup.exe)
   release [VERSION]      print a release's notes: its CHANGELOG.md section, else
@@ -616,8 +616,8 @@ cmd_docs() {
 
 # devdocs: the developer documentation of the code, from the comments before
 # each unit and declaration, as HTML in release/dev_docs. Only our own
-# sources under src/ are read, not the submodules. It is not published, nor
-# shipped in the packages; documents/pasdoc-introduction.txt is its first page.
+# sources under src/ are read, not the submodules. The Pages workflow publishes
+# it under /dev/pasdoc/; documents/pasdoc-introduction.txt is its first page.
 cmd_devdocs() {
   local pasdoc="${PASDOC:-pasdoc}" out=release/dev_docs list defines=()
   if ! command -v "$pasdoc" > /dev/null 2>&1; then

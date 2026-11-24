@@ -5,6 +5,7 @@
 #   released version, named with it;
 # - /dev/, from the development branch: the docs of what is not released yet,
 #   named with the commit, and kept out of search engines by robots.txt.
+# - /dev/pasdoc/, generated Pascal source documentation from development.
 #
 # A Pages deployment replaces the whole site, so every run builds both. It runs
 # on pushes to development that touch the docs, and from release.yml once a
@@ -24,6 +25,9 @@ on:
       - 'requirements.txt'
       - 'check-schemas.py'
       - 'tests/patterns/**'
+      - 'src/**/*.pas'
+      - 'documents/pasdoc-introduction.txt'
+      - 'opensloper-make.sh'
       - '.github/workflows/docs.yml'
   workflow_call:
   workflow_dispatch:
@@ -58,11 +62,23 @@ jobs:
       - name: Build the development docs
         working-directory: development
         run: ./opensloper-make.sh docs --dev
-      - name: Put the two together
+      - name: Build the Pascal source docs
+        working-directory: development
+        run: |
+          archive="$RUNNER_TEMP/pasdoc-1.0.4-linux-x86_64.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 -o "$archive" \
+            https://github.com/pasdoc/pasdoc/releases/download/v1.0.4/pasdoc-1.0.4-linux-x86_64.tar.gz
+          echo "ef0bee4a0c5169fd92bccd594e6df9ff4f4c138b951c9a81d498cecb9602e0e9  $archive" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/pasdoc"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/pasdoc"
+          PASDOC="$RUNNER_TEMP/pasdoc/pasdoc/bin/pasdoc" ./opensloper-make.sh devdocs
+          test -s release/dev_docs/index.html
+      - name: Assemble the Pages site
         run: |
           mkdir site
           cp -R released/release/site_docs/. site/
           cp -R development/release/site_dev site/dev
+          cp -R development/release/dev_docs site/dev/pasdoc
           printf 'User-agent: *\nDisallow: /dev/\n' > site/robots.txt
       # Named for the attempt: a re-run keeps the earlier attempt's artifact,
       # and deploy-pages fails when two have its name

@@ -12,8 +12,17 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from 'puppeteer-core';
-import { bodyData, launchBrowser, serveApp, status, TIMEOUT_MS, waitForData, watchProblems } from './browser.ts';
+import type { KeyInput, Page } from 'puppeteer-core';
+import {
+  bodyData,
+  launchBrowser,
+  serveApp,
+  status,
+  TIMEOUT_MS,
+  waitForData,
+  waitForStatus,
+  watchProblems,
+} from './browser.ts';
 
 const PATTERNS = '../tests/patterns';
 // The canvas's paper colour, which an empty canvas is all of but the grid
@@ -119,6 +128,10 @@ const browser = await launchBrowser();
 // Where the page's downloads go, removed at the end
 const downloads = await mkdtemp(join(tmpdir(), 'opensloper-design-'));
 try {
+  // Copy and Paste use the clipboard, which a user's browser would offer
+  await browser
+    .defaultBrowserContext()
+    .overridePermissions(`http://127.0.0.1:${String(port)}`, ['clipboard-read', 'clipboard-sanitized-write']);
   const page = await browser.newPage();
   const session = await page.createCDPSession();
   await session.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
@@ -363,6 +376,41 @@ try {
   await page.keyboard.press('z');
   await page.keyboard.up('Control');
   await waitForData(page, 'undo', 'Add point');
+  await page.mouse.click(at.x, at.y);
+  await waitForData(page, 'selection', added);
+
+  // Copy puts the point's fragment on the clipboard; Paste, the button or the
+  // paste key, makes a selected copy of it, and Cut copies and deletes, each one undo step
+  const pressWithControl = async (key: KeyInput): Promise<void> => {
+    await page.keyboard.down('Control');
+    await page.keyboard.press(key);
+    await page.keyboard.up('Control');
+  };
+  await pressWithControl('c');
+  await waitForStatus(page, 'Copied');
+  const fragment = await page.evaluate(async () => navigator.clipboard.readText());
+  assert.ok(fragment.length > 0, 'the fragment is on the clipboard');
+  await page.click('#toolbar button[title^="Paste copies"]');
+  await waitForData(page, 'undo', 'Paste');
+  const copy = await bodyData(page, 'selection');
+  assert.ok(copy !== '' && copy !== added, 'the copy is selected');
+  await pressWithControl('x');
+  await waitForData(page, 'undo', 'Cut');
+  await waitForData(page, 'selection', '');
+  // As the paste key gives it
+  await page.evaluate((text) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', text);
+    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
+  }, fragment);
+  await page.waitForFunction(() => document.body.dataset.selection !== '', { timeout: TIMEOUT_MS });
+  assert.equal(await bodyData(page, 'undo'), 'Paste', 'pasted from the paste key');
+  for (const step of ['Cut', 'Paste', 'Add point']) {
+    // oxlint-disable-next-line no-await-in-loop
+    await pressWithControl('z');
+    // oxlint-disable-next-line no-await-in-loop
+    await waitForData(page, 'undo', step);
+  }
   await page.mouse.click(at.x, at.y);
   await waitForData(page, 'selection', added);
 

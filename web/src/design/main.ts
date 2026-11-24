@@ -38,6 +38,9 @@ const ICONS = {
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
   delete: 'trash',
+  cut: 'cut',
+  copy: 'copy',
+  paste: 'clipboard',
   fit: 'zoom-scan',
   rulers: 'ruler-2',
   // The side panel's tabs
@@ -100,6 +103,16 @@ function iconButton(icon: string, caption: string, hint: string, action: () => v
   return button;
 }
 
+// A field or box that takes keys and the clipboard for itself
+function isTextField(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
 // A file from the site, named as its address ends; undefined when it cannot be had
 async function fetchFile(address: URL): Promise<File | undefined> {
   const response = await fetch(address);
@@ -125,6 +138,12 @@ class DesignApp {
   private readonly toolButtons = new Map<string, HTMLButtonElement>();
   private readonly undoButton: HTMLButtonElement;
   private readonly deleteButton: HTMLButtonElement;
+  // Cut, Copy and Delete, which need a selection
+  private readonly selectionButtons: HTMLButtonElement[];
+  // The fragment last copied, and whether the browser let it onto the
+  // clipboard; when it did not, Paste takes it from here
+  private copied = '';
+  private copiedToClipboard = false;
   private readonly redoButton: HTMLButtonElement;
   // The measurement file the open pattern names, while it has none
   private wantedMeasurements = '';
@@ -144,13 +163,28 @@ class DesignApp {
     const deleteButton = iconButton(ICONS.delete, STRINGS.delete, STRINGS.deleteHint, () => {
       this.run(this.canvas.deleteSelection());
     });
-    deleteButton.disabled = true;
     this.deleteButton = deleteButton;
+    const shortcutOf = (command: string): string => tables.shortcuts.get(command) ?? '';
+    const selectionButtons = [
+      iconButton(ICONS.cut, STRINGS.cut, STRINGS.cutHint(shortcutOf('cut')), () => {
+        this.run(this.copy(true));
+      }),
+      iconButton(ICONS.copy, STRINGS.copy, STRINGS.copyHint(shortcutOf('copy')), () => {
+        this.run(this.copy(false));
+      }),
+      deleteButton,
+    ];
+    for (const button of selectionButtons) {
+      button.disabled = true;
+    }
+    this.selectionButtons = selectionButtons;
     this.canvas = new PatternCanvas(element('canvas', HTMLCanvasElement), this.document, tables, {
       message: showMessage,
       selectionChanged: (ids) => {
         document.body.dataset.selection = ids.join(' ');
-        deleteButton.disabled = ids.length === 0;
+        for (const button of selectionButtons) {
+          button.disabled = ids.length === 0;
+        }
         this.objects.showSelection(ids);
         this.properties.showSelection(ids);
         this.features.showSelection(ids);
@@ -280,6 +314,10 @@ class DesignApp {
           ]),
       this.undoButton,
       this.redoButton,
+      ...this.selectionButtons.slice(0, 2),
+      iconButton(ICONS.paste, STRINGS.paste, STRINGS.pasteHint(shortcutOf('paste')), () => {
+        this.run(this.pasteFromButton());
+      }),
       this.deleteButton,
       iconButton(ICONS.exportDraft, STRINGS.exportDraft, STRINGS.exportDraftHint, () => {
         this.run(this.exportDraft());
@@ -316,6 +354,14 @@ class DesignApp {
     });
     document.addEventListener('keydown', (event) => {
       this.keyDown(event);
+    });
+    // The paste key gives the clipboard's text without asking; in a field it pastes text
+    document.addEventListener('paste', (event) => {
+      if (document.querySelector('dialog[open]') !== null || isTextField(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      this.run(this.paste(event.clipboardData?.getData('text/plain')));
     });
     // Every label shows while the show-labels key is held
     document.addEventListener('keyup', (event) => {
@@ -474,6 +520,47 @@ class DesignApp {
   // Opening something else drops unsaved changes, kept only for this tab, so the user is asked first
   private mayDropChanges(): boolean {
     return (!this.document.state.modified || window.confirm(STRINGS.discardChanges)) && this.mayDropMeasurementEdits();
+  }
+
+  // Edit > Copy or Cut: the fragment goes on the clipboard as text, so
+  // another tab or the desktop app can paste it, and is kept here too
+  private async copy(cut: boolean): Promise<void> {
+    const text = await this.canvas.copySelection(cut);
+    if (text === '') {
+      return;
+    }
+    this.copied = text;
+    this.copiedToClipboard = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.copiedToClipboard = true;
+    } catch {
+      // Refused, as without a click or a secure page: Paste takes it from here
+    }
+  }
+
+  // The clipboard's text, unless the last copy never reached it
+  private async paste(clipboardText: string | undefined): Promise<void> {
+    const text =
+      clipboardText !== undefined && clipboardText !== '' && (this.copiedToClipboard || this.copied === '')
+        ? clipboardText
+        : this.copied;
+    if (text === '') {
+      showMessage(STRINGS.nothingToPaste);
+      return;
+    }
+    await this.canvas.paste(text);
+  }
+
+  // The Paste button has no paste event, so reads the clipboard itself, which the browser may refuse
+  private async pasteFromButton(): Promise<void> {
+    let text: string | undefined;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      text = undefined;
+    }
+    await this.paste(text);
   }
 
   private run(pending: Promise<void>): void {
@@ -843,11 +930,7 @@ class DesignApp {
       event.preventDefault();
       return;
     }
-    if (
-      event.target instanceof HTMLInputElement ||
-      event.target instanceof HTMLSelectElement ||
-      event.target instanceof HTMLTextAreaElement
-    ) {
+    if (isTextField(event.target)) {
       return;
     }
     const matches = (command: string): boolean => this.matches(event, command);
@@ -873,6 +956,8 @@ class DesignApp {
       this.run(this.document.redo());
     } else if (matches('fit')) {
       this.canvas.fitAll();
+    } else if (matches('copy') || matches('cut')) {
+      this.run(this.copy(matches('cut')));
     } else if (matches('rulers')) {
       this.toggleRulers();
     } else {

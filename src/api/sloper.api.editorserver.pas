@@ -94,6 +94,8 @@ type
     function DoSeamPick(Params: TJSONObject): TJSONData;
     function DoSeamMake(Params: TJSONObject): TJSONData;
     function DoDelete(Params: TJSONObject): TJSONData;
+    function DoCopy(Params: TJSONObject; Cut: boolean): TJSONData;
+    function DoPaste(Params: TJSONObject): TJSONData;
     function DoComplete(Params: TJSONObject): TJSONData;
     function DoListObjects(Params: TJSONObject): TJSONData;
     function DoListVariables(Params: TJSONObject): TJSONData;
@@ -268,6 +270,19 @@ resourcestring
   rsEditorDeleteReturns = '`done`, true when they were deleted; `message`, why not; `select`, the selection ' +
     'afterwards, or null to leave it';
   rsEditorDeleteSelection = 'The selected objects, by ID, or by name for a repeat''s point';
+  rsEditorCopy = 'Copies the selected points and edges, as Edit > Copy: the fragment to put on the clipboard, which ' +
+    'editor_paste takes. Changes nothing.';
+  rsEditorCopyReturns = '`done`, true when something was copied; `text`, the fragment, empty when nothing could be ' +
+    'copied; `names`, the copied objects'' names for the plain text clipboard; `message`, what was copied, or why ' +
+    'not; `select`, null';
+  rsEditorCut = 'Copies the selected points and edges and deletes them, as Edit > Cut, as one undo step; refused, ' +
+    'changing nothing, when anything selected cannot be copied or another object uses it.';
+  rsEditorCutReturns = 'As editor_copy gives it, with `select` the selection afterwards when they were cut';
+  rsEditorPaste = 'Pastes a fragment copied by editor_copy or editor_cut, or by the Automation API''s copy_objects, ' +
+    'as Edit > Paste, as one undo step: copies of its objects, renamed where their names are taken.';
+  rsEditorPasteReturns = '`done`, true when it was pasted; `message`, what was pasted, or why not; `select`, the ' +
+    'pasted objects';
+  rsEditorFragment = 'The fragment''s text, as the clipboard holds it';
   rsEditorComplete = 'What to offer while a formula is typed: objects, variables, measurements and functions matching ' +
     'the word at the caret; @, # and a dot after an object narrow the list.';
   rsEditorCompleteTarget = 'The object or variable whose formula it is, by ID or name; left out for a new one';
@@ -450,7 +465,7 @@ uses
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
-  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources,
+  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF;
 
 const
@@ -567,6 +582,12 @@ begin
     AddApiParam(Built, 'sideB', apList, True, rsEditorSideB);
     AddApiMethod(Built, 'editor_delete', rsEditorDelete, rsEditorDeleteReturns);
     AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
+    AddApiMethod(Built, 'editor_copy', rsEditorCopy, rsEditorCopyReturns, True);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
+    AddApiMethod(Built, 'editor_cut', rsEditorCut, rsEditorCutReturns);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
+    AddApiMethod(Built, 'editor_paste', rsEditorPaste, rsEditorPasteReturns);
+    AddApiParam(Built, 'text', apText, True, rsEditorFragment);
     AddApiMethod(Built, 'editor_complete', rsEditorComplete, rsEditorCompleteReturns, True);
     AddApiParam(Built, 'id', apTarget, False, rsEditorCompleteTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorCompleteText);
@@ -2457,6 +2478,36 @@ begin
   Result := EditToJSON(DeleteSelection(Document, Selection, rsSelectionDelete));
 end;
 
+function TEditorApiServer.DoCopy(Params: TJSONObject; Cut: boolean): TJSONData;
+var
+  Selection: TStringArray;
+  Copied: TFragmentCopy;
+  Edit: TSelectionEdit;
+  Answer: TJSONObject;
+begin
+  Selection := KeysParam(Params, 'selection');
+  if Cut and Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  if Cut then
+    Edit := CutSelection(Document, Selection, Copied)
+  else
+    Edit := CopySelection(Document, Selection, Copied);
+  Answer := EditToJSON(Edit);
+  Answer.Add('text', Copied.Text);
+  Answer.Add('names', Copied.Names);
+  Result := Answer;
+end;
+
+function TEditorApiServer.DoPaste(Params: TJSONObject): TJSONData;
+var
+  Text: string;
+begin
+  Text := RequireString(Params, 'text');
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Result := EditToJSON(PasteFragmentText(Document, Text));
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -2478,6 +2529,9 @@ begin
     'editor_seam_pick': Result := DoSeamPick(Params);
     'editor_seam_make': Result := DoSeamMake(Params);
     'editor_delete': Result := DoDelete(Params);
+    'editor_copy': Result := DoCopy(Params, False);
+    'editor_cut': Result := DoCopy(Params, True);
+    'editor_paste': Result := DoPaste(Params);
     'editor_complete': Result := DoComplete(Params);
     'editor_list_objects': Result := DoListObjects(Params);
     'editor_list_variables': Result := DoListVariables(Params);

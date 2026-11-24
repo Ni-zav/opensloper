@@ -337,12 +337,42 @@ export class PatternCanvas implements CanvasToolHost {
     if (this.selection.size === 0 || this.mode !== 'idle') {
       return;
     }
-    const selection = [...this.selection].map((id) => {
+    this.applyEdit(await this.document.call('editor_delete', { selection: this.selectionParams() }));
+  }
+
+  // Edit > Copy, or Cut, which deletes what was copied: the fragment to put
+  // on the clipboard, empty when nothing could be copied
+  async copySelection(cut: boolean): Promise<string> {
+    if (this.mode !== 'idle') {
+      return '';
+    }
+    const params = { selection: this.selectionParams() };
+    const answer = cut
+      ? await this.document.call('editor_cut', params)
+      : await this.document.read('editor_copy', params);
+    this.applyEdit(answer);
+    return stringField(answer, 'text') ?? '';
+  }
+
+  // Edit > Paste: copies of a copied fragment's objects, selected
+  async paste(text: string): Promise<void> {
+    if (this.mode !== 'idle') {
+      return;
+    }
+    this.applyEdit(await this.document.call('editor_paste', { text }));
+  }
+
+  // The selection as the API takes it: IDs, and a repeat's point by name
+  private selectionParams(): (number | string)[] {
+    return [...this.selection].map((id) => {
       const point = this.scene.points.find((each) => each.id === id);
       const target = targetParams(point ?? { id, name: id });
       return 'id' in target ? target.id : target.name;
     });
-    const answer = await this.document.call('editor_delete', { selection });
+  }
+
+  // Shows what an edit to the selection says and selects what it chose
+  private applyEdit(answer: JsonRecord): void {
     const message = stringField(answer, 'message') ?? '';
     if (message !== '') {
       this.events.message(message);

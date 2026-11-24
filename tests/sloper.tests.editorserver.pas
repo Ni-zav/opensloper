@@ -70,6 +70,8 @@ type
     procedure TestSeamTool;
     // The Delete key: refused with the reason while something uses an object
     procedure TestDeleteSelection;
+    // Copy gives the fragment's text, paste makes copies of it; cut is copy and delete
+    procedure TestCopyAndPaste;
     procedure TestSeamInScene;
     // Notes as the canvas draws them, fields filled in
     procedure TestNotesInScene;
@@ -552,6 +554,56 @@ begin
   AssertEquals('one undo step', 1, Answer.Arrays['pieces'].Count);
   Call('editor_delete', '{"selection": []}');
   AssertFalse('nothing selected, nothing done', Answer.Booleans['done']);
+end;
+
+procedure TTestEditorServer.TestCopyAndPaste;
+var
+  Fragment: string;
+  Pasted: TJSONArray;
+  Params: TJSONObject;
+begin
+  AddSquare;
+  Call('editor_copy', '{"selection": []}');
+  AssertFalse('nothing selected', Answer.Booleans['done']);
+  AssertTrue('says what to select', Answer.Strings['message'] <> '');
+  AssertEquals('no text', '', Answer.Strings['text']);
+
+  Call('editor_copy', '{"selection": ["A", "B", ' + IntToStr(IdOf('Line_A_B')) + ']}');
+  AssertTrue('copied', Answer.Booleans['done']);
+  Fragment := Answer.Strings['text'];
+  AssertTrue('the fragment', Fragment <> '');
+  AssertTrue('the names, for the plain text clipboard', Pos('A', Answer.Strings['names']) > 0);
+  AssertTrue('copying changes nothing', Answer.Nulls['select']);
+
+  Params := TJSONObject.Create(['text', Fragment]);
+  try
+    Call('editor_paste', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  AssertTrue('pasted', Answer.Booleans['done']);
+  Pasted := Answer.Arrays['select'];
+  AssertEquals('the copies are selected', 3, Pasted.Count);
+  AssertTrue('the copies are new', Pasted.Integers[0] > IdOf('Flap'));
+  Call('editor_scene');
+  AssertEquals('two more points', 6, Answer.Arrays['points'].Count);
+  Call('undo');
+  Call('editor_scene');
+  AssertEquals('one undo step', 4, Answer.Arrays['points'].Count);
+
+  Call('editor_paste', '{"text": "not a fragment"}');
+  AssertFalse('refused', Answer.Booleans['done']);
+  AssertTrue('with the reason', Answer.Strings['message'] <> '');
+
+  Call('editor_cut', '{"selection": [' + IntToStr(IdOf('Flap')) + ']}');
+  AssertFalse('a piece cannot be copied, so it is not cut', Answer.Booleans['done']);
+  Call('add_point', '{"type": "freePoint", "name": "E", "x": 200, "y": 0}');
+  Call('editor_cut', '{"selection": ["E"]}');
+  AssertTrue('cut', Answer.Booleans['done']);
+  AssertTrue('with its fragment', Answer.Strings['text'] <> '');
+  AssertEquals('nothing selected after', 0, Answer.Arrays['select'].Count);
+  Call('editor_scene');
+  AssertEquals('E is gone', 4, Answer.Arrays['points'].Count);
 end;
 
 procedure TTestEditorServer.TestSeamTool;

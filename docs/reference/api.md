@@ -753,11 +753,11 @@ Returns: `top` and `bottom` (the first and last buttonholes' points), `holes` an
 
 ### `add_note`
 
-Adds a note, free or hung from a point, edge or piece; with a leader it is a callout.
+Adds a note, free or hung from a point, edge or piece; with a leader it is a callout, and with svg a stamp: a drawing in place of the text.
 
 | Parameter | Value | Required | Description |
 | --- | --- | --- | --- |
-| `text` | text | yes | The text, with draft values such as {=@waist / 4} |
+| `text` | text |  | The text, with draft values such as {=@waist / 4}; needed unless svg is given, as a stamp's text only names it |
 | `anchor` | group |  | What it hangs from; left out for a free note |
 | `anchor.point` | ID or name |  | A point |
 | `anchor.edge` | ID or name |  | Or an edge |
@@ -776,17 +776,19 @@ Adds a note, free or hung from a point, edge or piece; with a leader it is a cal
 | `bold` | true or false |  | Bold |
 | `italic` | true or false |  | Italic |
 | `name` | text |  | Its name |
+| `svg` | text |  | An SVG drawing's text, making the note a stamp drawn at true size from the SVG's units (pixels at 96 to the inch). Paths and shapes only: text must be converted to paths first. The reply's warnings say what was drawn differently. |
+| `scale` | number |  | How much bigger than true size a stamp is drawn, from 0.01 to 100; 1 when left out |
 
 Returns: The object, as `get_object` gives it.
 
 ### `set_text`
 
-Changes a note's text, size, printing, leader, alignment, box or font.
+Changes a note's text, size, printing, leader, alignment, box or font, or a stamp's drawing or scale.
 
 | Parameter | Value | Required | Description |
 | --- | --- | --- | --- |
 | `id` or `name` | number or text | yes | The object, by its ID or its name |
-| `text` | text |  | The text, with draft values such as {=@waist / 4} |
+| `text` | text |  | The text, with draft values such as {=@waist / 4}; needed unless svg is given, as a stamp's text only names it |
 | `size` | number |  | The text size in points |
 | `print` | true or false |  | Whether it prints; by default true |
 | `leader` | one of: `none`, `arrow`, `dot`, `line` |  | A line to what it hangs from |
@@ -795,6 +797,8 @@ Changes a note's text, size, printing, leader, alignment, box or font.
 | `font` | text |  | The font family it prints in; empty for the default sans-serif. One not installed prints in the default font |
 | `bold` | true or false |  | Bold |
 | `italic` | true or false |  | Italic |
+| `svg` | text |  | An SVG drawing's text, making the note a stamp drawn at true size from the SVG's units (pixels at 96 to the inch). Paths and shapes only: text must be converted to paths first. The reply's warnings say what was drawn differently. |
+| `scale` | number |  | How much bigger than true size a stamp is drawn, from 0.01 to 100; 1 when left out |
 
 Returns: The object, as `get_object` gives it.
 

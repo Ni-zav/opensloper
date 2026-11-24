@@ -81,6 +81,7 @@ type
     procedure TestPieceFieldsNeedOnePiece;
     procedure TestSizeFieldInPieceNotes;
     procedure TestPatternNotesStayUpright;
+    procedure TestStampPrintsWithPiece;
     procedure TestPatternNotesInPDFAndSVG;
     procedure TestCalloutPrintsItsLeader;
     procedure TestPieceNoteFarOutIsOnTheSheet;
@@ -201,7 +202,7 @@ uses
   Classes, Math, Sloper.Core.AppPaths, Sloper.Core.JSON, Sloper.Core.FileVersions, Sloper.Core.Draft, Sloper.Core.Measurements,
   Sloper.Core.PatternFile, Sloper.Core.PieceDetect,
   Sloper.Output.LayoutDocument, Sloper.Output.LayoutPDF, Sloper.Output.PDFWriter, Sloper.Output.Preview, Sloper.Output.LayoutSVG,
-  Sloper.Core.Note, Sloper.Core.Settings, Sloper.Output.TitleBlock;
+  Sloper.Core.Note, Sloper.Core.Settings, Sloper.Output.TitleBlock, Sloper.Core.Stamp, Sloper.Core.SvgImport;
 
 const
   SIZED_TABLE = '{"format": "measurements", "version": 1, "name": "Block", "sizes": ["36", "38"], ' +
@@ -872,6 +873,49 @@ begin
   Shapes := FLayout.PlacedPieces;
   AssertEquals('Size 38', Shapes[0].Notes[0].Text);
   AssertEquals('the layout''s sizes', '38', FLayout.FieldValues('', '').Size);
+end;
+
+// A stamp on a piece prints with it, upright and at its scale, as paths in
+// its own colours
+procedure TTestLayout.TestStampPrintsWithPiece;
+var
+  Pattern: TPattern;
+  Reason, Svg: string;
+  Note: TNoteObject;
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+  Shapes: TPlacedPieceArray;
+  Bounds: TRect2;
+  Pdf: rawbytestring;
+begin
+  WritePattern;
+  Pattern := TPattern.Create;
+  try
+    AssertTrue(Reason, LoadPatternFromFile(Pattern, FPatternPath, Reason));
+    AssertTrue(Reason, ImportSvgStamp('<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+      '<rect width="20" height="10" fill="#ff0000"/></svg>', Drawing, Warnings, Reason));
+    Note := Pattern.AddNote('', 'Logo', naPiece, Pattern.FindObject('Front').Key, '', '0', '0');
+    AssertTrue(Pattern.LastError, Pattern.SetNoteDrawing(Note, Drawing) and Pattern.SetNoteScale(Note, 2));
+    AssertTrue(Reason, SavePatternToFile(Pattern, FPatternPath, Reason));
+  finally
+    FreeAndNil(Pattern);
+  end;
+  Prepare;
+  FLayout.PlaceNewPieces;
+  Shapes := FLayout.PlacedPieces;
+  AssertTrue('its drawing', HasDrawing(Shapes[0].Notes[0].Drawing));
+  Bounds := NoteBounds(Shapes[0].Notes[0], Default(TFieldValues));
+  AssertNear('width at its scale', 40, Bounds.MaxX - Bounds.MinX);
+  AssertNear('height at its scale', 20, Bounds.MaxY - Bounds.MinY);
+  FLayout.Placements[0].Rotation := 90;
+  Bounds := NoteBounds(FLayout.PlacedPieces[0].Notes[0], Default(TFieldValues));
+  AssertNear('upright when turned', 40, Bounds.MaxX - Bounds.MinX);
+  Svg := LayoutToSVG(FLayout);
+  AssertTrue('drawn in the SVG', Pos('class="stamp"', Svg) > 0);
+  AssertTrue('in its colour', Pos('fill="#ff0000"', Svg) > 0);
+  AssertEquals('not as text', 0, Pos('>Logo<', Svg));
+  Pdf := LayoutToPDF(FLayout);
+  AssertTrue('filled red in the PDF', Pos('1 0 0 rg', Pdf) > 0);
 end;
 
 procedure TTestLayout.TestPatternNotesStayUpright;

@@ -30,11 +30,13 @@ interface
 
 uses
   SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Seam, Sloper.Document.PatternDocument,
-  Sloper.Core.Note, Sloper.Editor.Snap, Sloper.Editor.SelectionEdits;
+  Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Editor.Snap, Sloper.Editor.SelectionEdits;
 
 const
   // A line or curve shorter than this (mm) is ignored
   MIN_EDGE_LENGTH = 0.05;
+  // Where along a selected edge a new stamp hangs
+  STAMP_EDGE_POSITION = '0.5';
 
 // The point the snap makes, or the existing one it is on, which is selected
 // without a change
@@ -82,6 +84,11 @@ function AddCalloutFromSnap(Document: TPatternDocument; const Tip: TSnap; const 
 // Hangs a callout from where its dragged tip was dropped (at TipClick,
 // snapped to Tip), its text staying where it is, as one undo step
 function MoveCalloutTip(Document: TPatternDocument; Note: TNoteObject; const Tip: TSnap; const TipClick: TVec2): TSelectionEdit;
+// A stamp of Drawing named AText, its middle on what Selected holds when that
+// is one point, edge (at its middle) or piece, and otherwise free with its
+// middle at Centre, as one undo step
+function AddStampStep(Document: TPatternDocument; const Drawing: TStampDrawing; const AText: string; const Selected: TStringArray;
+  const Centre: TVec2): TSelectionEdit;
 
 resourcestring
   rsToolAddLine = 'Add line';
@@ -106,6 +113,7 @@ resourcestring
   rsToolCalloutBox = 'Click where the callout''s text goes';
   rsToolAddCallout = 'Add callout';
   rsToolMoveTip = 'Move callout tip';
+  rsToolAddStamp = 'Add stamp';
 
 implementation
 
@@ -383,6 +391,52 @@ begin
   Seam := Document.Pattern.AddSeam('', SideA, SideB);
   if Assigned(Seam) then
     Result := Committed(Document, True, [Seam.Key])
+  else
+    Result := Committed(Document, False, []);
+end;
+
+function AddStampStep(Document: TPatternDocument; const Drawing: TStampDrawing; const AText: string; const Selected: TStringArray;
+  const Centre: TVec2): TSelectionEdit;
+var
+  Pattern: TPattern;
+  Node: TEvalNode;
+  Anchor: TNoteAnchor;
+  AnchorKey, Position: string;
+  Half: TVec2;
+  Note: TNoteObject;
+
+  function InUnit(Millimetres: double): string;
+  begin
+    Result := RoundLengthFormulaText(Millimetres, Pattern.Units);
+  end;
+
+begin
+  Pattern := Document.Pattern;
+  Half := Vec2(Drawing.Width / 2, Drawing.Height / 2);
+  Anchor := naFree;
+  AnchorKey := '';
+  Position := '';
+  Node := nil;
+  if Length(Selected) = 1 then
+    Node := Pattern.FindNode(Selected[0]);
+  if Node is TPointObject then
+    Anchor := naPoint
+  else if Node is TEdgeObject then
+  begin
+    Anchor := naEdge;
+    Position := STAMP_EDGE_POSITION;
+  end
+  else if Node is TPieceObject then
+    Anchor := naPiece;
+  if Anchor <> naFree then
+    AnchorKey := Node.Key;
+  Document.BeginChange(rsToolAddStamp);
+  if Anchor = naFree then
+    Note := Pattern.AddNote('', AText, naFree, '', '', InUnit(Centre.X - Half.X), InUnit(Centre.Y - Half.Y))
+  else
+    Note := Pattern.AddNote('', AText, Anchor, AnchorKey, Position, InUnit(-Half.X), InUnit(-Half.Y));
+  if Assigned(Note) and Pattern.SetNoteDrawing(Note, Drawing) then
+    Result := Committed(Document, True, [Note.Key])
   else
     Result := Committed(Document, False, []);
 end;

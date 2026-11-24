@@ -24,7 +24,9 @@
 // (value1, value2 and so on), so they follow the draft and renames. Its size,
 // alignment, box and whether it prints are plain values; where it goes is
 // formulas. Its font is a family name with bold and italic, the default
-// sans-serif when the name is empty. See Annotations in the design document.
+// sans-serif when the name is empty. A note with a drawing is a stamp: the
+// drawing (Sloper.Core.Stamp), at its scale, is drawn in place of the text,
+// which then only names it in lists. See Annotations in the design document.
 // No LCL dependency.
 unit Sloper.Core.Note;
 
@@ -34,7 +36,7 @@ interface
 
 uses
   SysUtils, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Formula, Sloper.Core.Geometry, Sloper.Core.Draft,
-  Sloper.Core.Piece;
+  Sloper.Core.Piece, Sloper.Core.Stamp;
 
 const
   // The formula fields: the offset from the anchor, or the place of a free
@@ -94,9 +96,12 @@ type
     FAlign: TTextAlign;
     FBoxed: boolean;
     FStyle: TTextStyle;
+    FDrawing: TStampDrawing;
+    FScale: double;
     FPosition, FAnchorPosition: TVec2;
     function AnchorAt(Context: TEvalContext; out At: TVec2): TEvalState;
     function GetValueCount: integer;
+    function GetIsStamp: boolean;
     procedure AddPlaceFields;
     procedure RemovePlaceFields;
     // The template with each value's text in turn
@@ -149,6 +154,12 @@ type
     property Boxed: boolean read FBoxed write FBoxed;
     // Its font; the caller checks the name with CheckFontName
     property Style: TTextStyle read FStyle write FStyle;
+    // A stamp's drawing, empty for a note of text
+    property Drawing: TStampDrawing read FDrawing write FDrawing;
+    property IsStamp: boolean read GetIsStamp;
+    // How much bigger a stamp is drawn than its true size; the caller keeps
+    // it from MIN_STAMP_SCALE to MAX_STAMP_SCALE
+    property Scale: double read FScale write FScale;
     // Last good top left of its text
     property Position: TVec2 read FPosition;
     // Last good place it hangs from, where a callout's tip is: the point, the
@@ -359,6 +370,7 @@ begin
     FAnchorKey := '';
   FSize := DEFAULT_NOTE_SIZE;
   FPrint := True;
+  FScale := 1;
   AddPlaceFields;
 end;
 
@@ -418,6 +430,11 @@ end;
 function TNoteObject.GetValueCount: integer;
 begin
   Result := Length(FValues);
+end;
+
+function TNoteObject.GetIsStamp: boolean;
+begin
+  Result := HasDrawing(FDrawing);
 end;
 
 function TNoteObject.ValueField(Index: integer): string;

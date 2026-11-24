@@ -144,7 +144,8 @@ resourcestring
     '`chevrons` (x, y and angle for each); `notes` (left out while annotations are hidden), each with `print`, ' +
     '`lines` with fields filled in, `size` in points, `lineHeight` in mm, `align`, `boxed`, `font`, `bold`, ' +
     '`italic`, `box` and `frame` (minX, minY, maxX, maxY), `anchorAt` (x, y), `leader` and `leaderStrokes` ' +
-    '(segments); `seams`, each with its sides'' edges as `sideA` and `sideB` (a polyline ' +
+    '(segments), and for a stamp `stamp`, its paths, each with `d` (path data in mm where it is drawn), `fill` and ' +
+    '`stroke` (#rrggbb or none), `strokeWidth` (mm) and `evenOdd`; `seams`, each with its sides'' edges as `sideA` and `sideB` (a polyline ' +
     'each) and their `chevronsA` and `chevronsB`; `markers`, each with the `id` of its point or edge and ' +
     'its `strokes`, as marks are; `edges`, each with `id`, `name`, `role`, ' +
     '`state`, `locked`, `dimmed`, `copyOf`, its `line`, and `slot` and `normal` when it lies on another edge; `points`, ' +
@@ -472,7 +473,7 @@ uses
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Transform, Sloper.Core.PatternCheck, Sloper.Core.Materials,
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
-  Sloper.Core.Note, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
+  Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
   Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF;
 
@@ -853,6 +854,22 @@ begin
     Result := LeaderStrokes(Start, Tip, Note.Leader);
 end;
 
+// A stamp's paths where it is drawn, in mm, for a canvas's Path2D
+function StampToSceneJSON(Note: TNoteObject): TJSONArray;
+var
+  Path: TStampPath;
+begin
+  Result := TJSONArray.Create;
+  try
+    for Path in Note.Drawing.Paths do
+      Result.Add(TJSONObject.Create(['d', StampPathData(Path, Note.Position, Note.Scale), 'fill', StampColourText(Path.Fill), 'stroke',
+        StampColourText(Path.Stroke), 'strokeWidth', ReportFloat(Path.StrokeWidth * Note.Scale), 'evenOdd', Path.EvenOdd]));
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
+end;
+
 // A note as the canvas draws it: its text (Shown, as the note shows it or
 // as typed) with fields filled in, line by line, its look, where its text
 // and frame are, and its leader
@@ -885,6 +902,8 @@ begin
   Result.Add('anchorAt', LineToJSON([Note.AnchorPosition]));
   Result.Add('leader', NOTE_LEADER_NAMES[Note.Leader]);
   Result.Add('leaderStrokes', SegmentsToJSON(LeaderToTip(Note, Frame, Note.AnchorPosition)));
+  if Note.IsStamp then
+    Result.Add('stamp', StampToSceneJSON(Note));
 end;
 
 function NoteLeaderStrokes(Pattern: TPattern; Note: TNoteObject; const PatternValues: TFieldValues; const Tip: TVec2): TLine2Array;

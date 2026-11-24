@@ -1506,8 +1506,8 @@ class OpenSloper:
 
     def add_note(
         self,
-        text: str,
         *,
+        text: str | None = None,
         anchor: dict[str, Any] | None = None,
         x: str | float | None = None,
         y: str | float | None = None,
@@ -1522,11 +1522,15 @@ class OpenSloper:
         bold: bool | None = None,
         italic: bool | None = None,
         name: str | None = None,
+        svg: str | None = None,
+        scale: float | None = None,
     ) -> Any:
-        """Adds a note, free or hung from a point, edge or piece; with a leader it is a callout.
+        """Adds a note, free or hung from a point, edge or piece; with a leader it is a callout, and
+        with svg a stamp: a drawing in place of the text.
 
         Args:
-            text: The text, with draft values such as {=@waist / 4}.
+            text: The text, with draft values such as {=@waist / 4}; needed unless svg is given, as
+                a stamp's text only names it.
             anchor: What it hangs from; left out for a free note.
             anchor.point: A point.
             anchor.edge: Or an edge.
@@ -1546,6 +1550,11 @@ class OpenSloper:
             bold: Bold.
             italic: Italic.
             name: Its name.
+            svg: An SVG drawing's text, making the note a stamp drawn at true size from the SVG's
+                units (pixels at 96 to the inch). Paths and shapes only: text must be converted to
+                paths first. The reply's warnings say what was drawn differently.
+            scale: How much bigger than true size a stamp is drawn, from 0.01 to 100; 1 when left
+                out.
 
         Returns:
             The object, as `get_object` gives it.
@@ -1566,6 +1575,8 @@ class OpenSloper:
             "bold": bold,
             "italic": italic,
             "name": name,
+            "svg": svg,
+            "scale": scale,
         })
 
     def set_text(
@@ -1581,12 +1592,16 @@ class OpenSloper:
         font: str | None = None,
         bold: bool | None = None,
         italic: bool | None = None,
+        svg: str | None = None,
+        scale: float | None = None,
     ) -> Any:
-        """Changes a note's text, size, printing, leader, alignment, box or font.
+        """Changes a note's text, size, printing, leader, alignment, box or font, or a stamp's
+        drawing or scale.
 
         Args:
             target: The object, by its ID or its name.
-            text: The text, with draft values such as {=@waist / 4}.
+            text: The text, with draft values such as {=@waist / 4}; needed unless svg is given, as
+                a stamp's text only names it.
             size: The text size in points.
             print: Whether it prints; by default true.
             leader: A line to what it hangs from.
@@ -1596,6 +1611,11 @@ class OpenSloper:
                 prints in the default font.
             bold: Bold.
             italic: Italic.
+            svg: An SVG drawing's text, making the note a stamp drawn at true size from the SVG's
+                units (pixels at 96 to the inch). Paths and shapes only: text must be converted to
+                paths first. The reply's warnings say what was drawn differently.
+            scale: How much bigger than true size a stamp is drawn, from 0.01 to 100; 1 when left
+                out.
 
         Returns:
             The object, as `get_object` gives it.
@@ -1610,6 +1630,8 @@ class OpenSloper:
             "font": font,
             "bold": bold,
             "italic": italic,
+            "svg": svg,
+            "scale": scale,
         })
 
     def evaluate(self) -> Any:

@@ -395,8 +395,14 @@ resourcestring
   rsApiSuggestReturns = '`suggestions`, each with `sideA`, `sideB`, whether the edge is `shared`, and the length ' +
     '`difference`';
 
-  rsApiAddNote = 'Adds a note, free or hung from a point, edge or piece; with a leader it is a callout.';
-  rsApiNoteText = 'The text, with draft values such as {=@waist / 4}';
+  rsApiAddNote = 'Adds a note, free or hung from a point, edge or piece; with a leader it is a callout, and with svg a ' +
+    'stamp: a drawing in place of the text.';
+  rsApiNoteText = 'The text, with draft values such as {=@waist / 4}; needed unless svg is given, as a stamp''s text ' +
+    'only names it';
+  rsApiNoteSvg = 'An SVG drawing''s text, making the note a stamp drawn at true size from the SVG''s units (pixels at 96 to ' +
+    'the inch). Paths and shapes only: text must be converted to paths first. The reply''s warnings say what was drawn ' +
+    'differently.';
+  rsApiNoteScale = 'How much bigger than true size a stamp is drawn, from 0.01 to 100; 1 when left out';
   rsApiNoteAnchor = 'What it hangs from; left out for a free note';
   rsApiNoteAnchorPoint = 'A point';
   rsApiNoteAnchorEdge = 'Or an edge';
@@ -415,7 +421,7 @@ resourcestring
   rsApiNoteBold = 'Bold';
   rsApiNoteItalic = 'Italic';
   rsApiNoteName = 'Its name';
-  rsApiSetText = 'Changes a note''s text, size, printing, leader, alignment, box or font.';
+  rsApiSetText = 'Changes a note''s text, size, printing, leader, alignment, box or font, or a stamp''s drawing or scale.';
 
   rsApiEvaluate = 'Works the pattern out again and lists its problems.';
   rsApiEvaluateReturns = 'The problems: objects that are invalid or blocked, gaps, and seams out of tolerance';
@@ -819,7 +825,7 @@ begin
   ReadsOnly;
   // Notes
   Method('add_note', agNotes, rsApiAddNote, rsApiReturnsObject);
-  P('text', apText, True, rsApiNoteText);
+  P('text', apText, False, rsApiNoteText);
   P('anchor', apGroup, False, rsApiNoteAnchor);
   P('anchor.point', apReference, False, rsApiNoteAnchorPoint);
   P('anchor.edge', apReference, False, rsApiNoteAnchorEdge);
@@ -838,6 +844,8 @@ begin
   P('bold', apFlag, False, rsApiNoteBold);
   P('italic', apFlag, False, rsApiNoteItalic);
   P('name', apText, False, rsApiNoteName);
+  P('svg', apText, False, rsApiNoteSvg);
+  P('scale', apNumber, False, rsApiNoteScale);
   Method('set_text', agNotes, rsApiSetText, rsApiReturnsObject);
   Target;
   P('text', apText, False, rsApiNoteText);
@@ -849,6 +857,8 @@ begin
   P('font', apText, False, rsApiNoteFont);
   P('bold', apFlag, False, rsApiNoteBold);
   P('italic', apFlag, False, rsApiNoteItalic);
+  P('svg', apText, False, rsApiNoteSvg);
+  P('scale', apNumber, False, rsApiNoteScale);
   // Checking and output
   Method('evaluate', agChecking, rsApiEvaluate, rsApiEvaluateReturns);
   ReadsOnly;

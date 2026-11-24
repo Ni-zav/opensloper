@@ -88,7 +88,8 @@ function NoteFieldValues(Pattern: TPattern; Note: TNoteObject; const Values: TFi
 // worked out with the pattern as last evaluated, and one that does not work
 // out yet, or is not closed, kept as typed. For showing text while it is typed.
 function NotePreviewText(Pattern: TPattern; const Typed: string): string;
-// The rough area a note's text covers, in mm, from its top left down
+// The rough area a note's text covers, in mm, from its top left down; a
+// stamp's drawing at its scale
 function NoteBox(Note: TNoteObject; const Values: TFieldValues): TRect2; overload;
 // The same for Shown in place of the note's own text
 function NoteBox(Note: TNoteObject; const Values: TFieldValues; const Shown: string): TRect2; overload;
@@ -265,6 +266,15 @@ var
   Line: string;
   Widest: double;
 begin
+  // A stamp is its drawing, at its scale
+  if Note.IsStamp then
+  begin
+    Result.MinX := Note.Position.X;
+    Result.MinY := Note.Position.Y;
+    Result.MaxX := Note.Position.X + Note.Drawing.Width * Note.Scale;
+    Result.MaxY := Note.Position.Y + Note.Drawing.Height * Note.Scale;
+    Exit;
+  end;
   Lines := TextLines(ExpandFields(Shown, Values));
   Widest := 0;
   for Line in Lines do

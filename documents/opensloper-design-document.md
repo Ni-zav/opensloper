@@ -59,7 +59,7 @@ A pattern is a graph of draft objects whose positions come from measurements, va
 | Seam | The edges sewn together, with direction and expected ease | Seam-length checks, the Garment tab's darts, sewing in Blender |
 | Layout | Pieces arranged on sheets for printing, plotting or cutting | Works on computed geometry only |
 | Drape | Pieces placed round a body in 3D | Exported to Blender's cloth simulation |
-| Annotation | Note, callout, information block or sheet note | Anchored to objects by ID; may contain live fields |
+| Annotation | Note, callout, stamp, information block or sheet note | Anchored to objects by ID; may contain live fields |
 
 ## Architecture
 

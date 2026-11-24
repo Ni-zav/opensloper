@@ -30,7 +30,8 @@ unit Sloper.API.Server;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Rpc, Sloper.Core.Evaluator, Sloper.Core.Materials, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Document.PatternDocument;
+  SysUtils, fpjson, Sloper.API.Rpc, Sloper.Core.Evaluator, Sloper.Core.Materials, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Document.PatternDocument,
+  Sloper.Core.Stamp;
 
 type
   EApiError = class(Exception)
@@ -149,6 +150,8 @@ type
     function DoFlipSeam(Params: TJSONObject): TJSONData;
     function DoSuggestSeams: TJSONData;
     function DoAddNote(Params: TJSONObject): TJSONData;
+    function ReadStampParams(Params: TJSONObject; out Drawing: TStampDrawing; out Warnings: TStringArray; out Scale: double): boolean;
+    function WithWarnings(Reply: TJSONData; const Warnings: TStringArray): TJSONData;
     function DoSetText(Params: TJSONObject): TJSONData;
     function DoExport(Params: TJSONObject): TJSONData;
     function DoConvertUnits(Params: TJSONObject): TJSONData;
@@ -315,7 +318,7 @@ uses
   Sloper.Core.Features,
   Sloper.Core.Settings, Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.UnitConvert, Sloper.Core.Fragment, Sloper.Core.VariableImport, base64,
   Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.Garment, Sloper.Output.GarmentSVG, Sloper.Output.GarmentPNG,
-  Sloper.Output.LayoutExport, Sloper.Core.Version, Sloper.API.Methods;
+  Sloper.Output.LayoutExport, Sloper.Core.Version, Sloper.Core.SvgImport, Sloper.API.Methods;
 
 const
   VARIABLE_TYPE = 'variable';
@@ -608,6 +611,11 @@ begin
       Result.Add('anchor', NOTE_ANCHOR_NAMES[TNoteObject(Node).Anchor]);
       if TNoteObject(Node).Anchor <> naFree then
         Result.Add('anchorId', StrToInt(TNoteObject(Node).AnchorKey));
+      // A stamp's size as drawn, in mm
+      if TNoteObject(Node).IsStamp then
+        Result.Add('stamp', TJSONObject.Create(['width', ReportFloat(TNoteObject(Node).Drawing.Width * TNoteObject(Node).Scale),
+          'height', ReportFloat(TNoteObject(Node).Drawing.Height * TNoteObject(Node).Scale), 'scale', JSONFloat(TNoteObject(Node).Scale),
+          'paths', Length(TNoteObject(Node).Drawing.Paths)]));
     end;
     Formulas := TJSONObject.Create;
     Result.Add('formulas', Formulas);
@@ -2828,8 +2836,17 @@ var
   Align: TTextAlign;
   Note: TNoteObject;
   Style: TTextStyle;
+  IsStamp: boolean;
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+  Scale: double;
 begin
-  Text := RequireString(Params, 'text');
+  // A stamp's text only names it, so it may be left out
+  IsStamp := ReadStampParams(Params, Drawing, Warnings, Scale);
+  if IsStamp then
+    Text := OptionalString(Params, 'text')
+  else
+    Text := RequireString(Params, 'text');
   Anchor := naFree;
   AnchorKey := '';
   Position := '';
@@ -2886,13 +2903,47 @@ begin
   begin
     FDocument.Pattern.SetNoteAlign(Note, Align);
     FDocument.Pattern.SetNoteBoxed(Note, Boxed);
-    if not FDocument.Pattern.SetNoteStyle(Note, Style) then
+    if not FDocument.Pattern.SetNoteStyle(Note, Style) or not FDocument.Pattern.SetNoteScale(Note, Scale) or
+      (IsStamp and not FDocument.Pattern.SetNoteDrawing(Note, Drawing)) then
       RefuseChange;
   end;
-  Result := AddedNode(Note);
+  Result := WithWarnings(AddedNode(Note), Warnings);
 end;
 
-// Any of the text, size, printing, leader, alignment, box and font
+// The stamp's drawing from svg, refused with the reason when it cannot be
+// one, and its scale; False when there is no svg
+function TApiServer.ReadStampParams(Params: TJSONObject; out Drawing: TStampDrawing; out Warnings: TStringArray;
+  out Scale: double): boolean;
+var
+  Reason: string;
+begin
+  Drawing := Default(TStampDrawing);
+  Warnings := nil;
+  Scale := 1;
+  if Assigned(Params.Find('scale')) and not GetJSONNumber(Params, 'scale', Scale) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['scale']));
+  Result := Assigned(Params.Find('svg'));
+  if Result and not ImportSvgStamp(RequireString(Params, 'svg'), Drawing, Warnings, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+end;
+
+// What a stamp's drawing was drawn without, alongside the object
+function TApiServer.WithWarnings(Reply: TJSONData; const Warnings: TStringArray): TJSONData;
+var
+  List: TJSONArray;
+  Warning: string;
+begin
+  Result := Reply;
+  if (Length(Warnings) = 0) or not (Reply is TJSONObject) then
+    Exit;
+  List := TJSONArray.Create;
+  TJSONObject(Reply).Add('warnings', List);
+  for Warning in Warnings do
+    List.Add(Warning);
+end;
+
+// Any of the text, size, printing, leader, alignment, box and font, and a
+// stamp's drawing and scale
 function TApiServer.DoSetText(Params: TJSONObject): TJSONData;
 var
   Target: TEvalNode;
@@ -2903,11 +2954,18 @@ var
   Leader: TNoteLeader;
   Align: TTextAlign;
   Style: TTextStyle;
+  NewDrawing: boolean;
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+  Scale: double;
 begin
   Target := FindTarget(Params);
   if not (Target is TNoteObject) then
     raise EApiError.Create(RPC_REFUSED, Format(rsApiNotANote, [Target.DisplayName]));
   Note := TNoteObject(Target);
+  NewDrawing := ReadStampParams(Params, Drawing, Warnings, Scale);
+  if not Assigned(Params.Find('scale')) then
+    Scale := Note.Scale;
   Text := Note.DisplayText(FDocument.Pattern.Resolver);
   if Assigned(Params.Find('text')) then
     Text := RequireString(Params, 'text');
@@ -2932,9 +2990,10 @@ begin
   FDocument.Pattern.SetNoteAlign(Note, Align);
   FDocument.Pattern.SetNoteBoxed(Note, Boxed);
   if not FDocument.Pattern.SetNoteText(Note, Text) or not FDocument.Pattern.SetNoteSize(Note, Size) or not
-    FDocument.Pattern.SetNoteLeader(Note, Leader) or not FDocument.Pattern.SetNoteStyle(Note, Style) then
+    FDocument.Pattern.SetNoteLeader(Note, Leader) or not FDocument.Pattern.SetNoteStyle(Note, Style) or not
+    FDocument.Pattern.SetNoteScale(Note, Scale) or (NewDrawing and not FDocument.Pattern.SetNoteDrawing(Note, Drawing)) then
     RefuseChange;
-  Result := AddedNode(Note);
+  Result := WithWarnings(AddedNode(Note), Warnings);
 end;
 
 // Names, so that a suggestion can go straight back to add_seam

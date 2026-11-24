@@ -51,7 +51,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Classes, Sloper.Core.Geometry, Sloper.Core.Materials, Sloper.Core.Settings, Sloper.Core.Draft, Sloper.Core.Note,
+  SysUtils, Math, Classes, Sloper.Core.Geometry, Sloper.Core.Materials, Sloper.Core.Settings, Sloper.Core.Draft, Sloper.Core.Note, Sloper.Core.Stamp,
   Sloper.Output.PDFWriter, Sloper.Output.Tiling, Sloper.Output.TitleBlock;
 
 const
@@ -107,6 +107,7 @@ type
     function PageValues: TFieldValues;
     procedure DrawTitle(Left, Top: double; Boxed: boolean);
     procedure DrawTitleInCorner(PageWidth, PageHeight, Inset: double);
+    procedure DrawStamp(const Page: TTilePage; const Note: TSheetNote; Ink: double);
     procedure DrawNotes(const Page: TTilePage);
     procedure DrawMarks(const Page: TTilePage);
   public
@@ -307,6 +308,61 @@ end;
 
 // A white box goes under the text in the paper's colour, which on a
 // projector is black; a callout's leader is drawn as the marks are
+// In its own colours; on a projector, whose output is dark, all in the ink
+procedure TLayoutPrinter.DrawStamp(const Page: TTilePage; const Note: TSheetNote; Ink: double);
+var
+  Path: TStampPath;
+  Contour: TStampContour;
+  Segment: TStampSegment;
+  Red, Green, Blue: double;
+  Projected: boolean;
+
+  function Placed(const Point: TVec2): TVec2;
+  begin
+    Result := PagePoint(Page, Vec2(Note.X, Note.Y) + Point * Note.Scale);
+  end;
+
+begin
+  Projected := FLayout.Output.Kind = okProjector;
+  FWriter.SaveState;
+  for Path in Note.Drawing.Paths do
+  begin
+    for Contour in Path.Contours do
+    begin
+      FWriter.MoveTo(Placed(Contour.Start));
+      for Segment in Contour.Segments do
+        if Segment.Curve then
+          FWriter.CurveTo(Placed(Segment.Control1), Placed(Segment.Control2), Placed(Segment.Finish))
+        else
+          FWriter.LineTo(Placed(Segment.Finish));
+      if Contour.Closed then
+        FWriter.ClosePath;
+    end;
+    if Path.Fill <> STAMP_NO_COLOUR then
+      if Projected then
+        FWriter.SetFillColor(Ink, Ink, Ink)
+      else
+      begin
+        StampColourParts(Path.Fill, Red, Green, Blue);
+        FWriter.SetFillColor(Red, Green, Blue);
+      end;
+    if Path.Stroke <> STAMP_NO_COLOUR then
+    begin
+      if Projected then
+        FWriter.SetStrokeColor(Ink, Ink, Ink)
+      else
+      begin
+        StampColourParts(Path.Stroke, Red, Green, Blue);
+        FWriter.SetStrokeColor(Red, Green, Blue);
+      end;
+      // Calibration stretches the stroke as it does the shape
+      FWriter.SetLineWidth(Path.StrokeWidth * Note.Scale * Sqrt(Abs(FLayout.Calibration.X * FLayout.Calibration.Y)));
+    end;
+    FWriter.PaintPath(Path.Fill <> STAMP_NO_COLOUR, Path.Stroke <> STAMP_NO_COLOUR, Path.EvenOdd);
+  end;
+  FWriter.RestoreState;
+end;
+
 procedure TLayoutPrinter.DrawNotes(const Page: TTilePage);
 var
   Note: TSheetNote;
@@ -346,6 +402,11 @@ begin
       FWriter.SetGray(1 - Ink);
       FWriter.FillRectangle(Area);
       FWriter.SetGray(Ink);
+    end;
+    if HasDrawing(Note.Drawing) then
+    begin
+      DrawStamp(Page, Note, Ink);
+      Continue;
     end;
     Lines := TextLines(ExpandFields(Note.Text, PageValues));
     for Index := 0 to High(Lines) do

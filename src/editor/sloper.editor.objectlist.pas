@@ -191,6 +191,8 @@ resourcestring
   rsFieldPosition = 'Along the edge (ratio)';
   rsFieldNoteValue = 'Value %s';
   rsTypeCallout = 'Callout';
+  rsTypeStamp = 'Stamp';
+  rsObjectStampSize = '%s by %s';
 
 implementation
 
@@ -310,6 +312,8 @@ begin
     Result := rsTypePiece
   else if Node is TSeamObject then
     Result := rsTypeSeam
+  else if (Node is TNoteObject) and TNoteObject(Node).IsStamp then
+    Result := rsTypeStamp
   else if (Node is TNoteObject) and (TNoteObject(Node).Leader <> nlNone) then
     Result := rsTypeCallout
   else if Node is TNoteObject then
@@ -368,7 +372,13 @@ begin
     Result := Format(rsObjectSeamLengths, [LengthWithUnit(TSeamObject(DraftObject).LengthA, AUnit),
       LengthWithUnit(TSeamObject(DraftObject).LengthB, AUnit)])
   else if DraftObject is TNoteObject then
+  begin
     Result := TNoteObject(DraftObject).FirstLine;
+    // A stamp named by nothing is listed by its size
+    if (Result = '') and TNoteObject(DraftObject).IsStamp then
+      Result := Format(rsObjectStampSize, [LengthWithUnit(TNoteObject(DraftObject).Drawing.Width * TNoteObject(DraftObject).Scale, AUnit),
+        LengthWithUnit(TNoteObject(DraftObject).Drawing.Height * TNoteObject(DraftObject).Scale, AUnit)]);
+  end;
 end;
 
 function SeamEntryText(Pattern: TPattern; const Entry: TSeamEntry): string;

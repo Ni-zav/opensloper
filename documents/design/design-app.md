@@ -271,6 +271,7 @@ Notes, callouts and information blocks print with the pattern, a gap found in pr
 | --- | --- | --- | --- |
 | Note | Pattern | A point, edge position or piece, plus an offset; or free | "Stay-stitch neckline" |
 | Callout | Pattern | Text anywhere, leader tip on a point, edge position or piece | Pointing at a notch or dart |
+| Stamp | Pattern | As a note | A logo, a folding or assembly diagram |
 | Piece label | Pattern | Its piece | Name, cut count, on fold |
 | Information block | Layout | A page corner | Pattern, measurements, size, date |
 | Sheet note | Layout | A place on the printed layout | Instructions, notions |
@@ -280,6 +281,14 @@ Notes, callouts and information blocks print with the pattern, a gap found in pr
 **Fields.** Text can hold document fields (`{pattern.name}`, `{measurements.name}`, `{size}`, `{date}`, `{page}`, `{pages}`, `{cutlist}`, `{materials}`, `{materialneeded}`), filled by `Sloper.Core.TextFields`, and draft values such as `{=Line_A_B.length}`, each a formula field of the note (stored inline in ID form). A note that prints with exactly one piece also fills `{piece.name}`, `{piece.cut}` and `{piece.material}`, so a note can be a custom piece label; in a layout each placed copy fills its own.
 
 **Callouts** are notes with a `leader` (`arrow`, `dot`, `line`): one object and one file type. Dragging the tip re-anchors it (`SetNoteAnchor`). `align` and a white `box` work alike for pattern and sheet notes.
+
+**Stamps** are notes with a `drawing`: an SVG drawing from another app, drawn in place of the text, which only names it in lists (the file's name to start with). One object and one file type, as callouts are, so anchoring, dragging, Make Free, the leader, the box, printing with a piece and the layout come with it.
+
+- **Reading** (`Sloper.Core.SvgImport`): paths and the basic shapes (rect, circle, ellipse, line, polyline, polygon), through groups, nested `svg` and every transform, with fill, stroke, stroke width, fill rule and `currentColor` from attributes and the `style` attribute, inherited down groups. Arcs and quadratics become cubics. Text (`text`, `tspan`, `textPath`, `flowRoot`) is refused with a message asking for it to be converted to paths, which keeps fonts out of patterns; bitmaps (`image`, `foreignObject`) and clones (`use`) are refused too. Elements of other namespaces (Inkscape's, Sodipodi's), `defs` and the like are skipped, as is what is hidden. Gradients are drawn black; style sheets, clipping, masks and opacity are left out; each with a warning.
+- **True size** from the root's `width`, `height` and `viewBox` (fitted whole, keeping its shape). Without a real unit (mm, cm, in, pt, pc) the size is in pixels, taken at 96 to the inch, with a warning. `scale` (0.01 to 100, a plain value) makes it bigger or smaller.
+- **Kept in the pattern** (`Sloper.Core.Stamp`) as path data in mm from the drawing's top left, only `M`, `L`, `C` and `Z`, absolute, to a thousandth of a mm, with each path's fill and stroke as `#rrggbb` and its stroke width, so the pattern does not depend on the file. At most 50,000 segments. The drawing is a value nothing changes; another drawing replaces it.
+- **Drawn** in its own colours everywhere: the canvas and the publish preview (`DrawStampOn`, BGRABitmap), the draft and layout SVG (`StampElements`), the layout PDF (paths with `f`, `f*` or `B`; all in ink on a projector), and the web canvas (`Path2D` from the scene's `stamp` paths). Faded as text would be when dimmed or screen-only. In a layout it stays upright with its piece, as text does. Not written to DXF, as notes are not.
+- **Adding** (`AddStampStep`): File → Import SVG Stamp... centres it on the one point, edge (its middle) or piece selected, or free in the middle of the view; in the API, `add_note` and `set_text` take `svg` and `scale`, and reply with the warnings. Its rows are the name text, Scale, Print, Box and what it hangs from.
 
 **Typing.** Text is typed in the properties: the Text tool and a double-click on a note put the cursor there, and the canvas previews the note as it is typed (`PreviewNoteText`), with no undo step until the field is left. A text box over the canvas was rejected: it would have to follow zoom and scroll and switch between formulas and values.
 

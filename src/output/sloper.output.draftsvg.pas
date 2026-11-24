@@ -26,7 +26,7 @@ unit Sloper.Output.DraftSVG;
 interface
 
 uses
-  SysUtils, Sloper.Core.Evaluator, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Note;
+  SysUtils, Sloper.Core.Evaluator, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Note, Sloper.Core.Stamp;
 
 type
   TDraftSVGOptions = record
@@ -60,6 +60,9 @@ function EscapeXML(const Text: string): string;
 // A note's font as SVG attributes: its family first, then the default
 // families, and its weight and style when bold or italic
 function NoteFontAttributes(const Style: TTextStyle): string;
+// A stamp's drawing as a path element per path, its top left at At, each
+// element starting with Attributes (such as data-id="12")
+function StampElements(const Drawing: TStampDrawing; const At: TVec2; Scale: double; const Attributes: string): string;
 
 implementation
 
@@ -335,8 +338,26 @@ begin
       Num(Extent * LINE_SHARE)]) + #10;
 end;
 
+function StampElements(const Drawing: TStampDrawing; const At: TVec2; Scale: double; const Attributes: string): string;
+var
+  Path: TStampPath;
+  Look: string;
+begin
+  Result := '';
+  for Path in Drawing.Paths do
+  begin
+    Look := Format('fill="%s"', [StampColourText(Path.Fill)]);
+    if Path.EvenOdd then
+      Look := Look + ' fill-rule="evenodd"';
+    Look := Look + Format(' stroke="%s"', [StampColourText(Path.Stroke)]);
+    if Path.Stroke <> STAMP_NO_COLOUR then
+      Look := Look + Format(' stroke-width="%s"', [SVGNumber(Path.StrokeWidth * Scale)]);
+    Result := Result + Format('<path %s d="%s" %s/>', [Attributes, StampPathData(Path, At, Scale), Look]) + #10;
+  end;
+end;
+
 // At its true printed size over everything else: a callout's leader, a white
-// box when it has one, and a text element per line
+// box when it has one, and a text element per line, or a stamp's drawing
 function NoteElement(Note: TNoteObject; const Values: TFieldValues): string;
 var
   Lines: TStringArray;
@@ -364,6 +385,8 @@ begin
   if Note.Boxed then
     Result := Result + Format('<rect data-id="%s" x="%s" y="%s" width="%s" height="%s" fill="#ffffff"/>',
       [Note.Key, Num(Frame.MinX), Num(Frame.MinY), Num(Frame.MaxX - Frame.MinX), Num(Frame.MaxY - Frame.MinY)]) + #10;
+  if Note.IsStamp then
+    Exit(Result + StampElements(Note.Drawing, Note.Position, Note.Scale, Format('data-id="%s"', [Note.Key])));
   Lines := TextLines(ExpandFields(Note.ShownText, Values));
   for Index := 0 to High(Lines) do
     Result := Result + Format('<text data-id="%s" x="%s" y="%s" %s font-size="%s" fill="%s">%s</text>',

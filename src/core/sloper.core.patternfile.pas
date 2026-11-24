@@ -100,7 +100,7 @@ implementation
 
 uses
   Math, Sloper.Core.JSON, Sloper.Core.Evaluator, Sloper.Core.Names, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Transform,
-  Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.PatternMaterials;
+  Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.PatternMaterials, Sloper.Core.Stamp;
 
 const
   TYPE_FREE_POINT = 'freePoint';
@@ -177,6 +177,7 @@ type
     function CreateSeam(Item: TJSONObject): TDraftObject;
     function CreateNote(Item: TJSONObject): TDraftObject;
     function ReadNoteValues(Item: TJSONObject; Note: TNoteObject): boolean;
+    function ReadStamp(Item: TJSONObject; Note: TNoteObject): boolean;
     function ReadSources(Item: TJSONObject; out Sources: TStringArray): boolean;
     function ReadTransformKey(Item: TJSONObject; out Key: string): boolean;
     function CreateTransform(Item: TJSONObject; Kind: TTransformKind): TDraftObject;
@@ -588,6 +589,12 @@ begin
     Into.Add('bold', True);
   if Note.Style.Italic then
     Into.Add('italic', True);
+  if Note.IsStamp then
+  begin
+    if Note.Scale <> 1 then
+      Into.Add('scale', JSONFloat(Note.Scale));
+    Into.Add('drawing', StampToJSON(Note.Drawing));
+  end;
 end;
 
 function SaveObject(DraftObject: TDraftObject): TJSONObject;
@@ -1781,6 +1788,30 @@ begin
   if not ReadBoolean(Item, 'bold', Style.Bold) or not ReadBoolean(Item, 'italic', Style.Italic) then
     Exit(False);
   Note.Style := Style;
+  Result := ReadStamp(Item, Note);
+end;
+
+// A stamp's drawing and scale; a note of text has neither
+function TPatternLoader.ReadStamp(Item: TJSONObject; Note: TNoteObject): boolean;
+var
+  Data: TJSONData;
+  Drawing: TStampDrawing;
+  Reason: string;
+  Value: double;
+begin
+  Data := Item.Find('drawing');
+  if Assigned(Data) then
+  begin
+    if not StampFromJSON(Data, Drawing, Reason) then
+      Exit(Problem(Reason));
+    Note.Drawing := Drawing;
+  end;
+  if Assigned(Item.Find('scale')) then
+  begin
+    if not GetJSONNumber(Item, 'scale', Value) or (Value < MIN_STAMP_SCALE) or (Value > MAX_STAMP_SCALE) then
+      Exit(Missing('scale'));
+    Note.Scale := Value;
+  end;
   Result := True;
 end;
 

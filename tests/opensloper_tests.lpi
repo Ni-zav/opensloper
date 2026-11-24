@@ -111,6 +111,11 @@
         <UnitName Value="Sloper.Tests.Notes"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.stamps.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.Stamps"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.fonts.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.Fonts"/>

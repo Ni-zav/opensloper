@@ -155,6 +155,7 @@ type
     procedure TestCurves;
     procedure TestSeams;
     procedure TestNotes;
+    procedure TestStamps;
     procedure TestTransforms;
     procedure TestNoDraftsOrLayers;
     procedure TestExport;
@@ -1968,6 +1969,39 @@ begin
   AssertEquals('piece in use', RPC_REFUSED, ErrorCode);
   Call('suggest_seams');
   AssertEquals('one piece has no pairs', 0, Answer.Arrays['suggestions'].Count);
+end;
+
+// add_note with svg makes a stamp, its text optional, with warnings for what
+// was drawn differently; set_text changes its scale and drawing
+procedure TTestAPI.TestStamps;
+const
+  LOGO = '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+    '<rect width="20" height="10" fill="#ff0000"/></svg>';
+  IN_PIXELS = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><circle cx="48" cy="48" r="48"/></svg>';
+var
+  Stamp: TJSONObject;
+begin
+  AddSquare;
+  Call('add_note', '{"svg": "' + StringToJSONString(LOGO) + '", "anchor": {"point": "A"}, "name": "Logo"}');
+  AssertEquals('added', 'note', Answer.Get('type', ''));
+  Stamp := Answer.Objects['stamp'];
+  AssertEquals('width', 20, Stamp.Get('width', 0.0), 0.001);
+  AssertEquals('height', 10, Stamp.Get('height', 0.0), 0.001);
+  AssertEquals('one path', 1, Stamp.Get('paths', 0));
+  AssertNull('no warnings', Answer.Find('warnings'));
+  Call('set_text', '{"name": "Logo", "scale": 2}');
+  AssertEquals('scaled', 40, Answer.Objects['stamp'].Get('width', 0.0), 0.001);
+  Call('set_text', '{"name": "Logo", "scale": 0}');
+  AssertEquals('bad scale', RPC_REFUSED, ErrorCode);
+  Call('set_text', '{"name": "Logo", "svg": "' + StringToJSONString(IN_PIXELS) + '"}');
+  AssertEquals('new drawing at the scale kept', 50.8, Answer.Objects['stamp'].Get('width', 0.0), 0.001);
+  AssertEquals('pixels warned', 1, Answer.Arrays['warnings'].Count);
+  Call('render');
+  AssertTrue('drawn as paths', Pos('fill="#000000"', Answer.Get('svg', '')) > 0);
+  Call('add_note', '{"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>Logo</text></svg>", "x": 0, "y": 0}');
+  AssertEquals('text refused', RPC_REFUSED, ErrorCode);
+  Call('add_note', '{"svg": "not a drawing", "x": 0, "y": 0}');
+  AssertEquals('not SVG', RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestAPI.TestNotes;

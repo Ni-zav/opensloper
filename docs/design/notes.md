@@ -1,9 +1,11 @@
-# Notes and callouts
+# Notes, callouts and stamps
 
 Notes put text on the pattern: sewing instructions such as *Stay-stitch the
 neckline*, the size a piece was drafted for, or a value worked out from the
 measurements. A callout is a note with a line to what it is about, pointing at
-a notch, a dart or a seam.
+a notch, a dart or a seam. A stamp is a note that shows a drawing from
+another app, such as a logo or a folding diagram, in place of text (see
+[Stamps](#stamps)).
 
 ## Add a note
 
@@ -40,6 +42,7 @@ from that instead.
 | Box | On a white box, so it reads over lines and fills |
 | Font | The font it prints in: one from the list or a name typed in; the default is a plain sans-serif |
 | Style | Bold, italic, or both |
+| Scale | A stamp only: how much bigger than its true size it is drawn; 1 unless you change it |
 
 A point, edge or piece cannot be deleted while a note hangs from it: make the
 note free first, or delete it.
@@ -93,6 +96,35 @@ without "on fold". A note that prints with no piece, or with more than one,
 keeps the piece fields as typed. To print only your own label, leave labels
 out in the publish app's output profile.
 
+## Stamps
+
+File → Import SVG Stamp... puts an SVG drawing on the pattern, made in
+Inkscape, Illustrator or any app that saves SVG. With one point, edge or piece
+selected, the stamp hangs from it, centred on the point, the middle of the
+edge or the middle of the piece; otherwise it is free, in the middle of the
+view. It moves with what it hangs from like any note, can have a leader, and
+prints with its piece.
+
+The drawing is drawn at its true size, from the size the SVG file gives:
+a drawing 40 mm wide prints 40 mm wide. A file whose size is in pixels, or
+that gives no size, is taken at 96 pixels to the inch, with a warning. The
+**Scale** row makes it bigger or smaller.
+
+The drawing is copied into the pattern, so the pattern does not need the SVG
+file again. To change the drawing, import it again and delete the old stamp.
+
+A stamp keeps the drawing's fill and stroke colours. Only shapes are read:
+
+- **Text** is refused, so the pattern does not depend on fonts. Convert text
+  to paths first: in Inkscape, select it and choose Path → Object to Path.
+- **Bitmap images** are refused; a stamp can only hold shapes.
+- **Clones** (`<use>`) are refused: in Inkscape, Edit → Clone → Unlink Clone.
+- Gradients are drawn in black, and transparency, clipping, masks and style
+  sheets are left out, with a warning saying so.
+
+A stamp's text is not drawn: it only names the stamp in the object list, and
+starts as the file's name. A stamp has no size, font or alignment rows.
+
 ## Showing and printing
 
 View → Annotations shows or hides every note on the canvas; the pattern
@@ -102,4 +134,4 @@ A note prints with a piece when it hangs from the piece, or from one of its
 points or edges, or when its text starts inside the piece's cutting line. It
 follows the piece in the layout and stays upright when the piece is flipped.
 Other notes are left out of layouts, and a printing note on no piece is listed
-as a warning. Notes are not written to DXF files.
+as a warning. Notes and stamps are not written to DXF files.

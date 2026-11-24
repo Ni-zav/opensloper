@@ -34,7 +34,8 @@ function LayoutToSVG(Layout: TLayout): string;
 implementation
 
 uses
-  SysUtils, Math, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.MachineProfiles, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Output.DraftSVG;
+  SysUtils, Math, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.MachineProfiles, Sloper.Core.TextFields, Sloper.Core.Note,
+  Sloper.Core.Stamp, Sloper.Output.DraftSVG;
 
 const
   // Around the pieces, so that a line on the edge is drawn whole
@@ -127,7 +128,7 @@ begin
 end;
 
 // The pattern's notes printed with the piece: a callout's leader, a white box
-// when it has one, and a text element per line
+// when it has one, and a text element per line or a stamp's drawing
 function NotesGroup(const Shape: TPlacedPiece; const Values: TFieldValues): string;
 var
   Note: TSheetNote;
@@ -151,6 +152,11 @@ begin
     if Note.Boxed then
       Result := Result + Format('<rect x="%s" y="%s" width="%s" height="%s" fill="#ffffff" stroke="none"/>',
         [SVGNumber(Frame.MinX), SVGNumber(Frame.MinY), SVGNumber(Frame.MaxX - Frame.MinX), SVGNumber(Frame.MaxY - Frame.MinY)]);
+    if HasDrawing(Note.Drawing) then
+    begin
+      Result := Result + StampElements(Note.Drawing, Vec2(Note.X, Note.Y), Note.Scale, 'class="stamp"');
+      Continue;
+    end;
     Lines := TextLines(ExpandFields(Note.Text, Values));
     for Index := 0 to High(Lines) do
       Result := Result + Format('<text x="%s" y="%s" %s font-size="%s" fill="%s" stroke="none">%s</text>',

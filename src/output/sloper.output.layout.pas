@@ -32,7 +32,7 @@ uses
   SysUtils, Generics.Collections, Sloper.Core.Geometry, Sloper.Core.Materials, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles,
   Sloper.Core.Measurements, Sloper.Core.PatternSources,
   Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Settings, Sloper.Core.Draft, Sloper.Core.TextFields, Sloper.Core.Note,
-  Sloper.Core.FileVersions, Sloper.Output.Tiling;
+  Sloper.Core.FileVersions, Sloper.Core.Stamp, Sloper.Output.Tiling;
 
 const
   LAYOUT_FORMAT = 'layout';
@@ -88,7 +88,8 @@ type
 
   // Text on the layout, with its top left at (X, Y) and Size in points. It may
   // run to several lines, and may hold fields such as {date}. A pattern's
-  // callout printed with its piece also has a leader to Tip.
+  // callout printed with its piece also has a leader to Tip, and a pattern's
+  // stamp its drawing at Scale in place of the text.
   TSheetNote = record
     Text: string;
     X, Y, Size: double;
@@ -97,6 +98,8 @@ type
     Style: TTextStyle;
     Leader: TNoteLeader;
     Tip: TVec2;
+    Drawing: TStampDrawing;
+    Scale: double;
   end;
 
   TSheetNoteArray = array of TSheetNote;
@@ -427,6 +430,14 @@ var
   Line: string;
   Widest: double;
 begin
+  if HasDrawing(Note.Drawing) then
+  begin
+    Result.MinX := Note.X;
+    Result.MinY := Note.Y;
+    Result.MaxX := Note.X + Note.Drawing.Width * Note.Scale;
+    Result.MaxY := Note.Y + Note.Drawing.Height * Note.Scale;
+    Exit;
+  end;
   Lines := TextLines(ExpandFields(Note.Text, Values));
   Widest := 0;
   for Line in Lines do
@@ -1371,6 +1382,8 @@ begin
       Placed.Boxed := Note.Boxed;
       Placed.Style := Note.Style;
       Placed.Leader := Note.Leader;
+      Placed.Drawing := Note.Drawing;
+      Placed.Scale := Note.Scale;
       if Note.Leader <> nlNone then
         Placed.Tip := Moved(Note.AnchorPosition);
       Insert(Placed, Result.Notes, Length(Result.Notes));

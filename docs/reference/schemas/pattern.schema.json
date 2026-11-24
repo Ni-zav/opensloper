@@ -2537,6 +2537,55 @@
         "italic": {
           "description": "Whether it is italic",
           "type": "boolean"
+        },
+        "scale": {
+          "description": "A stamp: how much bigger than true size its drawing is drawn; left out at 1",
+          "type": "number"
+        },
+        "drawing": {
+          "description": "A stamp: its drawing, which the text only names; left out for a note of text",
+          "type": "object",
+          "properties": {
+            "width": {
+              "description": "Its width in mm at true size",
+              "type": "number"
+            },
+            "height": {
+              "description": "Its height in mm at true size",
+              "type": "number"
+            },
+            "paths": {
+              "description": "Its paths, drawn in order",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "d": {
+                    "description": "Path data in mm from the drawing's top left, with only M, L, C and Z, absolute",
+                    "type": "string"
+                  },
+                  "fill": {
+                    "description": "Its fill colour as #rrggbb; left out when not filled",
+                    "type": "string"
+                  },
+                  "stroke": {
+                    "description": "Its stroke colour as #rrggbb; left out when not stroked",
+                    "type": "string"
+                  },
+                  "strokeWidth": {
+                    "description": "Its stroke width in mm",
+                    "type": "number"
+                  },
+                  "evenOdd": {
+                    "description": "Whether it is filled by the even-odd rule rather than nonzero",
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [

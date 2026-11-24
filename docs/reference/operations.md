@@ -406,7 +406,7 @@ Two runs of piece edges that are sewn together, so their lengths can be checked.
 
 ### Note (`note`)
 
-Text on the pattern, free or hung from a point, edge or piece, with draft values such as `{=@waist / 4}` worked out in it.
+Text on the pattern, free or hung from a point, edge or piece, with draft values such as `{=@waist / 4}` worked out in it; or, with a drawing, a stamp: paths from an SVG drawing drawn in place of the text.
 
 | Member | Value | Description |
 | --- | --- | --- |
@@ -428,4 +428,14 @@ Text on the pattern, free or hung from a point, edge or piece, with draft values
 | `font` | text | The font family it prints in; left out for the default sans-serif |
 | `bold` | true or false | Whether it is bold |
 | `italic` | true or false | Whether it is italic |
+| `scale` | number | A stamp: how much bigger than true size its drawing is drawn; left out at 1 |
+| `drawing` | group | A stamp: its drawing, which the text only names; left out for a note of text |
+| `drawing.width` | number | Its width in mm at true size |
+| `drawing.height` | number | Its height in mm at true size |
+| `drawing.paths` | list | Its paths, drawn in order |
+| `drawing.paths[].d` | text | Path data in mm from the drawing's top left, with only M, L, C and Z, absolute |
+| `drawing.paths[].fill` | text | Its fill colour as #rrggbb; left out when not filled |
+| `drawing.paths[].stroke` | text | Its stroke colour as #rrggbb; left out when not stroked |
+| `drawing.paths[].strokeWidth` | number | Its stroke width in mm |
+| `drawing.paths[].evenOdd` | true or false | Whether it is filled by the even-odd rule rather than nonzero |
 

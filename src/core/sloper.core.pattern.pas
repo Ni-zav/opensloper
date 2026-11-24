@@ -30,7 +30,7 @@ interface
 uses
   Classes, SysUtils, Generics.Collections, Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.Formula,
   Sloper.Core.Measurements, Sloper.Core.Variables, Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.Piece, Sloper.Core.Seam,
-  Sloper.Core.Transform, Sloper.Core.Note, Sloper.Core.Geometry, Sloper.Core.Units, Sloper.Core.PatternMaterials;
+  Sloper.Core.Transform, Sloper.Core.Note, Sloper.Core.Geometry, Sloper.Core.Units, Sloper.Core.PatternMaterials, Sloper.Core.Stamp;
 
 type
   // In order around: from the corner along the width, then up, back and down
@@ -377,6 +377,12 @@ type
     procedure SetNoteBoxed(Note: TNoteObject; ABoxed: boolean);
     // False when the font name is refused (see CheckFontName)
     function SetNoteStyle(Note: TNoteObject; const AStyle: TTextStyle): boolean;
+    // Makes the note a stamp drawing ADrawing (Sloper.Core.SvgImport reads
+    // one), or a note of text again with an empty one. Refused when it has
+    // too many segments.
+    function SetNoteDrawing(Note: TNoteObject; const ADrawing: TStampDrawing): boolean;
+    // Refused outside MIN_STAMP_SCALE to MAX_STAMP_SCALE
+    function SetNoteScale(Note: TNoteObject; AScale: double): boolean;
     // Hangs the note from another anchor, Ratio along an edge, keeping its
     // text where it was last drawn, as when a callout's tip is dragged. A
     // callout cannot be made free.
@@ -614,6 +620,7 @@ resourcestring
   rsPatternNoteAnchorEdge = 'line or curve';
   rsPatternNoteAnchorPiece = 'piece';
   rsPatternNoteSize = 'A note''s size must be above 0 and at most %d points';
+  rsPatternStampScale = 'A stamp''s scale must be from %s to %s';
   rsPatternNoteIsFree = '%s is not anchored to anything';
   rsPatternCalloutFree = 'A callout needs a point, an edge or a piece to point at';
 
@@ -3379,6 +3386,22 @@ begin
   if not CheckFontName(AStyle.Font, Kept.Font, Reason) then
     Exit(SetError(Reason));
   Note.Style := Kept;
+  Result := True;
+end;
+
+function TPattern.SetNoteDrawing(Note: TNoteObject; const ADrawing: TStampDrawing): boolean;
+begin
+  if StampSegmentCount(ADrawing) > MAX_STAMP_SEGMENTS then
+    Exit(SetError(Format(rsStampTooDetailed, [MAX_STAMP_SEGMENTS])));
+  Note.Drawing := ADrawing;
+  Result := True;
+end;
+
+function TPattern.SetNoteScale(Note: TNoteObject; AScale: double): boolean;
+begin
+  if IsNan(AScale) or (AScale < MIN_STAMP_SCALE) or (AScale > MAX_STAMP_SCALE) then
+    Exit(SetError(Format(rsPatternStampScale, [FormatJSONFloat(MIN_STAMP_SCALE), FormatJSONFloat(MAX_STAMP_SCALE)])));
+  Note.Scale := AScale;
   Result := True;
 end;
 

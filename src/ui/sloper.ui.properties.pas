@@ -314,7 +314,7 @@ uses
   Math, Spin, Sloper.Core.EvalTypes, Sloper.Core.Pattern, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Transform,
   Sloper.Core.Note, Sloper.Core.Settings, Sloper.UI.GridColumns, Sloper.Editor.ObjectList, Sloper.UI.PieceProperties,
   Sloper.Editor.PropertyText, Sloper.UI.Spacing,
-  Sloper.UI.FontBox, Sloper.Editor.Completion, Sloper.UI.Icons, Sloper.Core.IconSet, Sloper.Core.Drag;
+  Sloper.UI.FontBox, Sloper.Editor.Completion, Sloper.UI.Icons, Sloper.Core.IconSet, Sloper.Core.Drag, Sloper.Core.Stamp;
 
 type
   // Rows every object has: type, name and formula fields first; what made a
@@ -389,13 +389,16 @@ type
   private
     FNoteText: TMemo;
     FNoteRefusal: TLabel;
-    FNoteSize: TFloatSpinEdit;
+    FNoteSize, FStampScale: TFloatSpinEdit;
     FNotePrint: TCheckBox;
     FNoteAnchorText: TGridLabel;
     FNoteLeaderBox, FNoteAlignBox, FNoteFontBox: TComboBox;
     FNoteBoxCheck, FNoteBoldCheck, FNoteItalicCheck: TCheckBox;
-    procedure AddTextRow;
+    procedure AddTextRow(Note: TNoteObject);
     procedure AddRows(Note: TNoteObject);
+    procedure AddTextNoteRows;
+    procedure AddAnchorRows(Note: TNoteObject);
+    procedure ScaleChange(Sender: TObject);
     // False when the text was refused, with the reason under it
     function CommitText: boolean;
     procedure TextExit(Sender: TObject);
@@ -415,6 +418,9 @@ type
   end;
 
 const
+  // Stands in the field names compared for a rebuild when a note is a stamp;
+  // never a field's name, which cannot hold #
+  STAMP_ROWS_MARK = '#stamp';
   // At 96 pixels per inch
   DIVIDER_WIDTH96 = 8;
   MIN_COLUMN96 = 48;
@@ -703,6 +709,10 @@ begin
   SetLength(Result, Node.FieldCount);
   for Index := 0 to Node.FieldCount - 1 do
     Result[Index] := Node.Fields[Index].Name;
+  // A stamp has other rows than a note of text with the same fields, so
+  // becoming one, as through the Automation API, rebuilds them
+  if (Node is TNoteObject) and TNoteObject(Node).IsStamp then
+    Insert(STAMP_ROWS_MARK, Result, Length(Result));
 end;
 
 // The sections for this object, in the order their rows go in each place
@@ -1931,7 +1941,7 @@ end;
 procedure TNoteSection.Build(Node: TEvalNode; Place: TSectionPlace);
 begin
   case Place of
-    spName: AddTextRow;
+    spName: AddTextRow(TNoteObject(Node));
     spRows: AddRows(TNoteObject(Node));
   end;
 end;
@@ -1943,7 +1953,7 @@ begin
 end;
 
 // Enter adds a line; leaving the field commits it as one undo step
-procedure TNoteSection.AddTextRow;
+procedure TNoteSection.AddTextRow(Note: TNoteObject);
 begin
   FNoteText := TMemo.Create(Panel);
   FNoteText.Height := Panel.Scale96ToForm(NOTE_TEXT_HEIGHT96);
@@ -1953,18 +1963,65 @@ begin
   FNoteText.OnExit := @TextExit;
   FNoteText.OnChange := @TextChange;
   FNoteText.OnKeyDown := @TextKeyDown;
-  FNoteText.Hint := rsPropNoteTextHint;
   FNoteText.ShowHint := True;
-  Panel.AddRow(rsPropNoteText, FNoteText);
+  // A stamp's text only names it
+  if Note.IsStamp then
+  begin
+    FNoteText.Hint := rsPropStampTextHint;
+    Panel.AddRow(rsPropStampText, FNoteText);
+  end
+  else
+  begin
+    FNoteText.Hint := rsPropNoteTextHint;
+    Panel.AddRow(rsPropNoteText, FNoteText);
+  end;
   FNoteRefusal := Panel.AddLabel('');
   FNoteRefusal.Font.Color := clRed;
   FNoteRefusal.WordWrap := True;
   FNoteRefusal.Visible := False;
 end;
 
+// A stamp has its scale where a note of text has its size and font
 procedure TNoteSection.AddRows(Note: TNoteObject);
-var
-  FreeButton: TButton;
+begin
+  if Note.IsStamp then
+  begin
+    FStampScale := TFloatSpinEdit.Create(Panel);
+    FStampScale.MinValue := MIN_STAMP_SCALE;
+    FStampScale.MaxValue := MAX_STAMP_SCALE;
+    FStampScale.Increment := STAMP_SCALE_STEP;
+    FStampScale.DecimalPlaces := STAMP_SCALE_DECIMALS;
+    FStampScale.OnChange := @ScaleChange;
+    Panel.AddRow(rsPropStampScale, FStampScale);
+  end;
+  FNotePrint := TCheckBox.Create(Panel);
+  FNotePrint.Caption := rsPropNotePrintCaption;
+  FNotePrint.OnClick := @PrintClick;
+  Panel.AddRow(rsPropNotePrint, FNotePrint);
+  if not Note.IsStamp then
+    AddTextNoteRows;
+  FNoteBoxCheck := TCheckBox.Create(Panel);
+  FNoteBoxCheck.Caption := rsPropNoteBoxCaption;
+  FNoteBoxCheck.OnClick := @LookChange;
+  Panel.AddRow(rsPropNoteBox, FNoteBoxCheck);
+  if not Note.IsStamp then
+  begin
+    FNoteFontBox := NewFontBox(Panel, @FontChange);
+    Panel.AddRow(rsPropNoteFont, FNoteFontBox);
+    FNoteBoldCheck := TCheckBox.Create(Panel);
+    FNoteBoldCheck.Caption := rsPropNoteBold;
+    FNoteBoldCheck.OnClick := @LookChange;
+    Panel.AddRow(rsPropNoteStyle, FNoteBoldCheck);
+    FNoteItalicCheck := TCheckBox.Create(Panel);
+    FNoteItalicCheck.Caption := rsPropNoteItalic;
+    FNoteItalicCheck.OnClick := @LookChange;
+    Panel.AddRow('', FNoteItalicCheck);
+  end;
+  AddAnchorRows(Note);
+end;
+
+// The size goes first, the alignment after whether it prints
+procedure TNoteSection.AddTextNoteRows;
 begin
   FNoteSize := TFloatSpinEdit.Create(Panel);
   FNoteSize.MinValue := NOTE_SIZE_STEP;
@@ -1973,26 +2030,14 @@ begin
   FNoteSize.DecimalPlaces := 1;
   FNoteSize.OnChange := @SizeChange;
   Panel.AddRow(rsPropNoteSize, FNoteSize);
-  FNotePrint := TCheckBox.Create(Panel);
-  FNotePrint.Caption := rsPropNotePrintCaption;
-  FNotePrint.OnClick := @PrintClick;
-  Panel.AddRow(rsPropNotePrint, FNotePrint);
   // In the order of TTextAlign
   FNoteAlignBox := Panel.AddChoiceRow(rsPropNoteAlign, [rsPropNoteAlignLeft, rsPropNoteAlignCentre, rsPropNoteAlignRight], @LookChange);
-  FNoteBoxCheck := TCheckBox.Create(Panel);
-  FNoteBoxCheck.Caption := rsPropNoteBoxCaption;
-  FNoteBoxCheck.OnClick := @LookChange;
-  Panel.AddRow(rsPropNoteBox, FNoteBoxCheck);
-  FNoteFontBox := NewFontBox(Panel, @FontChange);
-  Panel.AddRow(rsPropNoteFont, FNoteFontBox);
-  FNoteBoldCheck := TCheckBox.Create(Panel);
-  FNoteBoldCheck.Caption := rsPropNoteBold;
-  FNoteBoldCheck.OnClick := @LookChange;
-  Panel.AddRow(rsPropNoteStyle, FNoteBoldCheck);
-  FNoteItalicCheck := TCheckBox.Create(Panel);
-  FNoteItalicCheck.Caption := rsPropNoteItalic;
-  FNoteItalicCheck.OnClick := @LookChange;
-  Panel.AddRow('', FNoteItalicCheck);
+end;
+
+procedure TNoteSection.AddAnchorRows(Note: TNoteObject);
+var
+  FreeButton: TButton;
+begin
   // A free note has nothing to point at
   if Note.Anchor <> naFree then
     // In the order of TNoteLeader
@@ -2023,16 +2068,22 @@ begin
       FNoteText.Text := Note.DisplayText(Panel.Document.Pattern.Resolver);
       FNoteRefusal.Visible := False;
     end;
-    FNoteAlignBox.ItemIndex := Ord(Note.Align);
     FNoteBoxCheck.Checked := Note.Boxed;
-    if not FNoteFontBox.Focused then
-      ShowFontName(FNoteFontBox, Note.Style.Font);
-    FNoteBoldCheck.Checked := Note.Style.Bold;
-    FNoteItalicCheck.Checked := Note.Style.Italic;
+    // A stamp's rows have no font, size or alignment
+    if Assigned(FNoteFontBox) then
+    begin
+      FNoteAlignBox.ItemIndex := Ord(Note.Align);
+      if not FNoteFontBox.Focused then
+        ShowFontName(FNoteFontBox, Note.Style.Font);
+      FNoteBoldCheck.Checked := Note.Style.Bold;
+      FNoteItalicCheck.Checked := Note.Style.Italic;
+      if not FNoteSize.Focused then
+        FNoteSize.Value := Note.Size;
+    end;
+    if Assigned(FStampScale) and not FStampScale.Focused then
+      FStampScale.Value := Note.Scale;
     if Assigned(FNoteLeaderBox) then
       FNoteLeaderBox.ItemIndex := Ord(Note.Leader);
-    if not FNoteSize.Focused then
-      FNoteSize.Value := Note.Size;
     FNotePrint.Checked := Note.Print;
     FNoteAnchorText.Caption := NoteAnchorText(Panel.Document.Pattern, Note);
   finally
@@ -2121,6 +2172,8 @@ procedure TNoteSection.LookChange(Sender: TObject);
 var
   Node: TEvalNode;
   Leader: TNoteLeader;
+  Align: TTextAlign;
+  Bold, Italic: boolean;
   Reason: string;
 begin
   if FFilling then
@@ -2131,9 +2184,18 @@ begin
   Leader := TNoteObject(Node).Leader;
   if Assigned(FNoteLeaderBox) and (FNoteLeaderBox.ItemIndex >= 0) then
     Leader := TNoteLeader(FNoteLeaderBox.ItemIndex);
+  // A stamp has no rows for its alignment and style, which stay as they are
+  Align := TNoteObject(Node).Align;
+  Bold := TNoteObject(Node).Style.Bold;
+  Italic := TNoteObject(Node).Style.Italic;
+  if Assigned(FNoteAlignBox) then
+  begin
+    Align := TTextAlign(Max(0, FNoteAlignBox.ItemIndex));
+    Bold := FNoteBoldCheck.Checked;
+    Italic := FNoteItalicCheck.Checked;
+  end;
   Panel.BeginStep;
-  Panel.EndStep(SetNoteLookStep(Panel.Document, Node, Leader, TTextAlign(Max(0, FNoteAlignBox.ItemIndex)),
-    FNoteBoxCheck.Checked, FNoteBoldCheck.Checked, FNoteItalicCheck.Checked, Reason), Reason);
+  Panel.EndStep(SetNoteLookStep(Panel.Document, Node, Leader, Align, FNoteBoxCheck.Checked, Bold, Italic, Reason), Reason);
 end;
 
 // Picked from the list or typed; a name that is refused goes back to the
@@ -2168,6 +2230,20 @@ begin
     Exit;
   Panel.BeginStep;
   Panel.EndStep(SetNoteSizeStep(Panel.Document, Node, FNoteSize.Value, Reason, 'notesize:' + Node.Key), Reason);
+end;
+
+procedure TNoteSection.ScaleChange(Sender: TObject);
+var
+  Node: TEvalNode;
+  Reason: string;
+begin
+  if FFilling then
+    Exit;
+  Node := Panel.SelectedNode;
+  if not (Node is TNoteObject) then
+    Exit;
+  Panel.BeginStep;
+  Panel.EndStep(SetStampScaleStep(Panel.Document, Node, FStampScale.Value, Reason, 'stampscale:' + Node.Key), Reason);
 end;
 
 procedure TNoteSection.PrintClick(Sender: TObject);

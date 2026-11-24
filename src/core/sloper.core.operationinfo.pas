@@ -295,7 +295,7 @@ resourcestring
 
   rsOpNote = 'Note';
   rsOpNoteSummary = 'Text on the pattern, free or hung from a point, edge or piece, with draft values such as ' +
-    '`{=@waist / 4}` worked out in it.';
+    '`{=@waist / 4}` worked out in it; or, with a drawing, a stamp: paths from an SVG drawing drawn in place of the text.';
   rsMemberAnchor = 'What it hangs from; left out for a free note';
   rsMemberAnchorPoint = 'A point';
   rsMemberAnchorEdge = 'Or an edge';
@@ -314,6 +314,16 @@ resourcestring
   rsMemberFont = 'The font family it prints in; left out for the default sans-serif';
   rsMemberBold = 'Whether it is bold';
   rsMemberItalic = 'Whether it is italic';
+  rsMemberStampScale = 'A stamp: how much bigger than true size its drawing is drawn; left out at 1';
+  rsMemberDrawing = 'A stamp: its drawing, which the text only names; left out for a note of text';
+  rsMemberDrawingWidth = 'Its width in mm at true size';
+  rsMemberDrawingHeight = 'Its height in mm at true size';
+  rsMemberDrawingPaths = 'Its paths, drawn in order';
+  rsMemberDrawingData = 'Path data in mm from the drawing''s top left, with only M, L, C and Z, absolute';
+  rsMemberDrawingFill = 'Its fill colour as #rrggbb; left out when not filled';
+  rsMemberDrawingStroke = 'Its stroke colour as #rrggbb; left out when not stroked';
+  rsMemberDrawingStrokeWidth = 'Its stroke width in mm';
+  rsMemberDrawingEvenOdd = 'Whether it is filled by the even-odd rule rather than nonzero';
 
 implementation
 
@@ -569,6 +579,16 @@ begin
   M('font', mkText, rsMemberFont);
   M('bold', mkFlag, rsMemberBold);
   M('italic', mkFlag, rsMemberItalic);
+  M('scale', mkSize, rsMemberStampScale);
+  M('drawing', mkGroup, rsMemberDrawing);
+  M('drawing.width', mkSize, rsMemberDrawingWidth);
+  M('drawing.height', mkSize, rsMemberDrawingHeight);
+  M('drawing.paths', mkList, rsMemberDrawingPaths);
+  M('drawing.paths[].d', mkText, rsMemberDrawingData);
+  M('drawing.paths[].fill', mkText, rsMemberDrawingFill);
+  M('drawing.paths[].stroke', mkText, rsMemberDrawingStroke);
+  M('drawing.paths[].strokeWidth', mkSize, rsMemberDrawingStrokeWidth);
+  M('drawing.paths[].evenOdd', mkFlag, rsMemberDrawingEvenOdd);
 end;
 
 function OperationInfos: TOperationInfoArray;

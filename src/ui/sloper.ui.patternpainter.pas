@@ -29,7 +29,7 @@ interface
 uses
   Classes, SysUtils, Graphics, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam,
   Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.LabelPlacement, Sloper.Editor.View,
-  Sloper.Editor.SuggestionGrade, Sloper.Editor.Snap, Sloper.Editor.Scene;
+  Sloper.Core.Stamp, Sloper.Editor.SuggestionGrade, Sloper.Editor.Snap, Sloper.Editor.Scene;
 
 type
   // What a drawing tool's second click would make, drawn from its first
@@ -121,6 +121,9 @@ type
 
 // Draws text from here on in a note's font, or in DefaultFont when it names none
 procedure UseNoteFont(Bitmap: TBGRABitmap; const Style: TTextStyle; const DefaultFont: string);
+// A stamp's drawing in its own colours, faded to Alpha, its top left at
+// TopLeft in pixels and PixelsPerMm pixels to each of its mm
+procedure DrawStampOn(Bitmap: TBGRABitmap; const Drawing: TStampDrawing; const TopLeft: TVec2; PixelsPerMm: double; Alpha: byte);
 
 implementation
 
@@ -131,6 +134,10 @@ uses
 const
   // How much of the paper covers what an isolated piece does not use
   DIM_WASH_ALPHA = 200;
+  // How closely a stamp's curves are followed, and its thinnest stroke, in pixels
+  STAMP_FLATTEN_PIXELS = 0.25;
+  MIN_STAMP_STROKE = 0.5;
+  OPAQUE = 255;
   // How strongly a dimmed note's ink shows
   DIM_NOTE_ALPHA = 60;
   // How strongly a material's colour shows under the lines
@@ -329,6 +336,59 @@ begin
   if Style.Italic then
     Include(Styles, fsItalic);
   Bitmap.FontStyle := Styles;
+end;
+
+procedure DrawStampOn(Bitmap: TBGRABitmap; const Drawing: TStampDrawing; const TopLeft: TVec2; PixelsPerMm: double; Alpha: byte);
+var
+  Path: TStampPath;
+  Contour: TStampContour;
+  Shape, Outline: array of TPointF;
+  Point: TVec2;
+  SavedMode: TFillMode;
+
+  function Colour(Value: integer): TBGRAPixel;
+  begin
+    Result := BGRA((Value shr 16) and $FF, (Value shr 8) and $FF, Value and $FF, Alpha);
+  end;
+
+begin
+  SavedMode := Bitmap.FillMode;
+  try
+    for Path in Drawing.Paths do
+    begin
+      // Every contour in one polygon, so holes stay holes
+      Shape := nil;
+      for Contour in Path.Contours do
+      begin
+        if Length(Shape) > 0 then
+          Insert(EmptyPointF, Shape, Length(Shape));
+        for Point in FlattenStampContour(Contour, TopLeft, PixelsPerMm, STAMP_FLATTEN_PIXELS) do
+          Insert(ScreenPoint(Point), Shape, Length(Shape));
+      end;
+      if Path.Fill <> STAMP_NO_COLOUR then
+      begin
+        if Path.EvenOdd then
+          Bitmap.FillMode := fmAlternate
+        else
+          Bitmap.FillMode := fmWinding;
+        Bitmap.FillPolyAntialias(Shape, Colour(Path.Fill));
+      end;
+      if Path.Stroke = STAMP_NO_COLOUR then
+        Continue;
+      for Contour in Path.Contours do
+      begin
+        Outline := nil;
+        for Point in FlattenStampContour(Contour, TopLeft, PixelsPerMm, STAMP_FLATTEN_PIXELS) do
+          Insert(ScreenPoint(Point), Outline, Length(Outline));
+        if Contour.Closed then
+          Bitmap.DrawPolygonAntialias(Outline, Colour(Path.Stroke), Max(MIN_STAMP_STROKE, Path.StrokeWidth * PixelsPerMm))
+        else
+          Bitmap.DrawPolyLineAntialias(Outline, Colour(Path.Stroke), Max(MIN_STAMP_STROKE, Path.StrokeWidth * PixelsPerMm));
+      end;
+    end;
+  finally
+    Bitmap.FillMode := SavedMode;
+  end;
 end;
 
 { TPatternPainter }
@@ -917,6 +977,7 @@ var
   Stroke: TLine2;
   Selected: boolean;
   DefaultFont: string;
+  StampAlpha: byte;
 begin
   if FPattern.View.HideAnnotations then
     Exit;
@@ -998,6 +1059,17 @@ begin
     end;
     if (Note.Key = FState.HoverKey) or Selected then
       FBitmap.FillRectAntialias(TopLeft.X - 2, TopLeft.Y - 1, BottomRight.X + 2, BottomRight.Y + 1, PieceHoverTint);
+    // A stamp keeps its colours, faded as the ink would be
+    if Note.IsStamp then
+    begin
+      StampAlpha := OPAQUE;
+      if not Note.Print then
+        StampAlpha := OPAQUE div 2;
+      if FPattern.IsDimmed(Note) then
+        StampAlpha := DIM_NOTE_ALPHA;
+      DrawStampOn(FBitmap, Note.Drawing, TopLeft, Note.Scale * FState.View.Scale, StampAlpha);
+      Continue;
+    end;
     EmPixels := Note.Size * POINTS_TO_MM * FState.View.Scale;
     LinePixels := LineHeight(Note.Size) * FState.View.Scale;
     if EmPixels < MIN_NOTE_PIXELS then

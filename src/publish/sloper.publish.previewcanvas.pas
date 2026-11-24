@@ -30,7 +30,7 @@ interface
 
 uses
   Classes, SysUtils, Controls, StdCtrls, Graphics, LCLType, BGRABitmap, BGRABitmapTypes, Sloper.Core.Materials, Sloper.Core.Geometry, Sloper.Core.Note,
-  Sloper.Core.TextFields, Sloper.Output.Layout,
+  Sloper.Core.TextFields, Sloper.Core.Stamp, Sloper.Output.Layout,
   Sloper.Output.LayoutDocument, Sloper.Output.Preview, Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Editor.View;
 
 type
@@ -752,6 +752,11 @@ var
       First := FView.ToScreen(Vec2(Frame.MinX, Frame.MinY));
       Last := FView.ToScreen(Vec2(Frame.MaxX, Frame.MaxY));
       FBitmap.FillRectAntialias(First.X, First.Y, Last.X, Last.Y, PaperInk);
+    end;
+    if HasDrawing(Item.Drawing) then
+    begin
+      DrawStampOn(FBitmap, Item.Drawing, FView.ToScreen(Vec2(Item.X, Item.Y)), Item.Scale * FView.Scale, Ink.alpha);
+      Exit;
     end;
     // The font is the note's size and its lines a line height apart, as the
     // PDF and the design canvas have them; too small to read, it is a tint

@@ -55,6 +55,9 @@ const POINTS_TO_MM = 25.4 / 72;
 const MIN_NOTE_PIXELS = 3;
 // How strongly a dimmed note's ink shows, and a note too small to read, of 255
 const DIM_NOTE_ALPHA = 60;
+const OPAQUE = 255;
+// A stamp's thinnest stroke, in pixels
+const MIN_STAMP_STROKE_PIXELS = 0.5;
 const NOTE_BAR_ALPHA = 40;
 // A callout's dot at its tip, in mm, and at least this many pixels
 const LEADER_DOT_RADIUS = 0.8;
@@ -648,6 +651,18 @@ export class PatternPainter {
         bottomRight.y - topLeft.y + 2 * NOTE_TINT_DOWN,
       );
     }
+    // A stamp keeps its colours, faded as the ink would be
+    if (note.stamp.length > 0) {
+      let alpha = 1;
+      if (!note.print) {
+        alpha = 1 / 2;
+      }
+      if (note.dimmed) {
+        alpha = DIM_NOTE_ALPHA / OPAQUE;
+      }
+      this.drawStamp(note, alpha);
+      return;
+    }
     const emPixels = note.size * POINTS_TO_MM * view.scale;
     if (emPixels < MIN_NOTE_PIXELS) {
       context.fillStyle = css({ ...ink, alpha: NOTE_BAR_ALPHA });
@@ -670,6 +685,30 @@ export class PatternPainter {
       }
       context.fillText(line, left, topLeft.y + index * note.lineHeight * view.scale);
     });
+  }
+
+  // Its paths in model mm, so the canvas scales them, strokes too, as the view does
+  private drawStamp(note: SceneNote, alpha: number): void {
+    const view = this.paintState().view;
+    const context = this.context;
+    context.save();
+    context.globalAlpha = alpha;
+    context.transform(view.scale, 0, 0, view.scale, view.originX, view.originY);
+    for (const path of note.stamp) {
+      const shape = new Path2D(path.d);
+      if (path.fill !== 'none') {
+        context.fillStyle = path.fill;
+        // The canvas's fill of a path, which the rule takes for Array.prototype.fill
+        // oxlint-disable-next-line unicorn/no-array-fill-with-reference-type
+        context.fill(shape, path.evenOdd ? 'evenodd' : 'nonzero');
+      }
+      if (path.stroke !== 'none') {
+        context.strokeStyle = path.stroke;
+        context.lineWidth = Math.max(path.strokeWidth, MIN_STAMP_STROKE_PIXELS / view.scale);
+        context.stroke(shape);
+      }
+    }
+    context.restore();
   }
 
   // Near enough the canvas for its label to matter

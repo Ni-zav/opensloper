@@ -116,8 +116,11 @@ const
   PROPERTY_ROW_NOTE_LEADER = 'noteLeader';
   PROPERTY_ROW_NOTE_ANCHOR = 'noteAnchor';
   PROPERTY_ROW_NOTE_FREE = 'noteFree';
+  PROPERTY_ROW_STAMP_SCALE = 'stampScale';
   MAX_CUT_COUNT = 99;
   NOTE_SIZE_STEP = 1;
+  STAMP_SCALE_STEP = 0.1;
+  STAMP_SCALE_DECIMALS = 2;
 
 type
   // A dart of a piece, as its cap row shows it: its legs and its caption
@@ -214,6 +217,8 @@ function SetNoteTextStep(Document: TPatternDocument; Node: TEvalNode; const Fiel
 function SetNoteSizeStep(Document: TPatternDocument; Node: TEvalNode; Size: double; out Reason: string;
   const MergeKey: string = ''): boolean;
 function SetNotePrintStep(Document: TPatternDocument; Node: TEvalNode; Print: boolean; out Reason: string): boolean;
+function SetStampScaleStep(Document: TPatternDocument; Node: TEvalNode; Scale: double; out Reason: string;
+  const MergeKey: string = ''): boolean;
 // The leader, alignment, box, bold and italic together
 function SetNoteLookStep(Document: TPatternDocument; Node: TEvalNode; Leader: TNoteLeader; Align: TTextAlign;
   Boxed, Bold, Italic: boolean; out Reason: string): boolean;
@@ -331,6 +336,10 @@ resourcestring
   rsPropNoteFreeHint = 'Unhook the note, leaving it where it is, so what it hangs from can be deleted';
   rsPropChangeNoteText = 'Change note text';
   rsPropChangeNoteSize = 'Change note size';
+  rsPropChangeStampScale = 'Change stamp scale';
+  rsPropStampText = 'Name text';
+  rsPropStampTextHint = 'Names the stamp in lists; a stamp draws its drawing, not this text';
+  rsPropStampScale = 'Scale';
   rsPropChangeNotePrint = 'Change note printing';
   rsPropFreeNote = 'Make note free';
   rsPropNoteLeader = 'Leader';
@@ -363,7 +372,7 @@ implementation
 
 uses
   Math, Sloper.Core.EvalTypes, Sloper.Core.Transform, Sloper.Core.PatternMaterials, Sloper.Editor.ObjectList,
-  Sloper.Editor.PropertyText;
+  Sloper.Editor.PropertyText, Sloper.Core.Stamp;
 
 function PropertyKey(Pattern: TPattern; const Key: string): string;
 var
@@ -860,42 +869,73 @@ begin
   Builder.Last^.Color := PieceDrawnColor(Pattern, Piece);
 end;
 
-// A note's text goes under its name; its size, printing, look and what it hangs from after the fields
+// What it hangs from, and the button to unhook it
+procedure AddNoteAnchorRows(var Builder: TRowBuilder; Pattern: TPattern; Note: TNoteObject);
+begin
+  // A free note has nothing to point at; in the order of TNoteLeader
+  if Note.Anchor <> naFree then
+    Builder.AddChoice(PROPERTY_ROW_NOTE_LEADER, rsPropNoteLeader, [rsPropNoteLeaderNone, rsPropNoteLeaderArrow,
+      rsPropNoteLeaderDot, rsPropNoteLeaderLine], Ord(Note.Leader));
+  Builder.Add(PROPERTY_ROW_NOTE_ANCHOR, prkText, rsPropNoteAnchor, NoteAnchorText(Pattern, Note));
+  if Note.Anchor <> naFree then
+  begin
+    Builder.Add(PROPERTY_ROW_NOTE_FREE, prkButton, '', rsPropNoteFree);
+    Builder.Last^.Hint := rsPropNoteFreeHint;
+  end;
+end;
+
+// A stamp has no font: its scale, printing and box instead
+procedure AddStampRows(var Builder: TRowBuilder; Pattern: TPattern; Note: TNoteObject);
+begin
+  Builder.AddNumber(PROPERTY_ROW_STAMP_SCALE, rsPropStampScale, Note.Scale, MIN_STAMP_SCALE, MAX_STAMP_SCALE, STAMP_SCALE_STEP,
+    STAMP_SCALE_DECIMALS);
+  Builder.AddCheck(PROPERTY_ROW_NOTE_PRINT, rsPropNotePrint, rsPropNotePrintCaption, Note.Print);
+  Builder.AddCheck(PROPERTY_ROW_NOTE_BOX, rsPropNoteBox, rsPropNoteBoxCaption, Note.Boxed);
+  AddNoteAnchorRows(Builder, Pattern, Note);
+end;
+
+// Its size, printing, look and what it hangs from
+procedure AddTextNoteRows(var Builder: TRowBuilder; Pattern: TPattern; Note: TNoteObject);
+begin
+  Builder.AddNumber(PROPERTY_ROW_NOTE_SIZE, rsPropNoteSize, Note.Size, NOTE_SIZE_STEP, MAX_NOTE_SIZE,
+    NOTE_SIZE_STEP, 1);
+  Builder.AddCheck(PROPERTY_ROW_NOTE_PRINT, rsPropNotePrint, rsPropNotePrintCaption, Note.Print);
+  // In the order of TTextAlign
+  Builder.AddChoice(PROPERTY_ROW_NOTE_ALIGN, rsPropNoteAlign, [rsPropNoteAlignLeft, rsPropNoteAlignCentre,
+    rsPropNoteAlignRight], Ord(Note.Align));
+  Builder.AddCheck(PROPERTY_ROW_NOTE_BOX, rsPropNoteBox, rsPropNoteBoxCaption, Note.Boxed);
+  Builder.Add(PROPERTY_ROW_NOTE_FONT, prkFont, rsPropNoteFont, Note.Style.Font);
+  Builder.Last^.Choices := [rsPropFontDefault];
+  Builder.Last^.Hint := rsPropFontHint;
+  Builder.AddCheck(PROPERTY_ROW_NOTE_BOLD, rsPropNoteStyle, rsPropNoteBold, Note.Style.Bold);
+  Builder.AddCheck(PROPERTY_ROW_NOTE_ITALIC, '', rsPropNoteItalic, Note.Style.Italic);
+  AddNoteAnchorRows(Builder, Pattern, Note);
+end;
+
+// A note's text goes under its name, and its other rows after the fields; a
+// stamp's text only names it
 procedure AddNoteRows(var Builder: TRowBuilder; Pattern: TPattern; Note: TNoteObject; Place: TSectionPlace);
 begin
   case Place of
     spName:
-    begin
-      Builder.Add(PROPERTY_ROW_NOTE_TEXT, prkLongText, rsPropNoteText, Note.DisplayText(Pattern.Resolver));
-      Builder.Last^.Hint := rsPropNoteTextHint;
-    end;
-    spRows:
-    begin
-      Builder.AddNumber(PROPERTY_ROW_NOTE_SIZE, rsPropNoteSize, Note.Size, NOTE_SIZE_STEP, MAX_NOTE_SIZE,
-        NOTE_SIZE_STEP, 1);
-      Builder.AddCheck(PROPERTY_ROW_NOTE_PRINT, rsPropNotePrint, rsPropNotePrintCaption, Note.Print);
-      // In the order of TTextAlign
-      Builder.AddChoice(PROPERTY_ROW_NOTE_ALIGN, rsPropNoteAlign, [rsPropNoteAlignLeft, rsPropNoteAlignCentre,
-        rsPropNoteAlignRight], Ord(Note.Align));
-      Builder.AddCheck(PROPERTY_ROW_NOTE_BOX, rsPropNoteBox, rsPropNoteBoxCaption, Note.Boxed);
-      Builder.Add(PROPERTY_ROW_NOTE_FONT, prkFont, rsPropNoteFont, Note.Style.Font);
-      Builder.Last^.Choices := [rsPropFontDefault];
-      Builder.Last^.Hint := rsPropFontHint;
-      Builder.AddCheck(PROPERTY_ROW_NOTE_BOLD, rsPropNoteStyle, rsPropNoteBold, Note.Style.Bold);
-      Builder.AddCheck(PROPERTY_ROW_NOTE_ITALIC, '', rsPropNoteItalic, Note.Style.Italic);
-      // A free note has nothing to point at; in the order of TNoteLeader
-      if Note.Anchor <> naFree then
-        Builder.AddChoice(PROPERTY_ROW_NOTE_LEADER, rsPropNoteLeader, [rsPropNoteLeaderNone, rsPropNoteLeaderArrow,
-          rsPropNoteLeaderDot, rsPropNoteLeaderLine], Ord(Note.Leader));
-      Builder.Add(PROPERTY_ROW_NOTE_ANCHOR, prkText, rsPropNoteAnchor, NoteAnchorText(Pattern, Note));
-      if Note.Anchor <> naFree then
+      if Note.IsStamp then
       begin
-        Builder.Add(PROPERTY_ROW_NOTE_FREE, prkButton, '', rsPropNoteFree);
-        Builder.Last^.Hint := rsPropNoteFreeHint;
+        Builder.Add(PROPERTY_ROW_NOTE_TEXT, prkLongText, rsPropStampText, Note.DisplayText(Pattern.Resolver));
+        Builder.Last^.Hint := rsPropStampTextHint;
+      end
+      else
+      begin
+        Builder.Add(PROPERTY_ROW_NOTE_TEXT, prkLongText, rsPropNoteText, Note.DisplayText(Pattern.Resolver));
+        Builder.Last^.Hint := rsPropNoteTextHint;
       end;
-    end;
+    spRows:
+      if Note.IsStamp then
+        AddStampRows(Builder, Pattern, Note)
+      else
+        AddTextNoteRows(Builder, Pattern, Note);
   end;
 end;
+
 
 function PropertyRows(Pattern: TPattern; Node: TEvalNode): TPropertyRowArray;
 var
@@ -1256,6 +1296,18 @@ begin
   Result := FinishStep(Document, Document.Pattern.SetNoteSize(TNoteObject(Node), Size), Reason, MergeKey);
 end;
 
+function SetStampScaleStep(Document: TPatternDocument; Node: TEvalNode; Scale: double; out Reason: string;
+  const MergeKey: string): boolean;
+begin
+  Reason := '';
+  if not (Node is TNoteObject) then
+    Exit(Refuse(Reason));
+  if SameValue(TNoteObject(Node).Scale, Scale) then
+    Exit(True);
+  Document.BeginChange(rsPropChangeStampScale);
+  Result := FinishStep(Document, Document.Pattern.SetNoteScale(TNoteObject(Node), Scale), Reason, MergeKey);
+end;
+
 function SetNotePrintStep(Document: TPatternDocument; Node: TEvalNode; Print: boolean; out Reason: string): boolean;
 begin
   Reason := '';
@@ -1489,6 +1541,8 @@ begin
   end
   else if (RowId = PROPERTY_ROW_NOTE_SIZE) and (Node is TNoteObject) then
     Result := SetNoteSizeStep(Document, Node, Value, Reason, 'notesize:' + Node.Key)
+  else if (RowId = PROPERTY_ROW_STAMP_SCALE) and (Node is TNoteObject) then
+    Result := SetStampScaleStep(Document, Node, Value, Reason, 'stampscale:' + Node.Key)
   else
     Reason := rsPropNoSuchRow;
 end;

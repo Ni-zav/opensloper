@@ -33,7 +33,7 @@ uses
   Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.TextFields, Sloper.Core.Fragment,
   Sloper.Core.PatternCheck, Sloper.Document.PatternDocument, Sloper.Editor.View, Sloper.Editor.Snap,
   Sloper.Editor.Scene, Sloper.UI.CanvasInput, Sloper.Editor.SelectionEdits, Sloper.UI.PatternPainter, Sloper.UI.CanvasTools,
-  Sloper.Editor.Tools, Sloper.Editor.SuggestionGrade;
+  Sloper.Editor.Tools, Sloper.Editor.SuggestionGrade, Sloper.Core.Stamp;
 
 type
   TCursorMoveEvent = procedure(Sender: TObject; const ModelPos: TVec2) of object;
@@ -202,6 +202,9 @@ type
     procedure StartTransform(Kind: TTransformKind);
     // An arc about the selected point
     procedure AddArcHere;
+    // A stamp of Drawing on the one point, edge or piece selected, or free in
+    // the middle of the view, then selected
+    procedure AddStamp(const Drawing: TStampDrawing; const AText: string);
     // A construction edge parallel to the selected edge, or to the run the
     // selected edges make
     procedure OffsetSelection(Side: TOffsetSide);
@@ -941,6 +944,12 @@ procedure TPatternCanvas.AddArcHere;
 begin
   if Assigned(FDocument) then
     ApplyEdit(AddArcAtSelection(FDocument, FSelection, FDrawRole));
+end;
+
+procedure TPatternCanvas.AddStamp(const Drawing: TStampDrawing; const AText: string);
+begin
+  if Assigned(FDocument) then
+    ApplyEdit(AddStampStep(FDocument, Drawing, AText, FSelection, FView.ToModel(Vec2(ClientWidth / 2, ClientHeight / 2))));
 end;
 
 procedure TPatternCanvas.OffsetSelection(Side: TOffsetSide);

@@ -71,6 +71,7 @@ uses
   Sloper.Tests.Piece,
   Sloper.Tests.Seam,
   Sloper.Tests.Notes,
+  Sloper.Tests.Stamps,
   Sloper.Tests.PatternView,
   Sloper.Tests.IconSet,
   Sloper.Tests.ConvertEdge,

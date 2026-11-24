@@ -82,6 +82,7 @@ type
     procedure MenuFileDrapeClick(Sender: TObject);
     procedure MenuFileExportDraftClick(Sender: TObject);
     procedure ImportVariablesClick(Sender: TObject);
+    procedure ImportStampClick(Sender: TObject);
     procedure MenuFileQuitClick(Sender: TObject);
     procedure MenuEditUndoClick(Sender: TObject);
     procedure MenuEditRedoClick(Sender: TObject);
@@ -268,6 +269,7 @@ implementation
 
 uses
   Math, process, Graphics, Clipbrd, Sloper.UI.Icons, Sloper.Editor.ObjectList, Sloper.Core.JSON, Sloper.Output.DraftSVG,
+  Sloper.Core.Stamp, Sloper.Core.SvgImport,
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Core.Evaluator, Sloper.Core.Variables,
@@ -310,6 +312,11 @@ resourcestring
   rsMenuFileExportDraft = 'E&xport Draft SVG...';
   rsMenuFileImportVariables = '&Import Variables...';
   rsImportVariablesTitle = 'Import Variables';
+  rsMenuFileImportStamp = 'Import SVG &Stamp...';
+  rsImportStampTitle = 'Import SVG Stamp';
+  rsImportStampFilter = 'SVG drawings (*.svg)|*.svg;*.SVG|All files|*';
+  rsImportStampDone = 'Added the stamp %s';
+  rsImportStampWarnings = 'The stamp was added, drawn differently from the file:';
   rsExportDraftFilter = 'SVG (*.svg)|*.svg';
   rsExportDraftUnnamed = 'draft';
   rsExportDraftDone = 'Wrote %s';
@@ -932,7 +939,7 @@ end;
 // The File, Edit and View commands from the form, and the top toolbar
 procedure TMainForm.CreateCommands;
 var
-  DrapeItem, ImportItem: TMenuItem;
+  DrapeItem, ImportItem, StampItem: TMenuItem;
 begin
   MenuFileNew.Action := FCommands.NewAction(rsMenuFileNew, aiNew, @MenuFileNewClick, CommandShortCut(kcNew));
   MenuFileOpen.Action := FCommands.NewAction(rsMenuFileOpen, aiOpen, @MenuFileOpenClick, CommandShortCut(kcOpen));
@@ -960,6 +967,10 @@ begin
   ImportItem := TMenuItem.Create(MenuFile);
   ImportItem.Action := FCommands.NewAction(rsMenuFileImportVariables, aiOpen, @ImportVariablesClick);
   MenuFile.Insert(MenuFile.IndexOf(MenuFileMeasurements) + 1, ImportItem);
+  // A drawing from another app, placed as a note is
+  StampItem := TMenuItem.Create(MenuFile);
+  StampItem.Action := FCommands.NewAction(rsMenuFileImportStamp, aiOpen, @ImportStampClick);
+  MenuFile.Insert(MenuFile.IndexOf(ImportItem) + 1, StampItem);
   MenuFileQuit.Action := FCommands.NewAction(rsMenuFileQuit, aiQuit, @MenuFileQuitClick, CommandShortCut(kcQuit));
   FUndoAction := FCommands.NewAction(rsMenuEditUndo, aiUndo, @MenuEditUndoClick, CommandShortCut(kcUndo));
   MenuEditUndo.Action := FUndoAction;
@@ -2125,6 +2136,38 @@ begin
   StatusBar.Panels[PANEL_MESSAGE].Text := Message;
   if Warning then
     MessageDlg(Message, mtWarning, [mbOK], 0);
+end;
+
+// An SVG drawing as a stamp, named after its file, on what is selected or in
+// the middle of the view; what it was drawn without is shown after
+procedure TMainForm.ImportStampClick(Sender: TObject);
+var
+  Dialog: TOpenDialog;
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+  Message, FileName: string;
+begin
+  Dialog := TOpenDialog.Create(Self);
+  try
+    Dialog.Title := rsImportStampTitle;
+    Dialog.Filter := rsImportStampFilter;
+    if FDocument.FileName <> '' then
+      Dialog.InitialDir := ExtractFileDir(FDocument.FileName);
+    if not Dialog.Execute then
+      Exit;
+    FileName := Dialog.FileName;
+  finally
+    FreeAndNil(Dialog);
+  end;
+  if not ImportSvgStampFile(FileName, Drawing, Warnings, Message) then
+  begin
+    MessageDlg(Message, mtError, [mbOK], 0);
+    Exit;
+  end;
+  FCanvas.AddStamp(Drawing, ChangeFileExt(ExtractFileName(FileName), ''));
+  StatusBar.Panels[PANEL_MESSAGE].Text := Format(rsImportStampDone, [ExtractFileName(FileName)]);
+  if Length(Warnings) > 0 then
+    MessageDlg(rsImportStampWarnings + LineEnding + LineEnding + string.Join(LineEnding, Warnings), mtWarning, [mbOK], 0);
 end;
 
 // A publish window already showing the pattern's layout comes to the front;

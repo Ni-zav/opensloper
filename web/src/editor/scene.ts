@@ -68,6 +68,18 @@ export interface SceneNote extends SceneObject {
   anchorAt: Vec2;
   leader: string;
   leaderStrokes: number[];
+  // A stamp's paths where it is drawn, in mm; empty for a note of text
+  stamp: StampPath[];
+}
+
+// One path of a stamp's drawing: SVG path data in mm, colours as #rrggbb or
+// 'none', and its stroke's width in mm
+export interface StampPath {
+  d: string;
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+  evenOdd: boolean;
 }
 
 // The marker of a point or edge, as segments as a piece's marks are
@@ -285,6 +297,13 @@ export function parseNote(record: JsonRecord): SceneNote {
     anchorAt: pointField(record, 'anchorAt'),
     leader: stringField(record, 'leader') ?? 'none',
     leaderStrokes: numbersField(record, 'leaderStrokes') ?? [],
+    stamp: recordsField(record, 'stamp').map((path) => ({
+      d: stringField(path, 'd') ?? '',
+      fill: stringField(path, 'fill') ?? 'none',
+      stroke: stringField(path, 'stroke') ?? 'none',
+      strokeWidth: numberField(path, 'strokeWidth') ?? 0,
+      evenOdd: booleanField(path, 'evenOdd') ?? false,
+    })),
   });
 }
 

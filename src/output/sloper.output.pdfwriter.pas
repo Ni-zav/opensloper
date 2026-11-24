@@ -62,6 +62,7 @@ type
     procedure Add(const Text: rawbytestring);
     function PageX(Value: double): string;
     function PageY(Value: double): string;
+    function PointText(const Point: TVec2): string;
   public
     procedure BeginPage(AWidth, AHeight: double);
     procedure SetLineWidth(Millimetres: double);
@@ -78,6 +79,20 @@ type
     procedure Polyline(const Points: TVec2Array; Closed: boolean);
     procedure Line(const From, Target: TVec2);
     procedure Rectangle(const Area: TRect2);
+    // A path of any shape: MoveTo starts each part, then PaintPath draws it
+    procedure MoveTo(const Point: TVec2);
+    procedure LineTo(const Point: TVec2);
+    procedure CurveTo(const Control1, Control2, Point: TVec2);
+    procedure ClosePath;
+    // Fills it in the fill colour, by the even-odd rule or nonzero, and
+    // strokes it, either, both or neither
+    procedure PaintPath(Fill, Stroke, EvenOdd: boolean);
+    // Each part from 0 to 1, for paths alone, as SetColor sets both
+    procedure SetFillColor(Red, Green, Blue: double);
+    procedure SetStrokeColor(Red, Green, Blue: double);
+    // Keeps the colours, line width and dash until RestoreState
+    procedure SaveState;
+    procedure RestoreState;
     // Baseline at (AX, AY); Size in points; in the default font
     procedure Text(AX, AY, Size: double; const AText: string); overload;
     // In Style's font, or the default font when it cannot be embedded
@@ -413,6 +428,68 @@ procedure TPDFWriter.Rectangle(const Area: TRect2);
 begin
   Add(PageX(Area.MinX) + ' ' + PageY(Area.MaxY) + ' ' + PointsText((Area.MaxX - Area.MinX) * POINTS_PER_MM) + ' ' +
     PointsText((Area.MaxY - Area.MinY) * POINTS_PER_MM) + ' re S');
+end;
+
+function TPDFWriter.PointText(const Point: TVec2): string;
+begin
+  Result := PageX(Point.X) + ' ' + PageY(Point.Y);
+end;
+
+procedure TPDFWriter.MoveTo(const Point: TVec2);
+begin
+  Add(PointText(Point) + ' m');
+end;
+
+procedure TPDFWriter.LineTo(const Point: TVec2);
+begin
+  Add(PointText(Point) + ' l');
+end;
+
+procedure TPDFWriter.CurveTo(const Control1, Control2, Point: TVec2);
+begin
+  Add(PointText(Control1) + ' ' + PointText(Control2) + ' ' + PointText(Point) + ' c');
+end;
+
+procedure TPDFWriter.ClosePath;
+begin
+  Add('h');
+end;
+
+procedure TPDFWriter.PaintPath(Fill, Stroke, EvenOdd: boolean);
+var
+  Paint: string;
+begin
+  if Fill and Stroke then
+    Paint := 'B'
+  else if Fill then
+    Paint := 'f'
+  else if Stroke then
+    Paint := 'S'
+  else
+    Paint := 'n';
+  if Fill and EvenOdd then
+    Paint := Paint + '*';
+  Add(Paint);
+end;
+
+procedure TPDFWriter.SetFillColor(Red, Green, Blue: double);
+begin
+  Add(PointsText(Red) + ' ' + PointsText(Green) + ' ' + PointsText(Blue) + ' rg');
+end;
+
+procedure TPDFWriter.SetStrokeColor(Red, Green, Blue: double);
+begin
+  Add(PointsText(Red) + ' ' + PointsText(Green) + ' ' + PointsText(Blue) + ' RG');
+end;
+
+procedure TPDFWriter.SaveState;
+begin
+  Add('q');
+end;
+
+procedure TPDFWriter.RestoreState;
+begin
+  Add('Q');
 end;
 
 // WinAnsi matches Latin-1 for what is kept here

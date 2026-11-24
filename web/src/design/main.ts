@@ -163,6 +163,9 @@ class DesignApp {
       zoom: () => {
         this.run(this.canvas.zoomToSelection());
       },
+      delete: () => {
+        this.run(this.canvas.deleteSelection());
+      },
     });
     this.properties = new PropertiesPanel(this.document, {
       message: showMessage,
@@ -845,6 +848,15 @@ class DesignApp {
       this.canvas.holdLabels(true);
     } else if (event.key === 'Escape') {
       this.canvas.cancel();
+    } else if (
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      // Plain only: Shift+Delete is Cut on the desktop
+      this.run(this.canvas.deleteSelection());
     } else if (matches('undo')) {
       this.run(this.document.undo());
     } else if (matches('redo')) {

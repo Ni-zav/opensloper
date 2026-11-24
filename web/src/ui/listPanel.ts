@@ -393,7 +393,7 @@ export abstract class ListPanel implements SideTabContent {
     } else if (this.isEditable && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
       // Typing replaces the cell's text, as in a spreadsheet
       this.openCell(event.key);
-    } else if (event.key === 'Delete') {
+    } else if (event.key === 'Delete' || event.key === 'Backspace') {
       this.deleteRequested();
     } else {
       handled = false;

@@ -17,10 +17,16 @@ const FILTERS = [
   ['problems', STRINGS.objectsProblems],
 ] as const;
 
+export interface ObjectsPanelEvents extends ListPanelEvents {
+  // Delete was pressed in the list, whose rows are the canvas selection
+  delete(): void;
+}
+
 export class ObjectsPanel extends ListPanel {
   private readonly filter: HTMLSelectElement;
+  private readonly onDelete: () => void;
 
-  constructor(document: PatternDocument, events: ListPanelEvents) {
+  constructor(document: PatternDocument, events: ObjectsPanelEvents) {
     super(document, events, [
       { caption: STRINGS.columnName, width: 110 },
       { caption: STRINGS.columnOperation, width: 150 },
@@ -37,6 +43,14 @@ export class ObjectsPanel extends ListPanel {
       this.refresh();
     });
     this.header.append(this.filter);
+    this.onDelete = () => {
+      events.delete();
+    };
+  }
+
+  // As the desktop's, deletes what is selected on the canvas
+  protected override deleteRequested(): void {
+    this.onDelete();
   }
 
   protected async buildRows(search: string): Promise<ListPanelRow[]> {

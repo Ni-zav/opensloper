@@ -93,6 +93,7 @@ type
     function DoLabelKeys(Params: TJSONObject): TJSONData;
     function DoSeamPick(Params: TJSONObject): TJSONData;
     function DoSeamMake(Params: TJSONObject): TJSONData;
+    function DoDelete(Params: TJSONObject): TJSONData;
     function DoComplete(Params: TJSONObject): TJSONData;
     function DoListObjects(Params: TJSONObject): TJSONData;
     function DoListVariables(Params: TJSONObject): TJSONData;
@@ -262,6 +263,11 @@ resourcestring
     '`lines`, each side''s edges as flat lists x, y, x, y to draw; `message`, the progress or why nothing was picked';
   rsEditorSeamMake = 'Makes the seam between the sides picked, as one undo step.';
   rsEditorSeamMakeReturns = 'As editor_tool_click gives it';
+  rsEditorDelete = 'Deletes the selected objects, as the Delete key on the canvas, as one undo step; refused, changing ' +
+    'nothing, while another object uses one of them.';
+  rsEditorDeleteReturns = '`done`, true when they were deleted; `message`, why not; `select`, the selection ' +
+    'afterwards, or null to leave it';
+  rsEditorDeleteSelection = 'The selected objects, by ID, or by name for a repeat''s point';
   rsEditorComplete = 'What to offer while a formula is typed: objects, variables, measurements and functions matching ' +
     'the word at the caret; @, # and a dot after an object narrow the list.';
   rsEditorCompleteTarget = 'The object or variable whose formula it is, by ID or name; left out for a new one';
@@ -559,6 +565,8 @@ begin
     AddApiMethod(Built, 'editor_seam_make', rsEditorSeamMake, rsEditorSeamMakeReturns);
     AddApiParam(Built, 'sideA', apList, True, rsEditorSideA);
     AddApiParam(Built, 'sideB', apList, True, rsEditorSideB);
+    AddApiMethod(Built, 'editor_delete', rsEditorDelete, rsEditorDeleteReturns);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
     AddApiMethod(Built, 'editor_complete', rsEditorComplete, rsEditorCompleteReturns, True);
     AddApiParam(Built, 'id', apTarget, False, rsEditorCompleteTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorCompleteText);
@@ -2439,6 +2447,16 @@ begin
   Result := EditToJSON(AddSeamFromSides(Document, SideA, SideB));
 end;
 
+function TEditorApiServer.DoDelete(Params: TJSONObject): TJSONData;
+var
+  Selection: TStringArray;
+begin
+  Selection := KeysParam(Params, 'selection');
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Result := EditToJSON(DeleteSelection(Document, Selection, rsSelectionDelete));
+end;
+
 function TEditorApiServer.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
@@ -2459,6 +2477,7 @@ begin
     'editor_label_keys': Result := DoLabelKeys(Params);
     'editor_seam_pick': Result := DoSeamPick(Params);
     'editor_seam_make': Result := DoSeamMake(Params);
+    'editor_delete': Result := DoDelete(Params);
     'editor_complete': Result := DoComplete(Params);
     'editor_list_objects': Result := DoListObjects(Params);
     'editor_list_variables': Result := DoListVariables(Params);

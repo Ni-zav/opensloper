@@ -331,6 +331,27 @@ export class PatternCanvas implements CanvasToolHost {
     return { minX, minY, maxX, maxY };
   }
 
+  // The Delete key, as Edit > Delete on the desktop: refused with the reason
+  // while something uses what is selected
+  async deleteSelection(): Promise<void> {
+    if (this.selection.size === 0 || this.mode !== 'idle') {
+      return;
+    }
+    const selection = [...this.selection].map((id) => {
+      const point = this.scene.points.find((each) => each.id === id);
+      const target = targetParams(point ?? { id, name: id });
+      return 'id' in target ? target.id : target.name;
+    });
+    const answer = await this.document.call('editor_delete', { selection });
+    const message = stringField(answer, 'message') ?? '';
+    if (message !== '') {
+      this.events.message(message);
+    }
+    if (Array.isArray(answer.select)) {
+      this.select(idsField(answer, 'select'));
+    }
+  }
+
   // Escape: drops a drag, then the tool's step, then the selection
   cancel(): void {
     if (this.mode === 'dragging' || this.mode === 'starting') {

@@ -341,6 +341,18 @@ try {
   await page.keyboard.up('Control');
   await waitForData(page, 'undo', 'Add point');
 
+  // The Delete key deletes what is selected, as one undo step
+  assert.equal(await bodyData(page, 'selection'), added, 'the point is still selected');
+  await page.keyboard.press('Delete');
+  await waitForData(page, 'undo', 'Delete');
+  await waitForData(page, 'selection', '');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', 'Add point');
+  await page.mouse.click(at.x, at.y);
+  await waitForData(page, 'selection', added);
+
   // The Properties tab shows the point: renamed, a formula refused and put back, then one taken,
   // a marker chosen, which adds the marker's size, the point locked and unlocked, and its name put
   // back, as the rectangle's corners are named after the points before them

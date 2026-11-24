@@ -68,6 +68,8 @@ type
     procedure TestLabelKeys;
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
+    // The Delete key: refused with the reason while something uses an object
+    procedure TestDeleteSelection;
     procedure TestSeamInScene;
     // Notes as the canvas draws them, fields filled in
     procedure TestNotesInScene;
@@ -531,6 +533,25 @@ begin
   AssertEquals('none means none', 0, Answer.Arrays['objects'].Count);
   Call('editor_label_keys', '{"selection": [999]}');
   AssertEquals('an unknown ID', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestEditorServer.TestDeleteSelection;
+begin
+  AddSquare;
+  Call('editor_delete', '{"selection": ["A"]}');
+  AssertFalse('a point the edges use stays', Answer.Booleans['done']);
+  AssertTrue('with the reason', Answer.Strings['message'] <> '');
+  AssertTrue('the selection stays', Answer.Nulls['select']);
+  Call('editor_delete', '{"selection": [' + IntToStr(IdOf('Flap')) + ']}');
+  AssertTrue('the piece goes', Answer.Booleans['done']);
+  AssertEquals('nothing is selected', 0, Answer.Arrays['select'].Count);
+  Call('editor_scene');
+  AssertEquals('no pieces', 0, Answer.Arrays['pieces'].Count);
+  Call('undo');
+  Call('editor_scene');
+  AssertEquals('one undo step', 1, Answer.Arrays['pieces'].Count);
+  Call('editor_delete', '{"selection": []}');
+  AssertFalse('nothing selected, nothing done', Answer.Booleans['done']);
 end;
 
 procedure TTestEditorServer.TestSeamTool;

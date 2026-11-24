@@ -869,6 +869,33 @@ class OpenSloper:
             "to": to,
         })
 
+    def convert_point(
+        self,
+        target: int | str,
+        type: Literal["freePoint", "offsetPoint", "alongEdgePoint", "betweenPoint", "intersectPoint", "circleEdgePoint", "circleCirclePoint", "projectPoint"],
+        *,
+        from_: list[int | str] | None = None,
+    ) -> Any:
+        """Changes how a point is placed, keeping its ID, name and users. Its numbers are worked out
+        so it stays where it is, or moves onto its new edge, line or crossing (at most 10 mm);
+        formulas it had are replaced.
+
+        Args:
+            target: The object, by its ID or its name.
+            type: What it becomes, as the pattern file names it.
+            from_: What it is placed from, in order: offsetPoint a point; alongEdgePoint an edge;
+                betweenPoint two points; intersectPoint two edges; circleEdgePoint the centre and an
+                edge; circleCirclePoint the two centres; projectPoint the point and the edge. None
+                for freePoint.
+
+        Returns:
+            The object, as `get_object` gives it.
+        """
+        return self._send("convert_point", _target(target), {
+            "type": type,
+            "from": from_,
+        })
+
     def merge_points(self, points: list[int | str]) -> Any:
         """Merges two or more points into one, which every edge and formula then uses.
 

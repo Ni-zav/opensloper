@@ -143,6 +143,8 @@ class DesignApp {
   private readonly deleteButton: HTMLButtonElement;
   // Cut, Copy and Delete, which need a selection
   private readonly selectionButtons: HTMLButtonElement[];
+  // Changes the first selected point's type; needs a selection too
+  private readonly pointTypeSelect: HTMLSelectElement;
   // The fragment last copied, and whether the browser let it onto the
   // clipboard; when it did not, Paste takes it from here
   private copied = '';
@@ -181,6 +183,8 @@ class DesignApp {
       button.disabled = true;
     }
     this.selectionButtons = selectionButtons;
+    const pointTypeSelect = this.pointTypeBox();
+    this.pointTypeSelect = pointTypeSelect;
     this.canvas = new PatternCanvas(element('canvas', HTMLCanvasElement), this.document, tables, {
       message: showMessage,
       selectionChanged: (ids) => {
@@ -188,6 +192,7 @@ class DesignApp {
         for (const button of selectionButtons) {
           button.disabled = ids.length === 0;
         }
+        pointTypeSelect.disabled = ids.length === 0;
         this.objects.showSelection(ids);
         this.properties.showSelection(ids);
         this.features.showSelection(ids);
@@ -337,6 +342,7 @@ class DesignApp {
       this.exampleBox(),
       this.roleBox(),
       this.labelBox(),
+      this.pointTypeSelect,
     );
     for (const tool of tables.tools.filter((each) => this.canvas.hasTool(each.name))) {
       const button = iconButton(tool.icon, tool.caption, `${tool.caption} (${tool.keys})`, () => {
@@ -776,6 +782,29 @@ class DesignApp {
     }
     box.addEventListener('change', () => {
       this.canvas.drawRole = box.value;
+    });
+    return box;
+  }
+
+  // Tools > Points > Change To on the desktop, as a box that goes back to
+  // its caption once a type is chosen
+  private pointTypeBox(): HTMLSelectElement {
+    const box = document.createElement('select');
+    box.id = 'point-type';
+    box.title = STRINGS.changePointHint;
+    box.disabled = true;
+    box.add(new Option(STRINGS.changePointTo, '', true, true));
+    for (const type of this.tables.pointTypes) {
+      const option = new Option(type.caption, type.name);
+      option.title = type.hint;
+      box.add(option);
+    }
+    box.addEventListener('change', () => {
+      const type = box.value;
+      box.value = '';
+      if (type !== '') {
+        this.run(this.canvas.convertPoint(type));
+      }
     });
     return box;
   }

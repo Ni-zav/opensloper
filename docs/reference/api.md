@@ -302,6 +302,18 @@ Changes an edge to a line or a curve in place, keeping its ID.
 
 Returns: The object, as `get_object` gives it.
 
+### `convert_point`
+
+Changes how a point is placed, keeping its ID, name and users. Its numbers are worked out so it stays where it is, or moves onto its new edge, line or crossing (at most 10 mm); formulas it had are replaced.
+
+| Parameter | Value | Required | Description |
+| --- | --- | --- | --- |
+| `id` or `name` | number or text | yes | The object, by its ID or its name |
+| `type` | one of: `freePoint`, `offsetPoint`, `alongEdgePoint`, `betweenPoint`, `intersectPoint`, `circleEdgePoint`, `circleCirclePoint`, `projectPoint` | yes | What it becomes, as the pattern file names it |
+| `from` | list of IDs or names |  | What it is placed from, in order: offsetPoint a point; alongEdgePoint an edge; betweenPoint two points; intersectPoint two edges; circleEdgePoint the centre and an edge; circleCirclePoint the two centres; projectPoint the point and the edge. None for freePoint |
+
+Returns: The object, as `get_object` gives it.
+
 ### `merge_points`
 
 Merges two or more points into one, which every edge and formula then uses.

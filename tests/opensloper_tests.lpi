@@ -86,6 +86,11 @@
         <UnitName Value="Sloper.Tests.ConvertEdge"/>
       </Unit>
       <Unit>
+        <Filename Value="sloper.tests.convertpoint.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Sloper.Tests.ConvertPoint"/>
+      </Unit>
+      <Unit>
         <Filename Value="sloper.tests.mergepoints.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Sloper.Tests.MergePoints"/>

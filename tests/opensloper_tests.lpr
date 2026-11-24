@@ -75,6 +75,7 @@ uses
   Sloper.Tests.PatternView,
   Sloper.Tests.IconSet,
   Sloper.Tests.ConvertEdge,
+  Sloper.Tests.ConvertPoint,
   Sloper.Tests.MergePoints,
   Sloper.Tests.Fragment,
   Sloper.Tests.VariableImport,

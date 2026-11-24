@@ -70,6 +70,7 @@ type
     procedure TestSeamTool;
     // The Delete key: refused with the reason while something uses an object
     procedure TestDeleteSelection;
+    procedure TestConvertPoint;
     // Copy gives the fragment's text, paste makes copies of it; cut is copy and delete
     procedure TestCopyAndPaste;
     // The Variables tab's Import…, from the other file's text
@@ -557,6 +558,25 @@ begin
   AssertEquals('one undo step', 1, Answer.Arrays['pieces'].Count);
   Call('editor_delete', '{"selection": []}');
   AssertFalse('nothing selected, nothing done', Answer.Booleans['done']);
+end;
+
+// The first selected point, placed from the rest in order
+procedure TTestEditorServer.TestConvertPoint;
+begin
+  AddSquare;
+  Call('add_point', '{"type": "freePoint", "name": "M", "x": 50, "y": 2}');
+  Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('M')) + ', ' + IntToStr(IdOf('Line_A_B')) +
+    '], "type": "alongEdgePoint"}');
+  AssertTrue(Answer.Strings['message'], Answer.Booleans['done']);
+  AssertEquals('the point stays selected', '[' + IntToStr(IdOf('M')) + ']', Answer.Arrays['select'].AsJSON);
+  Call('get_object', '{"name": "M"}');
+  AssertEquals('alongEdgePoint', Answer.Strings['type']);
+  Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('Line_A_B')) + '], "type": "freePoint"}');
+  AssertFalse('an edge first', Answer.Booleans['done']);
+  Call('editor_convert_point', '{"selection": [' + IntToStr(IdOf('M')) + '], "type": "spiral"}');
+  AssertEquals('no such type', RPC_INVALID_PARAMS, ErrorCode);
+  Call('editor_tables');
+  AssertEquals('every type in the box', 8, Answer.Arrays['pointTypes'].Count);
 end;
 
 procedure TTestEditorServer.TestCopyAndPaste;

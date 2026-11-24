@@ -225,6 +225,7 @@ type
     procedure OffsetPieceClick(Sender: TObject);
     procedure RoundCornerClick(Sender: TObject);
     procedure ConvertClick(Sender: TObject);
+    procedure ConvertPointClick(Sender: TObject);
     procedure MarkingClick(Sender: TObject);
     procedure RemoveMarkingClick(Sender: TObject);
     procedure SuggestSeamsClick(Sender: TObject);
@@ -273,7 +274,7 @@ uses
   Sloper.Core.Seam, Sloper.Core.SeamSuggest, Sloper.Core.Version, Sloper.UI.About, Sloper.UI.Help,
   Sloper.Core.AppPaths, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.UnitConvert,
   Sloper.Core.PatternCheck, Sloper.Core.RecentFiles, Sloper.Output.Layout, Sloper.Core.DrapeFile, Sloper.Core.Evaluator, Sloper.Core.Variables,
-  Sloper.API.Server, Sloper.API.Endpoint, Sloper.Core.VariableImport, Sloper.Editor.PanelEdits;
+  Sloper.API.Server, Sloper.API.Endpoint, Sloper.Core.VariableImport, Sloper.Editor.PanelEdits, Sloper.Core.Pattern, Sloper.Editor.SelectionEdits;
 
 const
   // The Claude tab's key in the side panel, and in the settings
@@ -421,6 +422,15 @@ resourcestring
   rsMenuToolsToCurve = 'Change to Curv&e';
   rsMenuToolsMerge = 'Merge &Points';
   rsMenuToolsBreak = '&Break Point';
+  rsMenuToolsChangeTo = '&Change To';
+  rsMenuPointFree = '&Free Point';
+  rsMenuPointOffset = '&Offset Point';
+  rsMenuPointAlongEdge = 'Point &Along Edge';
+  rsMenuPointBetween = 'Point &Between Points';
+  rsMenuPointIntersect = '&Intersection of Edges';
+  rsMenuPointCircleEdge = '&Circle and Edge';
+  rsMenuPointCircleCircle = 'Circle and Ci&rcle';
+  rsMenuPointProject = 'Point &Projected onto Edge';
   rsMenuToolsRepeat = '&Repeat Points';
   rsMenuToolsHole = 'Mark &Hole';
   rsMenuToolsAttachLine = 'Attach Marking to &Piece';
@@ -1309,6 +1319,8 @@ var
   SubMenu: TMenuItem;
   OffsetAction, ConvertAction, SourceAction: TAction;
   Role: TEdgeRole;
+  Conversion: TPointConversion;
+  PointCaptions: array[TPointConversion] of string;
 
   procedure AddCommand(AParent: TMenuItem; AAction: TAction);
   begin
@@ -1337,6 +1349,14 @@ var
   end;
 
 begin
+  PointCaptions[pcFree] := rsMenuPointFree;
+  PointCaptions[pcOffset] := rsMenuPointOffset;
+  PointCaptions[pcAlongEdge] := rsMenuPointAlongEdge;
+  PointCaptions[pcBetween] := rsMenuPointBetween;
+  PointCaptions[pcIntersect] := rsMenuPointIntersect;
+  PointCaptions[pcCircleEdge] := rsMenuPointCircleEdge;
+  PointCaptions[pcCircleCircle] := rsMenuPointCircleCircle;
+  PointCaptions[pcProject] := rsMenuPointProject;
   MarkingCaptions[mkPoint] := rsMenuToolsHole;
   MarkingCaptions[mkLine] := rsMenuToolsAttachLine;
   MarkingCaptions[mkStitchHoles] := rsMenuToolsStitch;
@@ -1380,6 +1400,18 @@ begin
   AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsMerge, aiMergePoints, @MergeClick));
   AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsBreak, aiBreakPoint, @BreakClick));
   AddCommand(SubMenu, FCommands.NewAction(rsMenuToolsRepeat, aiRepeat, @RepeatClick));
+  // Menu only: the point is the first selected, the rest what it is placed from
+  Item := TMenuItem.Create(SubMenu);
+  Item.Caption := rsMenuToolsChangeTo;
+  SubMenu.Add(NewLine);
+  SubMenu.Add(Item);
+  for Conversion := Low(TPointConversion) to High(TPointConversion) do
+  begin
+    ConvertAction := FCommands.NewAction(PointCaptions[Conversion], aiLine, @ConvertPointClick, 0, Ord(Conversion));
+    ConvertAction.ImageIndex := -1;
+    ConvertAction.Hint := PointConversionHint(Conversion);
+    FCommands.AddMenuItem(Item, ConvertAction);
+  end;
   AddBreak;
   SubMenu := AddSubmenu(rsMenuToolsMarkings);
   for Marking := Low(TMarkingKind) to High(TMarkingKind) do
@@ -1481,6 +1513,12 @@ end;
 procedure TMainForm.ConvertClick(Sender: TObject);
 begin
   FCanvas.ConvertSelection(TComponent(Sender).Tag = Ord(True));
+  FCanvas.SetFocus;
+end;
+
+procedure TMainForm.ConvertPointClick(Sender: TObject);
+begin
+  FCanvas.ConvertPointSelection(TPointConversion(TComponent(Sender).Tag));
   FCanvas.SetFocus;
 end;
 

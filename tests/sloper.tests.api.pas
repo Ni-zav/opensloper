@@ -166,6 +166,7 @@ type
     procedure TestGrainlineAndNotches;
     procedure TestCutAndFold;
     procedure TestConvertEdge;
+    procedure TestConvertPoint;
     procedure TestMergePoints;
     procedure TestBreakPoint;
     procedure TestCopyAndPaste;
@@ -1773,6 +1774,28 @@ begin
   Call('undo');
   Call('get_object', '{"name": "Line_C_D"}');
   AssertEquals('back to a line', 'line', Answer.Get('type', ''));
+end;
+
+// The point keeps its name and the line from it, and undo brings it back free
+procedure TTestAPI.TestConvertPoint;
+begin
+  AddSquare;
+  Call('add_point', '{"type": "freePoint", "name": "M", "x": 50, "y": 2}');
+  Call('add_edge', '{"type": "line", "start": "M", "end": "C"}');
+  Call('convert_point', '{"name": "M", "type": "alongEdgePoint", "from": ["Line_A_B"]}');
+  AssertEquals('alongEdgePoint', Answer.Get('type', ''));
+  AssertEquals('keeps its name', 'M', Answer.Get('name', ''));
+  Call('get_object', '{"name": "Line_M_C"}');
+  AssertEquals('the line stays', 'valid', Answer.Get('state', ''));
+  Call('convert_point', '{"name": "M", "type": "intersectPoint", "from": ["Line_A_B"]}');
+  AssertEquals('needs two edges', RPC_REFUSED, ErrorCode);
+  Call('convert_point', '{"name": "M", "type": "spiralPoint"}');
+  AssertEquals('no such type', RPC_INVALID_PARAMS, ErrorCode);
+  Call('convert_point', '{"name": "Line_A_B", "type": "freePoint"}');
+  AssertEquals('not a point', RPC_REFUSED, ErrorCode);
+  Call('undo');
+  Call('get_object', '{"name": "M"}');
+  AssertEquals('free again', 'freePoint', Answer.Get('type', ''));
 end;
 
 // The line from Corner now starts at the kept point, under the user's name

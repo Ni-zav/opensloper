@@ -131,6 +131,7 @@ type
     function DoSetCut(Params: TJSONObject): TJSONData;
     function DoSetFold(Params: TJSONObject): TJSONData;
     function DoConvertEdge(Params: TJSONObject): TJSONData;
+    function DoConvertPoint(Params: TJSONObject): TJSONData;
     function DoSetRole(Params: TJSONObject): TJSONData;
     function DoSetMarker(Params: TJSONObject): TJSONData;
     function DoMergePoints(Params: TJSONObject): TJSONData;
@@ -263,6 +264,7 @@ resourcestring
   rsApiNotAPiece = '%s is not a piece';
   rsApiNotAnEdge = '%s is not an edge';
   rsApiConvertEdge = 'Change edge type';
+  rsApiConvertPoint = 'Change point type';
   rsApiMergePoints = 'Merge points';
   rsApiBreakPoint = 'Break point';
   rsApiPaste = 'Paste';
@@ -318,7 +320,7 @@ uses
   Sloper.Core.Features,
   Sloper.Core.Settings, Sloper.Core.Note, Sloper.Core.Units, Sloper.Core.UnitConvert, Sloper.Core.Fragment, Sloper.Core.VariableImport, base64,
   Sloper.Output.DraftSVG, Sloper.Output.DraftPNG, Sloper.Output.Layout, Sloper.Core.Garment, Sloper.Output.GarmentSVG, Sloper.Output.GarmentPNG,
-  Sloper.Output.LayoutExport, Sloper.Core.Version, Sloper.Core.SvgImport, Sloper.API.Methods;
+  Sloper.Output.LayoutExport, Sloper.Core.Version, Sloper.Core.SvgImport, Sloper.Core.TypeChange, Sloper.API.Methods;
 
 const
   VARIABLE_TYPE = 'variable';
@@ -2607,6 +2609,29 @@ begin
   Result := AddedNode(Converted);
 end;
 
+// In place: the point keeps its ID, so whatever used it still does
+function TApiServer.DoConvertPoint(Params: TJSONObject): TJSONData;
+var
+  Target: TEvalNode;
+  Conversion: TPointConversion;
+  Inputs: TStringArray;
+  Converted: TPointObject;
+begin
+  Target := FindTarget(Params);
+  if not (Target is TPointObject) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsApiNotAPoint, [Target.DisplayName]));
+  if not Assigned(Params.Find('type')) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['type']));
+  // Read before the change opens, as a bad type or reference raises
+  Conversion := TPointConversion(ChoiceParam(Params, 'type', POINT_CONVERSION_TYPES));
+  Inputs := ReferenceList(Params, 'from');
+  BeginChange(rsApiConvertPoint);
+  Converted := FDocument.Pattern.ConvertPoint(TPointObject(Target), Conversion, Inputs);
+  if not Assigned(Converted) then
+    RefuseChange;
+  Result := AddedNode(Converted);
+end;
+
 // A marking role gives the edge to the pieces it lies in, as the reply's
 // pieces list shows
 function TApiServer.DoSetRole(Params: TJSONObject): TJSONData;
@@ -3170,6 +3195,7 @@ begin
     'set_cut': Result := DoSetCut(Params);
     'set_fold': Result := DoSetFold(Params);
     'convert_edge': Result := DoConvertEdge(Params);
+    'convert_point': Result := DoConvertPoint(Params);
     'set_role': Result := DoSetRole(Params);
     'set_marker': Result := DoSetMarker(Params);
     'merge_points': Result := DoMergePoints(Params);

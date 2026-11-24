@@ -66,6 +66,13 @@ function OffsetSelection(Document: TPatternDocument; const Selection: TStringArr
 function OffsetSelectionInPiece(Document: TPatternDocument; const Selection: TStringArray; Inside: boolean): TSelectionEdit;
 // Every selected edge to a curve, or to a line
 function ConvertSelection(Document: TPatternDocument; const Selection: TStringArray; ToCurve: boolean): TSelectionEdit;
+// The first selected point to Conversion, placed from the other selected
+// points and edges in the order they were selected. The message says how far
+// it moved and whether its formulas were replaced.
+function ConvertPointSelection(Document: TPatternDocument; const Selection: TStringArray; Conversion: TPointConversion): TSelectionEdit;
+// For a menu or box of the conversions: "Point along edge", and what to select for it
+function PointConversionCaption(Conversion: TPointConversion): string;
+function PointConversionHint(Conversion: TPointConversion): string;
 function MergeSelection(Document: TPatternDocument; const Selection: TStringArray): TSelectionEdit;
 function BreakSelection(Document: TPatternDocument; const Selection: TStringArray): TSelectionEdit;
 // The two straight edges that meet at the corner
@@ -111,6 +118,28 @@ resourcestring
   rsSelectionConvertToLine = 'Change to line';
   rsSelectionConvertToCurve = 'Change to curve';
   rsSelectionPickEdgesToConvert = 'Select the edges to change first';
+  rsSelectionConvertPoint = 'Change point type';
+  rsSelectionPickPointToConvert = 'Select the point to change first, then what to place it from';
+  rsSelectionPointConverted = 'Changed %s to %s';
+  rsSelectionPointMoved = '%s; it moved %s';
+  rsSelectionFormulasReplaced = '%s; its formulas became numbers';
+  rsSelectionFreeInSizes = '%s. A free point stays put in every size';
+  rsPointTypeFree = 'Free point';
+  rsPointTypeOffset = 'Offset point';
+  rsPointTypeAlongEdge = 'Point along edge';
+  rsPointTypeBetween = 'Point between points';
+  rsPointTypeIntersect = 'Intersection of edges';
+  rsPointTypeCircleEdge = 'Circle and edge';
+  rsPointTypeCircleCircle = 'Circle and circle';
+  rsPointTypeProject = 'Point projected onto edge';
+  rsPointHintFree = 'Select the point';
+  rsPointHintOffset = 'Select the point, then the point to offset it from';
+  rsPointHintAlongEdge = 'Select the point, then the edge';
+  rsPointHintBetween = 'Select the point, then the two points';
+  rsPointHintIntersect = 'Select the point, then the two edges';
+  rsPointHintCircleEdge = 'Select the point, then the centre and the edge';
+  rsPointHintCircleCircle = 'Select the point, then the two centres';
+  rsPointHintProject = 'Select the point, then the point to project from and the edge';
   rsSelectionMergePoints = 'Merge points';
   rsSelectionMerged = 'Merged %d points into %s';
   rsSelectionBreakPoint = 'Break point';
@@ -140,7 +169,7 @@ resourcestring
 implementation
 
 uses
-  StrUtils, Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.Drag, Sloper.Core.Note, Sloper.Core.Transform, Sloper.Editor.Scene;
+  StrUtils, Sloper.Core.Evaluator, Sloper.Core.Units, Sloper.Core.TypeChange, Sloper.Core.Drag, Sloper.Core.Note, Sloper.Core.Transform, Sloper.Editor.Scene;
 
 const
   // A new arc's sweep, as a starting point for typing the real values; its
@@ -486,6 +515,84 @@ begin
       Break;
   end;
   Result := Commit(Document, Done);
+end;
+
+// Whether a formula places Point; the marker's size goes with the point
+function HasPlacingFormula(Point: TPointObject): boolean;
+var
+  Index: integer;
+begin
+  Result := False;
+  for Index := 0 to Point.FieldCount - 1 do
+    if (Point.Fields[Index].Name <> MARKER_SIZE_FIELD) and not Point.Fields[Index].Formula.IsLiteral then
+      Exit(True);
+end;
+
+function ConvertPointSelection(Document: TPatternDocument; const Selection: TStringArray; Conversion: TPointConversion): TSelectionEdit;
+var
+  Node: TEvalNode;
+  Converted: TPointObject;
+  Was: TVec2;
+  Key, Success, MovedText: string;
+  HadFormulas: boolean;
+begin
+  Node := nil;
+  if Length(Selection) > 0 then
+    Node := Document.Pattern.FindNode(Selection[0]);
+  if not (Node is TPointObject) then
+    Exit(Refused(rsSelectionPickPointToConvert));
+  Key := Node.Key;
+  Was := TPointObject(Node).Position;
+  HadFormulas := HasPlacingFormula(TPointObject(Node));
+  Document.BeginChange(rsSelectionConvertPoint);
+  Converted := Document.Pattern.ConvertPoint(TPointObject(Node), Conversion, Copy(Selection, 1, Length(Selection) - 1));
+  Success := '';
+  if Assigned(Converted) then
+    Success := Format(rsSelectionPointConverted, [Converted.DisplayName, PointConversionName(Conversion)]);
+  Result := CommitSelecting(Document, Assigned(Converted), [Key], Success);
+  if not Result.Done then
+    Exit;
+  Document.Pattern.Evaluate;
+  Node := Document.Pattern.FindNode(Key);
+  if (Node is TPointObject) and Node.HasResult then
+  begin
+    // Rounding its numbers moves it by less than shows
+    MovedText := LengthWithUnit(Distance(TPointObject(Node).Position, Was), Document.Pattern.Units);
+    if MovedText <> LengthWithUnit(0, Document.Pattern.Units) then
+      Result.Message := Format(rsSelectionPointMoved, [Result.Message, MovedText]);
+  end;
+  if HadFormulas then
+    Result.Message := Format(rsSelectionFormulasReplaced, [Result.Message]);
+  if (Conversion = pcFree) and Assigned(Document.Pattern.Measurements) and (Document.Pattern.Measurements.SizeCount > 0) then
+    Result.Message := Format(rsSelectionFreeInSizes, [Result.Message]);
+end;
+
+function PointConversionCaption(Conversion: TPointConversion): string;
+begin
+  case Conversion of
+    pcFree: Result := rsPointTypeFree;
+    pcOffset: Result := rsPointTypeOffset;
+    pcAlongEdge: Result := rsPointTypeAlongEdge;
+    pcBetween: Result := rsPointTypeBetween;
+    pcIntersect: Result := rsPointTypeIntersect;
+    pcCircleEdge: Result := rsPointTypeCircleEdge;
+    pcCircleCircle: Result := rsPointTypeCircleCircle;
+    pcProject: Result := rsPointTypeProject;
+  end;
+end;
+
+function PointConversionHint(Conversion: TPointConversion): string;
+begin
+  case Conversion of
+    pcFree: Result := rsPointHintFree;
+    pcOffset: Result := rsPointHintOffset;
+    pcAlongEdge: Result := rsPointHintAlongEdge;
+    pcBetween: Result := rsPointHintBetween;
+    pcIntersect: Result := rsPointHintIntersect;
+    pcCircleEdge: Result := rsPointHintCircleEdge;
+    pcCircleCircle: Result := rsPointHintCircleCircle;
+    pcProject: Result := rsPointHintProject;
+  end;
 end;
 
 function MergeSelection(Document: TPatternDocument; const Selection: TStringArray): TSelectionEdit;

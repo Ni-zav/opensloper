@@ -71,6 +71,9 @@ export const STRINGS = {
   rulersHint: (keys: string): string => `Show or hide the rulers (${keys})`,
   drawRoleHint: 'The role of the lines and shapes drawn next',
   labelsHint: 'Which objects are labelled',
+  changePointTo: 'Change point to…',
+  changePointHint:
+    'Change the first selected point to another type, placed from the other selected objects in the order you selected them',
   labelsContextual: 'Labels: contextual',
   labelsAll: (holdKeys: string): string => `Labels: all (hold ${holdKeys})`,
   labelsNone: 'Labels: none',

@@ -36,6 +36,11 @@ type
   // In order around: from the corner along the width, then up, back and down
   TRectangleEdges = array[0..3] of TLineObject;
 
+  // The operations ConvertPoint can give a point: those placed from other
+  // points and edges alone. A repeat's points, a rounded corner's ends and
+  // copies belong to what made them.
+  TPointConversion = (pcFree, pcOffset, pcAlongEdge, pcBetween, pcIntersect, pcCircleEdge, pcCircleCircle, pcProject);
+
   // What AddTransform needs. Sources are expanded: an edge brings its ends.
   TTransformSpec = record
     Kind: TTransformKind;
@@ -412,6 +417,9 @@ type
     function ConvertToFree(Point: TPointObject; const XText, YText: string): TFreePoint;
     function ConvertToBetween(Point: TPointObject; const FirstId, LastId: string; Mode: TAlongMode; const Value: string): TBetweenPoint;
     function ConvertToAlongEdge(Point: TPointObject; const EdgeId: string; FromEnd: boolean; Mode: TAlongMode; const Value: string): TAlongEdgePoint;
+    // Changes a point's operation, its numbers worked out so it stays where it
+    // is (see Sloper.Core.TypeChange.ConvertPoint)
+    function ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
     // An edge changed between line and curve in place: its ID, role and place
     // stay, so pieces, seams and formulas that use it go on using it, and a
     // name the user gave it is kept. An arc becomes a line between two new
@@ -3731,6 +3739,11 @@ end;
 function TPattern.ConvertToAlongEdge(Point: TPointObject; const EdgeId: string; FromEnd: boolean; Mode: TAlongMode; const Value: string): TAlongEdgePoint;
 begin
   Result := Sloper.Core.TypeChange.ConvertToAlongEdge(Self, Point, EdgeId, FromEnd, Mode, Value);
+end;
+
+function TPattern.ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+begin
+  Result := Sloper.Core.TypeChange.ConvertPoint(Self, Point, Conversion, Inputs);
 end;
 
 function TPattern.MergePoints(const Keys: array of string): TPointObject;

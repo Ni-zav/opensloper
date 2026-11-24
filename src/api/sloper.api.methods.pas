@@ -279,6 +279,12 @@ resourcestring
   rsApiCornerRadius = 'The arc''s radius';
   rsApiConvertEdge = 'Changes an edge to a line or a curve in place, keeping its ID.';
   rsApiConvertEdgeTo = 'What it becomes';
+  rsApiConvertPoint = 'Changes how a point is placed, keeping its ID, name and users. Its numbers are worked out so it stays ' +
+    'where it is, or moves onto its new edge, line or crossing (at most 10 mm); formulas it had are replaced.';
+  rsApiConvertPointType = 'What it becomes, as the pattern file names it';
+  rsApiConvertPointFrom = 'What it is placed from, in order: offsetPoint a point; alongEdgePoint an edge; ' +
+    'betweenPoint two points; intersectPoint two edges; circleEdgePoint the centre and an edge; ' +
+    'circleCirclePoint the two centres; projectPoint the point and the edge. None for freePoint';
   rsApiMergePoints = 'Merges two or more points into one, which every edge and formula then uses.';
   rsApiMergeReturns = 'The point kept';
   rsApiBreakPoint = 'Breaks a point into one for each edge that meets there.';
@@ -455,7 +461,8 @@ resourcestring
 implementation
 
 uses
-  Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units, Sloper.Core.Features;
+  Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Core.Note, Sloper.Core.Materials, Sloper.Core.Units, Sloper.Core.Features,
+  Sloper.Core.Pattern, Sloper.Core.TypeChange;
 
 var
   Table: TApiMethodArray;
@@ -686,6 +693,10 @@ begin
   Method('convert_edge', agDrafting, rsApiConvertEdge, rsApiReturnsObject);
   Target;
   P('to', apChoice, True, rsApiConvertEdgeTo, 'line, curve');
+  Method('convert_point', agDrafting, rsApiConvertPoint, rsApiReturnsObject);
+  Target;
+  P('type', apChoice, True, rsApiConvertPointType, string.Join(', ', POINT_CONVERSION_TYPES));
+  P('from', apReferences, False, rsApiConvertPointFrom);
   Method('merge_points', agDrafting, rsApiMergePoints, rsApiMergeReturns);
   P('points', apReferences, True, rsApiArrangePoints);
   Method('break_point', agDrafting, rsApiBreakPoint, rsApiBreakReturns);

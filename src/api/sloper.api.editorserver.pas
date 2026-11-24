@@ -94,6 +94,7 @@ type
     function DoSeamPick(Params: TJSONObject): TJSONData;
     function DoSeamMake(Params: TJSONObject): TJSONData;
     function DoDelete(Params: TJSONObject): TJSONData;
+    function DoConvertPoint(Params: TJSONObject): TJSONData;
     function DoCopy(Params: TJSONObject; Cut: boolean): TJSONData;
     function DoPaste(Params: TJSONObject): TJSONData;
     function DoVariableImport(Params: TJSONObject): TJSONData;
@@ -272,6 +273,12 @@ resourcestring
   rsEditorDeleteReturns = '`done`, true when they were deleted; `message`, why not; `select`, the selection ' +
     'afterwards, or null to leave it';
   rsEditorDeleteSelection = 'The selected objects, by ID, or by name for a repeat''s point';
+  rsEditorConvertPoint = 'Changes how the first selected point is placed, from the other selected points and edges in ' +
+    'the order they were selected, as Tools > Points > Change To, as one undo step. It keeps its ID, name and users.';
+  rsEditorConvertPointReturns = '`done`, true when it changed; `message`, what changed, how far the point moved and ' +
+    'whether its formulas became numbers, or why not; `select`, the selection afterwards, or null to leave it';
+  rsEditorConvertPointSelection = 'The point, then what it is placed from, by ID';
+  rsEditorConvertPointType = 'What it becomes, as editor_tables pointTypes names it';
   rsEditorCopy = 'Copies the selected points and edges, as Edit > Copy: the fragment to put on the clipboard, which ' +
     'editor_paste takes. Changes nothing.';
   rsEditorCopyReturns = '`done`, true when something was copied; `text`, the fragment, empty when nothing could be ' +
@@ -464,7 +471,8 @@ resourcestring
     '`name`, `icon`, `place`, `menu`, `keys` and `description`; `shortcuts`, each with `command`, `keys`, `kind`, ' +
     '`group` and `description`. Keys are written as Mod+Shift+S, Mod being Ctrl, or Cmd on macOS. `roles`, each edge ' +
     'role with its `name`, `caption`, `color` (empty for outline and construction, drawn in ink) and `dashes`, dash and gap ' +
-    'lengths in mm, empty for a solid line.';
+    'lengths in mm, empty for a solid line. `pointTypes`, what a point can be changed to with editor_convert_point, ' +
+    'each with its `name`, `caption` and `hint`, what to select.';
 
 implementation
 
@@ -475,7 +483,7 @@ uses
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
   Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
-  Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF;
+  Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -591,6 +599,9 @@ begin
     AddApiParam(Built, 'sideB', apList, True, rsEditorSideB);
     AddApiMethod(Built, 'editor_delete', rsEditorDelete, rsEditorDeleteReturns);
     AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
+    AddApiMethod(Built, 'editor_convert_point', rsEditorConvertPoint, rsEditorConvertPointReturns);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorConvertPointSelection);
+    AddApiParam(Built, 'type', apChoice, True, rsEditorConvertPointType, string.Join(', ', POINT_CONVERSION_TYPES));
     AddApiMethod(Built, 'editor_copy', rsEditorCopy, rsEditorCopyReturns, True);
     AddApiParam(Built, 'selection', apReferences, True, rsEditorDeleteSelection);
     AddApiMethod(Built, 'editor_cut', rsEditorCut, rsEditorCutReturns);
@@ -2393,6 +2404,17 @@ begin
   Result := TJSONObject.Create(['changed', True]);
 end;
 
+// What a point can be changed to, for the web editor's box
+function PointTypesToJSON: TJSONArray;
+var
+  Conversion: TPointConversion;
+begin
+  Result := TJSONArray.Create;
+  for Conversion := Low(TPointConversion) to High(TPointConversion) do
+    Result.Add(TJSONObject.Create(['name', POINT_CONVERSION_TYPES[Conversion], 'caption', PointConversionCaption(Conversion),
+      'hint', PointConversionHint(Conversion)]));
+end;
+
 function RolesToJSON: TJSONArray;
 var
   Role: TEdgeRole;
@@ -2508,6 +2530,18 @@ begin
   Result := EditToJSON(DeleteSelection(Document, Selection, rsSelectionDelete));
 end;
 
+function TEditorApiServer.DoConvertPoint(Params: TJSONObject): TJSONData;
+var
+  Selection: TStringArray;
+  Conversion: TPointConversion;
+begin
+  Selection := KeysParam(Params, 'selection');
+  Conversion := TPointConversion(ChoiceParam(Params, 'type', POINT_CONVERSION_TYPES));
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Result := EditToJSON(ConvertPointSelection(Document, Selection, Conversion));
+end;
+
 function TEditorApiServer.DoCopy(Params: TJSONObject; Cut: boolean): TJSONData;
 var
   Selection: TStringArray;
@@ -2573,6 +2607,7 @@ begin
     'editor_seam_pick': Result := DoSeamPick(Params);
     'editor_seam_make': Result := DoSeamMake(Params);
     'editor_delete': Result := DoDelete(Params);
+    'editor_convert_point': Result := DoConvertPoint(Params);
     'editor_copy': Result := DoCopy(Params, False);
     'editor_cut': Result := DoCopy(Params, True);
     'editor_paste': Result := DoPaste(Params);
@@ -2607,7 +2642,7 @@ begin
     'editor_drag_end': Result := DoDragEnd(False);
     'editor_drag_cancel': Result := DoDragEnd(True);
     'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON,
-        'roles', RolesToJSON]);
+        'roles', RolesToJSON, 'pointTypes', PointTypesToJSON]);
     else
       Result := inherited DispatchMethod(Method, Params);
   end;

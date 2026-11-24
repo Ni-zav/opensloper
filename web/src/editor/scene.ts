@@ -172,9 +172,18 @@ export interface RoleInfo {
   dashes: number[];
 }
 
+// What a point can be changed to (editor_convert_point), named as the pattern file does
+export interface PointTypeInfo {
+  name: string;
+  caption: string;
+  // What to select for it
+  hint: string;
+}
+
 export interface Tables {
   tools: ToolInfo[];
   roles: Map<string, RoleInfo>;
+  pointTypes: PointTypeInfo[];
   // Each command's keys, as undo gives Mod+Z
   shortcuts: Map<string, string>;
 }
@@ -315,6 +324,11 @@ export function parseTables(result: JsonRecord): Tables {
       hint: stringField(record, 'hint') ?? '',
       icon: stringField(record, 'icon') ?? '',
       keys: stringField(record, 'keys') ?? '',
+    })),
+    pointTypes: recordsField(result, 'pointTypes').map((record) => ({
+      name: stringField(record, 'name') ?? '',
+      caption: stringField(record, 'caption') ?? '',
+      hint: stringField(record, 'hint') ?? '',
     })),
     roles: new Map(
       recordsField(result, 'roles').map((record) => {

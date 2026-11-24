@@ -34,6 +34,23 @@ function ConvertToBetween(Pattern: TPattern; Point: TPointObject; const FirstId,
   const Value: string): TBetweenPoint;
 function ConvertToAlongEdge(Pattern: TPattern; Point: TPointObject; const EdgeId: string; FromEnd: boolean; Mode: TAlongMode;
   const Value: string): TAlongEdgePoint;
+// Changes Point to the operation Conversion, placed from Inputs: the keys
+// POINT_CONVERSION_INPUTS says, in that order. Its numbers are plain, worked
+// out from where it is now, so it stays there: a free point at its x and y,
+// an offset across and down from the base, along an edge or between points a
+// length from the nearer end or the first point, a compass step at its
+// distance from the centre, a projection square to the edge when it is the
+// foot of the perpendicular and otherwise at the angle it lies at. Where the
+// new operation puts it on an edge, line, circle or crossing, it moves to the
+// nearest such place, and is refused when that is more than MAX_CONVERT_MOVE
+// away; crossings beyond an edge's ends are used only when nearer. Formulas
+// it had are replaced. Refused, with the reason in LastError and Point left
+// as it was, for a repeat's point, a copy, a rounded corner's end, a point
+// with no place yet, inputs of the wrong kind or with no place, the operation
+// and inputs it already has, and inputs that read Point.
+function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+// What a point becomes, for messages: "an offset point"
+function PointConversionName(Conversion: TPointConversion): string;
 // Its role and place stay, and a name the user gave it is kept. An arc
 // becomes a line between two new points at its ends, offsets from its centre
 // by its own formulas. A new curve starts straight, its handles a third of
@@ -48,7 +65,40 @@ function ConvertToCurve(Pattern: TPattern; Edge: TEdgeObject): TCurveObject;
 // copy, an edge something uses (its end moves), and the point it ends at.
 function ExtendCurve(Pattern: TPattern; Edge: TEdgeObject; const PointId: string): TCurvePathObject;
 
+const
+  // What each conversion reads besides the point, in order: P a point, E an edge
+  POINT_CONVERSION_INPUTS: array[TPointConversion] of string = ('', 'P', 'E', 'PP', 'EE', 'PE', 'PP', 'PE');
+  // What each conversion makes, as the pattern file names its type
+  POINT_CONVERSION_TYPES: array[TPointConversion] of string = ('freePoint', 'offsetPoint', 'alongEdgePoint', 'betweenPoint',
+    'intersectPoint', 'circleEdgePoint', 'circleCirclePoint', 'projectPoint');
+  // The furthest ConvertPoint moves a point onto its new edge, line or crossing (mm)
+  MAX_CONVERT_MOVE = 10;
+
 resourcestring
+  rsPatternConvertNeeds = 'To become %s, %s needs %s';
+  rsPatternConvertNeedsPoint = 'a point to be placed from';
+  rsPatternConvertNeedsEdge = 'an edge';
+  rsPatternConvertNeedsTwoPoints = 'two points';
+  rsPatternConvertNeedsTwoEdges = 'two edges';
+  rsPatternConvertNeedsPointEdge = 'a point and an edge';
+  rsPatternConvertNeedsNothing = 'nothing else';
+  rsPatternConvertCornerPoint = '%s is an end of the rounded corner %s, so its type cannot change';
+  rsPatternConvertNoPlace = '%s has no place yet, so its type cannot change';
+  rsPatternConvertInputNoPlace = '%s has no place yet, so %s cannot be placed from it';
+  rsPatternConvertAlready = '%s is already placed that way';
+  rsPatternConvertTooFar = '%s is %s from where it would go; move it closer first';
+  rsPatternConvertNoCrossing = '%s and %s do not cross';
+  rsPatternConvertCircleMisses = 'A circle round %s through %s does not cross %s';
+  rsPatternConvertCirclesMiss = 'Circles round %s and %s through %s do not cross';
+  rsPatternConvertSamePlace = '%s and %s are in the same place, so there is no line between them';
+  rsPatternConvertNameFree = 'a free point';
+  rsPatternConvertNameOffset = 'an offset point';
+  rsPatternConvertNameAlong = 'a point along an edge';
+  rsPatternConvertNameBetween = 'a point between points';
+  rsPatternConvertNameIntersect = 'a crossing of two edges';
+  rsPatternConvertNameCircleEdge = 'a compass step onto an edge';
+  rsPatternConvertNameCircleCircle = 'two compass steps';
+  rsPatternConvertNameProject = 'a point projected onto an edge';
   rsPatternNotConvertible = '%s cannot be changed: only lines, curves and arcs can become a line or a curve';
   rsPatternAlreadyLine = '%s is already a line';
   rsPatternAlreadyCurve = '%s is already a curve';
@@ -65,7 +115,27 @@ implementation
 
 uses
   SysUtils, StrUtils, Math, Sloper.Core.Geometry, Sloper.Core.Formula, Sloper.Core.Evaluator, Sloper.Core.Piece,
-  Sloper.Core.Transform, Sloper.Core.Units;
+  Sloper.Core.Transform, Sloper.Core.Units, Sloper.Core.JSON;
+
+const
+  // A converted point this near a place counts as on it (mm): a projection
+  // lands on the foot of the perpendicular, and a crossing needs no extension
+  CONVERT_SAME_PLACE = 0.05;
+  // Angles ConvertPoint writes are rounded to this many decimals
+  CONVERT_ANGLE_DECIMALS = 2;
+  // The kind of point each conversion makes, to tell when it is that already
+  CONVERSION_CLASSES: array[TPointConversion] of TClass = (TFreePoint, TOffsetPoint, TAlongEdgePoint, TBetweenPoint,
+    TIntersectPoint, TCircleEdgePoint, TCircleCirclePoint, TProjectPoint);
+
+type
+  // How ConvertPoint places the point: where it goes, its fields, and the
+  // choices the operation's constructor takes
+  TConversionPlan = record
+    Target: TVec2;
+    Names, Texts: TStringArray;
+    FromEnd, ExtendA, ExtendB, Perpendicular: boolean;
+    Pick: integer;
+  end;
 
 // Lines, curves and arcs the user drew; copies and parts follow other edges
 function CheckConvertible(Pattern: TPattern; Edge: TEdgeObject): boolean;
@@ -233,6 +303,311 @@ begin
     Exit;
   Result := TAlongEdgePoint.Create(Point.Key, EdgeId, FromEnd, Mode);
   if not Pattern.ReplacePoint(Point, Result, ['value'], [Value]) then
+    Result := nil;
+end;
+
+function PointConversionName(Conversion: TPointConversion): string;
+begin
+  case Conversion of
+    pcFree: Result := rsPatternConvertNameFree;
+    pcOffset: Result := rsPatternConvertNameOffset;
+    pcAlongEdge: Result := rsPatternConvertNameAlong;
+    pcBetween: Result := rsPatternConvertNameBetween;
+    pcIntersect: Result := rsPatternConvertNameIntersect;
+    pcCircleEdge: Result := rsPatternConvertNameCircleEdge;
+    pcCircleCircle: Result := rsPatternConvertNameCircleCircle;
+    pcProject: Result := rsPatternConvertNameProject;
+  end;
+end;
+
+// What the conversion reads besides the point, in words
+function ConversionNeeds(Conversion: TPointConversion): string;
+begin
+  case POINT_CONVERSION_INPUTS[Conversion] of
+    'P': Result := rsPatternConvertNeedsPoint;
+    'E': Result := rsPatternConvertNeedsEdge;
+    'PP': Result := rsPatternConvertNeedsTwoPoints;
+    'EE': Result := rsPatternConvertNeedsTwoEdges;
+    'PE': Result := rsPatternConvertNeedsPointEdge;
+    else
+      Result := rsPatternConvertNeedsNothing;
+  end;
+end;
+
+procedure AddField(var Plan: TConversionPlan; const AName, AText: string);
+begin
+  Insert(AName, Plan.Names, Length(Plan.Names));
+  Insert(AText, Plan.Texts, Length(Plan.Texts));
+end;
+
+// A length as the field will hold it, in the pattern's unit, and what that is in mm
+function LengthText(Pattern: TPattern; Millimetres: double; out Rounded: double): string;
+var
+  Code: integer;
+begin
+  Result := RoundLengthFormulaText(Millimetres, Pattern.Units);
+  Val(Result, Rounded, Code);
+  Rounded := Rounded * MILLIMETRES_PER_UNIT[Pattern.Units];
+end;
+
+function LengthText(Pattern: TPattern; Millimetres: double): string;
+var
+  Rounded: double;
+begin
+  Result := LengthText(Pattern, Millimetres, Rounded);
+end;
+
+// The crossing nearest At, False when there is none
+function NearestCrossing(const Crossings: TEdgeCrossingArray; const At: TVec2; out Index: integer; out Gap: double): boolean;
+var
+  Candidate: integer;
+begin
+  Index := -1;
+  Gap := 0;
+  for Candidate := 0 to High(Crossings) do
+    if (Index < 0) or (Distance(Crossings[Candidate].Point, At) < Gap) then
+    begin
+      Index := Candidate;
+      Gap := Distance(Crossings[Candidate].Point, At);
+    end;
+  Result := Index >= 0;
+end;
+
+// Takes Crossings when its nearest to At is nearer than the plan's so far by
+// more than CONVERT_SAME_PLACE, so a crossing that needs no extension wins a tie
+function TakeNearer(const Crossings: TEdgeCrossingArray; const At: TVec2; var Plan: TConversionPlan; var Best: double;
+  var Found: boolean): boolean;
+var
+  Index: integer;
+  Gap: double;
+begin
+  Result := NearestCrossing(Crossings, At, Index, Gap) and (not Found or (Gap < Best - CONVERT_SAME_PLACE));
+  if not Result then
+    Exit;
+  Found := True;
+  Best := Gap;
+  Plan.Target := Crossings[Index].Point;
+  Plan.Pick := Index + 1;
+end;
+
+function PlanAlongEdge(Edge: TEdgeObject; Pattern: TPattern; const Here: TVec2; var Plan: TConversionPlan): boolean;
+var
+  Position, Offset: double;
+begin
+  Plan.Target := Edge.Locate(Here, Position, Offset);
+  // Measured from the nearer end, as the Point tool does
+  Plan.FromEnd := Position > Edge.Length / 2;
+  if Plan.FromEnd then
+    Position := Edge.Length - Position;
+  AddField(Plan, 'value', LengthText(Pattern, Position));
+  Result := True;
+end;
+
+function PlanBetween(PointA, PointB: TPointObject; Pattern: TPattern; const Here: TVec2; var Plan: TConversionPlan): boolean;
+var
+  Span: TVec2;
+  SpanLength, Along: double;
+begin
+  Span := Vec2(PointB.Position.X - PointA.Position.X, PointB.Position.Y - PointA.Position.Y);
+  SpanLength := Sqrt(Dot(Span, Span));
+  if SpanLength < CONVERT_SAME_PLACE then
+    Exit(Pattern.SetError(Format(rsPatternConvertSamePlace, [PointA.DisplayName, PointB.DisplayName])));
+  Along := Dot(Vec2(Here.X - PointA.Position.X, Here.Y - PointA.Position.Y), Span) / SpanLength;
+  Plan.Target := Lerp(PointA.Position, PointB.Position, Along / SpanLength);
+  AddField(Plan, 'value', LengthText(Pattern, Along));
+  Result := True;
+end;
+
+function PlanIntersect(EdgeA, EdgeB: TEdgeObject; Pattern: TPattern; const Here: TVec2; var Plan: TConversionPlan): boolean;
+var
+  Combination: integer;
+  Best: double;
+  Found: boolean;
+begin
+  Found := False;
+  Best := 0;
+  // Neither extended, then either, then both
+  for Combination := 0 to 3 do
+    if TakeNearer(CrossEdges(EdgeA, Odd(Combination), EdgeB, Combination >= 2), Here, Plan, Best, Found) then
+    begin
+      Plan.ExtendA := Odd(Combination);
+      Plan.ExtendB := Combination >= 2;
+    end;
+  if not Found then
+    Exit(Pattern.SetError(Format(rsPatternConvertNoCrossing, [EdgeA.DisplayName, EdgeB.DisplayName])));
+  Result := True;
+end;
+
+function PlanCircleEdge(Centre: TPointObject; Edge: TEdgeObject; Point: TPointObject; Pattern: TPattern; var Plan: TConversionPlan): boolean;
+var
+  Radius, Best: double;
+  Extend, Found: boolean;
+begin
+  AddField(Plan, 'radius', LengthText(Pattern, Distance(Centre.Position, Point.Position), Radius));
+  Found := False;
+  Best := 0;
+  for Extend in boolean do
+    if TakeNearer(CrossCircleEdge(Centre.Position, Radius, Edge, Extend), Point.Position, Plan, Best, Found) then
+      Plan.ExtendA := Extend;
+  if not Found then
+    Exit(Pattern.SetError(Format(rsPatternConvertCircleMisses, [Centre.DisplayName, Point.DisplayName, Edge.DisplayName])));
+  Result := True;
+end;
+
+function PlanCircleCircle(CentreA, CentreB, Point: TPointObject; Pattern: TPattern; var Plan: TConversionPlan): boolean;
+var
+  RadiusA, RadiusB: double;
+  First, Second: TVec2;
+begin
+  AddField(Plan, 'radiusA', LengthText(Pattern, Distance(CentreA.Position, Point.Position), RadiusA));
+  AddField(Plan, 'radiusB', LengthText(Pattern, Distance(CentreB.Position, Point.Position), RadiusB));
+  if IntersectCircles(CentreA.Position, RadiusA, CentreB.Position, RadiusB, First, Second) = 0 then
+    Exit(Pattern.SetError(Format(rsPatternConvertCirclesMiss, [CentreA.DisplayName, CentreB.DisplayName, Point.DisplayName])));
+  Plan.Pick := 1;
+  Plan.Target := First;
+  if Distance(Second, Point.Position) < Distance(First, Point.Position) then
+  begin
+    Plan.Pick := 2;
+    Plan.Target := Second;
+  end;
+  Result := True;
+end;
+
+function PlanProject(Source: TPointObject; Edge: TEdgeObject; const Here: TVec2; var Plan: TConversionPlan): boolean;
+var
+  Position, Offset: double;
+  Foot: TVec2;
+begin
+  Plan.Target := Edge.Locate(Here, Position, Offset);
+  Foot := Edge.Locate(Source.Position, Position, Offset);
+  Plan.Perpendicular := Distance(Foot, Plan.Target) <= CONVERT_SAME_PLACE;
+  if not Plan.Perpendicular then
+    AddField(Plan, 'angle', FormatJSONFloat(RoundTo(AngleBetween(Source.Position, Plan.Target), -CONVERT_ANGLE_DECIMALS)));
+  Result := True;
+end;
+
+// Where Conversion puts the point and with what, from Nodes, the inputs
+function PlanConversion(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Nodes: array of TDraftObject;
+  out Plan: TConversionPlan): boolean;
+var
+  Here: TVec2;
+begin
+  Plan := Default(TConversionPlan);
+  Here := Point.Position;
+  Plan.Target := Here;
+  Result := True;
+  case Conversion of
+    pcFree:
+    begin
+      AddField(Plan, 'x', LengthText(Pattern, Here.X));
+      AddField(Plan, 'y', LengthText(Pattern, Here.Y));
+    end;
+    pcOffset:
+    begin
+      AddField(Plan, 'dx', LengthText(Pattern, Here.X - TPointObject(Nodes[0]).Position.X));
+      AddField(Plan, 'dy', LengthText(Pattern, Here.Y - TPointObject(Nodes[0]).Position.Y));
+    end;
+    pcAlongEdge: Result := PlanAlongEdge(TEdgeObject(Nodes[0]), Pattern, Here, Plan);
+    pcBetween: Result := PlanBetween(TPointObject(Nodes[0]), TPointObject(Nodes[1]), Pattern, Here, Plan);
+    pcIntersect: Result := PlanIntersect(TEdgeObject(Nodes[0]), TEdgeObject(Nodes[1]), Pattern, Here, Plan);
+    pcCircleEdge: Result := PlanCircleEdge(TPointObject(Nodes[0]), TEdgeObject(Nodes[1]), Point, Pattern, Plan);
+    pcCircleCircle: Result := PlanCircleCircle(TPointObject(Nodes[0]), TPointObject(Nodes[1]), Point, Pattern, Plan);
+    pcProject: Result := PlanProject(TPointObject(Nodes[0]), TEdgeObject(Nodes[1]), Here, Plan);
+  end;
+  if Result and (Distance(Plan.Target, Here) > MAX_CONVERT_MOVE) then
+    Result := Pattern.SetError(Format(rsPatternConvertTooFar, [Point.DisplayName, LengthWithUnit(Distance(Plan.Target, Here), Pattern.Units)]));
+end;
+
+function NewConvertedPoint(const Key: string; Conversion: TPointConversion; const Inputs: array of string;
+  const Plan: TConversionPlan): TPointObject;
+begin
+  case Conversion of
+    pcFree: Result := TFreePoint.Create(Key);
+    pcOffset: Result := TOffsetPoint.Create(Key, Inputs[0], omCartesian);
+    pcAlongEdge: Result := TAlongEdgePoint.Create(Key, Inputs[0], Plan.FromEnd, amLength);
+    pcBetween: Result := TBetweenPoint.Create(Key, Inputs[0], Inputs[1], amLength);
+    pcIntersect: Result := TIntersectPoint.Create(Key, Inputs[0], Inputs[1], Plan.ExtendA, Plan.ExtendB, Plan.Pick);
+    pcCircleEdge: Result := TCircleEdgePoint.Create(Key, Inputs[0], Inputs[1], Plan.ExtendA, Plan.Pick);
+    pcCircleCircle: Result := TCircleCirclePoint.Create(Key, Inputs[0], Inputs[1], Plan.Pick);
+    pcProject:
+      if Plan.Perpendicular then
+        Result := TProjectPoint.Create(Key, Inputs[0], Inputs[1], pdPerpendicular, False)
+      else
+        Result := TProjectPoint.Create(Key, Inputs[0], Inputs[1], pdAngle, False);
+  end;
+end;
+
+// The inputs, checked to be of the kinds Conversion reads and to have a place
+function ConversionInputs(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
+  out Nodes: TDraftObjectArray): boolean;
+var
+  Kinds: string;
+  Index: integer;
+  Checked: boolean;
+begin
+  Nodes := nil;
+  Kinds := POINT_CONVERSION_INPUTS[Conversion];
+  if Length(Inputs) <> Length(Kinds) then
+    Exit(Pattern.SetError(Format(rsPatternConvertNeeds, [PointConversionName(Conversion), Point.DisplayName, ConversionNeeds(Conversion)])));
+  for Index := 0 to High(Inputs) do
+  begin
+    if Kinds[Index + 1] = 'P' then
+      Checked := Pattern.CheckPoint(Inputs[Index])
+    else
+      Checked := Pattern.CheckEdgeTarget(Inputs[Index]);
+    if not Checked then
+      Exit(False);
+    Insert(TDraftObject(Pattern.FindNode(Inputs[Index])), Nodes, Length(Nodes));
+  end;
+  Pattern.Evaluate;
+  if not Point.HasResult then
+    Exit(Pattern.SetError(Format(rsPatternConvertNoPlace, [Point.DisplayName])));
+  for Index := 0 to High(Nodes) do
+    if not Nodes[Index].HasResult then
+      Exit(Pattern.SetError(Format(rsPatternConvertInputNoPlace, [Nodes[Index].DisplayName, Point.DisplayName])));
+  Result := True;
+end;
+
+// Point is already Conversion from these inputs, so there is nothing to change
+function AlreadyConverted(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): boolean;
+var
+  Current: TStringArray;
+  Index: integer;
+begin
+  if Point.ClassType <> CONVERSION_CLASSES[Conversion] then
+    Exit(False);
+  Current := Point.InputKeys;
+  if Length(Current) <> Length(Inputs) then
+    Exit(False);
+  for Index := 0 to High(Inputs) do
+    if Current[Index] <> Inputs[Index] then
+      Exit(False);
+  Result := True;
+end;
+
+function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+var
+  Nodes: TDraftObjectArray;
+  Plan: TConversionPlan;
+begin
+  Result := nil;
+  if Point is TCornerPoint then
+  begin
+    Pattern.SetError(Format(rsPatternConvertCornerPoint, [Point.DisplayName, Pattern.FindNode(TCornerPoint(Point).Arc).DisplayName]));
+    Exit;
+  end;
+  if not ConversionInputs(Pattern, Point, Conversion, Inputs, Nodes) then
+    Exit;
+  if AlreadyConverted(Point, Conversion, Inputs) then
+  begin
+    Pattern.SetError(Format(rsPatternConvertAlready, [Point.DisplayName]));
+    Exit;
+  end;
+  if not PlanConversion(Pattern, Point, Conversion, Nodes, Plan) then
+    Exit;
+  // ReplacePoint frees the new point when it refuses it
+  Result := NewConvertedPoint(Point.Key, Conversion, Inputs, Plan);
+  if not Pattern.ReplacePoint(Point, Result, Plan.Names, Plan.Texts) then
     Result := nil;
 end;
 

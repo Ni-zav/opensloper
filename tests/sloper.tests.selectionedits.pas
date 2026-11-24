@@ -71,6 +71,11 @@ type
     procedure TestOffsetInPieceNeedsPiece;
     procedure TestConvertKeepsSelection;
     procedure TestConvertNeedsEdges;
+    procedure TestConvertPointKeepsSelection;
+    procedure TestConvertPointSaysMovedAndFormulasReplaced;
+    procedure TestConvertPointNeedsPointFirst;
+    procedure TestConvertPointRefusedSaysWhy;
+    procedure TestConvertLockedPointRefused;
     procedure TestMergeSelectsKept;
     procedure TestBreakNeedsOnePoint;
     procedure TestRoundCorner;
@@ -95,7 +100,8 @@ type
 implementation
 
 uses
-  Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.PieceDetect, Sloper.Core.Transform;
+  Sloper.Core.EvalTypes, Sloper.Core.Evaluator, Sloper.Core.PieceDetect, Sloper.Core.Transform, Sloper.Core.TypeChange,
+  Sloper.Core.Units;
 
 procedure TTestSelectionEdits.SetUp;
 var
@@ -401,6 +407,64 @@ end;
 procedure TTestSelectionEdits.TestConvertNeedsEdges;
 begin
   AssertRefused('a point', ConvertSelection(FDocument, [FE], False), rsSelectionPickEdgesToConvert);
+end;
+
+procedure TTestSelectionEdits.TestConvertPointKeepsSelection;
+var
+  Edit: TSelectionEdit;
+begin
+  // E is on the diagonal from A to C, so it stays put
+  Edit := ConvertPointSelection(FDocument, [FE, FA, FC], pcBetween);
+  AssertTrue(Edit.Message, Edit.Done);
+  AssertTrue('same ID, now between points', Pattern.FindNode(FE) is TBetweenPoint);
+  AssertEquals('the point stays selected', 1, Length(Edit.Selection));
+  AssertEquals(FE, Edit.Selection[0]);
+  AssertEquals(Format(rsSelectionPointConverted, ['E', PointConversionName(pcBetween)]), Edit.Message);
+  AssertOneStep('convert point', Edit, rsSelectionConvertPoint);
+end;
+
+procedure TTestSelectionEdits.TestConvertPointSaysMovedAndFormulasReplaced;
+var
+  Near: string;
+  Edit: TSelectionEdit;
+begin
+  // 3 mm below AB, by a formula
+  Near := Pattern.AddFreePoint('F', '50', '1+2').Key;
+  Pattern.Evaluate;
+  Edit := ConvertPointSelection(FDocument, [Near, FAB], pcAlongEdge);
+  AssertTrue(Edit.Message, Edit.Done);
+  AssertNear('onto AB', 0, TPointObject(Pattern.FindNode(Near)).Position.Y);
+  AssertEquals(Format(rsSelectionFormulasReplaced, [Format(rsSelectionPointMoved,
+    [Format(rsSelectionPointConverted, ['F', PointConversionName(pcAlongEdge)]), LengthWithUnit(3, Pattern.Units)])]), Edit.Message);
+end;
+
+procedure TTestSelectionEdits.TestConvertPointNeedsPointFirst;
+begin
+  AssertRefused('nothing', ConvertPointSelection(FDocument, [], pcFree), rsSelectionPickPointToConvert);
+  AssertRefused('an edge first', ConvertPointSelection(FDocument, [FAB, FE], pcAlongEdge), rsSelectionPickPointToConvert);
+end;
+
+procedure TTestSelectionEdits.TestConvertPointRefusedSaysWhy;
+var
+  Edit: TSelectionEdit;
+begin
+  Edit := ConvertPointSelection(FDocument, [FE, FAB], pcIntersect);
+  AssertFalse('needs two edges', Edit.Done);
+  AssertTrue('the pattern says why: ' + Edit.Message, Pos('E', Edit.Message) > 0);
+  AssertFalse('nothing to undo', FDocument.CanUndo);
+  AssertTrue('still free', Pattern.FindNode(FE) is TFreePoint);
+end;
+
+procedure TTestSelectionEdits.TestConvertLockedPointRefused;
+var
+  Edit: TSelectionEdit;
+begin
+  AssertTrue(Pattern.SetLocked(Pattern.FindNode(FE), True));
+  Edit := ConvertPointSelection(FDocument, [FE, FA, FC], pcBetween);
+  AssertFalse('locked', Edit.Done);
+  AssertTrue('says why', Edit.Message <> '');
+  AssertTrue('still free', Pattern.FindNode(FE) is TFreePoint);
+  AssertFalse('nothing to undo', FDocument.CanUndo);
 end;
 
 procedure TTestSelectionEdits.TestMergeSelectsKept;

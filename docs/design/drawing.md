@@ -22,7 +22,9 @@ with, and the status bar says what the click will make, such as *New point
 30 mm right of B*. While drawing a line, its start point is lined up with first.
 
 Distances are rounded to a tenth of a millimetre (or 0.1 cm, 0.01 in in those
-units), ready to be replaced by a formula in the Properties tab.
+units), ready to be replaced by a formula in the Properties tab. When a snap
+made the wrong kind of point, [change its type](points.md#changing-a-points-type)
+instead of drawing it again.
 
 ## Lines and curves
 
@@ -98,6 +100,7 @@ so use the formula above.
 | Tools → Offset | A line following an edge, or a run of edges, at a distance: stitch lines, facings |
 | Tools → Points → Merge Points | One point from several, which everything that used them then uses |
 | Tools → Points → Break Point | One point for each edge that meets at a point |
+| Tools → Points → Change To | The first selected point placed another way, from the other selected objects; see [Point types](points.md#changing-a-points-type) |
 | Tools → Points → Repeat Points | A row of evenly spaced points between two selected points or along a selected edge |
 | Tools → Transform | Rotated, mirrored or moved copies, which follow their sources |
 

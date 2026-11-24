@@ -340,6 +340,15 @@ export class PatternCanvas implements CanvasToolHost {
     this.applyEdit(await this.document.call('editor_delete', { selection: this.selectionParams() }));
   }
 
+  // Tools > Points > Change To on the desktop: the first selected point,
+  // placed from the other selected objects in the order they were selected
+  async convertPoint(type: string): Promise<void> {
+    if (this.selection.size === 0 || this.mode !== 'idle') {
+      return;
+    }
+    this.applyEdit(await this.document.call('editor_convert_point', { selection: this.selectionParams(), type }));
+  }
+
   // Edit > Copy, or Cut, which deletes what was copied: the fragment to put
   // on the clipboard, empty when nothing could be copied
   async copySelection(cut: boolean): Promise<string> {

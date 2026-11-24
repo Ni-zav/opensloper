@@ -61,7 +61,9 @@ function measurementButton(caption: 'Add' | 'Save' | 'Revert'): string {
 // Whether the control is disabled
 async function isDisabled(page: Page, selector: string): Promise<boolean> {
   return page.$eval(selector, (control) =>
-    control instanceof HTMLInputElement || control instanceof HTMLButtonElement ? control.disabled : false,
+    control instanceof HTMLInputElement || control instanceof HTMLButtonElement || control instanceof HTMLSelectElement
+      ? control.disabled
+      : false,
   );
 }
 
@@ -407,6 +409,21 @@ try {
   await waitForData(page, 'undo', 'Add point');
   await page.mouse.click(at.x, at.y);
   await waitForData(page, 'selection', added);
+
+  // Change point to… needs a selection; the point is free already, so making
+  // it free is refused with the reason, and the box goes back to its caption
+  assert.ok(!(await isDisabled(page, '#point-type')), 'a point to change');
+  await page.select('#point-type', 'freePoint');
+  await page.waitForFunction(
+    () => document.querySelector('#status')?.textContent.endsWith('is already placed that way'),
+    { timeout: TIMEOUT_MS },
+  );
+  assert.equal(
+    await page.$eval('#point-type', (select) => (select instanceof HTMLSelectElement ? select.value : undefined)),
+    '',
+    'back to its caption',
+  );
+  assert.equal(await bodyData(page, 'undo'), 'Add point', 'nothing changed');
 
   // Copy puts the point's fragment on the clipboard; Paste, the button or the
   // paste key, makes a selected copy of it, and Cut copies and deletes, each one undo step

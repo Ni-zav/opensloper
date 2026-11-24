@@ -213,6 +213,8 @@ type
     // Changes the selected edges to lines or curves in place, as one undo step
     procedure ConvertSelection(ToCurve: boolean);
     // Merges the selected points into one, as one undo step, and selects it
+    // The first selected point to Conversion, from the other selected objects
+    procedure ConvertPointSelection(Conversion: TPointConversion);
     procedure MergeSelection;
     procedure AddRepeatAtSelection;
     // Breaks the selected point into one for each edge meeting there, as one
@@ -968,6 +970,12 @@ procedure TPatternCanvas.ConvertSelection(ToCurve: boolean);
 begin
   if Assigned(FDocument) then
     ApplyEdit(Sloper.Editor.SelectionEdits.ConvertSelection(FDocument, FSelection, ToCurve));
+end;
+
+procedure TPatternCanvas.ConvertPointSelection(Conversion: TPointConversion);
+begin
+  if Assigned(FDocument) then
+    ApplyEdit(Sloper.Editor.SelectionEdits.ConvertPointSelection(FDocument, FSelection, Conversion));
 end;
 
 procedure TPatternCanvas.MergeSelection;

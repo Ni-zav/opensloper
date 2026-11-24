@@ -1,0 +1,353 @@
+{% extends "pages/base.html" %}{% load static %}
+{% block title %}OpenSloper: sewing patterns drafted from measurements, in your browser or on your desktop{% endblock %}
+{% block description %}OpenSloper drafts sewing patterns from your measurements: change one and every line, curve and piece redraws to fit. Try the Design app free in your browser, now in beta, or download the free, open-source desktop apps for Linux, macOS and Windows.{% endblock %}
+{% block og_description %}Draft sewing patterns from measurements, in your browser or on your desktop. Free and open source.{% endblock %}
+{% block content %}
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-copy">
+      <h1>Sewing patterns that redraw to fit.</h1>
+      <p class="lede">OpenSloper places every point with a formula that reads your measurements. Change the waist, and every line, curve and piece follows. Start drafting in your browser with nothing to install, or download the full set of desktop apps.</p>
+      <div class="btns">
+        <a class="btn btn-solid" href="/design/">Open the Design app <span class="beta">Beta</span></a>
+        <a class="btn btn-line" href="{{ repo }}/releases/latest">Download {{ version }}</a>
+        <a class="btn btn-line" href="{{ docs }}getting-started/">Get started</a>
+      </div>
+      <p class="note"><strong>Free and open source</strong> under GPLv3. The browser app needs no sign-up, and your patterns and measurements stay on your computer. The desktop apps run on Linux, macOS and Windows.</p>
+    </div>
+
+    <figure class="hero-fig hero-shot">
+      <img src="{% static 'pages/images/web-design.webp' %}" width="1280" height="800" alt="The OpenSloper Design app in a browser, with the bodice block on the canvas, rulers in centimetres, and the shoulder point's length formula in the Properties tab">
+      <figcaption>The Design app in the browser, with the bodice block from the tutorial and a shoulder point's formula in the Properties tab.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec web" id="browser">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>In your browser, nothing to install <span class="beta">Beta</span></h2>
+      <p class="lede">The Design app runs in the browser on the same drafting engine as the desktop app, so formulas, names and undo follow the same rules and files open in both. It's a beta: try it, keep copies of your work, and tell us what breaks.</p>
+    </div>
+    <div class="web-grid">
+      <div class="web-col">
+        <h3>What the beta does</h3>
+        <ul class="web-list">
+          <li><strong>Draft on the canvas</strong> with points, lines, curves, circles and rectangles that snap as on the desktop, with rulers, labels, notes and callouts.</li>
+          <li><strong>Make pieces</strong> with a click, then add notches, seams, materials, allowances and cut counts, and zips, darts, hems, facings and buttons from the Features tab.</li>
+          <li><strong>Work with formulas</strong>: variables, measurements and size tables, name completion, and the wand's formula suggestions.</li>
+          <li><strong>Edit as you expect</strong>: cut, copy and paste, undo and redo, and import variables from another pattern.</li>
+          <li><strong>Print at true size</strong> as a tiled PDF with a test square, or export the draft as SVG.</li>
+          <li><strong>Install it and draft offline</strong>, once it has loaded.</li>
+        </ul>
+        <div class="btns"><a class="btn btn-solid" href="/design/">Open the Design app</a></div>
+      </div>
+      <div class="web-col">
+        <h3>Still on the desktop only</h3>
+        <ul class="web-list later">
+          <li>The Measurements and Publish apps, which come to the browser next, and the Drape app.</li>
+          <li>The Garment tab, the Claude tab, and checks such as the Problems tab.</li>
+          <li>Some drafting tools: transforms, split, arcs, rounded corners, offset edges, merging points and repeats.</li>
+        </ul>
+        <div class="privacy">
+          <h3>Your files stay on your computer</h3>
+          <p>The app opens and saves pattern and measurement files on your own computer and never uploads them; the site keeps no patterns, measurements or accounts. Work you haven't saved is kept in your browser's storage, on your machine.</p>
+          <p>Chrome and Edge save straight back to your files. Other browsers open files as uploads to the page and save them as downloads.</p>
+        </div>
+        <p>Found a problem? <a href="{{ repo }}/issues/new?template=bug_report.yml">Report it on GitHub</a> and choose opensloper-web.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Built the way pattern makers work</h2>
+      <p class="lede">Draft a block, derive styles from it, and keep everything tied to the measurements, from the first line to the printed pieces. Everything here is in the desktop apps; the browser beta has the drafting described above.</p>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20 10 4l10 10"/><circle cx="4" cy="20" r="1.8"/><circle cx="10" cy="4" r="1.8"/><circle cx="20" cy="14" r="1.8"/></svg>
+        <h3>Formulas, not fixed sizes</h3>
+        <p>Points, lines and curves are placed by formulas that read your measurements and variables, such as a quarter of the waist plus ease.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 20 11-11"/><path d="M17 3v4m-2-2h4M20 9v2m-1-1h2M11 4v2m-1-1h2"/></svg>
+        <h3>Formula suggestions</h3>
+        <p>Typed a plain number? The wand beside the field suggests formulas that give about the same value, such as <code>@waist/4</code>, and shows each one at the smallest and largest sizes, so a formula that only fits by chance stands out.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v4m0 10v4M3 12h4m10 0h4"/></svg>
+        <h3>Draw freely, snap to relationships</h3>
+        <p>Draw on the canvas the way you would in a drawing program. Each snap records how a point was placed, so it keeps its place when measurements change.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5 18 4l2 15-15 1Z"/><path d="M7.5 8 9 18" stroke-dasharray="2 2"/><path d="m12 9 1 4 1-4"/></svg>
+        <h3>Click inside to make a piece</h3>
+        <p>No tracing outlines point by point. Pieces get seam allowances, notches, grainlines, materials and cut counts.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4c2 6 2 10 0 16M19 4c-2 6-2 10 0 16"/><path d="m9 12 2 2 4-4"/></svg>
+        <h3>Seams that check themselves</h3>
+        <p>Pair the edges that sew together and their lengths are checked as the pattern changes. Problems are listed in plain words.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="M9 6h6M9 9h6M9 12h6M9 15h6"/><rect x="10" y="17" width="4" height="4" rx="1"/></svg>
+        <h3>Sewing details in one step</h3>
+        <p>The Features tab adds a zip, a dart, a hem, a facing or a row of buttons and buttonholes: the points, edges, allowances, seams, notches and topstitching, even the facing piece, as ordinary objects that one Undo takes off. Shared sizes such as the hem depth or button count are variables, so changing one updates them all.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="m8 16 8-8m0 0h-3m3 0v3"/><circle cx="18" cy="18" r="3.5" stroke-dasharray="2 2"/></svg>
+        <h3>Problems you can see</h3>
+        <p>Anything wrong gets a faint red halo on the canvas and a line in the Problems tab; click one to go to it. Point at a point or edge and faint arrows show what it is built from, and what is built from it.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V5h6v2M4 12h16"/></svg>
+        <h3>Made for more than fabric</h3>
+        <p>Designed from the start for leather, foam board, card and other materials as well as fabric. Clothing, bags, wallets, hats and belts, with circles, arcs, rounded corners and output for cutting machines.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>
+        <h3>True-scale printing</h3>
+        <p>Tiled PDFs with a test square and matching marks, Greek and Cyrillic text, printer calibration, large-format and projector output, and SVG or DXF-AAMA export.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18M9 3v18M15 3v18"/></svg>
+        <h3>Size tables and test sizes</h3>
+        <p>Grade a pattern across a whole size table and switch sizes in a click. Test size nudges every measurement up or down to see how the draft grows before you trust it.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18C8 18 8 6 12 6s4 12 8 12"/><path d="M4 14C8 14 8 2 12 2" stroke-dasharray="2 2"/></svg>
+        <h3>Curve paths and offset edges</h3>
+        <p>Smooth armholes, necklines and crotch curves through several points, and edges that follow others at a distance for facings, linings and topstitching.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 6 4 12l5 6M15 6l5 6-5 6"/></svg>
+        <h3>Copies that follow</h3>
+        <p>Rotate, mirror and move copies of points and edges for dart moves and slash-and-spread. The copies follow their sources when the pattern changes.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><circle cx="12" cy="6" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="18" r="1.6"/></svg>
+        <h3>Repeats for buttons and pleats</h3>
+        <p>Evenly spaced rows of points for buttons, buttonholes, pleats, tucks and belt loops. The count is a formula too, so the row grows with the pattern. Buttonholes are drawn as slots with bar tacks, and cut as slits by machines.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v11H9l-5 5Z"/><path d="M8 9h8M8 12h5"/></svg>
+        <h3>Notes that do the sums</h3>
+        <p>Put sewing instructions and callouts on the pattern, in the font you choose, bold or italic, embedded when you print to PDF. Notes can hold live values, such as the finished waist, or the piece's name, cut count and size, worked out again whenever the pattern changes.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 10h9V3M12 10v11M12 15h9"/></svg>
+        <h3>Pieces laid out for printing</h3>
+        <p>Arrange every piece on the pages before you print: drag, turn and flip them, or let Pack pieces nest them by their shapes onto as few pages as it can, a small piece tucked into the curve of a larger one. Mirrored copies stay flipped, and warnings flag pieces that overlap or run off the page.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3z"/><path d="M3 12h18" stroke-dasharray="2 2"/><path d="M6 7h5v3H6zM13 14h5v3h-5z"/></svg>
+        <h3>How much material</h3>
+        <p>Give a material its roll width, or the size of a sheet of leather or board, and every piece is checked to fit it. Publish works out how much of each material the layout needs, cut folded or single layer, and can print it in the information block.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 6l2 4 2-1v12h8V9l2 1 2-4-4-3c-1 2-2.5 3-4 3S9 5 8 3Z"/><path d="M12 9v4" stroke-dasharray="2 2"/></svg>
+        <h3>See it sewn</h3>
+        <p>The Garment tab shows your pieces as sewn while you draft: darts closed, pieces cut on the fold opened out, fold lines such as pleats drawn, and each piece shaded in its material. Export it as SVG or PNG.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="2"/><path d="M8 9h8l-1 5H9Z"/><path d="M9 14c-1 3-2 5-4 7h14c-2-2-3-4-4-7" stroke-dasharray="2 2"/></svg>
+        <h3>Drape it in 3D</h3>
+        <p>Place the pieces round a figure built from the measurements and drape them in Blender's cloth simulation. Each material's fabric, from silk to leather, sets how its pieces hang.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="9" width="11" height="11" rx="1"/><path d="M10 9V4h11v11h-7" stroke-dasharray="2 2"/></svg>
+        <h3>Hide, isolate and stack pieces</h3>
+        <p>Pieces drafted over each other stay workable: hide a piece, isolate one to dim everything it doesn't use, or bring it to the front. Every piece still prints.</p>
+      </div>
+      <div class="feature">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <h3>Lock finished work</h3>
+        <p>Lock a block or piece so it can't be moved, edited or deleted by accident. It can still be selected and built on, and its formulas still follow the measurements.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec tools" id="apps">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Five desktop apps, one set of files</h2>
+      <p class="lede">Each app does one job. They share plain JSON files, so a pattern made in one opens in the others, and in the Design app in your browser.</p>
+    </div>
+    <div class="tool-grid">
+      <div class="tool" style="--c:var(--measure)">
+        <div class="tool-head">{% include "imported/icon-measure.svg" %}<div><h3>Measure</h3><span class="cmd">opensloper-measurements</span></div></div>
+        <p>Record one person's measurements or a whole size table, with a catalogue and body figure. Imports and exports Valentina and Seamly2D files.</p>
+        <figure class="tool-shot"><img src="{% static 'pages/images/measurements-app.webp' %}" width="1280" height="800" loading="lazy" alt="The measurements window with a size table of women's sizes 8 to 16, the body figure showing where the bust is measured, and the measurement catalogue"></figure>
+      </div>
+      <div class="tool" style="--c:var(--design)">
+        <div class="tool-head">{% include "imported/icon-design.svg" %}<div><h3>Design</h3><span class="cmd">opensloper-design · <a href="/design/">also in your browser</a></span></div></div>
+        <p>Draft blocks and styles on one canvas, then make the pieces, seams and markings, add zips, darts, hems, facings and buttons from the Features tab, and see them sewn in the Garment tab. Ask Claude for changes from the side panel.</p>
+        <figure class="tool-shot"><img src="{% static 'pages/images/design-features.webp' %}" width="1280" height="800" loading="lazy" alt="The design window with the bodice block, the centre back edge selected and the Features tab ready to add a zip along it"></figure>
+      </div>
+      <div class="tool" style="--c:var(--publish)">
+        <div class="tool-head">{% include "imported/icon-publish.svg" %}<div><h3>Publish</h3><span class="cmd">opensloper-publish</span></div></div>
+        <p>Lay out pieces from one or more patterns on pages or a roll, nested by their shapes, see how much material they take, then print at true size or export.</p>
+        <figure class="tool-shot"><img src="{% static 'pages/images/publish-app.webp' %}" width="1280" height="800" loading="lazy" alt="The publish window with the circle skirt's pieces packed onto 20 tiled A4 pages"></figure>
+      </div>
+      <div class="tool" style="--c:var(--drape)">
+        <div class="tool-head">{% include "imported/icon-drape.svg" %}<div><h3>Drape</h3><span class="cmd">opensloper-drape</span></div></div>
+        <p>Place the pieces of one or more patterns round a figure built from the measurements, then drape them in Blender's cloth simulation to see how the garment hangs.</p>
+        <figure class="tool-shot"><img src="{% static 'pages/images/drape-app.webp' %}" width="1280" height="800" loading="lazy" alt="The drape window with the bodice block's front and back pieces placed round a figure, ready for draping in Blender"></figure>
+      </div>
+      <div class="tool wide" style="--c:var(--cli)">
+        <div class="tool-head">{% include "imported/icon-cli.svg" %}<div><h3>Command line</h3><span class="cmd">opensloper-cli</span></div></div>
+        <p>Check and export patterns, pack layouts, export drapes for Blender, manage measurements, and serve the Automation API to scripts, or to Claude as an MCP server.</p>
+      </div>
+    </div>
+    <p class="tools-foot">File formats are documented, with JSON Schemas generated from the code, so you can read and write patterns from your own tools. See <a href="{{ docs }}reference/files/">File formats</a>.</p>
+  </div>
+</section>
+
+<section class="sec" id="learn">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Learn by drafting</h2>
+      <p class="lede">The tutorials build real blocks one step at a time. These drawings come straight from the example files, drawn by <code>opensloper-cli</code>. Every example also opens in the browser, from the Design app's Examples box.</p>
+    </div>
+    <ol class="steps" aria-label="Straight skirt block, step by step">
+      <li><figure>{% include "imported/skirt-1.svg" %}</figure><p class="cap">The frame from hip and length</p></li>
+      <li><figure>{% include "imported/skirt-2.svg" %}</figure><p class="cap">The curved side seam</p></li>
+      <li><figure>{% include "imported/skirt-3.svg" %}</figure><p class="cap">Waist darts</p></li>
+      <li><figure>{% include "imported/skirt-4.svg" %}</figure><p class="cap">Front and back pieces</p></li>
+    </ol>
+
+    <div class="learn-row">
+      <div>
+        <h3>Tutorials</h3>
+        <ul class="tut-list">
+          <li><a href="{{ docs }}tutorials/skirt-block/">A straight skirt block</a><span>A first pattern, from measurements to pieces.</span></li>
+          <li><a href="{{ docs }}tutorials/bodice-block/">A bodice block</a><span>Shoulders, armholes and darts, front and back.</span></li>
+          <li><a href="{{ docs }}tutorials/zip/">Adding a zip</a><span>A zip in the skirt block's centre back from the Features tab.</span></li>
+          <li><a href="{{ docs }}tutorials/darts/">Adding a dart</a><span>A second back dart in the skirt block, and every dart capped.</span></li>
+          <li><a href="{{ docs }}tutorials/hem/">Adding a hem</a><span>The skirt block's front and back hemmed in one step.</span></li>
+          <li><a href="{{ docs }}tutorials/facing/">Adding a facing</a><span>The bodice block's necklines faced, with interfacings.</span></li>
+          <li><a href="{{ docs }}tutorials/buttons/">Adding buttons</a><span>The bodice front opened and buttoned, with a facing behind.</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Example patterns</h3>
+        <ul class="ex-list">
+          <li><a href="{{ docs }}getting-started/examples/">Circle skirt</a><span>Arcs from the waist, a piece cut on the fold, and a buttoned waistband.</span></li>
+          <li><a href="{{ docs }}getting-started/examples/">Tote bag</a><span>A lined tote sized by variables, with boxed corners, a pocket and straps.</span></li>
+          <li><a href="{{ docs }}getting-started/examples/">Bodice with curve paths</a><span>Armholes drafted as single curves, with seams checked for length.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec scripting" id="scripting">
+  <div class="wrap script-grid">
+    <div>
+      <div class="sec-head" style="margin-bottom:0">
+        <h2>Script a pattern, or ask Claude</h2>
+        <p class="lede"><code>opensloper-cli serve</code> works through the same steps as the design window, so names, formulas and undo follow the same rules. A script can draft a family of patterns or test one, and Claude can draft, check and fix a pattern, looking at the draft as a picture to see what it made.</p>
+      </div>
+      <ol class="road">
+        <li><span class="when now">Scripts</span><p>JSON-RPC from any language that reads and writes lines of JSON, or <code>opensloper.py</code>, a Python client with a method for each call.</p></li>
+        <li><span class="when now">MCP</span><p><code>serve</code> is also an MCP server, so Claude Code and Claude Desktop can use every method as a tool.</p></li>
+        <li><span class="when now">In the window</span><p>Ask Claude from the Claude tab in the desktop design, publish and drape apps, or let Claude Code or any MCP client connect to the open pattern from the Assistance menu. Off until you allow it, and every change is one step you can undo.</p></li>
+        <li><span class="when now">Privacy</span><p>Assistants are never told a folder or a measurement file's name, and a preference keeps the measurement values back too. The Claude tab says what is sent before your first question.</p></li>
+      </ol>
+      <p style="margin-top:20px;font-size:15.5px"><a href="{{ docs }}scripting/">Read the scripting guide</a> · <a href="{{ docs }}design/claude/">Asking Claude</a></p>
+    </div>
+    <div>
+<pre class="code" aria-label="Example Python script"><span class="k">from</span> opensloper <span class="k">import</span> OpenSloper
+
+OpenSloper.create_pattern_file(<span class="s">"gathered-skirt.sloper"</span>, units=<span class="s">"cm"</span>,
+    measurement_file=<span class="s">"measurements/size-table.slm"</span>)
+<span class="k">with</span> OpenSloper() <span class="k">as</span> sloper:
+    sloper.open(<span class="s">"gathered-skirt.sloper"</span>, size=<span class="s">"12"</span>)
+    sloper.add_variable(<span class="s">"fullness"</span>, <span class="s">"1.5"</span>)
+    sloper.add_point(<span class="s">"freePoint"</span>, name=<span class="s">"A"</span>, x=<span class="s">"0"</span>, y=<span class="s">"0"</span>)
+    sloper.add_rectangle(<span class="s">"A"</span>,
+        <span class="s">"@hip_circumference / 2 * #fullness"</span>,
+        <span class="s">"@waist_to_knee + 4"</span>, role=<span class="s">"outline"</span>)
+    sloper.create_piece(50, 50, name=<span class="s">"Skirt"</span>)
+    <span class="k">print</span>(sloper.evaluate()[<span class="s">"problems"</span>] <span class="k">or</span> <span class="s">"none"</span>)
+    sloper.save()</pre>
+      <div class="asks">
+        <p class="h">Ask Claude from the design window, in your own words:</p>
+        <p class="ask">Add 2 cm ease at the hip.</p>
+        <p class="ask">Why is point C invalid?</p>
+        <p class="ask">Move the shoulder dart to the side seam.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec open" id="open-source">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Free and open source, for good</h2>
+      <p class="lede">The OpenSloper software costs nothing and always will. It's a community project under the GNU GPL v3, so anyone can use it, study how it works, change it and share it, in the browser as on the desktop.</p>
+    </div>
+    <div class="open-grid">
+      <div class="open-item">
+        <h3>Free to use</h3>
+        <p>No price and no ads. The desktop apps need no account, and the browser beta no sign-up. Use it for personal sewing, teaching or a business.</p>
+      </div>
+      <div class="open-item">
+        <h3>Your patterns stay yours</h3>
+        <p>Patterns and measurements are plain, documented JSON files on your own computer, readable by any tool, whichever app you draft them in.</p>
+      </div>
+      <div class="open-item">
+        <h3>Open code</h3>
+        <p>Every line of the apps, the browser app's drafting engine and editor included, is on GitHub under the GPL, so the software can never be locked away or taken from you.</p>
+      </div>
+      <div class="open-item">
+        <h3>Built together</h3>
+        <p>Bug reports, ideas, tutorials and code are all welcome. See <a href="{{ repo }}/blob/development/CONTRIBUTING.md">how to contribute</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="status">
+  <div class="wrap status-grid">
+    <div class="build">
+      <h2>Where it's at</h2>
+      <p>OpenSloper {{ version }} is an early release, for trying out: features and file formats may still change. See <a href="{{ repo }}/blob/development/CHANGELOG.md">what's new</a>. The Design app in the browser is a beta built from the same release; <a href="/design/">open it</a> in any recent browser.</p>
+      <p><a href="{{ repo }}/releases/latest">Download the desktop apps</a> for Linux (x86_64), macOS (Apple silicon) or Windows (x86_64): a <code>.deb</code> for Debian and Ubuntu, a <code>.dmg</code> for macOS and a <code>setup.exe</code> for Windows, or a folder to unpack and run, portable from a USB drive. Each download has the user guide to read offline.</p>
+      <p>Or build it from source:</p>
+<pre class="code" aria-label="Build from source">git clone --recursive \
+  {{ repo }}.git
+cd opensloper
+./opensloper-make.sh build</pre>
+      <p>You'll need Lazarus 4.8 with Free Pascal 3.2.2, and on Linux the Qt Pascal bindings. The <a href="{{ docs }}getting-started/">getting started guide</a> has the details.</p>
+      <p>Star the repository to follow along, or <a href="{{ repo }}/issues">open an issue</a> to share ideas and problems. To contribute, read <a href="{{ repo }}/blob/development/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+    </div>
+    <ul class="done-list" aria-label="Progress">
+      <li><span>Measurements, formulas and the dependency engine</span><span class="tag done">Done</span></li>
+      <li><span>Drafting canvas with snapping and transforms</span><span class="tag done">Done</span></li>
+      <li><span>Pieces, seam allowances, notches and materials</span><span class="tag done">Done</span></li>
+      <li><span>Seams and seam-length checks</span><span class="tag done">Done</span></li>
+      <li><span>Measurements app, Valentina and Seamly2D import</span><span class="tag done">Done</span></li>
+      <li><span>Accessories: arcs, rounded corners, offset edges</span><span class="tag done">Done</span></li>
+      <li><span>Notes and callouts, with fonts embedded in PDF</span><span class="tag done">Done</span></li>
+      <li><span>Garment tab: pieces as sewn</span><span class="tag done">Done</span></li>
+      <li><span>Locking, hiding and isolating pieces</span><span class="tag done">Done</span></li>
+      <li><span>Material sizes, fit checks and material needed</span><span class="tag done">Done</span></li>
+      <li><span>Scripting with <code>opensloper-cli serve</code> and a Python client</span><span class="tag done">Done</span></li>
+      <li><span>Features tab: zips, darts, hems, facings and buttons</span><span class="tag done">Done</span></li>
+      <li><span>Problems tab, halos and dependency arrows</span><span class="tag done">Done</span></li>
+      <li><span>Claude over MCP, and in the design, publish and drape apps</span><span class="tag done">Done</span></li>
+      <li><span>Tiled printing, SVG and DXF-AAMA export</span><span class="tag done">Done</span></li>
+      <li><span>Downloads, installers and a portable install</span><span class="tag done">Done</span></li>
+      <li><span>The Design app in the browser</span><span class="tag try">Beta</span></li>
+      <li><span>Drape app and draping in Blender</span><span class="tag try">Testing</span></li>
+      <li><span>Cutting machine output</span><span class="tag try">Testing</span></li>
+      <li><span>The Measurements and Publish apps in the browser</span><span class="tag plan">Planned</span></li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

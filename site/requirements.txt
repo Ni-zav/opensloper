@@ -1,0 +1,5 @@
+# The site's own packages, kept to what it needs and pinned (pip freeze)
+asgiref==3.13.0
+Django==5.2.19
+gunicorn==27.0.1
+sqlparse==0.6.1

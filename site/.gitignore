@@ -1,0 +1,6 @@
+dist/
+venv/
+imported/
+static_root/
+__pycache__/
+*.pyc

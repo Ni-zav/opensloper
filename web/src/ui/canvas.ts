@@ -371,6 +371,22 @@ export class PatternCanvas implements CanvasToolHost {
     this.applyEdit(await this.document.call('editor_paste', { text }));
   }
 
+  // Like File > Import SVG Stamp on the desktop: anchor to a selection or centre in the view.
+  async importStamp(svg: string, fileName: string): Promise<JsonRecord | undefined> {
+    if (this.mode !== 'idle') {
+      return undefined;
+    }
+    const centre = this.view.toModel({ x: this.element.clientWidth / 2, y: this.element.clientHeight / 2 });
+    const answer = await this.document.call('editor_import_stamp', {
+      svg,
+      fileName,
+      selection: this.selectionParams(),
+      ...centre,
+    });
+    this.applyEdit(answer);
+    return answer;
+  }
+
   // The selection as the API takes it: IDs, and a repeat's point by name
   private selectionParams(): (number | string)[] {
     return [...this.selection].map((id) => {

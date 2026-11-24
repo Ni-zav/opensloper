@@ -96,6 +96,7 @@ type
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
     function DoToolClick(Params: TJSONObject): TJSONData;
+    function DoImportStamp(Params: TJSONObject): TJSONData;
     function KeysParam(Params: TJSONObject; const AName: string): TStringArray;
     function DoLabelKeys(Params: TJSONObject): TJSONData;
     function DoSeamPick(Params: TJSONObject): TJSONData;
@@ -439,6 +440,11 @@ resourcestring
     'canvas shows it while the text is typed in the Properties tab; nothing changes.';
   rsEditorNotePreviewTarget = 'The note, by ID or name';
   rsEditorNotePreviewText = 'The text as typed, with names, and draft values in [ ] worked out';
+  rsEditorImportStamp = 'Imports an SVG stamp at true size, centred on the selected object or at the place given.';
+  rsEditorStampSVG = 'The SVG drawing as text';
+  rsEditorStampFileName = 'The drawing file name, used to name the stamp';
+  rsEditorStampPlace = 'The centre of a free stamp, in mm';
+  rsEditorStampReturns = '`done`, `select` and `message` as for other edits; `warnings` about differences from the SVG';
   rsEditorNotePreviewReturns = '`note`, as one of editor_scene''s `notes`';
   rsEditorSuggestItemValue = 'Its value, as editor_suggest gives it';
   rsEditorSuggestPreviewReturns = '`position`, where the point would go (`x`, `y`), or null when the field does ' +
@@ -508,7 +514,7 @@ uses
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
   Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange, Sloper.Output.GarmentSVG,
-  Sloper.Editor.Garment, Sloper.Core.Variables;
+  Sloper.Editor.Garment, Sloper.Core.Variables, Sloper.Core.SvgImport;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -701,6 +707,12 @@ begin
     AddApiParam(Built, 'values', apList, True, rsEditorFeatureValues);
     AddApiParam(Built, 'values[].id', apText, True, rsEditorFeatureValueId);
     AddApiParam(Built, 'values[].text', apText, True, rsEditorFeatureValueText);
+    AddApiMethod(Built, 'editor_import_stamp', rsEditorImportStamp, rsEditorStampReturns);
+    AddApiParam(Built, 'svg', apText, True, rsEditorStampSVG);
+    AddApiParam(Built, 'fileName', apText, True, rsEditorStampFileName);
+    AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorStampPlace);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorStampPlace);
     AddApiMethod(Built, 'editor_note_preview', rsEditorNotePreview, rsEditorNotePreviewReturns, True);
     AddApiParam(Built, 'id', apTarget, True, rsEditorNotePreviewTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorNotePreviewText);
@@ -2668,6 +2680,31 @@ begin
   Result := EditToJSON(AddSeamFromSides(Document, SideA, SideB));
 end;
 
+function TEditorApiServer.DoImportStamp(Params: TJSONObject): TJSONData;
+var
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+  Reason, StampName, Warning: string;
+  Centre: TVec2;
+  Selection: TStringArray;
+  Answer: TJSONObject;
+  WarningItems: TJSONArray;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Centre := PlaceOf(Params);
+  Selection := KeysParam(Params, 'selection');
+  StampName := ChangeFileExt(ExtractFileName(RequireString(Params, 'fileName')), '');
+  if not ImportSvgStamp(RequireString(Params, 'svg'), Drawing, Warnings, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Answer := EditToJSON(AddStampStep(Document, Drawing, StampName, Selection, Centre));
+  WarningItems := TJSONArray.Create;
+  for Warning in Warnings do
+    WarningItems.Add(Warning);
+  Answer.Add('warnings', WarningItems);
+  Result := Answer;
+end;
+
 function TEditorApiServer.DoDelete(Params: TJSONObject): TJSONData;
 var
   Selection: TStringArray;
@@ -2751,6 +2788,7 @@ begin
     'editor_list_click': Result := DoListClick(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);
+    'editor_import_stamp': Result := DoImportStamp(Params);
     'editor_label_keys': Result := DoLabelKeys(Params);
     'editor_seam_pick': Result := DoSeamPick(Params);
     'editor_seam_make': Result := DoSeamMake(Params);

@@ -25,6 +25,9 @@ Changed, Fixed and Removed under each version.
   and the status bar says how far; formulas it had become plain numbers,
   which the formula suggestions can turn back into formulas.
   `convert_point` does the same in the Automation API (#81).
+- The web editor imports SVG stamps at their original size. A stamp can
+  hang from a selected point, edge or piece, or sit in the middle of the
+  view. The drawing is saved in the pattern (#89).
 - The web version's side panel has a Garment tab, as the desktop's: the
   pieces as sewn, darts closed and folds opened, shaded, of one material
   or all. Zoom with the wheel, drag to pan, double-click to fit, or follow

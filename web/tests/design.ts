@@ -9,7 +9,7 @@
 // default, and SCREENSHOT, a file name without .png, keeps a picture of the end. It opens and saves
 // through uploads and downloads, as where the browser has no File System Access.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { KeyInput, Page } from 'puppeteer-core';
@@ -870,6 +870,32 @@ try {
     ['The pattern has changes not saved. Drop them?'],
     'asked before dropping the changes',
   );
+
+  const stampFile = join(downloads, 'fold.svg');
+  await writeFile(
+    stampFile,
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+      '<path d="M0 0 H20 V10 H0 Z"/></svg>',
+  );
+  const chooseStamp = async (path: string): Promise<void> => {
+    const [chooser] = await Promise.all([
+      page.waitForFileChooser(),
+      page.click('#toolbar button[title="Import SVG Stamp…"]'),
+    ]);
+    await chooser.accept([path]);
+  };
+  await chooseStamp(stampFile);
+  await waitForStatus(page, 'Added the stamp fold.svg');
+  await waitForData(page, 'undo', 'Add stamp');
+  assert.ok((await bodyData(page, 'selection')) !== '', 'the stamp is selected');
+  await page.click('#toolbar button[title="Undo Add stamp"]');
+  await waitForData(page, 'undo', '');
+  await waitForData(page, 'selection', '');
+  const largeStamp = join(downloads, 'large.svg');
+  await writeFile(largeStamp, Buffer.alloc(8 * 1024 * 1024 + 1));
+  await chooseStamp(largeStamp);
+  await waitForStatus(page, 'The file is too large for a stamp');
+  assert.equal(await bodyData(page, 'undo'), '', 'an oversized file adds no step');
 
   // SCREENSHOT names a PNG file to keep what the canvas shows at the end
   if ((process.env.SCREENSHOT ?? '') !== '') {

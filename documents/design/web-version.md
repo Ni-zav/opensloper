@@ -211,6 +211,8 @@ The design app's page is built (`web/`, see its README). The TypeScript is one n
 - Export SVG downloads the draft as the canvas shows it, as the desktop's Export Draft SVG.
 - Print… (`PrintDialog`) asks for the paper: A4, A3 or Letter, starting at Letter where that is the usual paper. It makes the publish app's tiled print of a new layout of the pattern as it is open, unsaved edits included: the pages with their captions, overlaps and marks, and the cover with the test square, the reminder to print at 100% and the page map. Open to print shows it in the browser's PDF viewer, in a tab opened while the click counts (a blocked tab downloads it instead). Download PDF saves it. Placing pieces by hand, leaving pages out and other kinds of output are the publish app's. Printer calibration waits for preferences on the web, so it prints at exactly 100%.
 
+**SVG stamps.** The toolbar reads the chosen SVG file locally and passes it as text to `editor_import_stamp`. The engine uses the desktop importer and the same one-step placement edit. It centres the stamp on the selection or in the canvas, stores the paths in the pattern and returns any import warnings. Files over the importer's size limit are refused before reading.
+
 **The side panel's tabs** (`SideTabs`). A tab can sit at the foot of the column, and show a count on its icon.
 
 - **Lists.** Objects, Variables and Measurements are lists on the shared `ListPanel`: search, rows by key, and the selection kept and painted by the list. A hidden tab builds its rows only once it shows.

@@ -68,6 +68,7 @@ type
     procedure TestLabelKeys;
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
+    procedure TestImportStamp;
     // The Delete key: refused with the reason while something uses an object
     procedure TestDeleteSelection;
     procedure TestConvertPoint;
@@ -780,6 +781,35 @@ begin
   AssertTrue('made', Answer.Booleans['done']);
   Call('editor_changes');
   AssertEquals('one step', 'Add seam', Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestImportStamp;
+const
+  STAMP_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+    '<path d="M0 0 H20 V10 H0 Z"/></svg>';
+var
+  Note: TJSONObject;
+  Params: string;
+begin
+  AddSquare;
+  Params := '{"svg": "' + StringToJSONString(STAMP_SVG) + '", "fileName": "Fold.svg", "selection": [' +
+    IntToStr(IdOf('A')) + '], "x": 300, "y": 250}';
+  Call('editor_import_stamp', Params);
+  AssertTrue('imported', Answer.Booleans['done']);
+  AssertEquals('selects the stamp', 1, Answer.Arrays['select'].Count);
+  AssertEquals('the dimensions are in millimetres', 0, Answer.Arrays['warnings'].Count);
+  Call('editor_scene');
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('hangs from the selected point', 'point', Note.Strings['anchor']);
+  AssertEquals('drawn as paths', 1, Note.Arrays['stamp'].Count);
+  AssertNear('left of the anchor', -10, Note.Arrays['box'].Floats[0], TOLERANCE);
+  AssertNear('right of the anchor', 10, Note.Arrays['box'].Floats[2], TOLERANCE);
+  Call('undo');
+  Answer;
+  Call('editor_scene');
+  AssertEquals('one undo removes the stamp', 0, Answer.Arrays['notes'].Count);
+  Call('editor_import_stamp', '{"svg": "not SVG", "fileName": "Bad.svg", "x": 0, "y": 0}');
+  AssertEquals('a bad file is refused', RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestEditorServer.TestSeamInScene;

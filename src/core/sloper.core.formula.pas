@@ -209,7 +209,7 @@ resourcestring
 implementation
 
 uses
-  SysUtils, Math, Generics.Collections, Sloper.Core.Names;
+  SysUtils, Math, Generics.Collections, Sloper.Core.Geometry, Sloper.Core.Names;
 
 type
   TFormulaFunction = (ffSin, ffCos, ffTan, ffAsin, ffAcos, ffAtan2, ffSqrt,
@@ -469,9 +469,7 @@ begin
       SumY := Sin(DegToRad(Values[0])) + Sin(DegToRad(Values[1]));
       if Hypot(SumX, SumY) < BISECT_TOLERANCE then
         raise EFormulaError.Create(rsFormulaBisectOpposite, Token);
-      Result := RadToDeg(ArcTan2(SumY, SumX));
-      if Result < 0 then
-        Result := Result + 360;
+      Result := NormalizeAngle(RadToDeg(ArcTan2(SumY, SumX)));
     end;
   end;
 end;

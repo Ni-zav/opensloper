@@ -64,6 +64,7 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- The `bisect` formula returns zero when rounding puts its result at 360°.
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

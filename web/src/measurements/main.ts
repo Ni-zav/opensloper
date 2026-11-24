@@ -34,6 +34,23 @@ interface MeasurementSet {
   measurements: Measurement[];
 }
 
+type FigurePoint = [number, number];
+type View = 'front' | 'back' | 'side';
+
+interface CatalogueEntry {
+  key: string;
+  name: string;
+  description: string;
+  howTo: string;
+  view: View;
+  overlay: FigurePoint[];
+}
+
+interface Catalogue {
+  figures: Record<View, FigurePoint[][]>;
+  measurements: CatalogueEntry[];
+}
+
 function required<T extends HTMLElement>(id: string, kind: new () => T): T {
   const element = document.getElementById(id);
   if (!(element instanceof kind)) throw new Error(`Missing #${id}`);
@@ -54,6 +71,15 @@ const empty = required('empty', HTMLParagraphElement);
 const sizeName = required('size-name', HTMLInputElement);
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const UNTITLED = 'Untitled.slm';
+const catalogueList = required('catalogue-list', HTMLSelectElement);
+const catalogueSearch = required('catalogue-search', HTMLInputElement);
+const addKnown = required('catalogue-add', HTMLButtonElement);
+const patternFile = required('pattern-file', HTMLInputElement);
+const missing = required('pattern-missing', HTMLUListElement);
+const patternClear = required('pattern-clear', HTMLButtonElement);
+let catalogue: Catalogue | undefined;
+let patternName = '';
+let missingRows: string[] = [];
 
 let engine: Engine;
 let text = '';
@@ -79,6 +105,31 @@ async function call(method: string, params: object = {}): Promise<void> {
   undo.disabled = reply.canUndo !== true;
   redo.disabled = reply.canRedo !== true;
   showFileName();
+  missingRows = [];
+  if (Array.isArray(reply.missing)) {
+    const items: unknown[] = reply.missing;
+    for (const data of items) {
+      if (data === null || typeof data !== 'object' || !('key' in data) || typeof data.key !== 'string') continue;
+      const values: unknown[] = 'sizes' in data && Array.isArray(data.sizes) ? data.sizes : [];
+      const sizes = values.filter((value) => typeof value === 'string');
+      missingRows.push(sizes.length === 0 ? data.key : `${data.key} (${sizes.join(', ')})`);
+    }
+  }
+  showPatternCheck();
+}
+
+function showPatternCheck(): void {
+  required('pattern-name', HTMLSpanElement).textContent = patternName;
+  patternClear.hidden = patternName === '';
+  required('pattern-complete', HTMLParagraphElement).hidden = patternName === '' || missingRows.length > 0;
+  missing.hidden = patternName === '' || missingRows.length === 0;
+  missing.replaceChildren(
+    ...missingRows.map((value) => {
+      const item = document.createElement('li');
+      item.textContent = value;
+      return item;
+    }),
+  );
 }
 
 function measurementSet(): MeasurementSet {
@@ -131,7 +182,10 @@ function editText(
     drafts.delete(field);
     const value = field.value;
     queue(
-      () => call(method, { ...params, text: value }),
+      async () => {
+        await call(method, { ...params, text: value });
+        if (method === 'rename_row') showCatalogue();
+      },
       () => {
         field.value = current(measurementSet());
       },
@@ -266,6 +320,62 @@ function render(): void {
     line.insertCell().append(moveAndDelete('row', row, set.measurements.length, item.key, 'row'));
   });
   empty.hidden = set.measurements.length > 0;
+  showCatalogue();
+}
+
+function selectedEntry(): CatalogueEntry | undefined {
+  return catalogue?.measurements.find((entry) => entry.key === catalogueList.value);
+}
+
+function showGuide(): void {
+  const entry = selectedEntry();
+  const figure = document.querySelector('#figure');
+  if (figure === null) return;
+  const paths = entry === undefined ? [] : (catalogue?.figures[entry.view] ?? []);
+  required('guide', HTMLDivElement).hidden = entry === undefined;
+  addKnown.disabled = entry === undefined;
+  required('how-to', HTMLParagraphElement).textContent = entry?.howTo === '' ? entry.description : (entry?.howTo ?? '');
+  figure.replaceChildren();
+  function draw(points: FigurePoint[], overlay: boolean): void {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    const outline = overlay ? points : [...points, points[0]].filter((point) => point !== undefined);
+    line.setAttribute(
+      'points',
+      outline.map(([horizontal, vertical]) => `${String(horizontal)},${String(vertical)}`).join(' '),
+    );
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', overlay ? '#185da9' : '#555');
+    line.setAttribute('stroke-width', overlay ? '15' : '8');
+    figure?.append(line);
+  }
+  for (const path of paths) draw(path, false);
+  if (entry?.overlay !== undefined) draw(entry.overlay, true);
+}
+
+function showCatalogue(): void {
+  if (catalogue === undefined) return;
+  const used = new Set(measurementSet().measurements.map((item) => item.key.toLowerCase()));
+  const search = catalogueSearch.value.trim().toLowerCase();
+  const selected = catalogueList.value;
+  const entries = catalogue.measurements.filter(
+    (entry) =>
+      !used.has(entry.key.toLowerCase()) &&
+      `${entry.name} ${entry.key} ${entry.description}`.toLowerCase().includes(search),
+  );
+  catalogueList.replaceChildren(...entries.map((entry) => new Option(entry.name, entry.key)));
+  if (entries.some((entry) => entry.key === selected)) catalogueList.value = selected;
+  if (entries.length === 0) catalogueList.append(new Option('No matching measurements', ''));
+  showGuide();
+}
+
+async function loadCatalogue(): Promise<void> {
+  const response = await fetch(new URL('./measurement-catalogue.json', import.meta.url));
+  if (!response.ok) throw new Error('The measurement catalogue could not be loaded');
+  // This JSON is shipped with OpenSloper, separate from the files users open.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  catalogue = (await response.json()) as Catalogue;
+  required('catalogue-panel', HTMLDetailsElement).hidden = false;
+  showCatalogue();
 }
 
 function replace(read: () => Promise<{ name: string; contents?: string }>): void {
@@ -288,6 +398,34 @@ function replace(read: () => Promise<{ name: string; contents?: string }>): void
     }
   });
 }
+
+catalogueSearch.addEventListener('input', showCatalogue);
+catalogueList.addEventListener('change', showGuide);
+addKnown.addEventListener('click', () => {
+  const entry = selectedEntry();
+  if (entry !== undefined) change('add_known', { key: entry.key, description: entry.description });
+});
+required('pattern-open', HTMLButtonElement).addEventListener('click', () => {
+  patternFile.click();
+});
+patternFile.addEventListener('change', () => {
+  const selected = patternFile.files?.[0];
+  patternFile.value = '';
+  if (selected === undefined) return;
+  queue(async () => {
+    if (selected.size === 0 || selected.size > MAX_FILE_BYTES) throw new Error('Choose a pattern file up to 8 MB');
+    await call('check_pattern', { text: await selected.text() });
+    patternName = selected.name;
+    showPatternCheck();
+  });
+});
+patternClear.addEventListener('click', () => {
+  queue(async () => {
+    await call('clear_pattern');
+    patternName = '';
+    showPatternCheck();
+  });
+});
 
 required('new', HTMLButtonElement).addEventListener('click', () => {
   replace(() => Promise.resolve({ name: UNTITLED }));
@@ -351,6 +489,8 @@ async function start(): Promise<void> {
   editor.disabled = false;
 }
 
-start().catch((error: unknown) => {
-  message(String(error), true);
-});
+start()
+  .then(loadCatalogue)
+  .catch((error: unknown) => {
+    message(String(error), true);
+  });

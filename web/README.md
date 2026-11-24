@@ -45,7 +45,8 @@ A service worker keeps the app for offline use and installation, with an
 Update button when a new build is ready.
 
 The standalone Measurements page opens, edits and downloads `.slm` files,
-including personal sets and size tables. Serve `web/out/measurements` to run
+including personal sets and size tables. It also offers the measurement
+catalogue and checks for measurements missing from a selected pattern. Serve `web/out/measurements` to run
 it directly, or use `/measurements/` on the Django development site.
 
 ## Setting up

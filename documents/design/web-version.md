@@ -21,8 +21,9 @@ current set in the same format. It edits names, notes, measurement rows and
 size columns, including missing size values. Its worker routes `measure_`
 methods to a `TMeasurementDocument` for validation and undo. File names and
 the last downloaded snapshot stay in the page, which asks before discarding
-edits. The desktop app provides the catalogue, body figure, pattern checks
-and import and export in other formats.
+edits. The page uses the shared catalogue to add known measurements and
+show where to take them. A selected local pattern lists missing keys and
+sizes. The desktop app imports and exports additional formats.
 
 ## Engine
 

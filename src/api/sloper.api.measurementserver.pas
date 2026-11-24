@@ -41,7 +41,7 @@ type
 implementation
 
 uses
-  SysUtils, Math, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON;
+  SysUtils, Math, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Measurements;
 
 resourcestring
   rsInvalidValue = 'Enter a finite measurement value';
@@ -112,7 +112,10 @@ end;
 
 function TMeasurementApiServer.CallMethod(const Method: string; Params: TJSONObject): TJSONData;
 var
-  Error: string;
+  Error, Size: string;
+  Missing: TMissingMeasurement;
+  List, Sizes: TJSONArray;
+  Answer: TJSONObject;
 begin
   case Method of
     'measure_state': ;
@@ -124,6 +127,13 @@ begin
     'measure_name': FDocument.SetName(RequireString(Params, 'text'));
     'measure_notes': FDocument.SetNotes(RequireString(Params, 'text'));
     'measure_add_row': FDocument.AddMeasurement;
+    'measure_add_known':
+      if not FDocument.AddKnown(RequireString(Params, 'key'), RequireString(Params, 'description'), Error) then
+        raise EApiError.Create(RPC_REFUSED, Error);
+    'measure_check_pattern':
+      if not FDocument.UsePatternText(RequireString(Params, 'text'), Error) then
+        raise EApiError.Create(RPC_REFUSED, Error);
+    'measure_clear_pattern': FDocument.UsePattern('', Error);
     'measure_add_size': if not FDocument.AddSize(RequireString(Params, 'text'), Error) then
         raise EApiError.Create(RPC_REFUSED, Error);
     'measure_rename_row', 'measure_describe_row', 'measure_delete_row', 'measure_move_row', 'measure_set_value':
@@ -132,7 +142,22 @@ begin
     else
       raise EApiError.Create(RPC_METHOD_NOT_FOUND, Method);
   end;
-  Result := TJSONObject.Create(['text', FDocument.SnapshotText, 'canUndo', FDocument.CanUndo, 'canRedo', FDocument.CanRedo]);
+  Answer := TJSONObject.Create(['text', FDocument.SnapshotText, 'canUndo', FDocument.CanUndo, 'canRedo', FDocument.CanRedo]);
+  try
+    List := TJSONArray.Create;
+    Answer.Add('missing', List);
+    for Missing in FDocument.Missing do
+    begin
+      Sizes := TJSONArray.Create;
+      List.Add(TJSONObject.Create(['key', Missing.Key, 'sizes', Sizes]));
+      for Size in Missing.Sizes do
+        Sizes.Add(Size);
+    end;
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
 end;
 
 end.

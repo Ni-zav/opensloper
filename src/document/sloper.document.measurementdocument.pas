@@ -64,6 +64,7 @@ type
     function Merge(const FileText: string; const TakeTheirs: TStringArray; out MergedText: string; out Conflicts: TStringArray): boolean;
     function FreeKey: string;
     function GetMissing: TMissingMeasurementArray;
+    function UsePatternContents(const Text, Path: string; out ErrorMessage: string): boolean;
     function AddKey(const Key, Description: string): TMeasurement;
   public
     constructor Create;
@@ -88,6 +89,8 @@ type
     // Checks the file against this pattern from now on, so Missing lists what
     // it uses that the file cannot give it. An empty name stops that.
     function UsePattern(const AFileName: string; out ErrorMessage: string): boolean;
+    // Checks against pattern text without attaching a file watcher.
+    function UsePatternText(const Text: string; out ErrorMessage: string): boolean;
     // Call regularly: reads the pattern again when it has been saved. A file
     // that does not read is left for whoever is writing it. True when it was.
     function CheckPattern: boolean;
@@ -404,23 +407,31 @@ end;
 
 function TMeasurementDocument.UsePattern(const AFileName: string; out ErrorMessage: string): boolean;
 var
-  Keys: TStringArray;
   Text: string;
 begin
+  if AFileName = '' then
+    Exit(UsePatternContents('', '', ErrorMessage));
+  Result := ReadTextFile(AFileName, Text, ErrorMessage) and UsePatternContents(Text, AFileName, ErrorMessage);
+end;
+
+function TMeasurementDocument.UsePatternText(const Text: string; out ErrorMessage: string): boolean;
+begin
+  Result := UsePatternContents(Text, '', ErrorMessage);
+end;
+
+function TMeasurementDocument.UsePatternContents(const Text, Path: string; out ErrorMessage: string): boolean;
+var
+  Keys: TStringArray;
+begin
   ErrorMessage := '';
-  Result := True;
   Keys := nil;
-  Text := '';
-  if AFileName <> '' then
-  begin
-    Result := ReadTextFile(AFileName, Text, ErrorMessage) and ReadPatternMeasurementKeys(AFileName, Keys, ErrorMessage);
-    if not Result then
-      Exit;
-  end;
-  FPatternFile := AFileName;
+  if ((Text <> '') or (Path <> '')) and not ReadPatternMeasurementKeysText(Text, Keys, ErrorMessage) then
+    Exit(False);
+  FPatternFile := Path;
   FPatternText := Text;
   FPatternKeys := Keys;
   Changed;
+  Result := True;
 end;
 
 function TMeasurementDocument.CheckPattern: boolean;
@@ -429,7 +440,7 @@ var
   Keys: TStringArray;
 begin
   Result := False;
-  if (FPatternFile = '') or not ReadTextFile(FPatternFile, Text, Err) or (Text = FPatternText) or not ReadPatternMeasurementKeys(FPatternFile, Keys, Err) then
+  if (FPatternFile = '') or not ReadTextFile(FPatternFile, Text, Err) or (Text = FPatternText) or not ReadPatternMeasurementKeysText(Text, Keys, Err) then
     Exit;
   FPatternText := Text;
   FPatternKeys := Keys;

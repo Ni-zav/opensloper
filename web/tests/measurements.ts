@@ -99,6 +99,20 @@ try {
   await file.uploadFile(output);
   await page.waitForFunction(() => document.querySelector('#file-name')?.textContent === 'person.slm');
   assert.equal(await page.$eval(newValue, (field) => field.value), '923.5');
+  await page.click('#catalogue-panel summary');
+  await page.type('#catalogue-search', 'total standing height');
+  await page.waitForFunction(() => document.querySelector<HTMLSelectElement>('#catalogue-list')?.value === 'height');
+  assert.ok(await page.$('#figure polyline'));
+  await page.click('#catalogue-add');
+  await page.waitForFunction(
+    () => document.querySelector<HTMLInputElement>('#rows tr:last-child input')?.value === 'height',
+  );
+
+  const pattern = await page.waitForSelector('input#pattern-file');
+  assert.ok(pattern);
+  await pattern.uploadFile('../docs/examples/skirt-block/skirt-darts.sloper');
+  await page.waitForFunction(() => document.querySelector('#pattern-name')?.textContent === 'skirt-darts.sloper');
+  assert.match(await page.$eval('#pattern-missing', (list) => list.textContent), /skirt_length/u);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(problems, []);
   console.log('Measurements browser round trip passed');

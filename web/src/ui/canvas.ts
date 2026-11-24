@@ -189,7 +189,9 @@ export class PatternCanvas implements CanvasToolHost {
   private readonly notePreviews: LatestOnly<{ id: string; text: string } | undefined>;
   private previewNote: SceneNote | undefined;
   private previewNoteId: string | undefined;
-  private generation = -1;
+  // The pattern shown, set from the document's when made, so the first edit
+  // of the pattern the app starts with is not taken for another pattern
+  private generation: number;
   // Fit each new scene to the window: from opening a pattern until the user
   // zooms, pans or edits, since its measurements may come after it and
   // bring the rest of it into view
@@ -203,6 +205,7 @@ export class PatternCanvas implements CanvasToolHost {
   constructor(element: HTMLCanvasElement, document: PatternDocument, tables: Tables, events: CanvasEvents) {
     this.element = element;
     this.document = document;
+    this.generation = document.state.generation;
     this.tables = tables;
     this.events = events;
     const context = element.getContext('2d');

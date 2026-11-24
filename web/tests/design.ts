@@ -1,5 +1,6 @@
 // Drives the built design app (out/design, from npm run build) in headless
-// Chromium as a user would: opens a regression pattern with its measurements,
+// Chromium as a user would: adds a point to the empty pattern it starts with
+// and checks it stays where it was clicked, opens a regression pattern with its measurements,
 // checks the canvas drew it, adds a point with the Point tool, drags it with
 // the Select tool and undoes, edits it in the Properties tab, then uses each
 // drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
@@ -83,6 +84,37 @@ async function inkedPixels(page: Page): Promise<number> {
   );
 }
 
+// Whether the canvas has ink within a few pixels of a place relative to its top left
+async function inkedNear(page: Page, x: number, y: number): Promise<boolean> {
+  return page.$eval(
+    '#canvas',
+    (canvas, place, paper) => {
+      if (!(canvas instanceof HTMLCanvasElement)) {
+        return false;
+      }
+      const ratio = window.devicePixelRatio;
+      const reach = Math.round(3 * ratio);
+      const data =
+        canvas
+          .getContext('2d')
+          ?.getImageData(Math.round(place.x * ratio) - reach, Math.round(place.y * ratio) - reach, 2 * reach, 2 * reach)
+          .data ?? [];
+      for (let index = 0; index < data.length; index += 4) {
+        const difference =
+          Math.abs((data[index] ?? 0) - (paper[0] ?? 0)) +
+          Math.abs((data[index + 1] ?? 0) - (paper[1] ?? 0)) +
+          Math.abs((data[index + 2] ?? 0) - (paper[2] ?? 0));
+        if (difference > 120) {
+          return true;
+        }
+      }
+      return false;
+    },
+    { x, y },
+    PAPER,
+  );
+}
+
 const browser = await launchBrowser();
 // Where the page's downloads go, removed at the end
 const downloads = await mkdtemp(join(tmpdir(), 'opensloper-design-'));
@@ -121,6 +153,22 @@ try {
   });
   await page.goto(`http://127.0.0.1:${String(port)}/`);
   await waitForData(page, 'ready', 'true');
+
+  // The first point added to the empty pattern stays where it was clicked:
+  // the view once fitted itself round it, as if a pattern had been opened (#83)
+  const emptyCanvas = await (await page.$('#canvas'))?.boundingBox();
+  assert.ok(emptyCanvas !== null && emptyCanvas !== undefined, 'the canvas has a place');
+  await page.keyboard.press('p');
+  await clickAt(page, emptyCanvas, 60, 60);
+  await waitForData(page, 'undo', 'Add point');
+  await page.waitForFunction(() => new Promise((resolve) => requestAnimationFrame(() => resolve(true))));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.ok(await inkedNear(page, 60, 60), 'the first point is drawn where it was clicked');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForData(page, 'undo', '');
+  await page.keyboard.press('s');
 
   const input = await page.$('input#open-input');
   assert.ok(input !== null, 'the open input');

@@ -7,7 +7,6 @@ import type { AddressInfo } from 'node:net';
 import { extname, join, normalize, relative } from 'node:path';
 import { launch, type Browser, type Page } from 'puppeteer-core';
 
-const ROOT = 'out/design';
 export const TIMEOUT_MS = 30000;
 
 const TYPES: Record<string, string> = {
@@ -24,6 +23,7 @@ const TYPES: Record<string, string> = {
 export interface ServeOptions {
   // The port to listen on, as when serving again after going offline; a free one by default
   port?: number;
+  root?: string;
   // Changes a file as it is served, by its path under out/design, as a new build would
   alter?: (file: string, data: Buffer) => Buffer;
 }
@@ -31,13 +31,14 @@ export interface ServeOptions {
 // Serves the app until close is called, which drops every connection, so
 // the page is offline until it is served again
 export async function serveApp(options: ServeOptions = {}): Promise<{ port: number; close: () => void }> {
+  const root = options.root ?? 'out/design';
   const server = createServer((request, response) => {
-    const path = normalize(join(ROOT, decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)));
-    const file = path.endsWith('/') || path === ROOT ? join(path, 'index.html') : path;
+    const path = normalize(join(root, decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)));
+    const file = path.endsWith('/') || path === root ? join(path, 'index.html') : path;
     readFile(file)
       .then((data) => {
         response.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
-        response.end(options.alter === undefined ? data : options.alter(relative(ROOT, file), data));
+        response.end(options.alter === undefined ? data : options.alter(relative(root, file), data));
         return undefined;
       })
       .catch(() => {

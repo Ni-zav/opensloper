@@ -30,6 +30,8 @@ uses
   Classes, SysUtils, Sloper.Core.TextHistory, Sloper.Output.Layout, Sloper.Core.PatternSources;
 
 type
+  TLayoutSourceLoader = procedure(Layout: TLayout) of object;
+
   TLayoutDocument = class
   private
     FLayout: TLayout;
@@ -41,11 +43,13 @@ type
     // The files' stamps last time CheckSources saw them differ
     FPendingStamps: string;
     FOnChange: TNotifyEvent;
+    FOnLoadSources: TLayoutSourceLoader;
     function GetModified: boolean;
     function GetCanUndo: boolean;
     function GetCanRedo: boolean;
     function GetUndoDescription: string;
     procedure Restore(const Text: string);
+    procedure LoadSources(Layout: TLayout);
     procedure Changed;
   public
     constructor Create;
@@ -53,6 +57,9 @@ type
     // Replaces the layout with one for this pattern, every piece placed
     procedure NewForPattern(const PatternFile: string);
     function Open(const FileName: string; out ErrorMessage: string): boolean;
+    // Opens a layout supplied as text. The source loader can resolve it
+    // from the same files again during undo and redo.
+    function OpenText(const Text: string; out ErrorMessage: string): boolean;
     function Save(const FileName: string; out ErrorMessage: string): boolean;
     // Reads the pattern files again; not an undo step
     procedure Reload;
@@ -72,6 +79,7 @@ type
     property CanUndo: boolean read GetCanUndo;
     property CanRedo: boolean read GetCanRedo;
     property UndoDescription: string read GetUndoDescription;
+    property OnLoadSources: TLayoutSourceLoader read FOnLoadSources write FOnLoadSources;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     // A change is open, as during a drag
     property ChangeOpen: boolean read FChangeOpen;
@@ -109,7 +117,7 @@ begin
   FLayout.FileName := ChangeFileExt(PatternFile, LAYOUT_EXTENSION);
   FLayout.Name := ChangeFileExt(ExtractFileName(PatternFile), '');
   FLayout.AddSource(ExtractFileName(PatternFile), '', '');
-  FLayout.LoadSources;
+  LoadSources(FLayout);
   FLayout.PlaceNewPieces;
   FLayout.UseDefaultTitle;
   FHistory.Clear;
@@ -124,10 +132,40 @@ begin
   Result := FLayout.LoadFromFile(FileName, ErrorMessage);
   if not Result then
     Exit;
-  FLayout.LoadSources;
+  LoadSources(FLayout);
   FHistory.Clear;
   FSavedText := FLayout.SaveToText;
   Changed;
+end;
+
+function TLayoutDocument.OpenText(const Text: string; out ErrorMessage: string): boolean;
+var
+  Incoming: TLayout;
+begin
+  Incoming := TLayout.Create;
+  try
+    Result := Incoming.LoadFromText(Text, ErrorMessage);
+    if not Result then
+      Exit;
+    LoadSources(Incoming);
+    FreeAndNil(FLayout);
+    FLayout := Incoming;
+    Incoming := nil;
+    Inc(FGeneration);
+    FHistory.Clear;
+    FSavedText := FLayout.SaveToText;
+    Changed;
+  finally
+    FreeAndNil(Incoming);
+  end;
+end;
+
+procedure TLayoutDocument.LoadSources(Layout: TLayout);
+begin
+  if Assigned(FOnLoadSources) then
+    FOnLoadSources(Layout)
+  else
+    Layout.LoadSources;
 end;
 
 function TLayoutDocument.Save(const FileName: string; out ErrorMessage: string): boolean;
@@ -143,7 +181,7 @@ end;
 
 procedure TLayoutDocument.Reload;
 begin
-  FLayout.LoadSources;
+  LoadSources(FLayout);
   Changed;
 end;
 
@@ -237,7 +275,7 @@ var
   Reason: string;
 begin
   if FLayout.LoadFromText(Text, Reason) then
-    FLayout.LoadSources;
+    LoadSources(FLayout);
   Changed;
 end;
 

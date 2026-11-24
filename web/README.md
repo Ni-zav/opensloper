@@ -44,6 +44,11 @@ the tab that had it closes.
 A service worker keeps the app for offline use and installation, with an
 Update button when a new build is ready.
 
+The standalone Publish page opens patterns and existing layouts with their
+source files, packs and edits their pieces, and downloads the layout, PDF
+and SVG. Serve `web/out/publish` to run it directly, or use `/publish/` on
+the Django development site.
+
 ## Setting up
 
 Node and npm come from the repository's Python `venv`, through `nodeenv`, so

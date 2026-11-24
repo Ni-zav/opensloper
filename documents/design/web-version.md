@@ -1,6 +1,6 @@
 # Web version
 
-Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design editor is built, as a beta; the Measurements and Publish apps are not.
+Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. Design is available as a beta, and Publish has a standalone browser layout editor. Measurements is planned.
 
 **Why it is possible.** The core has no LCL dependency, and the Automation API already exposes every document operation as JSON-RPC. So the web needs a new UI, not a new engine. Name rules, formula checks and undo are the same code everywhere.
 
@@ -13,6 +13,17 @@ Part of the [OpenSloper design](../opensloper-design-document.md). A web version
 The editor runs in the browser, since sending every drag to the server would make dragging lag. The server never takes part in drafting.
 
 **No user data on the site.** Patterns and measurement files stay on the user's machine. Body measurements are personal data under PDPA, and stored files cost hosting. So the server keeps only what an account and a subscription need: a login and an email address. Payment goes through a provider, so no card data is held. Everything the engine does (evaluation, checks, exports) happens in the browser.
+
+## Publish
+
+The page at `/publish/` opens one or more patterns as a new layout, or
+opens an existing `.slayout` selected with its source files. It previews
+the layout, lists problems, places and packs pieces, edits their positions
+and turns, changes the output, and downloads layouts, PDF and SVG. The
+worker uses the shared layout commands. It keeps the selected file texts
+for the open layout, so undo and redo can resolve sources again. Source
+paths are matched by file name among the files chosen together. Export
+profiles, DXF and interactive canvas placement stay in the desktop app.
 
 ## Engine
 

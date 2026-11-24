@@ -27,10 +27,41 @@ library engine_lib;
 uses
   Sloper.Core.CodePage,
   SysUtils,
-  Sloper.API.EditorServer;
+  StrUtils,
+  fpjson,
+  Sloper.API.EditorServer,
+  Sloper.API.PublishServer;
+
+type
+  TBrowserEngine = class(TEditorApiServer)
+  private
+    FPublish: TPublishApiServer;
+  protected
+    function DispatchMethod(const Method: string; Params: TJSONObject): TJSONData; override;
+  public
+    destructor Destroy; override;
+  end;
+
+const
+  PUBLISH_PREFIX = 'publish_';
+
+  function TBrowserEngine.DispatchMethod(const Method: string; Params: TJSONObject): TJSONData;
+  begin
+    if not StartsStr(PUBLISH_PREFIX, Method) then
+      Exit(inherited DispatchMethod(Method, Params));
+    if not Assigned(FPublish) then
+      FPublish := TPublishApiServer.Create;
+    Result := FPublish.CallMethod(Copy(Method, Length(PUBLISH_PREFIX) + 1, MaxInt), Params);
+  end;
+
+  destructor TBrowserEngine.Destroy;
+  begin
+    FreeAndNil(FPublish);
+    inherited Destroy;
+  end;
 
 var
-  Server: TEditorApiServer = nil;
+  Server: TBrowserEngine = nil;
 
   function engine_alloc(Size: longword): pointer;
   begin
@@ -49,7 +80,7 @@ var
     Line, Reply: rawbytestring;
   begin
     if not Assigned(Server) then
-      Server := TEditorApiServer.Create;
+      Server := TBrowserEngine.Create;
     SetString(Line, Request, Size);
     SetCodePage(Line, CP_UTF8, False);
     Reply := UTF8Encode(UTF8Decode(Server.HandleLine(Line)));

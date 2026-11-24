@@ -1,0 +1,277 @@
+<!doctype html>
+<!--
+  OpenSloper - parametric sewing pattern drafting
+  Copyright (C) 2026 The OpenSloper authors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSloper Publish</title>
+    <link rel="icon" href="opensloper-publish.svg" type="image/svg+xml" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #222428;
+        background: #f2f1ed;
+        font:
+          15px system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 90rem;
+        margin: auto;
+        padding: clamp(1rem, 3vw, 2.5rem);
+      }
+      h1 {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin: 0 0 0.85rem;
+        font-size: 1.5rem;
+      }
+      h1 img {
+        width: 2rem;
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+      }
+      fieldset {
+        padding: 0;
+        border: 0;
+        min-width: 0;
+        margin: 0;
+      }
+      button,
+      input,
+      select {
+        min-height: 2.35rem;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #c8c5bc;
+        border-radius: 4px;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        background: #e3edf9;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid #2574d6;
+        outline-offset: 2px;
+      }
+      #pdf {
+        background: #185da9;
+        border-color: #185da9;
+        color: #fff;
+      }
+      #pdf:hover:not(:disabled) {
+        background: #124d91;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      #instructions,
+      #status {
+        margin: 0.5rem 0;
+      }
+      #status {
+        min-height: 1.5em;
+      }
+      #status[data-error] {
+        color: #9c241b;
+      }
+      #workspace {
+        display: grid;
+        grid-template-columns: 18rem minmax(0, 1fr);
+        gap: 1rem;
+      }
+      [hidden] {
+        display: none;
+      }
+      aside {
+        display: grid;
+        align-content: start;
+        gap: 0.7rem;
+      }
+      section {
+        padding: 0.8rem;
+      }
+      section,
+      figure {
+        border: 1px solid #d8d6cf;
+        border-radius: 4px;
+        background: #fff;
+        min-width: 0;
+      }
+      form {
+        display: grid;
+        align-items: start;
+        gap: 0.6rem;
+      }
+      label {
+        display: grid;
+        gap: 0.25rem;
+      }
+      input[type='number'],
+      select {
+        width: 100%;
+      }
+      input[type='checkbox'] {
+        min-height: auto;
+        justify-self: start;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+      }
+      figure {
+        margin: 0;
+        display: grid;
+        place-items: center;
+        align-content: start;
+        padding: 0.8rem;
+      }
+      figure img {
+        max-width: 100%;
+        max-height: 76vh;
+      }
+      figcaption {
+        margin-bottom: 0.5rem;
+        text-align: center;
+      }
+      #problems {
+        margin: 0;
+        padding-left: 1.2rem;
+        overflow-wrap: anywhere;
+      }
+      @media (max-width: 48rem) {
+        #workspace {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1><img src="opensloper-publish.svg" alt="" /> OpenSloper Publish</h1>
+      <fieldset id="tools" disabled>
+        <div class="toolbar">
+          <button id="open" type="button" aria-describedby="instructions">Open files…</button>
+          <input id="files" type="file" accept=".sloper,.slm,.slayout" multiple hidden />
+          <button id="save" type="button" disabled>Download layout</button>
+          <button id="undo" type="button" disabled>Undo</button>
+          <button id="redo" type="button" disabled>Redo</button>
+          <button id="pdf" type="button" disabled>Download PDF</button>
+          <button id="svg" type="button" disabled>Download SVG</button>
+          <span id="name"></span>
+        </div>
+        <p id="instructions">
+          Choose one or more .sloper patterns, with their .slm files if required. To reopen a layout, choose the
+          .slayout and its source files together.
+        </p>
+        <p id="status" role="status">Loading the layout engine…</p>
+        <div id="workspace" hidden>
+          <aside>
+            <section aria-labelledby="output-title">
+              <h2 id="output-title">Output</h2>
+              <form id="output">
+                <label
+                  >Type
+                  <select id="kind">
+                    <option value="tiled">Tiled pages</option>
+                    <option value="large">Roll paper</option>
+                    <option value="projector">Projector</option>
+                    <option value="material">Material</option>
+                  </select>
+                </label>
+                <label id="tiled-options"
+                  >Paper
+                  <select id="paper">
+                    <option>A4</option>
+                    <option>A3</option>
+                    <option>Letter</option>
+                  </select>
+                </label>
+                <label id="width-options" hidden
+                  >Width (mm) <input id="width" type="number" min="1" step="any" required
+                /></label>
+                <button type="submit">Apply output</button>
+              </form>
+            </section>
+            <section aria-labelledby="pieces-title">
+              <h2 id="pieces-title">Pieces</h2>
+              <div class="toolbar">
+                <button id="place" type="button">Place waiting pieces</button>
+                <button id="pack" type="button">Pack layout</button>
+              </div>
+              <form id="placement" hidden>
+                <label
+                  >Placed piece
+                  <select id="piece"></select
+                ></label>
+                <div class="pair">
+                  <label>X (mm) <input id="x" type="number" step="any" required /></label>
+                  <label>Y (mm) <input id="y" type="number" step="any" required /></label>
+                </div>
+                <label
+                  >Rotation
+                  <select id="rotation">
+                    <option value="0">0°</option>
+                    <option value="90">90°</option>
+                    <option value="180">180°</option>
+                    <option value="270">270°</option>
+                  </select>
+                </label>
+                <label><input id="flipped" type="checkbox" /> Flip piece</label>
+                <div class="toolbar">
+                  <button type="submit">Move piece</button>
+                  <button id="remove" type="button">Remove</button>
+                </div>
+              </form>
+            </section>
+            <section id="problem-panel" aria-labelledby="problems-title" hidden>
+              <h2 id="problems-title">Problems</h2>
+              <ul id="problems"></ul>
+            </section>
+          </aside>
+          <figure>
+            <figcaption id="summary"></figcaption>
+            <img id="preview" alt="Layout preview" />
+          </figure>
+        </div>
+      </fieldset>
+    </main>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

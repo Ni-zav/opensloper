@@ -17,6 +17,12 @@ cd opensloper
 
 ## Before you open a pull request
 
+Every pull request is for an issue. Open one first, or find the one it is
+for, and end the pull request's title with its number, such as
+`Fix the hem allowance (#123)`. The **Linked issue** check fails until the
+title names an issue of this repository; it runs again when you edit the
+title.
+
 Run this and fix anything it reports:
 
 ```
@@ -35,7 +41,7 @@ It runs these four in turn and stops at the first that fails:
 
 Formatting changes files in place, so when all four pass, `pr-check` lists the files it reformatted: commit them with your change.
 
-CI runs the same checks on every pull request, and they must pass before a merge. `opensloper-make.sh check` also prints warnings, such as single-letter names. Warnings don't fail the check, but please fix them in code you add.
+CI runs the same checks on every pull request, with the Linked issue check, and they must pass before a merge. `opensloper-make.sh check` also prints warnings, such as single-letter names. Warnings don't fail the check, but please fix them in code you add.
 
 ## What a good pull request looks like
 

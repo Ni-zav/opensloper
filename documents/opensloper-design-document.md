@@ -202,7 +202,7 @@ A dependency used by one optional feature is kept out of the core and the other 
 
 ## Testing
 
-FPCUnit with the console runner, in `tests/`, run by `opensloper-make.sh test` with heaptrc, so leaks fail too. CI (`.github/workflows/ci.yml`) runs it with the formatter and the standards check. The LCL-free core means most logic is tested without a UI.
+FPCUnit with the console runner, in `tests/`, run by `opensloper-make.sh test` with heaptrc, so leaks fail too. CI (`.github/workflows/ci.yml`) runs it with the formatter and the standards check. A pull request must also name the issue it is for in its title (`.github/workflows/pull-request.yml`, the Linked issue check). The LCL-free core means most logic is tested without a UI.
 
 **What is covered:** geometry (with a tolerance helper, never exact float equality), formulas, evaluation order and states, IDs never reused, every operation against hand-checked cases and failures, piece detection and allowance, markings, transforms, seams, notes, materials, units and conversion, copy and paste, measurement files and merges, undo restoring the exact earlier state, save → load → save giving identical JSON, tiling, packing, PDF, SVG and DXF bytes, the mesher and the drape export, and the CLI commands through `RunCli`. Tables that document the program (operations, file members, API methods, CLI options, shortcuts, icons) are held to the code, and committed reference pages and schemas must match what the program writes.
 

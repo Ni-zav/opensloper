@@ -50,9 +50,16 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    // Replaces the layout with one for this pattern, every piece placed
+    // Replaces the layout with one for this pattern, every piece placed. The
+    // pattern is read from SourceFiles when it has been given
     procedure NewForPattern(const PatternFile: string);
+    // Opens a layout file from disk, and its sources from disk too
     function Open(const FileName: string; out ErrorMessage: string): boolean;
+    // Opens a layout from its file's text, with no file name, reading its
+    // sources from SourceFiles, as the browser does. A source whose file is
+    // missing gets a problem naming it (MissingFile); once SourceFiles has
+    // it, Reload reads it.
+    function OpenText(const Text: string; out ErrorMessage: string): boolean;
     function Save(const FileName: string; out ErrorMessage: string): boolean;
     // Reads the pattern files again; not an undo step
     procedure Reload;
@@ -67,6 +74,9 @@ type
     procedure LiveUpdate;
     procedure Undo;
     procedure Redo;
+    // The files' contents sources are read from, from now on, in place of
+    // disk; undo and Reload read them again
+    function SourceFiles: TSourceFiles;
     property Layout: TLayout read FLayout;
     property Modified: boolean read GetModified;
     property CanUndo: boolean read GetCanUndo;
@@ -102,6 +112,11 @@ begin
     FOnChange(Self);
 end;
 
+function TLayoutDocument.SourceFiles: TSourceFiles;
+begin
+  Result := FLayout.UseSourceFiles;
+end;
+
 procedure TLayoutDocument.NewForPattern(const PatternFile: string);
 begin
   Inc(FGeneration);
@@ -121,7 +136,22 @@ end;
 function TLayoutDocument.Open(const FileName: string; out ErrorMessage: string): boolean;
 begin
   Inc(FGeneration);
+  FLayout.ReadSourcesFromDisk;
   Result := FLayout.LoadFromFile(FileName, ErrorMessage);
+  if not Result then
+    Exit;
+  FLayout.LoadSources;
+  FHistory.Clear;
+  FSavedText := FLayout.SaveToText;
+  Changed;
+end;
+
+function TLayoutDocument.OpenText(const Text: string; out ErrorMessage: string): boolean;
+begin
+  Inc(FGeneration);
+  FLayout.UseSourceFiles;
+  FLayout.FileName := '';
+  Result := FLayout.LoadFromText(Text, ErrorMessage);
   if not Result then
     Exit;
   FLayout.LoadSources;

@@ -20,7 +20,8 @@
 // sources of a layout (.slayout) and of a drape file. Each source has an ID
 // from the file's own never-reused counter, and is evaluated from the saved
 // files, which a checksum tells when they change. Paths are stored relative to
-// the file that lists them. No LCL dependency.
+// the file that lists them. The files can be given as text instead, as in the
+// browser, which has no disk to read. No LCL dependency.
 unit Sloper.Core.PatternSources;
 
 {$mode ObjFPC}{$H+}
@@ -41,8 +42,12 @@ type
     Measurements: TMeasurementSet;
     // Why the source could not be read; empty when it is ready
     LoadError: string;
+    // The path of a file the source needs and nobody has, as LoadError names it
+    MissingFile: string;
     // The files read, and their stamps when they were
     PatternPath, MeasurementPath, LoadedStamp: string;
+    // Read from text, not disk, so no file is watched
+    InMemory: boolean;
     // The files' stamps now; differs from LoadedStamp once either is saved
     function CurrentStamp: string;
     destructor Destroy; override;
@@ -51,12 +56,29 @@ type
 
   TPatternSourceList = specialize TObjectList<TPatternSource>;
 
+  // The contents of the files sources read, by path, when there is no disk to
+  // read them from. A path is relative to the file listing the sources, as
+  // NormalSourcePath gives it; whoever supplies a file finds it by that path.
+  TSourceFiles = class
+  private
+    FTexts: specialize TDictionary<string, string>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    // Adds the file, or replaces it
+    procedure Add(const Path, Text: string);
+    function Find(const Path: string; out Text: string): boolean;
+    procedure Clear;
+  end;
+
   TPatternSources = class
   private
     FItems: TPatternSourceList;
     FNextId: integer;
+    FFiles: TSourceFiles;
     // The lowest ID no source has, once the counter is past JSON_MAX_ID
     function LowestFreeId: integer;
+    procedure LoadFromFiles(Source: TPatternSource);
   public
     constructor Create;
     destructor Destroy; override;
@@ -72,6 +94,11 @@ type
     // Reads the source from the files' contents, as the web editor holds
     // them, rather than from disk; an empty MeasurementText is no set
     procedure LoadText(Source: TPatternSource; const PatternText, MeasurementText: string);
+    // From now on Load reads the files given here, not disk, so undo and
+    // reloading find them again. Clear keeps them.
+    function UseFiles: TSourceFiles;
+    // Load reads the disk again, and the files given are dropped
+    procedure UseDisk;
     // Adds "nextId" and "sources" to a file's root
     procedure SaveTo(Root: TJSONObject);
     // Reads "sources" and "nextId"; on failure the sources are cleared
@@ -82,6 +109,9 @@ type
 // A path as stored in OwnerFile: relative to its folder once it has one
 function StoredSourcePath(const OwnerFile, Path: string): string;
 function ResolveSourcePath(const OwnerFile, Stored: string): string;
+// A stored path with '/' between its parts, '.' left out and each '..' taking
+// away the part before it, where there is one: the key of a TSourceFiles
+function NormalSourcePath(const Path: string): string;
 // A checksum of the contents: file times only go to the second, and these
 // files are small enough to read each time. '-' when the file cannot be read.
 function FileStamp(const Path: string): string;
@@ -124,11 +154,83 @@ begin
     Result := ConcatPaths([Folder, Result]);
 end;
 
+function NormalSourcePath(const Path: string): string;
+var
+  Part: string;
+  Parts: TStringArray;
+  Count: integer;
+  Rooted: boolean;
+begin
+  Rooted := (Path <> '') and (Path[1] in ['/', '\']);
+  Parts := nil;
+  Count := 0;
+  for Part in StringReplace(Path, '\', '/', [rfReplaceAll]).Split('/') do
+    if (Part = '') or (Part = '.') then
+      Continue
+    else if (Part = '..') and (Count > 0) and (Parts[Count - 1] <> '..') then
+      Dec(Count)
+    else if (Part = '..') and Rooted then
+      Continue
+    else
+    begin
+      if Count = Length(Parts) then
+        SetLength(Parts, Count + 4);
+      Parts[Count] := Part;
+      Inc(Count);
+    end;
+  Result := string.Join('/', Parts, 0, Count);
+  if Rooted then
+    Result := '/' + Result;
+end;
+
+// The measurement file a pattern at PatternPath, a normal path, names as Reference
+function NormalSiblingPath(const PatternPath, Reference: string): string;
+var
+  Folder: string;
+begin
+  Folder := ExtractFileDir(PatternPath);
+  if (Reference[1] in ['/', '\']) or (Folder = '') then
+    Result := NormalSourcePath(Reference)
+  else
+    Result := NormalSourcePath(Folder + '/' + Reference);
+end;
+
+{ TSourceFiles }
+
+constructor TSourceFiles.Create;
+begin
+  FTexts := specialize TDictionary<string, string>.Create;
+end;
+
+destructor TSourceFiles.Destroy;
+begin
+  FreeAndNil(FTexts);
+  inherited Destroy;
+end;
+
+procedure TSourceFiles.Add(const Path, Text: string);
+begin
+  FTexts.AddOrSetValue(NormalSourcePath(Path), Text);
+end;
+
+function TSourceFiles.Find(const Path: string; out Text: string): boolean;
+begin
+  Result := FTexts.TryGetValue(NormalSourcePath(Path), Text);
+end;
+
+procedure TSourceFiles.Clear;
+begin
+  FTexts.Clear;
+end;
+
 { TPatternSource }
 
 function TPatternSource.CurrentStamp: string;
 begin
-  Result := FileStamp(PatternPath) + ' ' + FileStamp(MeasurementPath);
+  if InMemory then
+    Result := LoadedStamp
+  else
+    Result := FileStamp(PatternPath) + ' ' + FileStamp(MeasurementPath);
 end;
 
 destructor TPatternSource.Destroy;
@@ -155,7 +257,20 @@ end;
 destructor TPatternSources.Destroy;
 begin
   FreeAndNil(FItems);
+  FreeAndNil(FFiles);
   inherited Destroy;
+end;
+
+function TPatternSources.UseFiles: TSourceFiles;
+begin
+  if not Assigned(FFiles) then
+    FFiles := TSourceFiles.Create;
+  Result := FFiles;
+end;
+
+procedure TPatternSources.UseDisk;
+begin
+  FreeAndNil(FFiles);
 end;
 
 procedure TPatternSources.Clear;
@@ -207,14 +322,22 @@ procedure TPatternSources.Load(Source: TPatternSource; const OwnerFile: string);
 var
   Err: string;
 begin
+  if Assigned(FFiles) then
+  begin
+    LoadFromFiles(Source);
+    Exit;
+  end;
   Source.Unload;
   Source.LoadError := '';
+  Source.MissingFile := '';
+  Source.InMemory := False;
   Source.PatternPath := ResolveSourcePath(OwnerFile, Source.PatternFile);
   Source.MeasurementPath := '';
   // Taken before reading, so a save during the read is not missed
   Source.LoadedStamp := Source.CurrentStamp;
   if not FileExists(Source.PatternPath) then
   begin
+    Source.MissingFile := Source.PatternPath;
     Source.LoadError := Format(rsPatternSourcesNoFile, [Source.PatternPath]);
     Exit;
   end;
@@ -233,6 +356,7 @@ begin
   begin
     if not FileExists(Source.MeasurementPath) then
     begin
+      Source.MissingFile := Source.MeasurementPath;
       Source.LoadError := Format(rsPatternSourcesNoFile, [Source.MeasurementPath]);
       Exit;
     end;
@@ -251,29 +375,32 @@ begin
   Source.Pattern.Evaluate;
 end;
 
-procedure TPatternSources.LoadText(Source: TPatternSource; const PatternText, MeasurementText: string);
-var
-  Err: string;
+// Unloads the source, to be read from text
+procedure StartInMemory(Source: TPatternSource);
 begin
   Source.Unload;
   Source.LoadError := '';
+  Source.MissingFile := '';
   Source.PatternPath := '';
   Source.MeasurementPath := '';
   Source.LoadedStamp := '';
+  Source.InMemory := True;
+end;
+
+function ReadPatternText(Source: TPatternSource; const Text: string): boolean;
+begin
   Source.Pattern := TPattern.Create;
   Source.Measurements := TMeasurementSet.Create;
-  if not LoadPatternFromText(Source.Pattern, PatternText, Err) then
-  begin
-    Source.LoadError := Err;
-    Exit;
-  end;
+  Result := LoadPatternFromText(Source.Pattern, Text, Source.LoadError);
+end;
+
+// The set, its size, and the pattern evaluated with them
+procedure FinishInMemory(Source: TPatternSource; const MeasurementText: string);
+begin
   if MeasurementText <> '' then
   begin
-    if not Source.Measurements.LoadFromText(MeasurementText, Err) then
-    begin
-      Source.LoadError := Err;
+    if not Source.Measurements.LoadFromText(MeasurementText, Source.LoadError) then
       Exit;
-    end;
     Source.Pattern.Measurements := Source.Measurements;
   end;
   if (Source.Size <> '') and not Source.Measurements.SelectSize(Source.Size) then
@@ -282,6 +409,47 @@ begin
     Exit;
   end;
   Source.Pattern.Evaluate;
+end;
+
+procedure TPatternSources.LoadText(Source: TPatternSource; const PatternText, MeasurementText: string);
+begin
+  StartInMemory(Source);
+  if ReadPatternText(Source, PatternText) then
+    FinishInMemory(Source, MeasurementText);
+end;
+
+procedure TPatternSources.LoadFromFiles(Source: TPatternSource);
+
+  procedure Missing(const Path: string);
+  begin
+    Source.MissingFile := Path;
+    Source.LoadError := Format(rsPatternSourcesNoFile, [Path]);
+  end;
+
+var
+  PatternText, MeasurementText: string;
+begin
+  StartInMemory(Source);
+  Source.PatternPath := NormalSourcePath(Source.PatternFile);
+  if not FFiles.Find(Source.PatternPath, PatternText) then
+  begin
+    Missing(Source.PatternPath);
+    Exit;
+  end;
+  if not ReadPatternText(Source, PatternText) then
+    Exit;
+  // As on disk: the layout's own set, else the one the pattern names beside it
+  if Source.MeasurementFile <> '' then
+    Source.MeasurementPath := NormalSourcePath(Source.MeasurementFile)
+  else if Source.Pattern.MeasurementFile <> '' then
+    Source.MeasurementPath := NormalSiblingPath(Source.PatternPath, Source.Pattern.MeasurementFile);
+  MeasurementText := '';
+  if (Source.MeasurementPath <> '') and not FFiles.Find(Source.MeasurementPath, MeasurementText) then
+  begin
+    Missing(Source.MeasurementPath);
+    Exit;
+  end;
+  FinishInMemory(Source, MeasurementText);
 end;
 
 procedure TPatternSources.LoadAll(const OwnerFile: string);

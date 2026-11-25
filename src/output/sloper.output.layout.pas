@@ -226,6 +226,10 @@ type
     procedure LoadSources;
     // Reads a source from its files' contents instead, as the web editor holds them
     procedure LoadSourceText(Source: TPatternSource; const PatternText, MeasurementText: string);
+    // LoadSources reads the files given here from now on, not disk, until
+    // ReadSourcesFromDisk; their paths are as SourceFiles' keys
+    function UseSourceFiles: TSourceFiles;
+    procedure ReadSourcesFromDisk;
     function SaveToText: string;
     function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
     function SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
@@ -691,6 +695,16 @@ end;
 procedure TLayout.LoadSourceText(Source: TPatternSource; const PatternText, MeasurementText: string);
 begin
   FSources.LoadText(Source, PatternText, MeasurementText);
+end;
+
+function TLayout.UseSourceFiles: TSourceFiles;
+begin
+  Result := FSources.UseFiles;
+end;
+
+procedure TLayout.ReadSourcesFromDisk;
+begin
+  FSources.UseDisk;
 end;
 
 function TLayout.GetSources: TPatternSourceList;

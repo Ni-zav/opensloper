@@ -143,6 +143,8 @@ A run of changes to a number is one undo step, as the desktop's spin boxes merge
 - A pattern opened from text has no file name and no measurement set. The reply's `measurementsFile` is the reference the pattern stores; the editor resolves it against the pattern's folder and supplies the file.
 - References between files stay relative paths with `/`, resolved by whoever supplies the file. So a set of files moves between desktop and web unchanged.
 - A set given as text is never read or written on disk, so file watching skips it. `ChangeMeasurements` changes it in memory (`TPatternDocument.MeasurementText`), for the editor to save as a download. `set_measurement` refuses it, as its reply could not hand the file back.
+- A layout's sources are read from files given as text (`TSourceFiles`), not disk, once the layout document has them (`TLayoutDocument.SourceFiles`, `OpenText`). They are kept by path, relative to the layout and with `/`, so undo, redo and reloading read them again.
+- A pattern's measurement file is looked for beside it, as on disk. A source whose file is not given names its path (`MissingFile`), for the editor to find and give.
 
 File watching is dropped on the web. File formats do not change.
 
@@ -173,7 +175,7 @@ File watching is dropped on the web. File formats do not change.
 
 ## Editor
 
-A TypeScript single-page app per job, as on the desktop, sharing one engine module. Drafting comes first, opening measurement files the user supplies. The measurements editor follows on the same structure, then publish. There are no measurement forms on the server.
+A TypeScript single-page app per job, as on the desktop, sharing one engine module. Each has its own page on the site: `/design/`, `/measurements/` and `/publish/`. Drafting comes first, opening measurement files the user supplies. The measurements editor follows on the same structure, then publish. There are no measurement forms on the server.
 
 - The canvas draws from the computed geometry the engine reports (Canvas2D, WebGL if needed), not from `render`'s SVG.
 - Tools, shortcuts, snapping, undo steps and colours match the desktop, following these design files.

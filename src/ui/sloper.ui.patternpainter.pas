@@ -29,7 +29,7 @@ interface
 uses
   Classes, SysUtils, Graphics, BGRABitmap, BGRABitmapTypes, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Piece, Sloper.Core.Seam,
   Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.TextFields, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Core.LabelPlacement, Sloper.Editor.View,
-  Sloper.Core.Stamp, Sloper.Editor.SuggestionGrade, Sloper.Editor.Snap, Sloper.Editor.Scene;
+  Sloper.Core.Stamp, Sloper.Core.Settings, Sloper.Editor.SuggestionGrade, Sloper.Editor.Snap, Sloper.Editor.Scene;
 
 type
   // What a drawing tool's second click would make, drawn from its first
@@ -41,6 +41,7 @@ type
     Selection: TStringArray;
     HoverKey: string;
     ShowPieceFills: boolean;
+    RoleStyles: TRoleDisplayStyles;
     // Points drawn smaller, when no labels are shown
     SmallPoints: boolean;
     // The two sides of the seam being picked
@@ -145,7 +146,6 @@ const
   MATERIAL_HATCH_ALPHA = 130;
   MATERIAL_HATCH_PIXELS = 8;
   // Screen pixels
-  MARKING_LINE_WIDTH = 1.5;
   POINT_RADIUS = 3.5;
   SMALL_POINT_RADIUS = 2.5;
   HANDLE_RADIUS = 4;
@@ -647,6 +647,7 @@ var
   Index: integer;
   LineColor: TBGRAPixel;
   LineWidth: single;
+  Style: TRoleDisplayStyle;
 begin
   Model := EdgePolyline(Edge, FState.View.PixelsToMM(FLATTEN_PIXELS));
   if Length(Model) < 2 then
@@ -657,23 +658,9 @@ begin
   for Index := 0 to High(Model) do
     Screen[Index] := ScreenPoint(FState.View.ToScreen(Model[Index]) + Shift);
 
-  case Edge.Role of
-    erOutline:
-    begin
-      LineColor := Ink;
-      LineWidth := 2;
-    end;
-    erConstruction:
-    begin
-      LineColor := ConstructionInk;
-      LineWidth := 1;
-    end;
-    else
-    begin
-      LineColor := StrToBGRA(ROLE_COLORS[Edge.Role]);
-      LineWidth := MARKING_LINE_WIDTH;
-    end;
-  end;
+  Style := FState.RoleStyles[Edge.Role];
+  LineColor := StrToBGRA(RoleDisplayColor(Edge.Role, Style));
+  LineWidth := RoleDisplayWidth(Edge.Role, Style);
   LineColor := InkFor(Edge, LineColor);
   if Edge.Key = FState.HoverKey then
     FBitmap.DrawPolyLineAntialias(Screen, HoverHalo, LineWidth + 6);
@@ -683,10 +670,17 @@ begin
     LineColor := SelectedInk;
     LineWidth := LineWidth + 1;
   end;
-  if Edge.Role = erConstruction then
-    FBitmap.PenStyle := psDash
-  else if ROLE_DASHES[Edge.Role][0] > 0 then
-    FBitmap.CustomPenStyle := ScreenDashes(ROLE_DASHES[Edge.Role], LineWidth);
+  case Style.Dash of
+    rdsDefault:
+      if Edge.Role = erConstruction then
+        FBitmap.PenStyle := psDash
+      else if ROLE_DASHES[Edge.Role][0] > 0 then
+        FBitmap.CustomPenStyle := ScreenDashes(ROLE_DASHES[Edge.Role], LineWidth);
+    rdsSolid: FBitmap.PenStyle := psSolid;
+    rdsDash: FBitmap.PenStyle := psDash;
+    rdsDot: FBitmap.PenStyle := psDot;
+    rdsDashDot: FBitmap.PenStyle := psDashDot;
+  end;
   FBitmap.DrawPolyLineAntialias(Screen, LineColor, LineWidth);
   FBitmap.PenStyle := psSolid;
 end;

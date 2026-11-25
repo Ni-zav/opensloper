@@ -17,6 +17,8 @@ Changed, Fixed and Removed under each version.
 
 - Round Corner can fit an arc between a line and a curve or between two
   curves that share an endpoint (#54).
+- Design Preferences can override the canvas colour, line pattern and width
+  for each role, with a reset to restore that role's defaults (#56).
 - A point's type can be changed in place, when it was placed the wrong
   way: select it, then what it is to be placed from, and choose the type
   in Tools → Points → Change To, or the *Change point to…* box in the web

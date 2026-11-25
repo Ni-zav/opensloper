@@ -36,6 +36,8 @@ type
   private
     FDocument: TPatternDocument;
     FChecks: array[TEdgeRole] of TCheckBox;
+    FSwatches: array[TEdgeRole] of TPaintBox;
+    FStyles: TRoleDisplayStyles;
     FPresetBox: TComboBox;
     FPresetGroup: TGroupBox;
     FPresets: TRolePresetArray;
@@ -66,6 +68,7 @@ type
     destructor Destroy; override;
     // The user's presets, from the settings; saving one writes them back
     procedure SetPresets(const Presets: TRolePresetArray);
+    procedure SetStyles(const Styles: TRoleDisplayStyles);
     property Document: TPatternDocument read FDocument write SetDocument;
     property OnMessage: TRolesMessageEvent read FOnMessage write FOnMessage;
   end;
@@ -93,7 +96,7 @@ resourcestring
 implementation
 
 uses
-  Math, Sloper.Editor.PropertyText;
+  Math, Sloper.Editor.PropertyText, Sloper.UI.MaterialGrid;
 
 const
   GAP = 6;
@@ -148,6 +151,7 @@ begin
     Swatch.Width := Scale96ToForm(SWATCH_WIDTH);
     Swatch.Tag := Ord(Role);
     Swatch.OnPaint := @SwatchPaint;
+    FSwatches[Role] := Swatch;
     FChecks[Role] := TCheckBox.Create(Self);
     FChecks[Role].Parent := Row;
     FChecks[Role].Align := alClient;
@@ -282,6 +286,16 @@ begin
   RefreshPresets;
 end;
 
+procedure TRolesPanel.SetStyles(const Styles: TRoleDisplayStyles);
+var
+  Swatch: TPaintBox;
+begin
+  FStyles := Styles;
+  for Swatch in FSwatches do
+    if Assigned(Swatch) then
+      Swatch.Invalidate;
+end;
+
 // View state only: not an undo step, and the pattern is not modified
 procedure TRolesPanel.SetHidden(Roles: TEdgeRoles);
 begin
@@ -371,6 +385,7 @@ var
   Box: TPaintBox;
   Role: TEdgeRole;
   Middle: integer;
+  Style: TRoleDisplayStyle;
 begin
   Box := TPaintBox(Sender);
   Box.Canvas.Brush.Color := clWhite; // Or any TColor like clSilver, clBtnFace, etc.
@@ -379,19 +394,20 @@ begin
   Box.Canvas.FillRect(Box.ClientRect);
   Role := TEdgeRole(Box.Tag);
   Middle := Box.Height div 2;
-  if ROLE_COLORS[Role] = '' then
-    Box.Canvas.Pen.Color := clGray
-  else
-    Box.Canvas.Pen.Color := RGBToColor(StrToInt('$' + Copy(ROLE_COLORS[Role], 2, 2)), StrToInt('$' + Copy(ROLE_COLORS[Role], 4, 2)),
-      StrToInt('$' + Copy(ROLE_COLORS[Role], 6, 2)));
-  Box.Canvas.Pen.Width := Max(1, Scale96ToForm(2) * 2);
-  if (Role = erConstruction) or (ROLE_DASHES[Role][0] > 0) then
-  begin
-    Box.Canvas.Pen.Width := 4;
-    Box.Canvas.Pen.Style := psDash;
-  end
-  else
-    Box.Canvas.Pen.Style := psSolid;
+  Style := FStyles[Role];
+  Box.Canvas.Pen.Color := SwatchColor(RoleDisplayColor(Role, Style));
+  Box.Canvas.Pen.Width := Max(1, Scale96ToForm(Round(RoleDisplayWidth(Role, Style))));
+  case Style.Dash of
+    rdsDefault:
+      if (Role = erConstruction) or (ROLE_DASHES[Role][0] > 0) then
+        Box.Canvas.Pen.Style := psDash
+      else
+        Box.Canvas.Pen.Style := psSolid;
+    rdsSolid: Box.Canvas.Pen.Style := psSolid;
+    rdsDash: Box.Canvas.Pen.Style := psDash;
+    rdsDot: Box.Canvas.Pen.Style := psDot;
+    rdsDashDot: Box.Canvas.Pen.Style := psDashDot;
+  end;
   Box.Canvas.Line(4, Middle, Box.Width - 4, Middle);
 end;
 

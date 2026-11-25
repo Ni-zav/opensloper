@@ -214,6 +214,8 @@ Internal markings (placement, stitch and fold lines, holes, buttons) are drawn l
 
 Roles are a fixed list, like KiCad's technical layers, so output settings can rely on them. On screen each marking role has its own colour, clear of red and orange, which mean problems; on paper they are black (`ROLE_DASHES`). For machines fold is a score line and cut is cut; DXF-AAMA writes markings on layer 8. Where lines coincide the higher role draws on top (`ROLE_PRIORITIES`). Tools → Draw As, shown on the command bar, chooses the role of lines drawn next.
 
+Preferences → Design → Line Styles sets the screen colour, line pattern and width for each role. The Design canvas and Lines tab use these settings.
+
 ### Point markers
 
 | Marker | Use | Drawn as | Starting size |

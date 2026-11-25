@@ -15,6 +15,9 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- The Properties tab shows what a point is placed from, after its name, for
+  reading only: an offset point's base, the edge a point lies along and the
+  end it is measured from, and so on (#116).
 - Round Corner can fit an arc between a line and a curve or between two
   curves that share an endpoint (#54).
 - Design Preferences can override the canvas colour, line pattern and width

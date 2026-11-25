@@ -22,6 +22,11 @@ point's type afterwards.
 Each type's settings are listed in
 [Operations and objects](../reference/operations.md#points).
 
+The Properties tab shows what a selected point is placed from, after its
+name: an offset point's **From**, the edge a point lies **Along** and the
+end it is **Measured from**, and so on. These rows are for reading only; to
+place the point from something else, [change its type](#changing-a-points-type).
+
 ## Changing a point's type
 
 When a point was placed the wrong way, say a free point that should have been

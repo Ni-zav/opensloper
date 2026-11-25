@@ -155,6 +155,8 @@ type
     procedure TestPrint;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
+    // What a point is placed from, read only, after its name
+    procedure TestPointInputRows;
     // Its edits, each one undo step, refused with the reason
     procedure TestPropertyEdits;
     // A piece's rows: cut, fold, own allowance, grainline, material and fill
@@ -1550,6 +1552,58 @@ begin
   AssertEquals('no rows', 0, Answer.Arrays['rows'].Count);
   Call('editor_properties', '{"selection": []}');
   AssertEquals('nothing', 'Nothing selected', Answer.Strings['title']);
+end;
+
+procedure TTestEditorServer.TestPointInputRows;
+
+// The input rows of the named point, as "caption: text" separated by "; "
+  function Inputs(const AName: string): string;
+  var
+    Rows: TJSONArray;
+    Index: integer;
+  begin
+    Call('editor_properties', '{"selection": ["' + AName + '"]}');
+    Rows := Answer.Arrays['rows'];
+    Result := '';
+    for Index := 0 to Rows.Count - 1 do
+      if Copy(Rows.Objects[Index].Strings['id'], 1, 5) = 'input' then
+      begin
+        AssertEquals('read only', 'text', Rows.Objects[Index].Strings['kind']);
+        if Result <> '' then
+          Result := Result + '; ';
+        Result := Result + Rows.Objects[Index].Strings['caption'] + ': ' + Rows.Objects[Index].Strings['text'];
+      end;
+  end;
+
+var
+  Rows: TJSONArray;
+  Ids: string;
+  Index: integer;
+begin
+  AddSquare;
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "10", "dy": "20"}');
+  Call('add_point', '{"type": "alongEdgePoint", "name": "Q", "edge": "Line_A_B", "from": "end", "mode": "length", ' +
+    '"value": "30"}');
+  Call('add_point', '{"type": "betweenPoint", "name": "R", "a": "A", "b": "C", "mode": "ratio", "value": "0.5"}');
+  Call('add_point', '{"type": "intersectPoint", "name": "S", "edgeA": "Line_A_B", "edgeB": "Line_B_C"}');
+  Call('add_point', '{"type": "projectPoint", "name": "T", "point": "A", "edge": "Line_B_C", ' +
+    '"direction": "perpendicular"}');
+  AssertEquals('an offset', 'From: A', Inputs('P'));
+  AssertEquals('along an edge', 'Along: Line_A_B; Measured from: B', Inputs('Q'));
+  AssertEquals('between', 'From: A; To: C', Inputs('R'));
+  AssertEquals('a crossing', 'First edge: Line_A_B; Second edge: Line_B_C', Inputs('S'));
+  AssertEquals('a projection', 'From: A; Onto: Line_B_C', Inputs('T'));
+  AssertEquals('a free point has none', '', Inputs('A'));
+  // After the name, before the formulas
+  Call('editor_properties', '{"selection": ["P"]}');
+  Rows := Answer.Arrays['rows'];
+  Ids := '';
+  for Index := 0 to Rows.Count - 1 do
+    Ids := Ids + Rows.Objects[Index].Strings['id'] + ' ';
+  AssertEquals('in order', 'type name locked input0 dx dy marker markedOn result problem ', Ids);
+  // Names follow a rename
+  Call('rename', '{"name": "A", "newName": "Start"}');
+  AssertEquals('renamed', 'From: Start', Inputs('P'));
 end;
 
 procedure TTestEditorServer.TestPropertyEdits;

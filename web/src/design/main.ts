@@ -7,7 +7,15 @@
 // and downloaded.
 import { PatternDocument } from '../document/patternDocument.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
-import { booleanField, idsField, numberField, stringField, stringsField } from '../engine/replies.ts';
+import {
+  booleanField,
+  idsField,
+  numberField,
+  recordsField,
+  stringField,
+  stringsField,
+  type JsonRecord,
+} from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
@@ -15,7 +23,8 @@ import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
 import { FeaturesPanel } from '../ui/featuresPanel.ts';
 import { GarmentPanel } from '../ui/garmentPanel.ts';
-import { ProblemsPanel, type ProblemSubject } from '../ui/problemsPanel.ts';
+import { LatestOnly } from '../ui/latestOnly.ts';
+import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { MaterialsDialog } from '../ui/materialDialog.ts';
 import { PrintDialog } from '../ui/printDialog.ts';
 import { MaterialsPanel } from '../ui/materialPanel.ts';
@@ -58,6 +67,26 @@ const ICONS = {
 } as const;
 
 const DEFAULT_FILE_NAME = 'pattern.sloper';
+
+// What a problem is about: an object on the canvas (or a seam) or a variable
+// by ID, a measurement by key, or nothing
+type ProblemSubject =
+  { kind: 'object' | 'variable'; id: string } | { kind: 'measurement'; key: string } | { kind: 'none' };
+
+const NO_SUBJECT: ProblemSubject = { kind: 'none' };
+
+function parseSubject(problem: JsonRecord): ProblemSubject {
+  const kind = stringField(problem, 'kind');
+  const id = numberField(problem, 'id');
+  if ((kind === 'object' || kind === 'variable') && id !== undefined) {
+    return { kind, id: String(id) };
+  }
+  const key = stringField(problem, 'key');
+  if (kind === 'measurement' && key !== undefined) {
+    return { kind, key };
+  }
+  return NO_SUBJECT;
+}
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
   const found = document.getElementById(id);
@@ -146,6 +175,9 @@ class DesignApp {
   private readonly materials: MaterialsPanel;
   private readonly garment: GarmentPanel;
   private readonly problems: ProblemsPanel;
+  // The Problems tab's subjects by the keys it was given
+  private problemSubjects = new Map<string, ProblemSubject>();
+  private readonly problemLoads: LatestOnly<number>;
   private readonly materialsDialog: MaterialsDialog;
   private readonly printDialog: PrintDialog;
   private readonly measurements: MeasurementsPanel;
@@ -315,24 +347,28 @@ class DesignApp {
     side.addSection('materials', STRINGS.tabMaterials, ICONS.materialsTab, this.materials);
     this.features = new FeaturesPanel(this.document, { message: showMessage, failed: showFailure });
     side.addSection('features', STRINGS.tabFeatures, ICONS.featuresTab, this.features);
-    this.problems = new ProblemsPanel(this.document, {
-      counted: (count) => {
-        side.setCount('problems', count);
-        side.setCaption('problems', count === 0 ? STRINGS.tabProblems : STRINGS.tabProblemsCount(count));
+    this.problems = new ProblemsPanel({
+      choose: (key) => {
+        this.showProblem(this.problemSubject(key));
       },
-      choose: (subject) => {
-        this.showProblem(subject);
-      },
-      hover: (subject) => {
+      hover: (key) => {
+        const subject = this.problemSubject(key);
         this.canvas.showOutsideHover(subject.kind === 'object' ? subject.id : '');
       },
-      zoom: (subject) => {
-        if (subject.kind === 'object') {
+      zoom: (key) => {
+        if (this.problemSubject(key).kind === 'object') {
           this.run(this.canvas.zoomToSelection());
         }
       },
-      failed: showFailure,
     });
+    // Filled on every change, hidden or not, as its count shows on the icon
+    this.problemLoads = new LatestOnly(async () => this.loadProblems(), showFailure);
+    this.document.addListener((_document, changes) => {
+      if (changes.has('pattern') || changes.has('objectsReplaced') || changes.has('measurements')) {
+        this.problemLoads.push(0);
+      }
+    });
+    this.problemLoads.push(0);
     // At the foot of the column, as in every app
     side.addSection('problems', STRINGS.tabProblems, ICONS.problemsTab, this.problems, true);
     this.undoButton = iconButton(ICONS.undo, STRINGS.undo, STRINGS.undo, () => {
@@ -798,6 +834,28 @@ class DesignApp {
   // Another pattern or set drops the measurement edits not saved, so the user is asked first
   private mayDropMeasurementEdits(): boolean {
     return !this.measurements.hasPending || window.confirm(STRINGS.discardMeasurementEdits);
+  }
+
+  // The pattern's problems in full (editor_problems), each keyed by what it is about
+  private async loadProblems(): Promise<void> {
+    const answer = await this.document.read('editor_problems');
+    this.problemSubjects = new Map();
+    const listed = recordsField(answer, 'problems').map((problem) => {
+      const subject = parseSubject(problem);
+      const key = subject.kind === 'none' ? '' : JSON.stringify(subject);
+      this.problemSubjects.set(key, subject);
+      return { key, text: stringField(problem, 'text') ?? '', blocking: false };
+    });
+    this.problems.setProblems(listed);
+    this.side.setCount('problems', listed.length);
+    this.side.setCaption(
+      'problems',
+      listed.length === 0 ? STRINGS.tabProblems : STRINGS.tabProblemsCount(listed.length),
+    );
+  }
+
+  private problemSubject(key: string): ProblemSubject {
+    return this.problemSubjects.get(key) ?? NO_SUBJECT;
   }
 
   // What a list tells the app; its rows' choices stay in the list unless a tab says otherwise

@@ -13,6 +13,7 @@ export const TIMEOUT_MS = 30000;
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'text/javascript',
+  '.css': 'text/css',
   '.wasm': 'application/wasm',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',

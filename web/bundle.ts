@@ -56,6 +56,7 @@ await rm(DESIGN, { recursive: true, force: true });
 await mkdir(DESIGN, { recursive: true });
 await bundle(['src/design/main.ts', 'src/engine/worker.ts'], 'out/design');
 await copyFile('src/design/index.html', 'out/design/index.html');
+await copyFile('src/ui/sidePanel.css', 'out/design/sidePanel.css');
 await copyFile(ENGINE, 'out/design/engine_lib.wasm');
 await cp('../data/icons', 'out/design/icons', { recursive: true });
 // Patterns and measurement files, laid out as in the guide so each finds its
@@ -104,6 +105,7 @@ await rm(PUBLISH, { recursive: true, force: true });
 await mkdir(PUBLISH, { recursive: true });
 await bundle(['src/publish/main.ts', 'src/engine/worker.ts'], PUBLISH);
 await copyFile('src/publish/index.html', join(PUBLISH, 'index.html'));
+await copyFile('src/ui/sidePanel.css', join(PUBLISH, 'sidePanel.css'));
 await copyFile(ENGINE, join(PUBLISH, 'engine_lib.wasm'));
 await cp('../data/icons', join(PUBLISH, 'icons'), { recursive: true });
 await copyFile('../resources/opensloper-publish.svg', join(PUBLISH, 'opensloper-publish.svg'));

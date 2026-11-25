@@ -225,6 +225,7 @@ export const STRINGS = {
   layoutNeedsFiles: (files: string[]): string =>
     `The layout needs ${files.join(', ')}: open them with the layout or pattern`,
   noProblems: 'No problems',
+  problemsHint: 'Click to list the problems',
   previewCover: 'Cover',
   fitPages: 'Fit Pages',
   fitPagesHint: 'Show every page',

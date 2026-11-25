@@ -18,6 +18,9 @@ export interface LayoutProblem {
   text: string;
   // It stops printing and export
   blocking: boolean;
+  // The placement or sheet note it names, by index, or -1
+  placement: number;
+  note: number;
 }
 
 export interface LayoutState {
@@ -61,6 +64,8 @@ function parseState(answer: JsonRecord): LayoutState {
     problems: recordsField(answer, 'problems').map((problem) => ({
       text: stringField(problem, 'text') ?? '',
       blocking: booleanField(problem, 'blocking') ?? false,
+      placement: numberField(problem, 'placement') ?? -1,
+      note: numberField(problem, 'note') ?? -1,
     })),
     missing: stringsField(answer, 'missing') ?? [],
     canUndo: booleanField(answer, 'canUndo') ?? false,

@@ -3,7 +3,8 @@
 // whose pages the preview draws and whose pieces a click selects. The layout
 // is packed, undone and redone, saved and exported, and the saved file opens
 // again. A layout whose sources sit in other folders finds its files by name,
-// and its waiting pieces are placed.
+// lists what stops it printing in the Problems tab, and its waiting pieces
+// are placed.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -171,6 +172,10 @@ try {
   // Every file was found; its pieces wait in the tray, so nothing would print
   assert.doesNotMatch(await status(page), /needs/u);
   assert.match(await page.$eval('#problem-count', (count) => count.textContent), /stop printing/u);
+  // The count opens the Problems tab, the one that stops printing in red
+  await page.click('#problem-count');
+  await page.waitForSelector('.problems-list li.blocking', { visible: true });
+  assert.match(await page.$eval('.side-title', (title) => title.textContent), /^Problems \(\d+\)$/u);
   await command(page, 'Place new pieces');
   await waitForStatus(page, 'Placed');
   assert.doesNotMatch(await status(page), /stop printing/u);

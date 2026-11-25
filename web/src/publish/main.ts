@@ -2,14 +2,17 @@
 // a layout with its patterns and measurement files, or patterns to start a
 // layout, as the desktop's Open does. The preview shows its pages and pieces;
 // the toolbar saves, undoes, places and packs, and exports, each file a
-// download; the title names the layout, and the status bar has a message and
-// the count of problems. Nothing leaves the
+// download; the side panel has the Problems tab at its foot. The title names
+// the layout, and the status bar has a message and the count of problems,
+// which opens the Problems tab. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
 import { Engine } from '../engine/engine.ts';
 import { booleanField, numberField, stringField } from '../engine/replies.ts';
 import { downloadBlob, downloadText } from '../ui/download.ts';
 import { PreviewCanvas } from '../ui/previewCanvas.ts';
+import { ProblemsPanel } from '../ui/problemsPanel.ts';
+import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
@@ -30,7 +33,12 @@ const ICONS = {
   exportPdf: 'file-type-pdf',
   exportSvg: 'file-type-svg',
   exportDxf: 'file-vector',
+  problemsTab: 'alert-triangle',
 } as const;
+
+// The Problems tab's keys, as the desktop's: what a problem names
+const PLACEMENT_KEY = 'placement:';
+const NOTE_KEY = 'note:';
 
 // The layout's exports, as the engine names them, with their files' types
 const EXPORTS = [
@@ -52,6 +60,7 @@ const message = element('message', HTMLElement);
 const problemCount = element('problem-count', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
 const previewElement = element('preview', HTMLCanvasElement);
+const sideElement = element('side', HTMLElement);
 
 function showMessage(text: string): void {
   message.textContent = text;
@@ -93,6 +102,8 @@ function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
 class PublishApp {
   private readonly document: LayoutDocument;
   private readonly preview: PreviewCanvas;
+  private readonly side: SideTabs;
+  private readonly problems: ProblemsPanel;
   private readonly buttons = new Map<string, HTMLButtonElement>();
 
   constructor(engine: Engine) {
@@ -103,6 +114,19 @@ class PublishApp {
       },
       failed: showFailure,
     });
+    this.side = new SideTabs(sideElement, window.matchMedia('(max-width: 640px)').matches);
+    this.problems = new ProblemsPanel({
+      // A sheet note is chosen once the preview shows notes
+      choose: (key) => {
+        if (key.startsWith(PLACEMENT_KEY)) {
+          this.preview.selected = Number(key.slice(PLACEMENT_KEY.length));
+        }
+      },
+      hover: () => undefined,
+      zoom: () => undefined,
+    });
+    // At the foot of the column, as in every app
+    this.side.addSection('problems', STRINGS.tabProblems, ICONS.problemsTab, this.problems, true);
   }
 
   // A toolbar button, kept by name to enable and disable
@@ -161,6 +185,11 @@ class PublishApp {
     openInput.addEventListener('change', () => {
       this.run(this.openFiles([...(openInput.files ?? [])]));
       openInput.value = '';
+    });
+    problemCount.addEventListener('click', () => {
+      if (this.problems.count > 0) {
+        this.side.open('problems');
+      }
     });
     this.document.addListener(() => {
       this.showState();
@@ -271,7 +300,30 @@ class PublishApp {
     } else {
       problemCount.textContent = STRINGS.problemCountBlocking(state.problems.length, blocking);
     }
-    problemCount.title = state.problems.map((problem) => problem.text).join('\n');
+    problemCount.title = state.problems.length > 0 ? STRINGS.problemsHint : '';
+    this.showProblems();
+  }
+
+  // The Problems tab, each keyed by the placement or note it names
+  private showProblems(): void {
+    const problems = this.document.state.problems;
+    this.problems.setProblems(
+      problems.map((problem) => ({
+        key:
+          problem.placement >= 0
+            ? `${PLACEMENT_KEY}${String(problem.placement)}`
+            : problem.note >= 0
+              ? `${NOTE_KEY}${String(problem.note)}`
+              : '',
+        text: problem.text,
+        blocking: problem.blocking,
+      })),
+    );
+    this.side.setCount('problems', problems.length);
+    this.side.setCaption(
+      'problems',
+      problems.length === 0 ? STRINGS.tabProblems : STRINGS.tabProblemsCount(problems.length),
+    );
   }
 
   private enableCommands(): void {

@@ -16,6 +16,11 @@ export const STRINGS = {
   saveAs: 'Save as…',
   saveAsHint: 'Save the pattern to another file',
   saved: (name: string): string => `Saved ${name}`,
+  importStamp: 'Import SVG Stamp…',
+  stampTooLarge: (limit: number): string => `The file is too large for a stamp: at most ${String(limit)} MB`,
+  stampAdded: (name: string): string => `Added the stamp ${name}`,
+  stampWarnings: (warnings: string[]): string =>
+    `The stamp was added, drawn differently from the file:\n\n${warnings.join('\n')}`,
   exportDraft: 'Export SVG',
   exportDraftHint: 'Download the draft as SVG, as the canvas shows it',
   exportedDraft: (name: string): string => `Downloaded ${name}`,

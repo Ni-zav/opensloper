@@ -22,7 +22,6 @@ Agreed, but not built.
 **Design app**
 
 - **Transforms** (#49): a live ghost while dragging, and snapping to existing angles.
-- **SVG stamps in the web editor** (#89): importing a drawing through a file picker, as File → Import SVG Stamp... does (`AddStampStep`); the web canvas already draws stamps a pattern has.
 - **Preferences in the web editor**: the grid's step per unit, whether the rulers show (kept between visits; for now they show at each start) and printer calibration, kept in the browser.
 
 **Publish app**

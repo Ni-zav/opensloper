@@ -7,7 +7,7 @@
 // and downloaded.
 import { PatternDocument } from '../document/patternDocument.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
-import { booleanField, idsField, numberField, stringField } from '../engine/replies.ts';
+import { booleanField, idsField, numberField, stringField, stringsField } from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
@@ -36,6 +36,7 @@ const ICONS = {
   save: 'device-floppy',
   saveAs: 'file-pencil',
   exportDraft: 'file-type-svg',
+  importStamp: 'file-import',
   print: 'printer',
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
@@ -72,6 +73,10 @@ const toolsBar = element('tools', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
 const measurementsInput = element('measurements-input', HTMLInputElement);
 const importInput = element('import-input', HTMLInputElement);
+const stampInput = element('stamp-input', HTMLInputElement);
+
+// As MAX_SVG_BYTES in the Pascal importer. Check before reading the file.
+const MAX_SVG_BYTES = 8 * 1024 * 1024;
 
 function showMessage(text: string): void {
   status.textContent = text;
@@ -369,6 +374,9 @@ class DesignApp {
         this.run(this.pasteFromButton());
       }),
       this.deleteButton,
+      iconButton(ICONS.importStamp, STRINGS.importStamp, STRINGS.importStamp, () => {
+        stampInput.click();
+      }),
       iconButton(ICONS.exportDraft, STRINGS.exportDraft, STRINGS.exportDraftHint, () => {
         this.run(this.exportDraft());
       }),
@@ -401,6 +409,13 @@ class DesignApp {
         this.run(this.importVariablesFrom(file));
       }
       importInput.value = '';
+    });
+    stampInput.addEventListener('change', () => {
+      const file = stampInput.files?.[0];
+      if (file !== undefined) {
+        this.run(this.importStamp(file));
+      }
+      stampInput.value = '';
     });
     measurementsInput.addEventListener('change', () => {
       const file = measurementsInput.files?.[0];
@@ -679,6 +694,27 @@ class DesignApp {
     }
     if (booleanField(answer, 'done') !== true || booleanField(answer, 'warning') === true) {
       window.alert(message);
+    }
+  }
+
+  private async importStamp(file: File): Promise<void> {
+    if (file.size > MAX_SVG_BYTES) {
+      showMessage(STRINGS.stampTooLarge(MAX_SVG_BYTES / (1024 * 1024)));
+      return;
+    }
+    const generation = this.document.state.generation;
+    const svg = await file.text();
+    if (this.document.state.generation !== generation) {
+      return;
+    }
+    const answer = await this.canvas.importStamp(svg, file.name);
+    if (answer === undefined || booleanField(answer, 'done') !== true) {
+      return;
+    }
+    showMessage(STRINGS.stampAdded(file.name));
+    const warnings = stringsField(answer, 'warnings') ?? [];
+    if (warnings.length > 0) {
+      window.alert(STRINGS.stampWarnings(warnings));
     }
   }
 

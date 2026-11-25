@@ -25,7 +25,8 @@ unit Sloper.Tests.EditorServer;
 interface
 
 uses
-  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer, Sloper.API.Rpc, Sloper.Core.Draft;
+  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer, Sloper.API.Rpc,
+  Sloper.Core.Draft, Sloper.Editor.ToolEdits;
 
 type
   TTestEditorServer = class(TOSTestCase)
@@ -59,6 +60,11 @@ type
     // Lines drawn in open space hang together: each end is offset from the line's start
     procedure TestLineToolChainsOffsets;
     procedure TestCurveToolCarriesOn;
+    // The Point tool's drag from a point: onto another point it is offset
+    // from that one, in open space it is free, where it is, as one step
+    procedure TestRebasePoint;
+    // Drags it refuses, saying why, or ignores
+    procedure TestRebaseRefused;
     procedure TestShapeTools;
     // A region with a piece already selects it
     procedure TestPieceTool;
@@ -492,6 +498,80 @@ begin
   Call('editor_scene');
   AssertEquals('three points', 3, Answer.Arrays['points'].Count);
   AssertEquals('three lines', 3, Answer.Arrays['edges'].Count);
+end;
+
+procedure TTestEditorServer.TestRebasePoint;
+var
+  Point: TDraftObject;
+begin
+  AddSquare;
+  Call('add_variable', '{"name": "size", "formula": "20"}');
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "10", ' +
+    '"dy": "#size"}');
+  Call('editor_rebase_snap', '{"from": {"x": 10, "y": 20.5, "radius": 2}, "x": 99.5, "y": 0.5, "radius": 2}');
+  AssertEquals('onto a point', 'point', Answer.Strings['kind']);
+  AssertEquals('says what it will do', Format(rsToolRebaseOffset, ['P', 'B']), Answer.Strings['description']);
+  AssertNear('drawn from the point', 20, Answer.Objects['from'].Floats['y'], TOLERANCE);
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20.5, "radius": 2}, "x": 99.5, "y": 0.5, "radius": 2}');
+  AssertTrue('done', Answer.Booleans['done']);
+  AssertTrue('its formula became a number', Pos('numbers', Answer.Strings['message']) > 0);
+  Point := FServer.Document.Pattern.FindObject('P');
+  AssertTrue('an offset', (Point is TOffsetPoint) and (TOffsetPoint(Point).Mode = omCartesian));
+  AssertEquals('from B', IntToStr(IdOf('B')), TOffsetPoint(Point).Base);
+  Call('get_object', '{"name": "P"}');
+  AssertNear('where it was', 10, Answer.Floats['x'], TOLERANCE);
+  AssertNear('where it was', 20, Answer.Floats['y'], TOLERANCE);
+  Call('editor_changes');
+  AssertEquals('one step', 'Change point type', Answer.Strings['undo']);
+  Call('undo');
+  Answer;
+  AssertEquals('undone', IntToStr(IdOf('A')), TOffsetPoint(FServer.Document.Pattern.FindObject('P')).Base);
+  // Dropped in open space it is free
+  Call('editor_rebase_snap', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertEquals(Format(rsToolRebaseFree, ['P']), Answer.Strings['description']);
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertTrue('freed', Answer.Booleans['done']);
+  AssertTrue('a free point', FServer.Document.Pattern.FindObject('P') is TFreePoint);
+  Call('get_object', '{"name": "P"}');
+  AssertNear('still there', 20, Answer.Floats['y'], TOLERANCE);
+end;
+
+procedure TTestEditorServer.TestRebaseRefused;
+begin
+  AddSquare;
+  Call('add_variable', '{"name": "size", "formula": "20"}');
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "10", ' +
+    '"dy": "#size"}');
+  Call('add_point', '{"type": "offsetPoint", "name": "R", "base": "P", "mode": "cartesian", "dx": "5", "dy": "5"}');
+  Call('add_point', '{"type": "alongEdgePoint", "name": "Q", "edge": "Line_A_B", "from": "start", "mode": "length", ' +
+    '"value": "50"}');
+  Answer;
+  // Onto an edge
+  Call('editor_rebase_snap', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 30, "y": 100.5, "radius": 2}');
+  AssertEquals(Format(rsToolRebaseOnPoint, ['P']), Answer.Strings['description']);
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 30, "y": 100.5, "radius": 2}');
+  AssertFalse('not on an edge', Answer.Booleans['done']);
+  AssertEquals('says why', Format(rsToolRebaseOnPoint, ['P']), Answer.Strings['message']);
+  // Back onto itself: nothing, quietly
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 10.5, "y": 20, "radius": 2}');
+  AssertFalse('nothing', Answer.Booleans['done']);
+  AssertEquals('nothing said', '', Answer.Strings['message']);
+  // Onto a point placed from it
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 15, "y": 25, "radius": 2}');
+  AssertFalse('no loop', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['message'] <> '');
+  // Only free and offset points
+  Call('editor_rebase_snap', '{"from": {"x": 50, "y": 0, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertEquals(Format(rsToolRebaseNotFreeOrOffset, ['Q']), Answer.Strings['description']);
+  Call('editor_rebase_point', '{"from": {"x": 50, "y": 0, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertFalse('not along an edge', Answer.Booleans['done']);
+  // From open space there is nothing to drag
+  Call('editor_rebase_snap', '{"from": {"x": 300, "y": 300, "radius": 2}, "x": 0, "y": 0, "radius": 2}');
+  AssertTrue('no point', Answer.Nulls['from']);
+  Call('editor_rebase_point', '{"from": {"x": 300, "y": 300, "radius": 2}, "x": 0, "y": 0, "radius": 2}');
+  AssertFalse('nothing', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('no step made', 'Add alongEdgePoint', Answer.Strings['undo']);
 end;
 
 procedure TTestEditorServer.TestCurveToolCarriesOn;

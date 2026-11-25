@@ -53,6 +53,14 @@ function AddEdgeFromSnaps(Document: TPatternDocument; const Start, Finish: TSnap
 // one in Role instead. EndKey as for AddEdgeFromSnaps.
 function ExtendCurveToSnap(Document: TPatternDocument; const CurveKey: string; const Start, Finish: TSnap; Role: TEdgeRole;
   out EndKey: string): TSelectionEdit;
+// The Point tool's drag from the point PointKey, dropped where Drop snapped:
+// onto another point it becomes an offset across and down from that one, in
+// open space a free point; it stays where it is, as one undo step (Change
+// point type). Only free and offset points are re-pointed; a drop on an edge
+// or crossing is refused, saying why, and one back on the point does nothing.
+function RebasePointStep(Document: TPatternDocument; const PointKey: string; const Drop: TSnap): TSelectionEdit;
+// What RebasePointStep would do, or why it would not, for the status bar
+function RebaseDescription(Pattern: TPattern; const PointKey: string; const Drop: TSnap): string;
 // A circle about the snapped centre through Opposite, or a rectangle from the
 // snapped corner to Opposite
 function AddShapeFromSnap(Document: TPatternDocument; const Start: TSnap; const Opposite: TVec2; Circle: boolean;
@@ -115,6 +123,10 @@ resourcestring
   rsToolAddCallout = 'Add callout';
   rsToolMoveTip = 'Move callout tip';
   rsToolAddStamp = 'Add stamp';
+  rsToolRebaseOffset = 'Place %s across and down from %s';
+  rsToolRebaseFree = 'Make %s a free point';
+  rsToolRebaseOnPoint = 'Drop on a point to place %s from it, or in open space to make it free';
+  rsToolRebaseNotFreeOrOffset = 'Only a free or offset point can be placed from another by dragging; %s is not one';
 
 implementation
 
@@ -249,6 +261,58 @@ begin
   Result := Committed(Document, Assigned(Path), [CurveKey]);
   if not Result.Done then
     EndKey := '';
+end;
+
+// Why the point cannot be re-pointed by dragging, or ''
+function RebaseRefusal(Pattern: TPattern; const PointKey: string): string;
+var
+  Node: TEvalNode;
+begin
+  Result := '';
+  Node := Pattern.FindNode(PointKey);
+  if not (Node is TFreePoint) and not (Node is TOffsetPoint) then
+    Result := Format(rsToolRebaseNotFreeOrOffset, [Node.DisplayName]);
+end;
+
+function RebaseDescription(Pattern: TPattern; const PointKey: string; const Drop: TSnap): string;
+var
+  Name: string;
+begin
+  Result := RebaseRefusal(Pattern, PointKey);
+  if Result <> '' then
+    Exit;
+  Name := Pattern.FindNode(PointKey).DisplayName;
+  case Drop.Kind of
+    snPoint:
+      if Drop.PointKey = PointKey then
+        Result := ''
+      else
+        Result := Format(rsToolRebaseOffset, [Name, Pattern.FindNode(Drop.PointKey).DisplayName]);
+    snEdge, snCrossing:
+      Result := Format(rsToolRebaseOnPoint, [Name]);
+    else
+      Result := Format(rsToolRebaseFree, [Name]);
+  end;
+end;
+
+function RebasePointStep(Document: TPatternDocument; const PointKey: string; const Drop: TSnap): TSelectionEdit;
+var
+  Reason: string;
+begin
+  Reason := RebaseRefusal(Document.Pattern, PointKey);
+  if Reason <> '' then
+    Exit(Refused(Reason));
+  case Drop.Kind of
+    snPoint:
+      if Drop.PointKey = PointKey then
+        Result := Default(TSelectionEdit)
+      else
+        Result := ConvertPointSelection(Document, [PointKey, Drop.PointKey], pcOffset);
+    snEdge, snCrossing:
+      Result := Refused(RebaseDescription(Document.Pattern, PointKey, Drop));
+    else
+      Result := ConvertPointSelection(Document, [PointKey], pcFree);
+  end;
 end;
 
 function AddShapeFromSnap(Document: TPatternDocument; const Start: TSnap; const Opposite: TVec2; Circle: boolean;

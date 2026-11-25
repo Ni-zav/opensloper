@@ -98,6 +98,10 @@ type
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
     function DoToolClick(Params: TJSONObject): TJSONData;
+    // The point the Point tool's drag starts from, or '' when it starts on none
+    function RebaseFrom(Params: TJSONObject): string;
+    function DoRebaseSnap(Params: TJSONObject): TJSONData;
+    function DoRebasePoint(Params: TJSONObject): TJSONData;
     function DoImportStamp(Params: TJSONObject): TJSONData;
     function KeysParam(Params: TJSONObject; const AName: string): TStringArray;
     function DoLabelKeys(Params: TJSONObject): TJSONData;
@@ -247,6 +251,14 @@ resourcestring
   rsEditorToolSnapReturns = 'As editor_snap gives it, with `start`, where the first click snapped (`kind`, `x`, `y`), ' +
     'and `startObjects`, what it works from, when given. A line''s or curve''s end in open space is `offset`, across ' +
     'and down from the start';
+  rsEditorRebaseSnap = 'Where the Point tool''s drag from a point would drop, and what the drop would do: onto ' +
+    'another point, place the dragged one across and down from it; in open space, make it free.';
+  rsEditorRebaseFrom = 'Where the drag started: a group of `x`, `y` and `radius`, which must be on a point';
+  rsEditorRebaseSnapReturns = 'As editor_snap gives it, with `from`, the dragged point (`id`, `x`, `y`), or null ' +
+    'when the drag did not start on a point';
+  rsEditorRebasePoint = 'Drops the Point tool''s drag from a point: onto another point the dragged one is placed ' +
+    'across and down from it, in open space it is made free, staying where it is, as one undo step. Only free and ' +
+    'offset points; a drop on an edge is refused, and one back on the point does nothing.';
   rsEditorToolClick = 'Does what a click of a canvas tool does, as one undo step: point adds the point it snaps to; ' +
     'line and curve take a first click, then make the edge with its points, carrying on from its end; circle and ' +
     'rectangle take a first click, then make the shape; piece makes a piece of the closed outline round the place; ' +
@@ -620,6 +632,16 @@ begin
     AddApiParam(Built, 'start', apGroup, False, rsEditorStart);
     AddApiParam(Built, 'extend', apReference, False, rsEditorExtend);
     AddApiParam(Built, 'role', apChoice, False, rsEditorRole, string.Join(', ', EDGE_ROLE_NAMES));
+    AddApiMethod(Built, 'editor_rebase_snap', rsEditorRebaseSnap, rsEditorRebaseSnapReturns, True);
+    AddApiParam(Built, 'from', apGroup, True, rsEditorRebaseFrom);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorX);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorY);
+    AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
+    AddApiMethod(Built, 'editor_rebase_point', rsEditorRebasePoint, rsEditorToolClickReturns);
+    AddApiParam(Built, 'from', apGroup, True, rsEditorRebaseFrom);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorX);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorY);
+    AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
     AddApiMethod(Built, 'editor_label_keys', rsEditorLabelKeys, rsEditorLabelKeysReturns, True);
     AddApiParam(Built, 'mode', apChoice, False, rsEditorLabelMode, string.Join(', ', LABEL_MODE_NAMES));
     AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
@@ -1467,6 +1489,46 @@ begin
   Result := Answer;
 end;
 
+function TEditorApiServer.RebaseFrom(Params: TJSONObject): string;
+var
+  Group: TJSONData;
+  From: TSnap;
+begin
+  Group := Params.Find('from');
+  if not (Group is TJSONObject) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['from']));
+  From := SnapOf(TJSONObject(Group), '');
+  Result := '';
+  if From.Kind = snPoint then
+    Result := From.PointKey;
+end;
+
+function TEditorApiServer.DoRebaseSnap(Params: TJSONObject): TJSONData;
+var
+  PointKey: string;
+  Drop: TSnap;
+  Answer: TJSONObject;
+  Point: TPointObject;
+begin
+  PointKey := RebaseFrom(Params);
+  Drop := SnapOf(Params, '');
+  Answer := SnapToJSON(Drop);
+  if PointKey = '' then
+  begin
+    Answer.Add('description', '');
+    Answer.Add('from', TJSONNull.Create);
+  end
+  else
+  begin
+    Answer.Add('description', RebaseDescription(Document.Pattern, PointKey, Drop));
+    Point := TPointObject(Document.Pattern.FindNode(PointKey));
+    Answer.Add('from', TJSONObject.Create(['id', KeyToJSON(PointKey), 'x', ReportFloat(Point.Position.X), 'y',
+      ReportFloat(Point.Position.Y)]));
+  end;
+  Answer.Add('objects', KeysToJSON(SnapObjectKeys(Drop)));
+  Result := Answer;
+end;
+
 function EditToJSON(const Edit: TSelectionEdit): TJSONObject;
 begin
   Result := TJSONObject.Create(['done', Edit.Done, 'message', Edit.Message]);
@@ -1474,6 +1536,18 @@ begin
     Result.Add('select', KeysToJSON(Edit.Selection))
   else
     Result.Add('select', TJSONNull.Create);
+end;
+
+function TEditorApiServer.DoRebasePoint(Params: TJSONObject): TJSONData;
+var
+  PointKey: string;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  PointKey := RebaseFrom(Params);
+  if PointKey = '' then
+    Exit(EditToJSON(Default(TSelectionEdit)));
+  Result := EditToJSON(RebasePointStep(Document, PointKey, SnapOf(Params, '')));
 end;
 
 function TEditorApiServer.DoToolClick(Params: TJSONObject): TJSONData;
@@ -2807,6 +2881,8 @@ begin
     'editor_list_click': Result := DoListClick(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);
+    'editor_rebase_snap': Result := DoRebaseSnap(Params);
+    'editor_rebase_point': Result := DoRebasePoint(Params);
     'editor_import_stamp': Result := DoImportStamp(Params);
     'editor_label_keys': Result := DoLabelKeys(Params);
     'editor_seam_pick': Result := DoSeamPick(Params);

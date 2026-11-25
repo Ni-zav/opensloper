@@ -18,6 +18,10 @@ Changed, Fixed and Removed under each version.
 - The Properties tab shows what a point is placed from, after its name, for
   reading only: an offset point's base, the edge a point lies along and the
   end it is measured from, and so on (#116).
+- A free or offset point can be placed from another point by dragging it
+  with the Point tool: dropped on a point it is offset across and down from
+  that point, and dropped in open space it becomes free, staying where it is
+  (#115).
 - Round Corner can fit an arc between a line and a curve or between two
   curves that share an endpoint (#54).
 - Design Preferences can override the canvas colour, line pattern and width

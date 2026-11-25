@@ -859,7 +859,9 @@ begin
     Invalidate;
   end
   else if FInput.Mode = cmDragging then
-    FDocument.CancelChange;
+    FDocument.CancelChange
+  else if FInput.Mode = cmToolDrag then
+    ActiveTool.Cancel;
   FInput.Mode := cmIdle;
   FDraggingHandle := False;
 end;
@@ -1153,7 +1155,7 @@ begin
   EndPicking;
   ActiveTool.Reset;
   FTipSnapShown := False;
-  if FInput.Mode = cmDragging then
+  if FInput.Mode in [cmDragging, cmToolDrag] then
     CancelDrag;
   FTool := Value;
   ActiveTool.Reset;
@@ -1373,6 +1375,9 @@ begin
   if FTool <> ctSelect then
   begin
     ActiveTool.Press(Pressed, Shift, X, Y);
+    // The tool's drag holds the button until its release
+    if ActiveTool.Holds then
+      FInput.Mode := cmToolDrag;
     Exit;
   end;
   if Button = mbRight then
@@ -1459,6 +1464,8 @@ begin
         DragTo(X, Y);
     cmBoxing:
       Invalidate;
+    cmToolDrag:
+      ActiveTool.Move(X, Y);
     cmIdle:
       if Assigned(FDocument) and (FTool <> ctSelect) then
         ActiveTool.Move(X, Y)
@@ -1509,6 +1516,8 @@ begin
         SelectBox(X, Y, ssShift in Shift);
       Invalidate;
     end;
+    cmToolDrag:
+      ActiveTool.Release(X, Y);
     cmPressed:
       if FTool = ctZoom then
         ZoomClick(X, Y, ssShift in Shift)
@@ -1631,7 +1640,7 @@ begin
     VK_SPACE:
       FInput.SpaceDown := True;
     VK_ESCAPE:
-      if FInput.Mode = cmDragging then
+      if FInput.Mode in [cmDragging, cmToolDrag] then
         CancelDrag
       else if FInput.Mode = cmBoxing then
       begin

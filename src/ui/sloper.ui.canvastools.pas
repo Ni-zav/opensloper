@@ -68,8 +68,13 @@ type
     // A press that starts no gesture of the canvas's own; Shift holds the
     // modifier keys
     procedure Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer); virtual;
-    // The pointer moving with no button held
+    // The pointer moving with no button held, or during the tool's drag
     procedure Move(X, Y: integer); virtual;
+    // True after a press that started the tool's own drag, which then has
+    // the moves until Release
+    function Holds: boolean; virtual;
+    // The release that ends the tool's drag
+    procedure Release(X, Y: integer); virtual;
     // Escape: True when it dropped something the tool was part way through
     function Cancel: boolean; virtual;
     // Keys besides Escape that the tool takes, which the canvas then keeps from moving the focus
@@ -96,8 +101,12 @@ procedure FreeCanvasTools(var Tools: TCanvasToolHandlers);
 implementation
 
 uses
-  LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Editor.Scene,
+  Math, LCLType, Sloper.Core.Evaluator, Sloper.Core.Pattern, Sloper.Core.Units, Sloper.Core.Note, Sloper.Core.Drag, Sloper.Editor.Scene,
   Sloper.Editor.ToolEdits;
+
+const
+  // Pixels the pointer moves, button held, before a press on a point is a drag
+  POINT_DRAG_THRESHOLD = 3;
 
 type
   // Selecting and dragging are the canvas's own gestures
@@ -144,11 +153,30 @@ type
     procedure Paint(Painter: TPatternPainter); override;
   end;
 
+  // A click adds a point, or selects one it is on. Dragging from a free or
+  // offset point places it from the point it is dropped on, or makes it free
+  // in open space (RebasePointStep).
   TPointTool = class(TSnapTool)
+  private
+    // The point pressed on, which a drag places from another; '' for none
+    FDragKey: string;
+    // The drag has gone far enough to count
+    FDragging: boolean;
+    FPressPos: TPoint;
+    procedure EndDrag;
   protected
+    function SnapMessage: string; override;
     procedure Click; override;
   public
     function Hint: string; override;
+    procedure Reset; override;
+    procedure Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer); override;
+    function Holds: boolean; override;
+    procedure Move(X, Y: integer); override;
+    procedure Release(X, Y: integer); override;
+    function Cancel: boolean; override;
+    function LabelKeys: TStringArray; override;
+    procedure Paint(Painter: TPatternPainter); override;
   end;
 
   // Lines and curves carry on from the end of the last, as a chain. A
@@ -300,6 +328,15 @@ begin
 end;
 
 procedure TCanvasToolHandler.Move(X, Y: integer);
+begin
+end;
+
+function TCanvasToolHandler.Holds: boolean;
+begin
+  Result := False;
+end;
+
+procedure TCanvasToolHandler.Release(X, Y: integer);
 begin
 end;
 
@@ -460,6 +497,97 @@ end;
 procedure TPointTool.Click;
 begin
   ApplyEdit(AddPointFromSnap(Host.Document, FSnap));
+end;
+
+procedure TPointTool.EndDrag;
+begin
+  FDragKey := '';
+  FDragging := False;
+end;
+
+procedure TPointTool.Reset;
+begin
+  inherited Reset;
+  EndDrag;
+end;
+
+// A press on a point may start a drag from it
+procedure TPointTool.Press(Button: TCanvasButton; Shift: TShiftState; X, Y: integer);
+begin
+  EndDrag;
+  inherited Press(Button, Shift, X, Y);
+  if (Button = cbLeft) and (FSnap.Kind = snPoint) then
+  begin
+    FDragKey := FSnap.PointKey;
+    FPressPos := Point(X, Y);
+  end;
+end;
+
+function TPointTool.Holds: boolean;
+begin
+  Result := FDragKey <> '';
+end;
+
+procedure TPointTool.Move(X, Y: integer);
+begin
+  if (FDragKey <> '') and (Max(Abs(X - FPressPos.X), Abs(Y - FPressPos.Y)) >= POINT_DRAG_THRESHOLD) then
+    FDragging := True;
+  inherited Move(X, Y);
+end;
+
+procedure TPointTool.Release(X, Y: integer);
+var
+  Key: string;
+begin
+  Key := FDragKey;
+  if FDragging then
+  begin
+    UpdateSnap(X, Y);
+    EndDrag;
+    ApplyEdit(RebasePointStep(Host.Document, Key, FSnap));
+  end
+  else
+    EndDrag;
+  Host.Refresh;
+end;
+
+function TPointTool.Cancel: boolean;
+begin
+  if FDragKey = '' then
+    Exit(inherited Cancel);
+  EndDrag;
+  Host.ShowMessage(SnapMessage);
+  Host.Refresh;
+  Result := True;
+end;
+
+function TPointTool.SnapMessage: string;
+begin
+  if FDragging then
+    Result := RebaseDescription(Host.Document.Pattern, FDragKey, FSnap)
+  else
+    Result := inherited SnapMessage;
+end;
+
+function TPointTool.LabelKeys: TStringArray;
+begin
+  Result := inherited LabelKeys;
+  if FDragging then
+    Insert(FDragKey, Result, Length(Result));
+end;
+
+// The drag's line, from the point to where it would drop
+procedure TPointTool.Paint(Painter: TPatternPainter);
+var
+  Node: TEvalNode;
+begin
+  Node := nil;
+  if FDragging then
+    Node := Host.Document.Pattern.FindNode(FDragKey);
+  if (Node is TPointObject) and FSnapShown then
+    Painter.DrawSnap(FSnap, spLine, TPointObject(Node).Position)
+  else
+    inherited Paint(Painter);
 end;
 
 { TEdgeTool }

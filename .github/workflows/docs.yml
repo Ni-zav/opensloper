@@ -95,9 +95,15 @@ jobs:
   # version, and Pages keeps the files it has for a version already deployed.
   # A release is usually the development head, so the release's docs had the
   # version of the development push's, and the site stayed as it was (#124).
-  # The version here is unique to the run.
+  # The version must be a commit of the repository, so the job makes one for
+  # the run: the run's tree, with the run's commit as its parent. No branch
+  # points at it, and it needs contents: write.
   deploy:
     needs: build
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -109,7 +115,17 @@ jobs:
           ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
         with:
           script: |
-            const version = `${context.sha}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+            const { data: head } = await github.rest.git.getCommit({
+              ...context.repo,
+              commit_sha: context.sha,
+            });
+            const { data: commit } = await github.rest.git.createCommit({
+              ...context.repo,
+              message: `Docs deployment, run ${context.runId} attempt ${process.env.GITHUB_RUN_ATTEMPT}`,
+              tree: head.tree.sha,
+              parents: [context.sha],
+            });
+            const version = commit.sha;
             const { data: deployment } = await github.request(
               'POST /repos/{owner}/{repo}/pages/deployments', {
                 ...context.repo,

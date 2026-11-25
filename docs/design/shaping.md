@@ -72,8 +72,9 @@ grainline and material. A notch on the part cut away moves to the end of the
 arc beside it. A corner on the edge a piece is folded on cannot be rounded,
 since a fold has to stay one straight edge.
 
-Only corners between straight edges can be rounded so far. To round a second
-corner on the same edge, select the part of the edge that is left.
+Round Corner works on lines and curves that share an endpoint. If the radius
+cannot make an arc tangent to both edges, reduce it in the arc's properties.
+To round a second corner on the same edge, select the part that is left.
 
 ## Copies that follow: transforms
 

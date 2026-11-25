@@ -59,6 +59,8 @@ A small recursive-descent parser of our own (`Sloper.Core.Formula`, on `Sloper.C
 
 Nine point operations and the edge types cover bodice, skirt and trouser blocks; circles, arcs, rounded corners and offset edges were added for accessories. Many of Valentina's ~30 tools become special cases once formulas read properties such as `{4}.angle`. Every operation, its members and properties are on the generated Operations and objects page, from `Sloper.Core.OperationInfo`, which tests hold to the code.
 
+**Round Corner** keeps the closed-form construction for two straight edges. When a curve is involved, the engine starts with the corner's end tangents and searches for an intersection of the two inward offsets at the requested radius. Contact must be within both edges. The arc splits the edges at those contacts and the existing piece, seam and notch handling takes over.
+
 **Conventions:**
 
 - Geometry in mm, formula numbers in the pattern unit.

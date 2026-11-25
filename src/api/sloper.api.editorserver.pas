@@ -20,7 +20,9 @@
 // what lies under the cursor, and what a click would snap to. They are named
 // editor_ and served with the API by the web engine and opensloper-cli serve,
 // but are not offered to Claude as tools, for whom a mouse position means
-// nothing. Positions are in mm, as the API's. No LCL dependency.
+// nothing. Positions are in mm, as the API's. The web Publish app's methods,
+// named publish_, go to a TPublishApiServer, made when first called, as the
+// pages share one engine. No LCL dependency.
 unit Sloper.API.EditorServer;
 
 {$mode ObjFPC}{$H+}
@@ -30,7 +32,7 @@ interface
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
   Sloper.Core.Geometry, Sloper.Core.Evaluator, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits,
-  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment;
+  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment, Sloper.API.PublishServer;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -58,6 +60,7 @@ type
     FGradeKey, FGradeField: string;
     // Keeps the Garment tab's pieces, so only those that changed are built again
     FGarment: TGarmentBuilder;
+    FPublish: TPublishApiServer;
     // The Garment tab's scene: as the canvas shows the pieces, of the call's material
     function GarmentScene(Params: TJSONObject): TGarmentScene;
     function DoGarment(Params: TJSONObject): TJSONData;
@@ -2387,6 +2390,7 @@ begin
   FreeAndNil(FPending);
   FreeAndNil(FGrade);
   FreeAndNil(FGarment);
+  FreeAndNil(FPublish);
   inherited Destroy;
 end;
 
@@ -2929,7 +2933,14 @@ begin
     'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON,
         'roles', RolesToJSON, 'pointTypes', PointTypesToJSON]);
     else
-      Result := inherited DispatchMethod(Method, Params);
+      if StartsStr(PUBLISH_PREFIX, Method) then
+      begin
+        if not Assigned(FPublish) then
+          FPublish := TPublishApiServer.Create;
+        Result := FPublish.CallMethod(Method, Params);
+      end
+      else
+        Result := inherited DispatchMethod(Method, Params);
   end;
 end;
 

@@ -1,20 +1,21 @@
 # The web version
 
-The web design app (issue #78), as `documents/design/web-version.md` plans
-it: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
+The web design app (issue #78), and the Publish app being built (issue
+#85), as `documents/design/web-version.md` plans them: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
 Worker, under an editor in plain TypeScript. Files stay on the user's
 machine: the page opens and saves them as text, and sends nothing anywhere.
 
-| Folder          | What it is                                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                    |
-| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                               |
-| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels                                                                    |
-| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                        |
-| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units                 |
-| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                            |
-| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts`, `files.ts` and `offline.ts` drive the built app in headless Chromium, `browser.ts` serves it for them |
-| `bundle.ts`     | Bundles the pages with esbuild into `out/design` and `engine/out/browser`                                                                                   |
+| Folder          | What it is                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                            |
+| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                                       |
+| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels, and `LayoutDocument`, the open layout                                     |
+| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                                |
+| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units                         |
+| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                                    |
+| `src/publish/`  | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                                                  |
+| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts`, `files.ts`, `offline.ts` and `publish.ts` drive the built apps in headless Chromium, `browser.ts` serves them |
+| `bundle.ts`     | Bundles the pages with esbuild into `out/design`, `out/publish` and `engine/out/browser`                                                                            |
 
 So far the canvas draws the scene (pieces with their marks, notches and
 direction, edges, selected seams, notes and callouts, markers, points and
@@ -43,6 +44,10 @@ Work not yet saved is kept in the browser (OPFS) and offered back after
 the tab that had it closes.
 A service worker keeps the app for offline use and installation, with an
 Update button when a new build is ready.
+
+The Publish app (`out/publish`) so far opens a layout with its patterns and
+measurement files, or patterns to start a layout, finding each file a layout
+names by its name among those chosen, and shows the problems' count.
 
 ## Setting up
 

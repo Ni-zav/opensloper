@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSloper Publish</title>
+    <link rel="icon" href="opensloper-publish.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#f2f1ed" />
+    <style>
+      /* As the design app's page */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        font:
+          13px system-ui,
+          sans-serif;
+        color: #222428;
+        background: #f2f1ed;
+      }
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        border-bottom: 1px solid #d8d6cf;
+      }
+      button {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: none;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      button img {
+        width: 18px;
+        height: 18px;
+      }
+      /* The pages will be drawn here */
+      #preview {
+        min-height: 0;
+        background: #787a80;
+      }
+      /* A message, and the problems' count at the end, as the desktop's status bar */
+      #status {
+        display: flex;
+        gap: 16px;
+        padding: 4px 8px;
+        border-top: 1px solid #d8d6cf;
+        min-height: 1.4em;
+        white-space: nowrap;
+      }
+      #message {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #open-input {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar"></div>
+    <div id="preview"></div>
+    <div id="status"><span id="message"></span><span id="problem-count"></span></div>
+    <input id="open-input" type="file" accept=".slayout,.sloper,.slm" multiple />
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

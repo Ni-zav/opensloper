@@ -1,6 +1,6 @@
 # Web version
 
-Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design editor is built, as a beta; the Measurements and Publish apps are not.
+Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design editor is built, as a beta. The Publish app is being built; the Measurements app is not.
 
 **Why it is possible.** The core has no LCL dependency, and the Automation API already exposes every document operation as JSON-RPC. So the web needs a new UI, not a new engine. Name rules, formula checks and undo are the same code everywhere.
 
@@ -284,6 +284,25 @@ A fix or feature then lands in the same place in both. Names follow TypeScript's
 - **Widgets are ours.** A small control base wraps a DOM element, standing in for the LCL's `TCustomControl` and `TPanel`. The list grid is our own, on a table. Nothing from npm is in the shipped editor.
 - **No `Free`, but listeners are removed** when a panel goes, through a `dispose` method, so a closed panel is never kept alive by the document.
 - **Shared tables come from the engine**, not copied. Shortcuts, commands and their captions are read from it as JSON, so the two editors cannot drift. User-visible text sits in one strings module, as `resourcestring` does on the desktop.
+
+### The Publish editor
+
+The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.MainForm`), built in small steps (#85). It is not linked from the site until it can print.
+
+- **Open** takes a layout with its patterns and measurement files, or patterns alone, which start a layout as the desktop's Open does.
+- `LayoutDocument` (`document/layoutDocument.ts`) is the open layout, as the desktop's `TLayoutDocument`.
+- The engine says which files the sources still need, by their paths from the layout. The chosen files have names only, so each is matched by name and given. A pattern found may name a measurement file, which is looked for in turn.
+- The title names the layout. The status bar has a message and the problems' count, as on the desktop, with how many stop printing.
+
+**Its methods** are named `publish_`, in their own table (`PublishMethods` in `Sloper.API.PublishServer`). The editor server passes them to a `TPublishApiServer`, which holds the layout document, so both pages use one engine module. They are not MCP tools.
+
+| Method | Does |
+| --- | --- |
+| `publish_open` | Opens a layout from its text, or starts one for a pattern among the files, with the files given (`OpenText`, `NewForPattern`) |
+| `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
+| `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given |
+
+Every reply to these is `publish_state`'s.
 
 ## Server
 

@@ -102,9 +102,8 @@ File → Import SVG Stamp... puts an SVG drawing on the pattern, made in
 Inkscape, Illustrator or any app that saves SVG. In the web Design app, use
 **Import SVG Stamp…** on the toolbar. The file is read on your device.
 With one point, edge or piece selected, the stamp hangs from it, centred
-on the point, the middle of the
-edge or the middle of the piece; otherwise it is free, in the middle of the
-view. It moves with what it hangs from like any note, can have a leader, and
+on the point, the middle of the edge or the middle of the piece; otherwise
+it is free, in the middle of the view. It moves with what it hangs from like any note, can have a leader, and
 prints with its piece.
 
 The drawing is drawn at its true size, from the size the SVG file gives:

@@ -190,7 +190,13 @@ try {
     const original = Worker.prototype.postMessage;
     Object.defineProperty(Worker.prototype, 'postMessage', {
       value: function (this: Worker, ...args: unknown[]): unknown {
-        if (JSON.stringify(args[0]).includes('editor_scene')) {
+        const request = JSON.stringify(args[0]);
+        if (request.includes('editor_drag_to')) {
+          document.body.dataset.dragMoved = 'true';
+        } else if (request.includes('editor_drag_cancel')) {
+          document.body.dataset.dragCancelled = 'true';
+        }
+        if (request.includes('editor_scene')) {
           document.body.dataset.sceneCalls = String(Number(document.body.dataset.sceneCalls ?? '0') + 1);
         }
         return Reflect.apply(original, this, args);
@@ -210,6 +216,18 @@ try {
   await page.waitForFunction(() => new Promise((resolve) => requestAnimationFrame(() => resolve(true))));
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.ok(await inkedNear(page, 60, 60), 'the first point is drawn where it was clicked');
+  await page.keyboard.press('s');
+  const touchPoint = { x: Math.round(emptyCanvas.x + 60), y: Math.round(emptyCanvas.y + 60) };
+  const draggedPoint = { x: touchPoint.x + DRAG_PIXELS, y: touchPoint.y + DRAG_PIXELS };
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint] });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [draggedPoint] });
+  await waitForData(page, 'dragMoved', 'true');
+  await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  await waitForData(page, 'dragCancelled', 'true');
+  await page.waitForSelector('button[title="Undo Add point"]:enabled', { timeout: TIMEOUT_MS });
+  await clickAt(page, emptyCanvas, 150, 150);
+  assert.equal(await bodyData(page, 'undo'), 'Add point', 'a later click does not commit the cancelled drag');
+  assert.ok(await inkedNear(page, 60, 60), 'the cancelled drag put the point back');
   await pressWithMod(page, 'z');
   await waitForData(page, 'undo', '');
   await page.keyboard.press('s');

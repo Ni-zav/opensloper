@@ -67,6 +67,8 @@ Changed, Fixed and Removed under each version.
 - The web Design app starts with its side panel folded on narrow screens.
   The side panel button shows or hides it and remembers the selected tab (#91).
 - Cancelling or leaving the web Seam tool clears pending edge picks (#97).
+- An interrupted touch drag in the web editor rolls back without moving
+  the object on the next click (#96).
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

@@ -1,8 +1,8 @@
 // Drives the built design app (out/design, from npm run build) in headless
 // Chromium as a user would: adds a point to the empty pattern it starts with
 // and checks it stays where it was clicked, opens a regression pattern with its measurements,
-// checks the canvas drew it and its rulers, hides and shows them, adds a point with the Point tool, drags it with
-// the Select tool and undoes, edits it in the Properties tab, then uses each
+// checks the canvas drew it and its rulers, hides and shows them, adds a point with the Point tool, drags from
+// another with the Point tool to make it free, drags it with the Select tool and undoes, edits it in the Properties tab, then uses each
 // drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
 // set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
 // this TypeScript as it is. CHROMIUM overrides the browser path, and SCREENSHOT,
@@ -411,6 +411,33 @@ try {
   assert.equal(await bodyData(page, 'modified'), 'true', 'modified');
   const added = await bodyData(page, 'selection');
   assert.ok(added !== '', 'the new point is selected');
+
+  // Dragging from a point with the Point tool places it from where it is
+  // dropped: here, in open space, it is made free, as one step
+  const second = { x: at.x + 60, y: at.y };
+  await page.mouse.move(second.x, second.y);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await page.mouse.click(second.x, second.y);
+  await page.waitForFunction(
+    (first) => !['', first].includes(document.body.dataset.selection ?? ''),
+    { timeout: TIMEOUT_MS },
+    added,
+  );
+  const lined = await bodyData(page, 'selection');
+  await page.mouse.move(second.x, second.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 4; step++) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.mouse.move(second.x + 10 * step, second.y + 15 * step);
+  }
+  await page.mouse.up();
+  await waitForData(page, 'undo', 'Change point type');
+  assert.equal(await bodyData(page, 'selection'), lined, 'the dragged point is selected');
+  assert.ok((await status(page)).toLowerCase().includes('free point'), 'made free');
+  await pressWithMod(page, 'z');
+  await waitForData(page, 'undo', 'Add point');
+  await pressWithMod(page, 'z');
+  await page.waitForSelector('#toolbar button[title="Redo Add point"]', { timeout: TIMEOUT_MS });
 
   await page.keyboard.press('s');
   await page.mouse.move(at.x, at.y);

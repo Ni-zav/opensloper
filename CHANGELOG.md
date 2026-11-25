@@ -15,6 +15,10 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- A free or offset point can be placed from another point by dragging it
+  with the Point tool: dropped on a point it is offset across and down from
+  that point, and dropped in open space it becomes free, staying where it is
+  (#115).
 - Round Corner can fit an arc between a line and a curve or between two
   curves that share an endpoint (#54).
 - Design Preferences can override the canvas colour, line pattern and width

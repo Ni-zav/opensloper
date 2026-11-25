@@ -39,6 +39,20 @@ pieces, notches and formulas go on as before.
 The menu item's hint says what to select for each type. The change is one
 undo step.
 
+### Dragging with the Point tool
+
+A free or offset point can be placed from another point by dragging:
+
+1. Choose the Point tool (++p++).
+2. Press on the point and drag. A blue line follows the pointer, and the
+   status bar says what the drop will do.
+3. Let go on another point to place it across and down from that point, or
+   in open space to make it a free point.
+
+It stays where it is, and the change is one undo step. Letting go on an
+edge, on the point itself or on a point that is placed from it does nothing,
+and the status bar says why. Press ++escape++ during the drag to drop it.
+
 ### Where the point ends up
 
 The new type's numbers are worked out from where the point is now, so it stays

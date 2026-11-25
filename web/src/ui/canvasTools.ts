@@ -74,6 +74,16 @@ export abstract class CanvasToolHandler {
   // The pointer moved over the canvas, no button held
   move(_at: Vec2): void {}
 
+  // A press at pressAt moved far enough to be a drag: true when the tool takes
+  // it, and then has dragMove and dragEnd instead of a click
+  dragStart(_pressAt: Vec2): boolean {
+    return false;
+  }
+
+  dragMove(_at: Vec2): void {}
+
+  dragEnd(_at: Vec2): void {}
+
   // Escape or a right click: true when the tool had something to drop
   cancel(): boolean {
     return false;
@@ -139,6 +149,10 @@ export class SnapTool extends CanvasToolHandler {
   // The curve the last click made, which Shift+click carries on
   private lastCurve = '';
   private lastAt: Vec2 | undefined;
+  // Where the Point tool's drag was pressed; a drag from a point places it
+  // from another (editor_rebase_point)
+  private dragFrom: ToolPlace | undefined;
+  private readonly dragSnaps: LatestOnly<Vec2>;
 
   constructor(host: CanvasToolHost, name: string) {
     super(host, name);
@@ -148,6 +162,76 @@ export class SnapTool extends CanvasToolHandler {
         this.report(error);
       },
     );
+    this.dragSnaps = new LatestOnly(
+      async (at) => this.updateDragSnap(at),
+      (error) => {
+        this.report(error);
+      },
+    );
+  }
+
+  override dragStart(pressAt: Vec2): boolean {
+    if (this.name !== 'point') {
+      return false;
+    }
+    this.snaps.clear();
+    this.dragFrom = this.place(pressAt);
+    return true;
+  }
+
+  override dragMove(at: Vec2): void {
+    this.lastAt = at;
+    this.dragSnaps.push(at);
+  }
+
+  override dragEnd(at: Vec2): void {
+    this.finishDrag(at).catch((error: unknown) => {
+      this.report(error);
+    });
+  }
+
+  // A drag from a point re-points it; one from anywhere else is the click it was before
+  private async finishDrag(at: Vec2): Promise<void> {
+    const from = this.dragFrom;
+    this.dragSnaps.clear();
+    await this.dragSnaps.idle();
+    this.dragFrom = undefined;
+    if (from === undefined) {
+      return;
+    }
+    // Asked again, as the release may come before any preview's answer
+    const drop = await this.host.document.read('editor_rebase_snap', { from, ...this.place(at) });
+    if (!isRecord(drop.from)) {
+      await this.commit(at, false);
+      return;
+    }
+    const answer = await this.host.document.call('editor_rebase_point', { from, ...this.place(at) });
+    if (answer.select !== null) {
+      this.host.select(idsField(answer, 'select'));
+    }
+    // What it did stays up until the pointer moves
+    this.host.showSnap(undefined);
+    this.host.showToolObjects([]);
+    this.host.showMessage(stringField(answer, 'message') ?? '');
+  }
+
+  private async updateDragSnap(at: Vec2): Promise<void> {
+    if (this.dragFrom === undefined) {
+      return;
+    }
+    const answer = await this.host.document.read('editor_rebase_snap', { from: this.dragFrom, ...this.place(at) });
+    const from = answer.from;
+    if (!isRecord(from)) {
+      return;
+    }
+    this.host.showSnap({
+      kind: SNAP_KINDS.find((each) => each === stringField(answer, 'kind')) ?? 'free',
+      at: { x: numberField(answer, 'x') ?? 0, y: numberField(answer, 'y') ?? 0 },
+      preview: { kind: 'line', from: { x: numberField(from, 'x') ?? 0, y: numberField(from, 'y') ?? 0 } },
+    });
+    this.host.showMessage(stringField(answer, 'description') ?? '');
+    const dragged = idField(from, 'id');
+    this.host.showToolObjects([...(dragged === undefined ? [] : [dragged]), ...idsField(answer, 'objects')]);
   }
 
   override move(at: Vec2): void {
@@ -168,6 +252,13 @@ export class SnapTool extends CanvasToolHandler {
   }
 
   override cancel(): boolean {
+    if (this.dragFrom !== undefined) {
+      this.dragFrom = undefined;
+      this.dragSnaps.clear();
+      this.host.showSnap(undefined);
+      this.host.showMessage('');
+      return true;
+    }
     if (this.start === undefined) {
       return false;
     }

@@ -82,7 +82,8 @@ export const SELECT_TOOL = 'select';
 // idle; pressed: the left button is down, not yet moved; starting: a drag or
 // box waits for the engine to say what was pressed; dragging; boxing;
 // panning; cancelling while the engine rolls back; refused until the button goes up
-type CanvasMode = 'idle' | 'pressed' | 'starting' | 'dragging' | 'boxing' | 'panning' | 'cancelling' | 'refused';
+type CanvasMode =
+  'idle' | 'pressed' | 'starting' | 'dragging' | 'boxing' | 'panning' | 'cancelling' | 'refused' | 'toolDragging';
 
 export interface CanvasEvents {
   // What the status bar shows: a hint, a snap's description, a reason
@@ -414,6 +415,12 @@ export class PatternCanvas implements CanvasToolHost {
   cancel(): void {
     if (this.mode === 'dragging' || this.mode === 'starting') {
       this.cancelDrag();
+      return;
+    }
+    if (this.mode === 'toolDragging') {
+      // Dropped; the release that follows does nothing
+      this.tools.get(this.tool)?.cancel();
+      this.mode = 'refused';
       return;
     }
     if (this.mode === 'cancelling' || this.tools.get(this.tool)?.cancel() === true) {
@@ -817,7 +824,18 @@ export class PatternCanvas implements CanvasToolHost {
         if (this.tool === SELECT_TOOL && distance(this.pressAt, at) > DRAG_THRESHOLD) {
           this.mode = 'starting';
           this.gesture = this.gesture.then(async () => this.startDragOrBox());
+        } else if (
+          this.tool !== SELECT_TOOL &&
+          distance(this.pressAt, at) > DRAG_THRESHOLD &&
+          this.tools.get(this.tool)?.dragStart(this.pressAt) === true
+        ) {
+          // The tool's own drag, such as the Point tool's from a point
+          this.mode = 'toolDragging';
+          this.tools.get(this.tool)?.dragMove(at);
         }
+        break;
+      case 'toolDragging':
+        this.tools.get(this.tool)?.dragMove(at);
         break;
       case 'dragging':
         this.drags.push(at);
@@ -843,6 +861,10 @@ export class PatternCanvas implements CanvasToolHost {
       case 'panning':
       case 'refused':
         this.mode = 'idle';
+        break;
+      case 'toolDragging':
+        this.mode = 'idle';
+        this.tools.get(this.tool)?.dragEnd(at);
         break;
       case 'pressed':
         this.mode = 'idle';
@@ -876,6 +898,9 @@ export class PatternCanvas implements CanvasToolHost {
     this.pointerId = undefined;
     if (this.mode === 'starting' || this.mode === 'dragging') {
       this.cancelDrag();
+    } else if (this.mode === 'toolDragging') {
+      this.tools.get(this.tool)?.cancel();
+      this.mode = 'idle';
     } else if (this.mode !== 'cancelling') {
       this.mode = 'idle';
       this.repaint();

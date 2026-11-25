@@ -40,6 +40,7 @@ type
     FPendingPath: string;
     // What the document has said changed since editor_changes last answered
     FChanges: TDocumentChanges;
+    FSaveRevision: integer;
     // The point, note or curve being dragged, and the one field a point's drag
     // changes, or '' for all it can; '' when no drag is open
     FDragKey, FDragField: string;
@@ -77,6 +78,7 @@ type
     procedure DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
     function DoChanges: TJSONData;
     function DoSnapshot: TJSONData;
+    function DoSaveComplete(Params: TJSONObject): TJSONData;
     function DoMarkUnsaved: TJSONData;
     // The snap for the call's place, radius and anchor
     function CallSnap(Params: TJSONObject): TSnap;
@@ -459,7 +461,12 @@ resourcestring
     'text. Refused while a drag is open.';
   rsEditorSnapshotReturns = '`text`, the pattern file''s contents; `measurementsText`, the set''s file as given ' +
     'with `use_measurements` and changed since, or null when the set is read from disk or there is none; ' +
-    '`measurementsFile`, where the pattern records the set; `modified`';
+    '`measurementsFile`, where the pattern records the set; `modified`; `generation`, as in editor_changes; ' +
+    '`revision`, to confirm a successful write';
+  rsEditorSaveComplete = 'Counts a snapshot as saved after the browser has written it, if the pattern is still ' +
+    'at that revision and no edit is in progress.';
+  rsEditorSaveCompleteRevision = 'The revision returned by editor_snapshot';
+  rsEditorSaveCompleteReturns = '`modified`, whether the current pattern still has unsaved changes';
   rsEditorMarkUnsaved = 'Counts the pattern as not saved, as after its work in progress is opened again; not an ' +
     'undo step.';
   rsEditorMarkUnsavedReturns = '`modified`, true';
@@ -725,6 +732,8 @@ begin
     AddApiMethod(Built, 'editor_tables', rsEditorTables, rsEditorTablesReturns, True);
     AddApiMethod(Built, 'editor_changes', rsEditorChanges, rsEditorChangesReturns, True);
     AddApiMethod(Built, 'editor_snapshot', rsEditorSnapshot, rsEditorSnapshotReturns, True);
+    AddApiMethod(Built, 'editor_save_complete', rsEditorSaveComplete, rsEditorSaveCompleteReturns);
+    AddApiParam(Built, 'revision', apNumber, True, rsEditorSaveCompleteRevision);
     AddApiMethod(Built, 'editor_mark_unsaved', rsEditorMarkUnsaved, rsEditorMarkUnsavedReturns);
     AddApiMethod(Built, 'editor_drag_begin', rsEditorDragBegin, rsEditorDragBeginReturns);
     AddApiParam(Built, 'id', apTarget, True, rsEditorDragTarget);
@@ -2309,6 +2318,8 @@ end;
 procedure TEditorApiServer.DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
 begin
   FChanges := FChanges + Changes;
+  if Changes - [dcView] <> [] then
+    Inc(FSaveRevision);
   // A drag changes only the field's own object, which no candidate reads
   if (Changes * [dcPattern, dcObjectsReplaced, dcMeasurements] <> []) and not ADocument.ChangeOpen then
     FreeAndNil(FGrade);
@@ -2334,12 +2345,19 @@ begin
   if Document.ChangeOpen then
     raise EApiError.Create(RPC_REFUSED, rsApiBusy);
   Answer := TJSONObject.Create(['text', Document.SnapshotText, 'measurementsFile', Document.Pattern.MeasurementFile,
-    'modified', Document.Modified]);
+    'modified', Document.Modified, 'generation', Document.Generation, 'revision', FSaveRevision]);
   if Document.MeasurementsInMemory then
     Answer.Add('measurementsText', Document.MeasurementText)
   else
     Answer.Add('measurementsText', TJSONNull.Create);
   Result := Answer;
+end;
+
+function TEditorApiServer.DoSaveComplete(Params: TJSONObject): TJSONData;
+begin
+  if (RequireWhole(Params, 'revision') = FSaveRevision) and not Document.ChangeOpen then
+    Document.MarkSaved;
+  Result := TJSONObject.Create(['modified', Document.Modified]);
 end;
 
 function TEditorApiServer.DoMarkUnsaved: TJSONData;
@@ -2825,6 +2843,7 @@ begin
     'editor_feature_apply': Result := DoFeatureApply(Params);
     'editor_changes': Result := DoChanges;
     'editor_snapshot': Result := DoSnapshot;
+    'editor_save_complete': Result := DoSaveComplete(Params);
     'editor_mark_unsaved': Result := DoMarkUnsaved;
     'editor_drag_begin': Result := DoDragBegin(Params);
     'editor_drag_to': Result := DoDragTo(Params);

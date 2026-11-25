@@ -29,7 +29,7 @@ export const SNAP_KINDS: readonly SnapKind[] = ['free', 'point', 'crossing', 'ed
 
 // What a tool needs of the canvas
 export interface CanvasToolHost {
-  readonly document: PatternDocument;
+  readonly document: Pick<PatternDocument, 'read' | 'call'>;
   readonly view: ViewTransform;
   // The role of the edges the drawing tools make
   readonly drawRole: string;
@@ -278,15 +278,29 @@ export class SeamTool extends CanvasToolHandler {
   private onB = false;
   // Each step waits for the one before, so Enter makes the seam with every
   // edge clicked before it, however fast
-  private steps: Promise<void> = Promise.resolve();
+  private steps: Promise<void> | undefined;
+  private generation = 0;
 
-  private queue(step: () => Promise<void>): void {
-    this.steps = this.steps.then(step).catch((error: unknown) => {
-      this.report(error);
-    });
+  private queue(step: (generation: number) => Promise<void>): void {
+    const generation = this.generation;
+    const pending = (this.steps ?? Promise.resolve())
+      .then(() => (generation === this.generation ? step(generation) : undefined))
+      .catch((error: unknown) => {
+        if (generation === this.generation) {
+          this.report(error);
+        }
+      })
+      .finally(() => {
+        if (this.steps === pending) {
+          this.steps = undefined;
+        }
+      });
+    this.steps = pending;
   }
 
   override reset(): void {
+    this.generation++;
+    this.steps = undefined;
     this.sideA = [];
     this.sideB = [];
     this.onB = false;
@@ -294,7 +308,7 @@ export class SeamTool extends CanvasToolHandler {
   }
 
   override cancel(): boolean {
-    const picking = this.sideA.length > 0 || this.sideB.length > 0 || this.onB;
+    const picking = this.steps !== undefined || this.sideA.length > 0 || this.sideB.length > 0 || this.onB;
     if (picking) {
       this.reset();
     }
@@ -303,20 +317,20 @@ export class SeamTool extends CanvasToolHandler {
 
   override click(at: Vec2): void {
     const place = this.place(at);
-    this.queue(async () => this.pick(place));
+    this.queue(async (generation) => this.pick(place, generation));
   }
 
   override keyDown(event: KeyboardEvent): boolean {
     if (event.key === 'Tab') {
       const onB = !event.shiftKey;
-      this.queue(async () => {
+      this.queue(async (generation) => {
         this.onB = onB;
-        await this.pick({});
+        await this.pick({}, generation);
       });
       return true;
     }
     if (event.key === 'Enter') {
-      this.queue(async () => this.make());
+      this.queue(async (generation) => this.make(generation));
       return true;
     }
     return false;
@@ -325,18 +339,21 @@ export class SeamTool extends CanvasToolHandler {
   // Undo may have taken away a piece or edge picked
   override sceneChanged(): void {
     if (this.sideA.length > 0 || this.sideB.length > 0) {
-      this.queue(async () => this.pick({}));
+      this.queue(async (generation) => this.pick({}, generation));
     }
   }
 
   // Without a place, only the sides as they are, and the progress
-  private async pick(place: object): Promise<void> {
+  private async pick(place: object, generation: number): Promise<void> {
     const answer = await this.host.document.read('editor_seam_pick', {
       ...place,
       sideA: this.sideA,
       sideB: this.sideB,
       onB: this.onB,
     });
+    if (generation !== this.generation) {
+      return;
+    }
     this.sideA = recordsField(answer, 'sideA');
     this.sideB = recordsField(answer, 'sideB');
     const lines = isRecord(answer.lines) ? answer.lines : {};
@@ -344,8 +361,11 @@ export class SeamTool extends CanvasToolHandler {
     this.host.showMessage(stringField(answer, 'message') ?? '');
   }
 
-  private async make(): Promise<void> {
+  private async make(generation: number): Promise<void> {
     const answer = await this.host.document.call('editor_seam_make', { sideA: this.sideA, sideB: this.sideB });
+    if (generation !== this.generation) {
+      return;
+    }
     if (booleanField(answer, 'done') === true) {
       this.reset();
     }

@@ -59,6 +59,10 @@ Changed, Fixed and Removed under each version.
 
 ### Changed
 
+- The Line and Curve tools draft a whole outline on their own (#114). After
+  the first click, a click in open space makes a point across and down from
+  the point before, not a free point, so the outline moves with its first
+  point and each length can become a formula.
 - The skirt and bodice block tutorials are simpler. Points take the names
   the app gives them, A, B, C and so on, in the order the steps make them,
   so you no longer name each one; most lines and curves keep their

@@ -25,7 +25,7 @@ unit Sloper.Tests.EditorServer;
 interface
 
 uses
-  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer, Sloper.API.Rpc;
+  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer, Sloper.API.Rpc, Sloper.Core.Draft;
 
 type
   TTestEditorServer = class(TOSTestCase)
@@ -56,6 +56,8 @@ type
     procedure TestAddPointOnExistingPoint;
     procedure TestLineTool;
     procedure TestLineTooShortIgnored;
+    // Lines drawn in open space hang together: each end is offset from the line's start
+    procedure TestLineToolChainsOffsets;
     procedure TestCurveToolCarriesOn;
     procedure TestShapeTools;
     // A region with a piece already selects it
@@ -448,6 +450,46 @@ begin
   Call('editor_tool_click', '{"tool": "line", "x": 10, "y": 10, "radius": 2, "start": {"x": 10, "y": 10.01, "radius": 2}}');
   AssertFalse('nothing', Answer.Booleans['done']);
   AssertEquals('and nothing said', '', Answer.Strings['message']);
+end;
+
+procedure TTestEditorServer.TestLineToolChainsOffsets;
+var
+  First, Second: integer;
+
+// The offset point with this ID, across and down from its base
+  function OffsetOf(Id: integer): TOffsetPoint;
+  begin
+    Result := TOffsetPoint(FServer.Document.Pattern.FindNode(IntToStr(Id)));
+    AssertTrue('an offset point', Result is TOffsetPoint);
+    AssertTrue('across and down', Result.Mode = omCartesian);
+  end;
+
+begin
+  Call('editor_tool_click', '{"tool": "line", "x": 40, "y": 70, "radius": 2, "start": {"x": 0, "y": 0, "radius": 2}}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Call('editor_scene');
+  AssertEquals('both ends made', 2, Answer.Arrays['points'].Count);
+  First := Answer.Arrays['points'].Objects[0].Integers['id'];
+  Second := Answer.Arrays['points'].Objects[1].Integers['id'];
+  Call('get_object', '{"id": ' + IntToStr(First) + '}');
+  AssertEquals('the first point is free', 'freePoint', Answer.Strings['type']);
+  AssertEquals('the end from the start', IntToStr(First), OffsetOf(Second).Base);
+  Call('get_object', '{"id": ' + IntToStr(Second) + '}');
+  AssertNear('across', 40, Answer.Floats['x'], TOLERANCE);
+  AssertNear('down', 70, Answer.Floats['y'], TOLERANCE);
+  // What the next click would make, then making it from the end
+  Call('editor_tool_snap', '{"tool": "line", "x": 90, "y": 75, "radius": 2, "start": {"x": 40, "y": 70, "radius": 2}}');
+  AssertEquals('offset', 'offset', Answer.Strings['kind']);
+  AssertTrue('says so', Pos('across', Answer.Strings['description']) > 0);
+  Call('editor_tool_click', '{"tool": "line", "x": 90, "y": 75, "radius": 2, "start": {"x": 40, "y": 70, "radius": 2}}');
+  Call('editor_scene');
+  AssertEquals('from the last end', IntToStr(Second), OffsetOf(Answer.Arrays['points'].Objects[2].Integers['id']).Base);
+  // Closing on the first point makes no point
+  Call('editor_tool_click', '{"tool": "line", "x": 0.5, "y": 0.5, "radius": 2, "start": {"x": 90, "y": 75, "radius": 2}}');
+  AssertTrue('closed', Answer.Booleans['done']);
+  Call('editor_scene');
+  AssertEquals('three points', 3, Answer.Arrays['points'].Count);
+  AssertEquals('three lines', 3, Answer.Arrays['edges'].Count);
 end;
 
 procedure TTestEditorServer.TestCurveToolCarriesOn;

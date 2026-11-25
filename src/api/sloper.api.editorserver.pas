@@ -245,7 +245,8 @@ resourcestring
   rsEditorStart = 'The tool''s first click, for line, curve, circle and rectangle: a group of `x`, `y` and `radius` ' +
     'as the click gave them. A line or curve lines up with its start first, once that is a point.';
   rsEditorToolSnapReturns = 'As editor_snap gives it, with `start`, where the first click snapped (`kind`, `x`, `y`), ' +
-    'and `startObjects`, what it works from, when given';
+    'and `startObjects`, what it works from, when given. A line''s or curve''s end in open space is `offset`, across ' +
+    'and down from the start';
   rsEditorToolClick = 'Does what a click of a canvas tool does, as one undo step: point adds the point it snaps to; ' +
     'line and curve take a first click, then make the edge with its points, carrying on from its end; circle and ' +
     'rectangle take a first click, then make the shape; piece makes a piece of the closed outline round the place; ' +
@@ -531,7 +532,7 @@ const
   // The tools whose clicks snap, and every tool editor_tool_click takes
   SNAP_TOOL_NAMES: array[0..6] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'text', 'callout');
   CLICK_TOOL_NAMES: array[0..8] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'piece', 'notch', 'text', 'callout');
-  SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical');
+  SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical', 'offset');
   // The Variables tab's columns that can be edited, as TVariableColumn without the value
   VARIABLE_COLUMN_NAMES: array[0..2] of string = ('name', 'formula', 'description');
   VARIABLE_COLUMNS: array[0..2] of TVariableColumn = (vcName, vcFormula, vcDescription);
@@ -1442,7 +1443,7 @@ begin
   if Assigned(Group) then
     Start := SnapOf(Group, '');
   if Assigned(Group) and ((ToolName = 'line') or (ToolName = 'curve')) then
-    Snap := SnapOf(Params, StartAnchor(Start))
+    Snap := LineEndSnap(SnapOf(Params, StartAnchor(Start)), Start)
   else
     Snap := SnapOf(Params, '');
   if Assigned(Group) and ((ToolName = 'circle') or (ToolName = 'rectangle')) then

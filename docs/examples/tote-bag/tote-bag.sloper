@@ -75,6 +75,14 @@
     },
     {
       "id": 11,
+      "type": "line",
+      "name": "Top",
+      "start": 9,
+      "end": 10,
+      "role": "outline"
+    },
+    {
+      "id": 12,
       "type": "offsetPoint",
       "name": "C",
       "base": 10,
@@ -83,46 +91,33 @@
       "angle": "270"
     },
     {
-      "id": 12,
+      "id": 13,
+      "type": "line",
+      "start": 10,
+      "end": 12,
+      "role": "outline"
+    },
+    {
+      "id": 14,
       "type": "offsetPoint",
       "name": "D",
-      "base": 11,
+      "base": 12,
       "mode": "polar",
       "length": "{3} / 2",
       "angle": "180"
     },
     {
-      "id": 13,
-      "type": "offsetPoint",
-      "name": "E",
-      "base": 12,
-      "mode": "polar",
-      "length": "{3} / 2",
-      "angle": "270"
-    },
-    {
-      "id": 14,
-      "type": "offsetPoint",
-      "name": "F",
-      "base": 9,
-      "mode": "polar",
-      "length": "{2} - {3} / 2",
-      "angle": "270"
-    },
-    {
       "id": 15,
-      "type": "offsetPoint",
-      "name": "G",
-      "base": 14,
-      "mode": "polar",
-      "length": "{3} / 2",
-      "angle": "0"
+      "type": "line",
+      "start": 12,
+      "end": 14,
+      "role": "outline"
     },
     {
       "id": 16,
       "type": "offsetPoint",
-      "name": "H",
-      "base": 15,
+      "name": "E",
+      "base": 14,
       "mode": "polar",
       "length": "{3} / 2",
       "angle": "270"
@@ -130,57 +125,62 @@
     {
       "id": 17,
       "type": "line",
-      "name": "Top",
-      "start": 9,
-      "end": 10,
-      "role": "outline"
-    },
-    {
-      "id": 18,
-      "type": "line",
-      "start": 10,
-      "end": 11,
-      "role": "outline"
-    },
-    {
-      "id": 19,
-      "type": "line",
-      "start": 11,
-      "end": 12,
-      "role": "outline"
-    },
-    {
-      "id": 20,
-      "type": "line",
-      "start": 12,
-      "end": 13,
-      "role": "outline"
-    },
-    {
-      "id": 21,
-      "type": "line",
-      "start": 13,
+      "start": 14,
       "end": 16,
       "role": "outline"
     },
     {
-      "id": 22,
+      "id": 18,
+      "type": "offsetPoint",
+      "name": "F",
+      "base": 16,
+      "mode": "polar",
+      "length": "{1} - {3}",
+      "angle": "180"
+    },
+    {
+      "id": 19,
       "type": "line",
       "start": 16,
-      "end": 15,
+      "end": 18,
       "role": "outline"
+    },
+    {
+      "id": 20,
+      "type": "offsetPoint",
+      "name": "G",
+      "base": 18,
+      "mode": "polar",
+      "length": "{3} / 2",
+      "angle": "90"
+    },
+    {
+      "id": 21,
+      "type": "line",
+      "start": 18,
+      "end": 20,
+      "role": "outline"
+    },
+    {
+      "id": 22,
+      "type": "offsetPoint",
+      "name": "H",
+      "base": 20,
+      "mode": "polar",
+      "length": "{3} / 2",
+      "angle": "180"
     },
     {
       "id": 23,
       "type": "line",
-      "start": 15,
-      "end": 14,
+      "start": 20,
+      "end": 22,
       "role": "outline"
     },
     {
       "id": 24,
       "type": "line",
-      "start": 14,
+      "start": 22,
       "end": 9,
       "role": "outline"
     },
@@ -188,7 +188,7 @@
       "id": 25,
       "type": "alongEdgePoint",
       "name": "I",
-      "edge": 17,
+      "edge": 11,
       "from": "start",
       "mode": "length",
       "value": "({1} - {8}) / 2"
@@ -197,7 +197,7 @@
       "id": 26,
       "type": "alongEdgePoint",
       "name": "J",
-      "edge": 17,
+      "edge": 11,
       "from": "end",
       "mode": "length",
       "value": "({1} - {8}) / 2"
@@ -206,7 +206,7 @@
       "id": 27,
       "type": "alongEdgePoint",
       "name": "K",
-      "edge": 17,
+      "edge": 11,
       "from": "start",
       "mode": "length",
       "value": "{1} / 2"
@@ -242,24 +242,22 @@
       "id": 31,
       "type": "offsetPoint",
       "name": "O",
-      "base": 29,
+      "base": 30,
       "mode": "polar",
-      "length": "{4} / 2",
+      "length": "{4}",
       "angle": "0"
     },
     {
       "id": 32,
-      "type": "offsetPoint",
-      "name": "P",
-      "base": 30,
-      "mode": "polar",
-      "length": "{5}",
-      "angle": "270"
+      "type": "line",
+      "start": 30,
+      "end": 31,
+      "role": "placement"
     },
     {
       "id": 33,
       "type": "offsetPoint",
-      "name": "Q",
+      "name": "P",
       "base": 31,
       "mode": "polar",
       "length": "{5}",
@@ -268,28 +266,30 @@
     {
       "id": 34,
       "type": "line",
-      "start": 30,
-      "end": 31,
-      "role": "placement"
-    },
-    {
-      "id": 35,
-      "type": "line",
       "start": 31,
       "end": 33,
       "role": "placement"
     },
     {
+      "id": 35,
+      "type": "offsetPoint",
+      "name": "Q",
+      "base": 33,
+      "mode": "polar",
+      "length": "{4}",
+      "angle": "180"
+    },
+    {
       "id": 36,
       "type": "line",
       "start": 33,
-      "end": 32,
+      "end": 35,
       "role": "placement"
     },
     {
       "id": 37,
       "type": "line",
-      "start": 32,
+      "start": 35,
       "end": 30,
       "role": "placement"
     },
@@ -300,19 +300,19 @@
       "sources": [
         9,
         10,
-        11,
         12,
-        13,
-        16,
-        15,
         14,
-        28,
-        17,
+        16,
         18,
-        19,
         20,
-        21,
         22,
+        28,
+        11,
+        13,
+        15,
+        17,
+        19,
+        21,
         23,
         24
       ],
@@ -340,42 +340,42 @@
       "type": "pointCopy",
       "name": "C_t1",
       "transform": 38,
-      "source": 11
+      "source": 12
     },
     {
       "id": 42,
       "type": "pointCopy",
       "name": "D_t1",
       "transform": 38,
-      "source": 12
+      "source": 14
     },
     {
       "id": 43,
       "type": "pointCopy",
       "name": "E_t1",
       "transform": 38,
-      "source": 13
+      "source": 16
     },
     {
       "id": 44,
       "type": "pointCopy",
-      "name": "H_t1",
+      "name": "F_t1",
       "transform": 38,
-      "source": 16
+      "source": 18
     },
     {
       "id": 45,
       "type": "pointCopy",
       "name": "G_t1",
       "transform": 38,
-      "source": 15
+      "source": 20
     },
     {
       "id": 46,
       "type": "pointCopy",
-      "name": "F_t1",
+      "name": "H_t1",
       "transform": 38,
-      "source": 14
+      "source": 22
     },
     {
       "id": 47,
@@ -391,7 +391,7 @@
       "type": "edgeCopy",
       "name": "Top_t1",
       "transform": 38,
-      "source": 17,
+      "source": 11,
       "start": 39,
       "end": 40,
       "role": "outline"
@@ -401,7 +401,7 @@
       "type": "edgeCopy",
       "name": "Line_B_C_t1",
       "transform": 38,
-      "source": 18,
+      "source": 13,
       "start": 40,
       "end": 41,
       "role": "outline"
@@ -411,7 +411,7 @@
       "type": "edgeCopy",
       "name": "Line_C_D_t1",
       "transform": 38,
-      "source": 19,
+      "source": 15,
       "start": 41,
       "end": 42,
       "role": "outline"
@@ -421,7 +421,7 @@
       "type": "edgeCopy",
       "name": "Line_D_E_t1",
       "transform": 38,
-      "source": 20,
+      "source": 17,
       "start": 42,
       "end": 43,
       "role": "outline"
@@ -429,9 +429,9 @@
     {
       "id": 52,
       "type": "edgeCopy",
-      "name": "Line_E_H_t1",
+      "name": "Line_E_F_t1",
       "transform": 38,
-      "source": 21,
+      "source": 19,
       "start": 43,
       "end": 44,
       "role": "outline"
@@ -439,9 +439,9 @@
     {
       "id": 53,
       "type": "edgeCopy",
-      "name": "Line_H_G_t1",
+      "name": "Line_F_G_t1",
       "transform": 38,
-      "source": 22,
+      "source": 21,
       "start": 44,
       "end": 45,
       "role": "outline"
@@ -449,7 +449,7 @@
     {
       "id": 54,
       "type": "edgeCopy",
-      "name": "Line_G_F_t1",
+      "name": "Line_G_H_t1",
       "transform": 38,
       "source": 23,
       "start": 45,
@@ -459,7 +459,7 @@
     {
       "id": 55,
       "type": "edgeCopy",
-      "name": "Line_F_A_t1",
+      "name": "Line_H_A_t1",
       "transform": 38,
       "source": 24,
       "start": 46,
@@ -471,9 +471,9 @@
       "type": "offsetPoint",
       "name": "R",
       "base": 9,
-      "mode": "polar",
-      "length": "{2} + 8",
-      "angle": "270"
+      "mode": "cartesian",
+      "dx": "0",
+      "dy": "{2} + 8"
     },
     {
       "id": 57,
@@ -486,17 +486,16 @@
     },
     {
       "id": 58,
-      "type": "offsetPoint",
-      "name": "T",
-      "base": 56,
-      "mode": "polar",
-      "length": "{5}",
-      "angle": "270"
+      "type": "line",
+      "name": "Pocket_top",
+      "start": 56,
+      "end": 57,
+      "role": "outline"
     },
     {
       "id": 59,
       "type": "offsetPoint",
-      "name": "U",
+      "name": "T",
       "base": 57,
       "mode": "polar",
       "length": "{5}",
@@ -505,29 +504,30 @@
     {
       "id": 60,
       "type": "line",
-      "name": "Pocket_top",
-      "start": 56,
-      "end": 57,
-      "role": "outline"
-    },
-    {
-      "id": 61,
-      "type": "line",
       "start": 57,
       "end": 59,
       "role": "construction"
     },
     {
+      "id": 61,
+      "type": "offsetPoint",
+      "name": "U",
+      "base": 59,
+      "mode": "polar",
+      "length": "{4}",
+      "angle": "180"
+    },
+    {
       "id": 62,
       "type": "line",
       "start": 59,
-      "end": 58,
+      "end": 61,
       "role": "construction"
     },
     {
       "id": 63,
       "type": "line",
-      "start": 58,
+      "start": 61,
       "end": 56,
       "role": "construction"
     },
@@ -535,7 +535,7 @@
       "id": 64,
       "type": "cornerArc",
       "vertex": 59,
-      "edgeA": 61,
+      "edgeA": 60,
       "edgeB": 62,
       "radius": "3",
       "role": "outline"
@@ -557,7 +557,7 @@
     {
       "id": 67,
       "type": "splitPart",
-      "edge": 61,
+      "edge": 60,
       "point": 65,
       "part": 1,
       "role": "outline"
@@ -565,7 +565,7 @@
     {
       "id": 68,
       "type": "splitPart",
-      "edge": 61,
+      "edge": 60,
       "point": 65,
       "part": 2,
       "role": "construction"
@@ -589,7 +589,7 @@
     {
       "id": 71,
       "type": "cornerArc",
-      "vertex": 58,
+      "vertex": 61,
       "edgeA": 70,
       "edgeB": 63,
       "radius": "3",
@@ -661,17 +661,15 @@
     },
     {
       "id": 80,
-      "type": "offsetPoint",
-      "name": "AB",
-      "base": 78,
-      "mode": "polar",
-      "length": "{7} * 4",
-      "angle": "270"
+      "type": "line",
+      "start": 78,
+      "end": 79,
+      "role": "outline"
     },
     {
       "id": 81,
       "type": "offsetPoint",
-      "name": "AC",
+      "name": "AB",
       "base": 79,
       "mode": "polar",
       "length": "{7} * 4",
@@ -680,28 +678,30 @@
     {
       "id": 82,
       "type": "line",
-      "start": 78,
-      "end": 79,
-      "role": "outline"
-    },
-    {
-      "id": 83,
-      "type": "line",
       "start": 79,
       "end": 81,
       "role": "outline"
     },
     {
+      "id": 83,
+      "type": "offsetPoint",
+      "name": "AC",
+      "base": 81,
+      "mode": "polar",
+      "length": "{6}",
+      "angle": "180"
+    },
+    {
       "id": 84,
       "type": "line",
       "start": 81,
-      "end": 80,
+      "end": 83,
       "role": "outline"
     },
     {
       "id": 85,
       "type": "line",
-      "start": 80,
+      "start": 83,
       "end": 78,
       "role": "outline"
     },
@@ -718,7 +718,7 @@
       "id": 87,
       "type": "alongEdgePoint",
       "name": "AE",
-      "edge": 83,
+      "edge": 82,
       "from": "start",
       "mode": "length",
       "value": "{7} * 2"
@@ -756,7 +756,7 @@
           "reversed": false
         },
         {
-          "edge": 60,
+          "edge": 58,
           "reversed": false
         }
       ],
@@ -768,7 +768,7 @@
         "count": 1,
         "mirrored": false
       },
-      "foldEdge": 60,
+      "foldEdge": 58,
       "material": 89
     },
     {
@@ -777,7 +777,7 @@
       "name": "Strap",
       "path": [
         {
-          "edge": 83,
+          "edge": 82,
           "reversed": false
         },
         {
@@ -789,7 +789,7 @@
           "reversed": false
         },
         {
-          "edge": 82,
+          "edge": 80,
           "reversed": false
         }
       ],
@@ -815,7 +815,15 @@
       "name": "Body",
       "path": [
         {
-          "edge": 18,
+          "edge": 13,
+          "reversed": false
+        },
+        {
+          "edge": 15,
+          "reversed": false
+        },
+        {
+          "edge": 17,
           "reversed": false
         },
         {
@@ -823,15 +831,7 @@
           "reversed": false
         },
         {
-          "edge": 20,
-          "reversed": false
-        },
-        {
           "edge": 21,
-          "reversed": false
-        },
-        {
-          "edge": 22,
           "reversed": false
         },
         {
@@ -843,7 +843,7 @@
           "reversed": false
         },
         {
-          "edge": 17,
+          "edge": 11,
           "reversed": false
         }
       ],
@@ -862,11 +862,11 @@
       "markings": [
         {
           "kind": "line",
-          "edge": 34
+          "edge": 32
         },
         {
           "kind": "line",
-          "edge": 35
+          "edge": 34
         },
         {
           "kind": "line",
@@ -950,7 +950,7 @@
       "sideB": [
         {
           "piece": 91,
-          "edge": 18
+          "edge": 13
         }
       ],
       "reversed": false,
@@ -964,13 +964,13 @@
       "sideA": [
         {
           "piece": 91,
-          "edge": 21
+          "edge": 19
         }
       ],
       "sideB": [
         {
           "piece": 91,
-          "edge": 21
+          "edge": 19
         }
       ],
       "reversed": false,
@@ -984,7 +984,7 @@
       "sideA": [
         {
           "piece": 91,
-          "edge": 22
+          "edge": 21
         }
       ],
       "sideB": [
@@ -1004,13 +1004,13 @@
       "sideA": [
         {
           "piece": 91,
-          "edge": 19
+          "edge": 15
         }
       ],
       "sideB": [
         {
           "piece": 91,
-          "edge": 20
+          "edge": 17
         }
       ],
       "reversed": false,
@@ -1024,7 +1024,7 @@
       "sideA": [
         {
           "piece": 91,
-          "edge": 17
+          "edge": 11
         }
       ],
       "sideB": [

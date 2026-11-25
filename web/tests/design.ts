@@ -131,6 +131,36 @@ const browser = await launchBrowser();
 // Where the page's downloads go, removed at the end
 const downloads = await mkdtemp(join(tmpdir(), 'opensloper-design-'));
 try {
+  const phone = await browser.newPage();
+  await phone.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await phone.goto(`http://127.0.0.1:${String(port)}/`);
+  await waitForData(phone, 'ready', 'true');
+  const canvasWidth = async (): Promise<number> =>
+    phone.$eval('#canvas', (canvas) => canvas.getBoundingClientRect().width);
+  const foldedWidth = await canvasWidth();
+  assert.ok(foldedWidth > 200, 'the canvas has room when the phone opens the editor');
+  const toggle = '.side-rail > button';
+  assert.equal(await phone.$eval(toggle, (button) => button.getAttribute('aria-expanded')), 'false');
+  await phone.tap(toggle);
+  assert.equal(await phone.$eval(toggle, (button) => button.getAttribute('aria-expanded')), 'true');
+  assert.equal(
+    await phone.$eval('.side-column [data-tab="properties"]', (tab) => tab.getAttribute('aria-selected')),
+    'true',
+  );
+  const openWidth = await canvasWidth();
+  assert.ok(openWidth > 0 && openWidth < foldedWidth, 'the open panel still leaves room for the canvas');
+  await phone.click('.side-column [data-tab="objects"]');
+  await phone.focus(toggle);
+  await phone.keyboard.press('Space');
+  assert.equal(await canvasWidth(), foldedWidth, 'hiding the panel gives the canvas its room back');
+  await phone.keyboard.press('Enter');
+  assert.equal(
+    await phone.$eval('.side-column [data-tab="objects"]', (tab) => tab.getAttribute('aria-selected')),
+    'true',
+  );
+  assert.equal(await canvasWidth(), openWidth, 'the toggle opens the last selected tab again');
+  await phone.close();
+
   // Copy and Paste use the clipboard, which a user's browser would offer
   await browser
     .defaultBrowserContext()

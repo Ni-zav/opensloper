@@ -191,12 +191,20 @@
         min-height: 0;
         border-left: 1px solid #d8d6cf;
       }
+      .side-rail,
       .side-column {
         display: flex;
         flex-direction: column;
         gap: 2px;
+      }
+      .side-rail {
         padding: 4px;
         border-right: 1px solid #d8d6cf;
+      }
+      .side-column {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
       }
       /* Tabs kept at the foot of the column, such as Problems */
       .side-foot {
@@ -231,7 +239,7 @@
       .side-page {
         display: flex;
         flex-direction: column;
-        width: 440px;
+        width: min(440px, 55vw);
         min-height: 0;
       }
       .side-page[hidden] {

@@ -243,7 +243,7 @@ class DesignApp {
         this.canvas.showNoteText(id, text);
       },
     });
-    const side = new SideTabs(element('side', HTMLElement));
+    const side = new SideTabs(element('side', HTMLElement), window.matchMedia('(max-width: 640px)').matches);
     this.side = side;
     this.variables = new VariablesPanel(this.document, {
       ...this.listEvents(),

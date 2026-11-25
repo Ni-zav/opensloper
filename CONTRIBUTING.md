@@ -49,6 +49,13 @@ CI runs the same checks on every pull request, and they must pass before a merge
 - **Changelog.** Add a line for anything a user would notice to `CHANGELOG.md`, under the version being worked on (the `APP_VERSION` in `src/core/sloper.core.version.pas`), with the issue number if there is one. A release with no notes there lists its commits instead, so a fix also says `Closes #N` in its commit message.
 - **Commits.** Write commit messages that say what the change does and why.
 
+## Pascal source documentation
+
+GitHub Pages publishes the [Pascal source documentation](https://docs.opensloper.com/dev/pasdoc/)
+from `development`. Build it locally with `./opensloper-make.sh devdocs`
+and open `release/dev_docs/index.html`. Set `PASDOC` if the binary is outside
+your `PATH`.
+
 ## Licence
 
 OpenSloper is licensed under the GNU GPL, version 3 or later. By submitting a pull request, you agree that your contribution is licensed under the same terms. Every new source file starts with the header in `documents/gpl-header.txt`. Code translated from Valentina or Seamly2D keeps their copyright line.

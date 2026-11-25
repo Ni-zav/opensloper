@@ -18,7 +18,6 @@ Agreed, but not built.
 - **Release signing** (#17): macOS notarisation, Intel macOS builds and signed Windows programs.
 - **More tutorials** (#46): moving a dart, a tote bag, a leather card wallet.
 - **Help in the apps** (#32): F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Translated and versioned documentation wait for the community release.
-- **Publishing the developer documentation** once the user guide has moved to docs.opensloper.com on the project's own server, putting it where GitHub Pages has the user guide now.
 
 **Design app**
 

@@ -234,9 +234,11 @@ export class PreviewCanvas {
     this.scenes.push(this.document.generation);
   }
 
+  // Fits what the engine shows once its scene comes, so a fit asked for
+  // straight after a change, as Pack's, fits the changed layout
   zoomToFit(): void {
     this.needsFit = true;
-    this.repaint();
+    this.refresh();
   }
 
   zoomIn(): void {

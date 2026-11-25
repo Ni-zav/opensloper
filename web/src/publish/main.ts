@@ -1,16 +1,43 @@
 // The web Publish app, as Sloper.Publish.MainForm: starts the engine and opens
 // a layout with its patterns and measurement files, or patterns to start a
 // layout, as the desktop's Open does. The preview shows its pages and pieces;
-// the title names the layout, and the status bar has a message and the count
-// of problems. Nothing leaves the
+// the toolbar saves, undoes, places and packs, and exports, each file a
+// download; the title names the layout, and the status bar has a message and
+// the count of problems. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
 import { Engine } from '../engine/engine.ts';
+import { booleanField, numberField, stringField } from '../engine/replies.ts';
+import { downloadBlob, downloadText } from '../ui/download.ts';
 import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { STRINGS } from '../ui/strings.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
 const PATTERN_EXTENSION = '.sloper';
+
+// The desktop's icons for the toolbar's commands (APP_ICON_NAMES); Place and
+// Pack have none there, being buttons on the Pieces tab
+const ICONS = {
+  open: 'folder-open',
+  save: 'device-floppy',
+  undo: 'arrow-back-up',
+  redo: 'arrow-forward-up',
+  zoomIn: 'zoom-in',
+  zoomOut: 'zoom-out',
+  fit: 'zoom-scan',
+  place: 'stack-front',
+  pack: 'puzzle',
+  exportPdf: 'file-type-pdf',
+  exportSvg: 'file-type-svg',
+  exportDxf: 'file-vector',
+} as const;
+
+// The layout's exports, as the engine names them, with their files' types
+const EXPORTS = [
+  { format: 'pdf', extension: '.pdf', type: 'application/pdf' },
+  { format: 'svg', extension: '.svg', type: 'image/svg+xml' },
+  { format: 'dxf', extension: '.dxf', type: 'application/dxf' },
+] as const;
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
   const found = document.getElementById(id);
@@ -53,9 +80,20 @@ function hasExtension(file: File, extension: string): boolean {
   return file.name.toLowerCase().endsWith(extension);
 }
 
+function divider(): HTMLElement {
+  const line = document.createElement('span');
+  line.className = 'divider';
+  return line;
+}
+
+function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+}
+
 class PublishApp {
   private readonly document: LayoutDocument;
   private readonly preview: PreviewCanvas;
+  private readonly buttons = new Map<string, HTMLButtonElement>();
 
   constructor(engine: Engine) {
     this.document = new LayoutDocument(engine);
@@ -67,26 +105,114 @@ class PublishApp {
     });
   }
 
+  // A toolbar button, kept by name to enable and disable
+  private button(name: keyof typeof ICONS, caption: string, hint: string, action: () => void): HTMLButtonElement {
+    const made = iconButton(ICONS[name], caption, hint, action);
+    this.buttons.set(name, made);
+    return made;
+  }
+
   start(): void {
+    // In the desktop's order
     toolbar.append(
-      iconButton('folder-open', STRINGS.open, STRINGS.publishOpenHint, () => {
-        openInput.click();
+      this.button('open', STRINGS.open, STRINGS.publishOpenHint, () => {
+        if (!this.document.state.modified || window.confirm(STRINGS.layoutDiscardChanges)) {
+          openInput.click();
+        }
       }),
-      iconButton('zoom-scan', STRINGS.fitPages, STRINGS.fitPagesHint, () => {
-        this.preview.zoomToFit();
+      this.button('save', STRINGS.save, STRINGS.layoutSaveHint, () => {
+        this.run(this.save());
       }),
-      iconButton('zoom-in', STRINGS.zoomIn, STRINGS.zoomInHint, () => {
+      divider(),
+      this.button('undo', STRINGS.undo, STRINGS.undoHint, () => {
+        this.run(this.document.undo());
+      }),
+      this.button('redo', STRINGS.redo, STRINGS.redoHint, () => {
+        this.run(this.document.redo());
+      }),
+      divider(),
+      this.button('zoomIn', STRINGS.zoomIn, STRINGS.zoomInHint, () => {
         this.preview.zoomIn();
       }),
-      iconButton('zoom-out', STRINGS.zoomOut, STRINGS.zoomOutHint, () => {
+      this.button('zoomOut', STRINGS.zoomOut, STRINGS.zoomOutHint, () => {
         this.preview.zoomOut();
+      }),
+      this.button('fit', STRINGS.fitPages, STRINGS.fitPagesHint, () => {
+        this.preview.zoomToFit();
+      }),
+      divider(),
+      this.button('place', STRINGS.placeNew, STRINGS.placeNewHint, () => {
+        this.run(this.placeNew());
+      }),
+      this.button('pack', STRINGS.packPieces, STRINGS.packPiecesHint, () => {
+        this.run(this.pack());
+      }),
+      divider(),
+      this.button('exportPdf', STRINGS.exportPdf, STRINGS.exportPdfHint, () => {
+        this.run(this.export(0));
+      }),
+      this.button('exportSvg', STRINGS.exportSvg, STRINGS.exportSvgHint, () => {
+        this.run(this.export(1));
+      }),
+      this.button('exportDxf', STRINGS.exportDxf, STRINGS.exportDxfHint, () => {
+        this.run(this.export(2));
       }),
     );
     openInput.addEventListener('change', () => {
       this.run(this.openFiles([...(openInput.files ?? [])]));
       openInput.value = '';
     });
+    this.document.addListener(() => {
+      this.showState();
+    });
+    window.addEventListener('beforeunload', (event) => {
+      if (this.document.state.modified) {
+        event.preventDefault();
+      }
+    });
     this.showState();
+  }
+
+  // The layout's base name, for the files it is saved and exported as
+  private baseName(): string {
+    return this.document.fileName.replace(/\.[^.]*$/, '');
+  }
+
+  private async save(): Promise<void> {
+    const name = `${this.baseName()}${LAYOUT_EXTENSION}`;
+    downloadText(name, await this.document.save());
+    showMessage(STRINGS.downloaded(name));
+  }
+
+  private async placeNew(): Promise<void> {
+    const answer = await this.document.call('publish_place_pieces');
+    showMessage(STRINGS.placedNew(numberField(answer, 'placed') ?? 0));
+  }
+
+  // As the desktop's Pack: fitted afterwards, with what it did in the status bar
+  private async pack(): Promise<void> {
+    const answer = await this.document.call('publish_pack');
+    if (booleanField(answer, 'done') !== true) {
+      showMessage(stringField(answer, 'reason') ?? '');
+      return;
+    }
+    this.preview.zoomToFit();
+    const count = numberField(answer, 'count') ?? 0;
+    const pages = numberField(answer, 'pages') ?? 0;
+    const leftOut = numberField(answer, 'leftOut') ?? 0;
+    const summary = pages > 1 ? STRINGS.packedPages(count, pages) : STRINGS.packed(count);
+    showMessage(leftOut > 0 ? STRINGS.packLeftOut(summary, leftOut) : summary);
+  }
+
+  private async export(which: number): Promise<void> {
+    const kind = EXPORTS[which];
+    if (kind === undefined) {
+      return;
+    }
+    const answer = await this.document.read('publish_export', { format: kind.format });
+    const name = `${this.baseName()}${kind.extension}`;
+    downloadBlob(name, new Blob([bytesOf(stringField(answer, 'base64') ?? '')], { type: kind.type }));
+    showMessage(STRINGS.downloaded(name));
   }
 
   private run(pending: Promise<void>): void {
@@ -127,7 +253,9 @@ class PublishApp {
   private showState(opened?: string): void {
     const state = this.document.state;
     const name = state.name || this.document.fileName;
-    document.title = name === '' ? STRINGS.publishName : `${name} — ${STRINGS.publishName}`;
+    const mark = state.modified ? `${STRINGS.modifiedMark} ` : '';
+    document.title = name === '' ? STRINGS.publishName : `${mark}${name} — ${STRINGS.publishName}`;
+    this.enableCommands();
     if (state.missing.length > 0) {
       showMessage(STRINGS.layoutNeedsFiles(state.missing));
     } else if (opened !== undefined) {
@@ -144,6 +272,32 @@ class PublishApp {
       problemCount.textContent = STRINGS.problemCountBlocking(state.problems.length, blocking);
     }
     problemCount.title = state.problems.map((problem) => problem.text).join('\n');
+  }
+
+  private enableCommands(): void {
+    const state = this.document.state;
+    const open = this.document.fileName !== '';
+    const blocked = state.problems.some((problem) => problem.blocking);
+    const enabled: Record<string, boolean> = {
+      save: open,
+      undo: state.canUndo,
+      redo: state.canRedo,
+      place: state.unplaced > 0,
+      pack: state.placed + state.unplaced > 0,
+      exportPdf: open && !blocked,
+      exportSvg: open && !blocked,
+      exportDxf: open && !blocked,
+    };
+    for (const [name, on] of Object.entries(enabled)) {
+      const button = this.buttons.get(name);
+      if (button !== undefined) {
+        button.disabled = !on;
+      }
+    }
+    const undo = this.buttons.get('undo');
+    if (undo !== undefined) {
+      undo.title = state.canUndo ? STRINGS.undoStep(state.undo) : STRINGS.undoHint;
+    }
   }
 }
 

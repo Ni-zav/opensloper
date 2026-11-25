@@ -44,6 +44,8 @@ type
     function DoState: TJSONData;
     function DoScene: TJSONData;
     function DoAt(Params: TJSONObject): TJSONData;
+    function DoSave: TJSONData;
+    function DoExport(Params: TJSONObject): TJSONData;
   public
     constructor Create;
     destructor Destroy; override;
@@ -78,6 +80,14 @@ resourcestring
     '`lineHeight` and `padding` in mm';
   rsPublishAt = 'The placed piece at a point of the layout, the smallest where they overlap.';
   rsPublishAtReturns = '`placement`, the piece''s placement index, or -1 for none';
+  rsPublishLayoutMethod = 'As the layout method %s, on the open layout; one undo step.';
+  rsPublishLayoutReturns = 'What %s gives';
+  rsPublishSave = 'The layout file''s text, to download, counted as saved.';
+  rsPublishSaveReturns = '`text`, the layout file''s text';
+  rsPublishExport = 'The layout written as PDF, SVG or DXF-AAMA, to download. The problems that block a PDF block ' +
+    'these too.';
+  rsPublishExportFormat = 'pdf, svg or dxf';
+  rsPublishExportReturns = '`base64`, the file''s bytes';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
@@ -86,12 +96,22 @@ implementation
 uses
   StrUtils, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
-  Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.Preview, Sloper.API.Shapes;
+  Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.Preview, Sloper.Output.LayoutExport, Sloper.API.Shapes,
+  base64;
+
+const
+  // The layout methods (Sloper.API.LayoutServer) the page calls as publish_ ones
+  LAYOUT_COMMANDS: array[0..3] of string = ('undo', 'redo', 'place_pieces', 'pack');
+  // A machine DXF needs the user's machine profiles, which the web has not yet
+  WEB_EXPORTS: array[0..2] of TExportFormat = (efPDF, efSVG, efDXF);
+  WEB_EXPORT_NAMES: array[0..2] of string = ('pdf', 'svg', 'dxf');
 
 var
   Built: TApiMethodArray = nil;
 
 function PublishMethods: TApiMethodArray;
+var
+  Index: integer;
 begin
   if Length(Built) = 0 then
   begin
@@ -106,6 +126,12 @@ begin
     AddApiParam(Built, 'files[].path', apText, True, rsPublishFilePath);
     AddApiParam(Built, 'files[].text', apText, True, rsPublishFileText);
     AddApiMethod(Built, 'publish_state', rsPublishState, rsPublishStateReturns, True);
+    for Index := 0 to High(LAYOUT_COMMANDS) do
+      AddApiMethod(Built, PUBLISH_PREFIX + LAYOUT_COMMANDS[Index], Format(rsPublishLayoutMethod, [LAYOUT_COMMANDS[Index]]),
+        Format(rsPublishLayoutReturns, [LAYOUT_COMMANDS[Index]]));
+    AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
+    AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
+    AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
     AddApiMethod(Built, 'publish_scene', rsPublishScene, rsPublishSceneReturns, True);
     AddApiMethod(Built, 'publish_at', rsPublishAt, rsPublishAtReturns, True);
     AddApiParam(Built, 'x', apNumber, True, rsPublishX);
@@ -201,6 +227,10 @@ var
 begin
   Answer := TJSONObject(FLayoutServer.CallMethod('layout_state', nil));
   try
+    Answer.Add('canUndo', FDocument.CanUndo);
+    Answer.Add('canRedo', FDocument.CanRedo);
+    Answer.Add('undo', FDocument.UndoDescription);
+    Answer.Add('modified', FDocument.Modified);
     Missing := TJSONArray.Create;
     Answer.Add('missing', Missing);
     for Path in MissingFiles(FDocument) do
@@ -320,14 +350,36 @@ begin
   Result := TJSONObject.Create(['placement', Index]);
 end;
 
-function TPublishApiServer.CallMethod(const Method: string; Params: TJSONObject): TJSONData;
+function TPublishApiServer.DoSave: TJSONData;
 begin
+  Result := TJSONObject.Create(['text', FDocument.SaveText]);
+end;
+
+function TPublishApiServer.DoExport(Params: TJSONObject): TJSONData;
+var
+  Bytes: rawbytestring;
+  Reason: string;
+begin
+  if not LayoutBytes(FDocument.Layout, WEB_EXPORTS[ChoiceParam(Params, 'format', WEB_EXPORT_NAMES)], Bytes, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Result := TJSONObject.Create(['base64', EncodeStringBase64(Bytes)]);
+end;
+
+function TPublishApiServer.CallMethod(const Method: string; Params: TJSONObject): TJSONData;
+var
+  Command: string;
+begin
+  for Command in LAYOUT_COMMANDS do
+    if Method = PUBLISH_PREFIX + Command then
+      Exit(FLayoutServer.CallMethod(Command, Params));
   case Method of
     'publish_open': Result := DoOpen(Params);
     'publish_add_files': Result := DoAddFiles(Params);
     'publish_state': Result := DoState;
     'publish_scene': Result := DoScene;
     'publish_at': Result := DoAt(Params);
+    'publish_save': Result := DoSave;
+    'publish_export': Result := DoExport(Params);
     else
       raise EApiError.Create(RPC_METHOD_NOT_FOUND, Format(rsApiNoMethod, [Method]));
   end;

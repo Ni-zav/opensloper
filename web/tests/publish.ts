@@ -1,9 +1,11 @@
 // Drives the built Publish app in headless Chromium: a pattern opened without
 // its measurement file names the file it needs, then with it starts a layout
-// whose pages the preview draws and whose pieces a click selects; a layout
-// whose sources sit in other folders finds its files by name.
+// whose pages the preview draws and whose pieces a click selects. The layout
+// is packed, undone and redone, saved and exported, and the saved file opens
+// again. A layout whose sources sit in other folders finds its files by name,
+// and its waiting pieces are placed.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
@@ -22,6 +24,40 @@ const LAYOUT = {
   nextId: 2,
   sources: [{ id: 1, pattern: 'patterns/skirt-darts.sloper' }],
 };
+
+// Clicks the toolbar's button with this caption, once it is enabled
+async function command(page: Page, caption: string): Promise<void> {
+  await page.waitForFunction(
+    (text) => {
+      const button = [...document.querySelectorAll('#toolbar button')].find(
+        (each) => each.textContent === text && each instanceof HTMLButtonElement && !each.disabled,
+      );
+      if (button instanceof HTMLButtonElement) {
+        button.click();
+        return true;
+      }
+      return false;
+    },
+    {},
+    caption,
+  );
+}
+
+// A downloaded file's contents, once the browser has written it
+async function download(folder: string, name: string): Promise<Buffer> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    // oxlint-disable-next-line no-await-in-loop
+    const bytes = await readFile(join(folder, name)).catch(() => undefined);
+    if (bytes !== undefined && bytes.length > 0) {
+      return bytes;
+    }
+    // oxlint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+  }
+  throw new Error(`${name} was not downloaded`);
+}
 
 // Waits for the preview to draw paper: white pages on the grey desk
 async function waitForPaper(page: Page): Promise<void> {
@@ -67,6 +103,7 @@ async function selectSomePiece(page: Page): Promise<string> {
 }
 
 const folder = await mkdtemp(join(tmpdir(), 'opensloper-publish-'));
+const downloads = join(folder, 'downloads');
 const app = await serveApp({ root: 'out/publish' });
 const browser = await launchBrowser();
 try {
@@ -74,6 +111,8 @@ try {
   await writeFile(layoutFile, JSON.stringify(LAYOUT));
   const page = await browser.newPage();
   const problems = watchProblems(page);
+  const session = await page.createCDPSession();
+  await session.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
   await page.goto(`http://127.0.0.1:${String(app.port)}/`);
   await waitForData(page, 'ready', 'true');
   const input = await page.$('input#open-input');
@@ -85,7 +124,7 @@ try {
 
   await input.uploadFile(PATTERN, MEASUREMENTS);
   await waitForStatus(page, 'Started a layout for skirt-darts.sloper');
-  assert.equal(await page.title(), 'skirt-darts — OpenSloper Publish');
+  assert.equal(await page.title(), '• skirt-darts — OpenSloper Publish', 'not saved yet');
   assert.doesNotMatch(await status(page), /stop printing/u);
   await waitForPaper(page);
   const selected = await selectSomePiece(page);
@@ -96,8 +135,35 @@ try {
   await waitForData(page, 'selected', '-1');
   assert.notEqual(selected, '-1');
   // The view zooms without failing, and fits again
-  await page.click('button[title="Zoom in on the middle"]');
-  await page.click('button[title="Show every page"]');
+  await command(page, 'Zoom In');
+  await command(page, 'Fit Pages');
+
+  // Pack, undone and redone, each one step
+  await command(page, 'Pack pieces');
+  await waitForStatus(page, 'Packed');
+  await page.waitForSelector('#toolbar button[title="Undo Pack pieces"]:enabled');
+  await command(page, 'Undo');
+  await page.waitForSelector('#toolbar button[title="Take back the last change"]:disabled');
+  await command(page, 'Redo');
+  await page.waitForSelector('#toolbar button[title="Undo Pack pieces"]:enabled');
+
+  // Saved as a download, counted saved; then exported
+  await command(page, 'Save');
+  await waitForStatus(page, 'Downloaded skirt-darts.slayout');
+  const saved = (await download(downloads, 'skirt-darts.slayout')).toString();
+  assert.match(saved, /"placements"/u);
+  await page.waitForFunction(() => document.title === 'skirt-darts — OpenSloper Publish');
+  await command(page, 'Export PDF');
+  assert.equal((await download(downloads, 'skirt-darts.pdf')).subarray(0, 5).toString(), '%PDF-');
+  await command(page, 'Export SVG');
+  assert.match((await download(downloads, 'skirt-darts.svg')).toString(), /<svg/u);
+  await command(page, 'Export DXF');
+  assert.match((await download(downloads, 'skirt-darts.dxf')).toString(), /SECTION/u);
+
+  // The saved layout opens again as it was
+  await input.uploadFile(join(downloads, 'skirt-darts.slayout'), PATTERN, MEASUREMENTS);
+  await waitForStatus(page, 'Opened skirt-darts.slayout');
+  assert.equal(await page.title(), 'skirt-darts — OpenSloper Publish');
 
   await input.uploadFile(layoutFile, PATTERN, MEASUREMENTS);
   await waitForStatus(page, 'Opened skirt.slayout');
@@ -105,6 +171,9 @@ try {
   // Every file was found; its pieces wait in the tray, so nothing would print
   assert.doesNotMatch(await status(page), /needs/u);
   assert.match(await page.$eval('#problem-count', (count) => count.textContent), /stop printing/u);
+  await command(page, 'Place new pieces');
+  await waitForStatus(page, 'Placed');
+  assert.doesNotMatch(await status(page), /stop printing/u);
 
   await input.uploadFile(MEASUREMENTS);
   await waitForStatus(page, 'skirt.slm is not a layout');

@@ -48,7 +48,8 @@ Update button when a new build is ready.
 The Publish app (`out/publish`) so far opens a layout with its patterns and
 measurement files, or patterns to start a layout, finding each file a layout
 names by its name among those chosen, previews its pages and pieces (zoom,
-pan, fit, click to select) and shows the problems' count.
+pan, fit, click to select), places and packs pieces with undo and redo,
+downloads the layout, PDF, SVG and DXF, and shows the problems' count.
 
 ## Setting up
 

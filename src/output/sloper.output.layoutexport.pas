@@ -38,7 +38,10 @@ const
 // extension, where .dxf means DXF-AAMA, and PDF when there is no file name.
 // False when neither is known.
 function ExportFormatFor(const FormatName, FileName: string; out AFormat: TExportFormat): boolean;
-// Refuses, listing the blocking problems in ErrorMessage, or writes the file
+// Refuses, listing the blocking problems in ErrorMessage, or gives the
+// file's contents, as the browser downloads them
+function LayoutBytes(Layout: TLayout; AFormat: TExportFormat; out Bytes: rawbytestring; out ErrorMessage: string): boolean;
+// Refuses as LayoutBytes does, or writes the file
 function ExportLayout(Layout: TLayout; AFormat: TExportFormat; const FileName: string; out ErrorMessage: string): boolean;
 
 resourcestring
@@ -67,10 +70,11 @@ begin
   Result := False;
 end;
 
-function ExportLayout(Layout: TLayout; AFormat: TExportFormat; const FileName: string; out ErrorMessage: string): boolean;
+function LayoutBytes(Layout: TLayout; AFormat: TExportFormat; out Bytes: rawbytestring; out ErrorMessage: string): boolean;
 var
   Profile: TMachineProfile;
 begin
+  Bytes := '';
   ErrorMessage := Layout.Refusal;
   if ErrorMessage <> '' then
     Exit(False);
@@ -81,13 +85,19 @@ begin
     Exit(False);
   end;
   case AFormat of
-    efPDF: Result := WriteBytesToFile(FileName, LayoutToPDF(Layout), ErrorMessage);
-    efSVG: Result := WriteBytesToFile(FileName, LayoutToSVG(Layout), ErrorMessage);
-    efDXF: Result := WriteBytesToFile(FileName, LayoutToDXF(Layout), ErrorMessage);
-    efMachineDXF: Result := WriteBytesToFile(FileName, LayoutToMachineDXF(Layout, Profile), ErrorMessage);
-    else
-      Result := False;
+    efPDF: Bytes := LayoutToPDF(Layout);
+    efSVG: Bytes := LayoutToSVG(Layout);
+    efDXF: Bytes := LayoutToDXF(Layout);
+    efMachineDXF: Bytes := LayoutToMachineDXF(Layout, Profile);
   end;
+  Result := True;
+end;
+
+function ExportLayout(Layout: TLayout; AFormat: TExportFormat; const FileName: string; out ErrorMessage: string): boolean;
+var
+  Bytes: rawbytestring;
+begin
+  Result := LayoutBytes(Layout, AFormat, Bytes, ErrorMessage) and WriteBytesToFile(FileName, Bytes, ErrorMessage);
 end;
 
 end.

@@ -70,6 +70,10 @@ Changed, Fixed and Removed under each version.
   the first click, a click in open space makes a point across and down from
   the point before, not a free point, so the outline moves with its first
   point and each length can become a formula.
+- The tote bag and card wallet tutorials draw their outlines with the Line
+  tool alone, then set each point's length, and the tote bag ties its
+  pocket to the body by dragging a point with the Point tool (#122). The
+  finished patterns are the same; some points take other letters.
 - The skirt and bodice block tutorials are simpler. Points take the names
   the app gives them, A, B, C and so on, in the order the steps make them,
   so you no longer name each one; most lines and curves keep their

@@ -69,17 +69,15 @@
     },
     {
       "id": 10,
-      "type": "offsetPoint",
-      "name": "C",
-      "base": 8,
-      "mode": "polar",
-      "length": "{2} + {3}",
-      "angle": "270"
+      "type": "line",
+      "start": 8,
+      "end": 9,
+      "role": "construction"
     },
     {
       "id": 11,
       "type": "offsetPoint",
-      "name": "D",
+      "name": "C",
       "base": 9,
       "mode": "polar",
       "length": "{2} + {3}",
@@ -88,28 +86,30 @@
     {
       "id": 12,
       "type": "line",
-      "start": 8,
-      "end": 9,
-      "role": "construction"
-    },
-    {
-      "id": 13,
-      "type": "line",
       "start": 9,
       "end": 11,
       "role": "construction"
     },
     {
+      "id": 13,
+      "type": "offsetPoint",
+      "name": "D",
+      "base": 11,
+      "mode": "polar",
+      "length": "{1}",
+      "angle": "180"
+    },
+    {
       "id": 14,
       "type": "line",
       "start": 11,
-      "end": 10,
+      "end": 13,
       "role": "outline"
     },
     {
       "id": 15,
       "type": "line",
-      "start": 10,
+      "start": 13,
       "end": 8,
       "role": "construction"
     },
@@ -118,7 +118,7 @@
       "type": "cornerArc",
       "vertex": 8,
       "edgeA": 15,
-      "edgeB": 12,
+      "edgeB": 10,
       "radius": "{4}",
       "role": "outline"
     },
@@ -155,7 +155,7 @@
     {
       "id": 21,
       "type": "splitPart",
-      "edge": 12,
+      "edge": 10,
       "point": 18,
       "part": 1,
       "role": "construction"
@@ -163,7 +163,7 @@
     {
       "id": 22,
       "type": "splitPart",
-      "edge": 12,
+      "edge": 10,
       "point": 18,
       "part": 2,
       "role": "construction"
@@ -173,7 +173,7 @@
       "type": "cornerArc",
       "vertex": 9,
       "edgeA": 22,
-      "edgeB": 13,
+      "edgeB": 12,
       "radius": "{4}",
       "role": "outline"
     },
@@ -210,7 +210,7 @@
     {
       "id": 28,
       "type": "splitPart",
-      "edge": 13,
+      "edge": 12,
       "point": 25,
       "part": 1,
       "role": "construction"
@@ -218,7 +218,7 @@
     {
       "id": 29,
       "type": "splitPart",
-      "edge": 13,
+      "edge": 12,
       "point": 25,
       "part": 2,
       "role": "outline"

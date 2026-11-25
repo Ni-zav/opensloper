@@ -126,6 +126,8 @@ type
     // Shift was held for the click being handled
     FShiftClick: boolean;
     procedure UpdateSnap(X, Y: integer);
+    // Where the second click snaps, given where the first did
+    function SecondSnap(const Snap: TSnap): TSnap; virtual;
     // What the status bar says about the snap
     function SnapMessage: string; virtual;
     // What the second click would make
@@ -161,6 +163,7 @@ type
     procedure ExtendLastEdge;
     procedure CarryOnFrom(const EndKey, EdgeKey: string);
   protected
+    function SecondSnap(const Snap: TSnap): TSnap; override;
     procedure Click; override;
   public
     constructor Create(AHost: TCanvasToolHost; Curve: boolean);
@@ -367,10 +370,17 @@ begin
   if FHasStart and (FStart.Kind = snPoint) then
     AnchorKey := FStart.PointKey;
   FSnap := FindSnap(Host.Document.Pattern, ModelAt(X, Y), Host.View.PixelsToMM(SNAP_RADIUS), AnchorKey);
+  if FHasStart then
+    FSnap := SecondSnap(FSnap);
   FSnapClick := ModelAt(X, Y);
   FSnapShown := True;
   Host.ShowMessage(SnapMessage);
   Host.Refresh;
+end;
+
+function TSnapTool.SecondSnap(const Snap: TSnap): TSnap;
+begin
+  Result := Snap;
 end;
 
 function TSnapTool.SnapMessage: string;
@@ -466,6 +476,12 @@ begin
     Result := rsToolCurveHint
   else
     Result := rsToolLineHint;
+end;
+
+// Open space is an offset from the start, as the edge will make it
+function TEdgeTool.SecondSnap(const Snap: TSnap): TSnap;
+begin
+  Result := LineEndSnap(Snap, FStart);
 end;
 
 procedure TEdgeTool.Click;

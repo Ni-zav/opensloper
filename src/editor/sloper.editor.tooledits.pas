@@ -42,7 +42,8 @@ const
 // without a change
 function AddPointFromSnap(Document: TPatternDocument; const Snap: TSnap): TSelectionEdit;
 // A line or curve from Start to Finish, making their points as needed; a curve
-// leaves its ends along the chord, its handles a third of it. EndKey is the
+// leaves its ends along the chord, its handles a third of it. A Finish in
+// open space is offset across and down from the start (LineEndSnap). EndKey is the
 // point it ends at, where the next one goes from. Not Done and no message when
 // it would be too short to see.
 function AddEdgeFromSnaps(Document: TPatternDocument; const Start, Finish: TSnap; Curve: boolean; Role: TEdgeRole;
@@ -173,6 +174,18 @@ begin
   Result := Committed(Document, Key <> '', [Key]);
 end;
 
+// The point a line or curve from StartKey, made where Start snapped, ends at:
+// open space is offset across and down from StartKey (LineEndSnap)
+function EndPointFromSnap(Pattern: TPattern; const Start, Finish: TSnap; const StartKey: string): string;
+var
+  EndSnap: TSnap;
+begin
+  EndSnap := LineEndSnap(Finish, Start);
+  if EndSnap.Kind = snOffset then
+    EndSnap.PointKey := StartKey;
+  Result := PointFromSnap(Pattern, EndSnap);
+end;
+
 function AddEdgeFromSnaps(Document: TPatternDocument; const Start, Finish: TSnap; Curve: boolean; Role: TEdgeRole;
   out EndKey: string): TSelectionEdit;
 var
@@ -194,7 +207,7 @@ begin
   Edge := nil;
   StartKey := PointFromSnap(Pattern, Start);
   if StartKey <> '' then
-    EndKey := PointFromSnap(Pattern, Finish);
+    EndKey := EndPointFromSnap(Pattern, Start, Finish, StartKey);
   if (EndKey <> '') and (EndKey <> StartKey) then
     if Curve then
     begin
@@ -230,7 +243,7 @@ begin
     Exit(AddEdgeFromSnaps(Document, Start, Finish, True, Role, EndKey));
   Document.BeginChange(rsToolExtendCurve);
   Path := nil;
-  EndKey := PointFromSnap(Pattern, Finish);
+  EndKey := EndPointFromSnap(Pattern, Start, Finish, TEdgeObject(Node).EndKey);
   if EndKey <> '' then
     Path := Pattern.ExtendCurve(TEdgeObject(Node), EndKey);
   Result := Committed(Document, Assigned(Path), [CurveKey]);

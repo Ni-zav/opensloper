@@ -101,6 +101,13 @@ The canvas feels like Inkscape, but every point records how it was placed relati
 
 **Snap-inferred operations.** The snap target decides the operation recorded: a point level with A at 250 mm becomes an offset from A with `250` ready to change to `@waist/4`; a crossing becomes an intersection; empty space a free point. This is construction-based, not constraint-based like FreeCAD's Sketcher, so no solver is needed. Snapping (`Sloper.Editor.Snap`) looks within 8 pixels, in order: a point, a crossing, a place on an edge, a spot level with or square to a point, else a free point. The status bar says what a click will make.
 
+**Drafting with the Line and Curve tools** (issue #114). A whole outline can be drawn with the Line or Curve tool alone, without placing points first.
+
+- The first click in open space makes a free point.
+- A later click in open space makes an offset point across and down from the line's start, the point before (`LineEndSnap`, snap kind `offset`). The chain hangs together: moving the first point moves the outline.
+- Clicks on a point, crossing or edge, or level with or square to the start, snap as above; level and square ones stay offsets by length and angle.
+- Each point reads the one before, so changing an offset moves every point after it, and a point in the middle cannot be deleted while the next reads it. Changing which point an offset is from is issue #115.
+
 **Canvas** (`Sloper.UI.Canvas`, with the LCL-free `Sloper.Editor.View`, `Sloper.Editor.Scene`, `Sloper.UI.CanvasInput`, `Sloper.Core.Drag`):
 
 - **Edits to the selection** (`Sloper.Editor.SelectionEdits`): each checks the selection fits, makes one undo step and returns what to select and show, so the rules are tested without the LCL.

@@ -225,6 +225,13 @@ export const STRINGS = {
   layoutNeedsFiles: (files: string[]): string =>
     `The layout needs ${files.join(', ')}: open them with the layout or pattern`,
   noProblems: 'No problems',
+  previewCover: 'Cover',
+  fitPages: 'Fit Pages',
+  fitPagesHint: 'Show every page',
+  zoomIn: 'Zoom In',
+  zoomInHint: 'Zoom in on the middle',
+  zoomOut: 'Zoom Out',
+  zoomOutHint: 'Zoom out from the middle',
   problemCount: (count: number): string => `Problems: ${String(count)}`,
   problemCountBlocking: (count: number, blocking: number): string =>
     `Problems: ${String(count)}, ${String(blocking)} stop printing`,

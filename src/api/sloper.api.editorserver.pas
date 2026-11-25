@@ -535,7 +535,8 @@ uses
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
-  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
+  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment,
+  Sloper.Core.VariableImport, Sloper.API.Shapes,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange, Sloper.Output.GarmentSVG,
   Sloper.Editor.Garment, Sloper.Core.Variables, Sloper.Core.SvgImport;
 
@@ -822,33 +823,6 @@ begin
   Result := TJSONArray.Create;
   for Text in Texts do
     Result.Add(Text);
-end;
-
-function LineToJSON(const Line: TVec2Array): TJSONArray;
-var
-  Point: TVec2;
-begin
-  Result := TJSONArray.Create;
-  for Point in Line do
-  begin
-    Result.Add(ReportFloat(Point.X));
-    Result.Add(ReportFloat(Point.Y));
-  end;
-end;
-
-// Line segments as one flat list: x1, y1, x2, y2 for each
-function SegmentsToJSON(const Segments: TLine2Array): TJSONArray;
-var
-  Segment: TLine2;
-begin
-  Result := TJSONArray.Create;
-  for Segment in Segments do
-  begin
-    Result.Add(ReportFloat(Segment.P1.X));
-    Result.Add(ReportFloat(Segment.P1.Y));
-    Result.Add(ReportFloat(Segment.P2.X));
-    Result.Add(ReportFloat(Segment.P2.Y));
-  end;
 end;
 
 // A notch is drawn from where it is cut to its tip

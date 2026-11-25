@@ -78,6 +78,9 @@ Changed, Fixed and Removed under each version.
   the object on the next click (#96).
 - A failed file write in the web editor keeps the pattern dirty and preserves
   its recovery copy (#95).
+- The web engine reports a worker call failure to the request that caused
+  it. If the worker stops, pending requests report the failure instead of
+  leaving controls waiting indefinitely.
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

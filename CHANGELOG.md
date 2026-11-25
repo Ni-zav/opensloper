@@ -13,6 +13,12 @@ Changed, Fixed and Removed under each version.
 
 ## 0.9.0
 
+### Fixed
+
+- In the web Design app, a drag or click right after an undo no longer fails
+  with "There is no object or variable with ID …" when the undo took away a
+  selected object (#133).
+
 ## 0.8.0
 
 ### Added

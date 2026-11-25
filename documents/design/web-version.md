@@ -43,7 +43,7 @@ Layout helpers for desktop widgets (CanvasInput, GridColumns, SideTabsLayout) st
 
 ### Behind the API
 
-What needs the evaluated pattern goes behind the API: snapping, completion, the object lists, formula suggestions and selection edits. Where a method shares a step with the desktop, both call the same `src/editor` code, named in the table. A refused edit is an answer with its reason, not an error.
+What needs the evaluated pattern goes behind the API: snapping, completion, the object lists, formula suggestions and selection edits. Where a method shares a step with the desktop, both call the same `src/editor` code, named in the table. A refused edit is an answer with its reason, not an error. A selection that only shows things (`editor_objects_at`, `editor_handles`, `editor_label_keys`, `editor_bounds`, `editor_garment_marks`) leaves out objects gone since, as an undo can take them while the canvas still holds them; an edit to the selection refuses them.
 
 **Drawing and finding things**
 

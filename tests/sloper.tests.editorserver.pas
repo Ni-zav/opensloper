@@ -51,6 +51,9 @@ type
     procedure TestSnapToEdge;
     procedure TestSnapFree;
     procedure TestObjectsAt;
+    // An undo can take away what the canvas still has selected, for a
+    // moment: what only shows things leaves it out rather than refusing (#133)
+    procedure TestSelectionGoneByUndo;
     procedure TestObjectsInBox;
     procedure TestAddPointOnEdge;
     // A click on a point picks it and changes nothing
@@ -364,6 +367,32 @@ begin
   Call('editor_objects_at', '{"x": 50, "y": 50, "pointRadius": 2, "edgeRadius": 2}');
   AssertEquals('inside, only the piece', 1, Answer.Arrays['objects'].Count);
   AssertEquals('the piece', IdFlap, Answer.Arrays['objects'].Integers[0]);
+end;
+
+procedure TTestEditorServer.TestSelectionGoneByUndo;
+var
+  IdA, IdGone: integer;
+  Selection: string;
+begin
+  AddSquare;
+  IdA := IdOf('A');
+  Call('add_point', '{"type": "freePoint", "name": "Gone", "x": 200, "y": 0}');
+  IdGone := IdOf('Gone');
+  Call('undo');
+  Selection := '"selection": [' + IntToStr(IdA) + ', ' + IntToStr(IdGone) + ', "Gone"]';
+  Call('editor_objects_at', '{"x": 99.5, "y": 0, "pointRadius": 2, "edgeRadius": 2, ' + Selection + '}');
+  AssertEquals('found what is there', IdOf('B'), Answer.Arrays['objects'].Integers[0]);
+  Call('editor_label_keys', '{' + Selection + '}');
+  AssertTrue('labels', Answer.Arrays['objects'].Count > 0);
+  Call('editor_handles', '{' + Selection + '}');
+  AssertEquals('no handles', 0, Answer.Arrays['handles'].Count);
+  Call('editor_bounds', '{"ids": [' + IntToStr(IdA) + ', ' + IntToStr(IdGone) + ']}');
+  AssertTrue('round what is there', Answer.Find('bounds').JSONType = jtArray);
+  Call('editor_garment_marks', '{' + Selection + '}');
+  Answer;
+  // Deleting it is an edit, which says it is gone
+  Call('editor_delete', '{"selection": [' + IntToStr(IdGone) + ']}');
+  AssertEquals(RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestEditorServer.TestObjectsInBox;
@@ -680,7 +709,7 @@ begin
   Call('editor_label_keys', '{"mode": "none", "suggestions": [' + IntToStr(IdB) + ']}');
   AssertEquals('none means none', 0, Answer.Arrays['objects'].Count);
   Call('editor_label_keys', '{"selection": [999]}');
-  AssertEquals('an unknown ID', RPC_REFUSED, ErrorCode);
+  AssertEquals('an unknown ID is left out', 0, Answer.Arrays['objects'].Count);
 end;
 
 procedure TTestEditorServer.TestDeleteSelection;

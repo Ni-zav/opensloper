@@ -104,6 +104,7 @@ type
     function DoRebasePoint(Params: TJSONObject): TJSONData;
     function DoImportStamp(Params: TJSONObject): TJSONData;
     function KeysParam(Params: TJSONObject; const AName: string): TStringArray;
+    function ShownKeysParam(Params: TJSONObject; const AName: string): TStringArray;
     function DoLabelKeys(Params: TJSONObject): TJSONData;
     function DoSeamPick(Params: TJSONObject): TJSONData;
     function DoSeamMake(Params: TJSONObject): TJSONData;
@@ -181,7 +182,7 @@ resourcestring
   rsEditorObjectsReturns = '`objects`, their IDs; with a selection, `tip`, the selected callout whose tip is there, ' +
     'or null, and `handle`, the handle of a selected curve there (`edge` and `field`, its length field), or null';
   rsEditorObjectsSelection = 'The selected objects'' IDs, whose callouts'' tips and curves'' handles lie over ' +
-    'everything else';
+    'everything else; any gone since, as after an undo, are left out';
   rsEditorVariableAdd = 'Adds a variable as the Variables tab''s Add does: the next free name, with formula 0, as one ' +
     'undo step.';
   rsEditorVariableAddReturns = '`id`, the new variable''s';
@@ -221,7 +222,7 @@ resourcestring
   rsEditorPropertySetReturns = '`done`, false when refused, with the `reason` and, for a formula, `errorPos`, where ' +
     'the problem is, in characters from 1 (0 for none)';
   rsEditorBounds = 'The box round objects, as the canvas shows or zooms to a selection';
-  rsEditorBoundsTargets = 'The objects'' IDs';
+  rsEditorBoundsTargets = 'The objects'' IDs; any gone since are left out';
   rsEditorBoundsReturns = '`bounds`, minX, minY, maxX and maxY in mm, or null when none of them has a place';
   rsEditorListClick = 'The selection after a click on a row of a list: a click selects the row, Ctrl or Cmd adds or ' +
     'removes it, Shift selects from the anchor to it in list order.';
@@ -278,6 +279,7 @@ resourcestring
     'read; every point, edge and piece in all; none in none.';
   rsEditorLabelMode = 'contextual, all or none';
   rsEditorSelection = 'The selected objects'' IDs';
+  rsEditorShownSelection = 'The selected objects'' IDs; any gone since, as after an undo, are left out';
   rsEditorHover = 'The hovered object''s ID';
   rsEditorSuggestObjects = 'The IDs of the objects the formula suggestions in view read, as editor_suggest gives them';
   rsEditorToolObjects = 'The IDs of the objects the tool is working with, as editor_tool_snap gives them';
@@ -415,7 +417,7 @@ resourcestring
     'others do, which are counted rather than listed';
   rsEditorGarmentMarks = 'What the Garment tab marks for a selection: selected pieces are outlined, and a selected ' +
     'seam marked on both its sides, with the stitch line of a dart it closes.';
-  rsEditorGarmentSelection = 'The canvas''s selection, by ID';
+  rsEditorGarmentSelection = 'The canvas''s selection, by ID; any gone since are left out';
   rsEditorGarmentMarksReturns = '`pieces`, the IDs of the selected pieces shown, and `lines`, the seams'' lines as ' +
     'flat lists of x and y in the drawing''s mm';
   rsEditorMaterialsReturns = '`rows`, each with `name`, `color` (#RRGGBB), `fill` (tint or hatch), `fillCaption`, ' +
@@ -617,7 +619,7 @@ begin
     AddApiParam(Built, 'toggle', apFlag, False, rsEditorListToggle);
     AddApiParam(Built, 'extend', apFlag, False, rsEditorListExtend);
     AddApiMethod(Built, 'editor_handles', rsEditorHandles, rsEditorHandlesReturns, True);
-    AddApiParam(Built, 'selection', apReferences, True, rsEditorSelection);
+    AddApiParam(Built, 'selection', apReferences, True, rsEditorShownSelection);
     AddApiMethod(Built, 'editor_tool_snap', rsEditorToolSnap, rsEditorToolSnapReturns, True);
     AddApiParam(Built, 'tool', apChoice, True, rsEditorTool, string.Join(', ', SNAP_TOOL_NAMES));
     AddApiParam(Built, 'x', apNumber, True, rsEditorX);
@@ -644,7 +646,7 @@ begin
     AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
     AddApiMethod(Built, 'editor_label_keys', rsEditorLabelKeys, rsEditorLabelKeysReturns, True);
     AddApiParam(Built, 'mode', apChoice, False, rsEditorLabelMode, string.Join(', ', LABEL_MODE_NAMES));
-    AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
+    AddApiParam(Built, 'selection', apReferences, False, rsEditorShownSelection);
     AddApiParam(Built, 'hover', apReference, False, rsEditorHover);
     AddApiParam(Built, 'tool', apReferences, False, rsEditorToolObjects);
     AddApiParam(Built, 'suggestions', apReferences, False, rsEditorSuggestObjects);
@@ -1178,7 +1180,7 @@ begin
   // A selected callout's tip or curve's handle lies over everything
   if Assigned(Params.Find('selection')) then
   begin
-    Selection := KeysParam(Params, 'selection');
+    Selection := ShownKeysParam(Params, 'selection');
     TipKey := CalloutTipAt(Document.Pattern, Selection, At, PointRadius);
     if TipKey <> '' then
       Answer.Add('tip', KeyToJSON(TipKey))
@@ -1227,7 +1229,7 @@ function TEditorApiServer.DoBounds(Params: TJSONObject): TJSONData;
 var
   Bounds: TRect2;
 begin
-  if ObjectsBounds(Document.Pattern, KeysParam(Params, 'ids'), Bounds) then
+  if ObjectsBounds(Document.Pattern, ShownKeysParam(Params, 'ids'), Bounds) then
     Result := TJSONObject.Create(['bounds', RectToJSON(Bounds)])
   else
     Result := TJSONObject.Create(['bounds', TJSONNull.Create]);
@@ -1392,7 +1394,7 @@ var
   Reason: string;
 begin
   Handles := TJSONArray.Create;
-  for Handle in SelectionHandles(Document.Pattern, KeysParam(Params, 'selection')) do
+  for Handle in SelectionHandles(Document.Pattern, ShownKeysParam(Params, 'selection')) do
     Handles.Add(TJSONObject.Create(['edge', KeyToJSON(Handle.EdgeKey), 'field', Handle.LengthField, 'anchorX',
       ReportFloat(Handle.Anchor.X), 'anchorY', ReportFloat(Handle.Anchor.Y), 'x', ReportFloat(Handle.Position.X), 'y',
       ReportFloat(Handle.Position.Y), 'draggable', CanDragHandle(TEdgeObject(Document.Pattern.FindNode(Handle.EdgeKey)),
@@ -2127,7 +2129,7 @@ var
   Line: TVec2Array;
   Key: string;
 begin
-  Marks := GarmentSelectionMarks(Document.Pattern, KeysParam(Params, 'selection'));
+  Marks := GarmentSelectionMarks(Document.Pattern, ShownKeysParam(Params, 'selection'));
   Scene := GarmentScene(Params);
   Selected := TJSONArray.Create;
   for Piece in Scene.Pieces do
@@ -2714,6 +2716,37 @@ begin
   end;
 end;
 
+// The same for what only shows things: the canvas's selection, which an undo
+// can take objects from while it still holds them, for a moment. Those gone
+// are left out, rather than refusing what is asked; an edit refuses them.
+function TEditorApiServer.ShownKeysParam(Params: TJSONObject; const AName: string): TStringArray;
+var
+  List: TJSONData;
+  Item: TJSONData;
+  Present: TJSONArray;
+  Holder: TJSONObject;
+  Index: integer;
+begin
+  List := Params.Find(AName);
+  if not Assigned(List) or (List.JSONType <> jtArray) then
+    Exit(KeysParam(Params, AName));
+  Present := TJSONArray.Create;
+  Holder := TJSONObject.Create([AName, Present]);
+  try
+    for Index := 0 to List.Count - 1 do
+    begin
+      Item := List.Items[Index];
+      if ((Item.JSONType = jtNumber) and not Assigned(Document.Pattern.FindNode(Item.AsString))) or
+        ((Item.JSONType = jtString) and not Assigned(Document.Pattern.FindObject(Item.AsString))) then
+        Continue;
+      Present.Add(Item.Clone);
+    end;
+    Result := KeysParam(Holder, AName);
+  finally
+    FreeAndNil(Holder);
+  end;
+end;
+
 function TEditorApiServer.DoLabelKeys(Params: TJSONObject): TJSONData;
 var
   Mode: TLabelMode;
@@ -2723,8 +2756,8 @@ begin
   HoverKey := '';
   if Assigned(Params.Find('hover')) and (Params.Find('hover').JSONType <> jtNull) then
     HoverKey := Reference(Params, 'hover', False);
-  Result := TJSONObject.Create(['objects', KeysToJSON(LabelKeys(Document.Pattern, Mode, KeysParam(Params, 'selection'), HoverKey,
-    Concat(KeysParam(Params, 'tool'), KeysParam(Params, 'suggestions'))))]);
+  Result := TJSONObject.Create(['objects', KeysToJSON(LabelKeys(Document.Pattern, Mode, ShownKeysParam(Params, 'selection'), HoverKey,
+    Concat(ShownKeysParam(Params, 'tool'), ShownKeysParam(Params, 'suggestions'))))]);
 end;
 
 // A seam side by IDs, as the editor keeps it

@@ -3,7 +3,11 @@
 // pages are greyed out, and pages left out crossed. Sheet notes and the
 // pattern notes printing with the pieces are drawn over the pieces, as the
 // desktop's DrawNotes draws them, each sheet note in a dotted frame. The wheel zooms about
-// the pointer and the middle button pans. A right-click leaves the page under
+// the pointer, and the middle button or Space with a drag pans. Zoom Area
+// zooms to a box dragged, or in on a click and out on a Shift+click. Delete
+// sends the selected piece back to the tray or deletes the selected note,
+// and Escape lets go of a drag, a box, Zoom Area or the selection, the first
+// there is, as the desktop's KeyDown does. A right-click leaves the page under
 // it out of the print, or puts it back. A press selects the piece under
 // it, or the sheet note, which lies over pieces, as publish_press finds and
 // holds it, and dragging moves it, one undo
@@ -71,6 +75,8 @@ export interface PreviewCanvasEvents {
   selectionChanged(placement: number): void;
   // A sheet note was chosen by its index, or -1 for none
   noteChanged(note: number): void;
+  // Zoom Area was turned on or off, here by Escape too
+  zoomAreaChanged(on: boolean): void;
   // A copy from the tray, by its index there, let go at a point of the layout
   dropCopy(index: number, at: Vec2): void;
   failed(error: unknown): void;
@@ -106,6 +112,7 @@ const LEFT_OUT = 'rgb(190, 60, 60)';
 const EDGE = 'rgb(90, 92, 98)';
 const PIECE = 'rgb(34, 36, 40)';
 const SELECTED = 'rgb(37, 116, 214)';
+const ZOOM_BOX_FILL = 'rgba(37, 116, 214, 0.16)';
 // How strongly a piece's material tints it
 const TINT_ALPHA = 50 / 255;
 const DASH = [6, 4];
@@ -220,7 +227,11 @@ export class PreviewCanvas {
   private needsFit = true;
   private selectedPlacement = -1;
   private selectedNoteIndex = -1;
-  private mode: 'idle' | 'pressed' | 'dragging' | 'panning' = 'idle';
+  // zoomPressed and zoomBoxing: Zoom Area's click, and its box being drawn
+  private mode: 'idle' | 'pressed' | 'dragging' | 'panning' | 'zoomPressed' | 'zoomBoxing' = 'idle';
+  private zoomAreaOn = false;
+  // Space is held, so a drag pans
+  private spaceDown = false;
   private pointerId: number | undefined;
   private pressAt: Vec2 = { x: 0, y: 0 };
   private lastAt: Vec2 = { x: 0, y: 0 };
@@ -329,6 +340,68 @@ export class PreviewCanvas {
     this.zoomBy(1 / ZOOM_STEP);
   }
 
+  get zoomArea(): boolean {
+    return this.zoomAreaOn;
+  }
+
+  // Pieces cannot be pressed or dragged while it is on
+  set zoomArea(on: boolean) {
+    if (on === this.zoomAreaOn) {
+      return;
+    }
+    this.zoomAreaOn = on;
+    this.element.classList.toggle('zoom-area', on);
+    this.events.zoomAreaChanged(on);
+  }
+
+  // Space held pans with a drag, as on the desktop
+  set panKeyDown(down: boolean) {
+    this.spaceDown = down;
+  }
+
+  // As the desktop's Delete: not while something is held, as the drag would
+  // lose what it moves
+  removeSelected(): void {
+    if (this.mode !== 'idle') {
+      return;
+    }
+    const removing = async (): Promise<void> => {
+      if (this.selectedNoteIndex >= 0) {
+        const note = this.selectedNoteIndex;
+        this.selectedNote = -1;
+        await this.document.call('publish_delete_note', { note });
+      } else if (this.selectedPlacement >= 0) {
+        const placement = this.selectedPlacement;
+        this.selected = -1;
+        await this.document.call('publish_unplace', { placement });
+      }
+    };
+    removing().catch((error: unknown) => {
+      this.events.failed(error);
+    });
+  }
+
+  // As the desktop's Escape: a drag put back, else a box dropped, else Zoom
+  // Area off, else nothing selected
+  escape(): void {
+    if (this.mode === 'dragging') {
+      this.endPointer();
+      this.endDrag('publish_cancel');
+    } else if (this.mode === 'zoomBoxing') {
+      this.endPointer();
+      this.repaint();
+    } else if (this.zoomAreaOn) {
+      this.zoomArea = false;
+    } else {
+      // A press not yet a drag ends with the selection it was on
+      if (this.mode === 'pressed') {
+        this.endPointer();
+      }
+      this.selected = -1;
+      this.selectedNote = -1;
+    }
+  }
+
   private zoomBy(factor: number): void {
     this.view.zoomAt(factor, { x: this.element.clientWidth / 2, y: this.element.clientHeight / 2 });
     this.needsFit = false;
@@ -381,8 +454,10 @@ export class PreviewCanvas {
       });
       return;
     }
-    if (event.button === MIDDLE_BUTTON) {
+    if (event.button === MIDDLE_BUTTON || (event.button === LEFT_BUTTON && this.spaceDown)) {
       this.mode = 'panning';
+    } else if (event.button === LEFT_BUTTON && this.zoomAreaOn) {
+      this.mode = 'zoomPressed';
     } else if (event.button === LEFT_BUTTON) {
       this.mode = 'pressed';
       this.pressing = this.press(at);
@@ -412,6 +487,14 @@ export class PreviewCanvas {
       this.repaint();
     } else if (this.mode === 'pressed' && Math.hypot(at.x - this.pressAt.x, at.y - this.pressAt.y) > DRAG_THRESHOLD) {
       this.mode = 'dragging';
+    } else if (
+      this.mode === 'zoomPressed' &&
+      Math.hypot(at.x - this.pressAt.x, at.y - this.pressAt.y) > DRAG_THRESHOLD
+    ) {
+      this.mode = 'zoomBoxing';
+    }
+    if (this.mode === 'zoomBoxing') {
+      this.repaint();
     }
     if (this.mode === 'dragging') {
       this.drags.push(this.view.toModel(at));
@@ -422,10 +505,19 @@ export class PreviewCanvas {
     if (event.pointerId !== this.pointerId) {
       return;
     }
-    const dragged = this.mode === 'dragging';
+    const mode = this.mode;
+    const at = this.screenAt(event);
     this.endPointer();
-    if (dragged) {
+    if (mode === 'dragging') {
       this.endDrag('publish_release');
+    } else if (mode === 'zoomBoxing') {
+      this.view.zoomToBox(this.pressAt, at, this.element.clientWidth, this.element.clientHeight);
+      this.needsFit = false;
+      this.repaint();
+    } else if (mode === 'zoomPressed') {
+      this.view.zoomAt(event.shiftKey ? 1 / ZOOM_STEP : ZOOM_STEP, at);
+      this.needsFit = false;
+      this.repaint();
     }
   };
 
@@ -531,6 +623,9 @@ export class PreviewCanvas {
     });
     // Over the pieces, as it clears what is under it in a tile's corner
     this.drawTitleBoxes(context);
+    if (this.mode === 'zoomBoxing') {
+      this.drawZoomBox(context);
+    }
   }
 
   // As the desktop's DrawNote: a sheet note's frame, on screen only so it can
@@ -625,6 +720,21 @@ export class PreviewCanvas {
       }
     }
     context.restore();
+  }
+
+  // As the desktop's DrawZoomBox: a light fill, dotted in the selection's blue
+  private drawZoomBox(context: CanvasRenderingContext2D): void {
+    const x = Math.min(this.pressAt.x, this.lastAt.x) + 0.5;
+    const y = Math.min(this.pressAt.y, this.lastAt.y) + 0.5;
+    const width = Math.abs(this.lastAt.x - this.pressAt.x);
+    const height = Math.abs(this.lastAt.y - this.pressAt.y);
+    context.fillStyle = ZOOM_BOX_FILL;
+    context.fillRect(x, y, width, height);
+    context.strokeStyle = SELECTED;
+    context.lineWidth = 1;
+    context.setLineDash(NOTE_DOTS);
+    context.strokeRect(x, y, width, height);
+    context.setLineDash([]);
   }
 
   private screenRect(area: Rect2): { x: number; y: number; width: number; height: number } {

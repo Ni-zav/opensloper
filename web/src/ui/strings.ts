@@ -244,6 +244,12 @@ export const STRINGS = {
   exportDxf: 'Export DXF',
   exportDxfHint: 'Download the layout as DXF-AAMA, for pattern software',
   downloaded: (name: string): string => `Downloaded ${name}`,
+  // The Publish app's Zoom Area, as the desktop's
+  zoomArea: 'Zoom Area',
+  zoomAreaHint: 'Drag a box on the pages to zoom to it',
+  zoomAreaStatus: 'Zoom Area: drag a box to zoom to it, click to zoom in, Shift+click to zoom out',
+  // A hint with the command's keys, as the desktop's
+  withShortcut: (hint: string, keys: string): string => `${hint} (${keys})`,
   // The Patterns tab, as the desktop's
   tabPatterns: 'Patterns',
   patternsGroup: 'Patterns in This Layout',

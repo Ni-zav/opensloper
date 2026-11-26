@@ -89,6 +89,7 @@ type
     procedure TestSave;
     procedure TestExport;
     procedure TestExportRefused;
+    procedure TestTables;
     procedure TestNotTools;
   end;
 
@@ -886,6 +887,25 @@ begin
   Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
   Call('publish_export', TJSONObject.Create(['format', 'pdf']));
   AssertEquals('nothing placed', RPC_REFUSED, ErrorCode);
+end;
+
+// The Publish app's own, not the design app's
+procedure TTestPublishServer.TestTables;
+var
+  Shortcuts: TJSONArray;
+  Index: integer;
+  Commands: string;
+begin
+  Call('publish_tables', TJSONObject.Create);
+  Shortcuts := Answer.Arrays['shortcuts'];
+  Commands := ';';
+  for Index := 0 to Shortcuts.Count - 1 do
+    Commands := Commands + Shortcuts.Objects[Index].Strings['command'] + '=' + Shortcuts.Objects[Index].Strings['keys'] + ';';
+  AssertTrue('undo', Pos(';undo=Mod+Z;', Commands) > 0);
+  AssertTrue('export PDF', Pos(';exportPDF=Mod+E;', Commands) > 0);
+  AssertTrue('zoom area', Pos(';toolZoom=Z;', Commands) > 0);
+  AssertTrue('back to tray', Pos(';removePiece=Delete;', Commands) > 0);
+  AssertFalse('no design tools', Pos(';toolPoint=', Commands) > 0);
 end;
 
 procedure TTestPublishServer.TestNotTools;

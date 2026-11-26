@@ -50,6 +50,16 @@ export function parseShortcut(keys: string): Shortcut | undefined {
   return shortcut.key === '' ? undefined : shortcut;
 }
 
+// Keys as people read them in a hint: Mod as Ctrl, or Cmd on macOS, and
+// Plus, Minus and Comma as their signs, as Ctrl+Shift+Z or Ctrl++
+export function shortcutText(keys: string, mac: boolean = isMac()): string {
+  const signs: Record<string, string> = { Mod: mac ? 'Cmd' : 'Ctrl', Plus: '+', Minus: '-', Comma: ',' };
+  return keys
+    .split('+')
+    .map((part) => signs[part] ?? part)
+    .join('+');
+}
+
 export function isMac(): boolean {
   return /Mac|iPhone|iPad/.test(navigator.platform);
 }

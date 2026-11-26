@@ -9,7 +9,9 @@
 // count of problems, which opens the Problems tab. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
+import { Autosave, type Work } from '../ui/autosave.ts';
 import { FileAccess, LAYOUT_EXTENSION, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
+import { keepOffline } from '../ui/offline.ts';
 import type { Vec2 } from '../editor/view.ts';
 import { Engine } from '../engine/engine.ts';
 import { booleanField, numberField, recordsField, stringField } from '../engine/replies.ts';
@@ -51,6 +53,14 @@ const ICONS = {
   outputTab: 'printer',
   problemsTab: 'alert-triangle',
 } as const;
+
+// The names of the texts kept as work in progress: the layout's, and each
+// file its sources were given, by its path
+const WORK_LAYOUT = 'layout';
+const WORK_FILE = 'file:';
+// And of the files it came from
+const WORK_LAYOUT_HANDLE = 'layout';
+const WORK_SOURCES_HANDLE = 'sources';
 
 // The Problems tab's keys, as the desktop's: what a problem names
 const PLACEMENT_KEY = 'placement:';
@@ -180,6 +190,7 @@ class PublishApp {
   // or the pattern a new layout was started for
   private sourcesHandle: FileSystemFileHandle | undefined;
   private saving = false;
+  private readonly autosave: Autosave;
   // A layout started for a pattern whose files were not all chosen: once
   // they are found, it is started again with them, so every piece is placed
   private started: { pattern: string; files: Map<string, string> } | undefined;
@@ -187,6 +198,19 @@ class PublishApp {
   constructor(engine: Engine, shortcuts: ReadonlyMap<string, string>) {
     this.shortcuts = shortcuts;
     this.document = new LayoutDocument(engine);
+    this.autosave = new Autosave(
+      'publish',
+      this.document,
+      async () => this.snapshot(),
+      () => ({
+        fileName: this.document.fileName,
+        handles: { [WORK_LAYOUT_HANDLE]: this.layoutHandle, [WORK_SOURCES_HANDLE]: this.sourcesHandle },
+      }),
+      (kept) => {
+        // For the tests
+        document.body.dataset.workKept = String(kept);
+      },
+    );
     this.preview = new PreviewCanvas(previewElement, this.document, {
       selectionChanged: (placement) => {
         document.body.dataset.selected = String(placement);
@@ -302,6 +326,68 @@ class PublishApp {
     return made;
   }
 
+  // The layout's text and every file its sources were given, as work in progress
+  private async snapshot(): Promise<Map<string, string>> {
+    const answer = await this.document.read('publish_snapshot');
+    const texts = new Map([[WORK_LAYOUT, stringField(answer, 'layout') ?? '']]);
+    for (const file of recordsField(answer, 'files')) {
+      texts.set(`${WORK_FILE}${stringField(file, 'path') ?? ''}`, stringField(file, 'text') ?? '');
+    }
+    return texts;
+  }
+
+  // The newest work a closed tab left, to open again or drop; then the next
+  private async offerLeftOver(): Promise<void> {
+    const [work] = await this.autosave.leftOver();
+    if (work === undefined) {
+      return;
+    }
+    const name = work.fileName === '' ? STRINGS.untitled : work.fileName;
+    showActions(STRINGS.workLeftOver(name, new Date(work.time).toLocaleString()), [
+      [
+        STRINGS.workOpen,
+        () => {
+          this.run(this.openWork(work));
+        },
+      ],
+      [
+        STRINGS.workDiscard,
+        () => {
+          // Cleared once it is gone, then the next is offered
+          this.run(
+            this.autosave.discard(work).then(async () => {
+              showMessage('');
+              return this.offerLeftOver();
+            }),
+          );
+        },
+      ],
+    ]);
+  }
+
+  // The layout as it was, with the files its sources read, counted not saved;
+  // it still saves to the file it came from
+  private async openWork(work: Work): Promise<void> {
+    if (this.document.state.modified && !window.confirm(STRINGS.layoutDiscardChanges)) {
+      return;
+    }
+    const texts = await this.autosave.texts(work);
+    const files = new Map<string, string>();
+    for (const [name, text] of texts) {
+      if (name.startsWith(WORK_FILE)) {
+        files.set(name.slice(WORK_FILE.length), text);
+      }
+    }
+    await this.document.open(files, { layout: texts.get(WORK_LAYOUT) ?? '' });
+    this.layoutHandle = work.handles[WORK_LAYOUT_HANDLE];
+    this.sourcesHandle = work.handles[WORK_SOURCES_HANDLE];
+    this.started = undefined;
+    this.document.fileName = work.fileName;
+    await this.document.call('publish_mark_unsaved');
+    await this.autosave.discard(work);
+    showMessage(STRINGS.workOpened(work.fileName === '' ? STRINGS.untitled : work.fileName));
+  }
+
   start(): void {
     // In the desktop's order
     toolbar.append(
@@ -389,6 +475,12 @@ class PublishApp {
       }
     });
     this.showState();
+    this.autosave.start();
+    // Offline use is a convenience: the app runs without it
+    keepOffline(toolbar, async () => this.autosave.flush(), showFailure).catch((error: unknown) => {
+      console.warn('not kept for offline use', error);
+    });
+    this.run(this.offerLeftOver());
   }
 
   // The layout's base name, for the files it is saved and exported as

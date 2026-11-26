@@ -21,6 +21,7 @@ import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/c
 import type { ListPanelEvents } from '../ui/listPanel.ts';
 import { baseName, downloadText } from '../ui/download.ts';
 import { Autosave, type Work } from '../ui/autosave.ts';
+import { keepOffline } from '../ui/offline.ts';
 import { FeaturesPanel } from '../ui/featuresPanel.ts';
 import { GarmentPanel } from '../ui/garmentPanel.ts';
 import { LatestOnly } from '../ui/latestOnly.ts';
@@ -37,6 +38,10 @@ import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { VariablesPanel } from '../ui/variablesPanel.ts';
+
+// The names of the texts and files kept as work in progress
+const WORK_PATTERN = 'pattern';
+const WORK_MEASUREMENTS = 'measurements';
 
 // The desktop's icons for the toolbar's commands (APP_ICON_NAMES)
 const ICONS = {
@@ -486,11 +491,21 @@ class DesignApp {
       this.updateState();
     });
     this.autosave = new Autosave(
+      'design',
       this.document,
+      async () => {
+        // The pattern file's text, and its measurement set's when it was given as text
+        const snapshot = await this.document.read('editor_snapshot');
+        const texts = new Map([[WORK_PATTERN, stringField(snapshot, 'text') ?? '']]);
+        const measurementsText = stringField(snapshot, 'measurementsText');
+        if (measurementsText !== undefined) {
+          texts.set(WORK_MEASUREMENTS, measurementsText);
+        }
+        return texts;
+      },
       () => ({
         fileName: this.document.fileName,
-        patternHandle: this.patternHandle,
-        measurementsHandle: this.measurementsHandle,
+        handles: { [WORK_PATTERN]: this.patternHandle, [WORK_MEASUREMENTS]: this.measurementsHandle },
       }),
       (kept) => {
         // For the tests
@@ -501,79 +516,12 @@ class DesignApp {
     this.updateState();
   }
 
-  // Keeps the app for offline use; a new version waits until the user reloads into it
-  private async registerServiceWorker(): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
-      return;
-    }
-    const container = navigator.serviceWorker;
-    const registration = await container.register('sw.js');
-    const update = document.createElement('button');
-    update.id = 'update';
-    update.type = 'button';
-    update.textContent = STRINGS.update;
-    update.title = STRINGS.updateHint;
-    update.hidden = true;
-    toolbar.append(update);
-    let reloading = false;
-    // The newest worker waiting to take over
-    let waiting: ServiceWorker | undefined;
-    update.addEventListener('click', () => {
-      const next = waiting;
-      if (next === undefined) {
-        return;
-      }
-      reloading = true;
-      // The work is in the browser before the page goes
-      this.run(
-        this.autosave.flush().then(() => {
-          next.postMessage('skipWaiting');
-          return undefined;
-        }),
-      );
-    });
-    const offer = (worker: ServiceWorker): void => {
-      waiting = worker;
-      update.hidden = false;
-    };
-    // Only a worker replacing one that runs the page waits; the first takes over at once
-    const offerWhenInstalled = (worker: ServiceWorker): void => {
-      worker.addEventListener('statechange', () => {
-        if (worker.state === 'installed' && container.controller !== null) {
-          offer(worker);
-        }
-      });
-    };
-    if (registration.waiting !== null && container.controller !== null) {
-      offer(registration.waiting);
-    }
-    if (registration.installing !== null) {
-      offerWhenInstalled(registration.installing);
-    }
-    registration.addEventListener('updatefound', () => {
-      if (registration.installing !== null) {
-        offerWhenInstalled(registration.installing);
-      }
-    });
-    const controlled = (): void => {
-      // For the tests: the page now loads from the cache
-      document.body.dataset.offline = String(container.controller !== null);
-    };
-    controlled();
-    container.addEventListener('controllerchange', () => {
-      controlled();
-      if (reloading) {
-        window.location.reload();
-      }
-    });
-  }
-
   async start(): Promise<void> {
     await this.document.refresh();
     this.updateState();
     this.autosave.start();
     // Offline use is a convenience: the app runs without it
-    this.registerServiceWorker().catch((error: unknown) => {
+    keepOffline(toolbar, async () => this.autosave.flush(), showFailure).catch((error: unknown) => {
       console.warn('not kept for offline use', error);
     });
     await this.offerLeftOver();
@@ -613,13 +561,14 @@ class DesignApp {
     if (!this.mayDropChanges()) {
       return;
     }
-    const { text, measurementsText } = await this.autosave.texts(work);
-    await this.openPattern(new File([text], work.fileName), work.patternHandle);
+    const texts = await this.autosave.texts(work);
+    await this.openPattern(new File([texts.get(WORK_PATTERN) ?? ''], work.fileName), work.handles[WORK_PATTERN]);
+    const measurementsText = texts.get(WORK_MEASUREMENTS);
     if (measurementsText !== undefined) {
       // The pattern keeps the file it records
       await this.document.call('use_measurements', { text: measurementsText });
       this.wantedMeasurements = '';
-      this.measurementsHandle = work.measurementsHandle;
+      this.measurementsHandle = work.handles[WORK_MEASUREMENTS];
     }
     this.document.fileName = work.fileName;
     await this.document.call('editor_mark_unsaved');

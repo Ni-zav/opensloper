@@ -62,3 +62,25 @@ the layout reads it again within a second or two, and new pieces wait in the
 tray. View → Reload Patterns (++ctrl+r++) reads everything again by hand.
 
 Every change to a layout is a step in Edit → Undo (++ctrl+z++).
+
+## In the browser
+
+The publish app also runs in the browser, as a beta, at
+[opensloper.com/publish/](https://www.opensloper.com/publish/), with nothing
+to install. It uses the same engine as the desktop app, so layouts open in
+both.
+
+- **Open** takes a layout together with its patterns and measurement files,
+  or patterns alone to start a layout. The app asks for any file the layout
+  still needs.
+- The keys are the desktop's.
+- The tabs are the desktop's, but there is no Claude tab.
+- **Print…** opens the PDF in the browser's viewer, or downloads it. Print
+  the cover first and check its test square.
+- Export writes PDF, SVG and DXF-AAMA. Machine DXF is on the desktop only.
+- In Chrome and Edge, Save writes back to the layout's file, and Open can
+  find the layout's patterns in a folder you choose. Other browsers save as
+  a download.
+- Your files stay on your computer. Work you have not saved is kept in the
+  browser and offered back next time.
+- Once it has loaded, the app can be installed and works offline.

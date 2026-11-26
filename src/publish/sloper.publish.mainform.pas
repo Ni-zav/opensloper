@@ -110,7 +110,6 @@ type
     procedure PatternSetClick(Sender: TObject);
     procedure SourceSelected(Sender: TObject);
     procedure SizeChange(Sender: TObject);
-    procedure ChangeSource(const Description, AMeasurementFile, ASize: string);
     procedure BuildSide;
     procedure TabsCollapsedChange(Sender: TObject);
     function AddSpin(const ACaption: string; AMax, AIncrement: double; Decimals: integer): TFloatSpinEdit;
@@ -253,10 +252,6 @@ resourcestring
   rsPatternSet = 'Use the pattern''s own';
   rsSourceSize = 'Size';
   rsNoSet = 'None';
-  rsAddPatternChange = 'Add pattern';
-  rsRemovePatternChange = 'Remove pattern';
-  rsSetChange = 'Change measurements';
-  rsSizeChange = 'Change size';
   rsSourceAdded = '%d new copies in the tray';
   rsFilterMeasurements = 'Measurements (*.slm)|*.slm';
   rsMarks = 'Alignment marks';
@@ -301,11 +296,6 @@ resourcestring
   rsAddNote = 'Add note';
   rsDeleteNote = 'Delete note';
   rsNoteHelp = 'Fields: {pattern.name} {measurements.name} {size} {date} {page} {pages} {cutlist} {materials} {materialneeded}';
-  rsNewNote = 'New note';
-  rsChangeTitle = 'Change title block';
-  rsChangeNote = 'Change note';
-  rsAddNoteChange = 'Add note';
-  rsCannotPlace = 'This piece has a problem in the pattern, so it cannot be placed yet';
   rsNoProblems = 'No problems';
   rsProblemCount = 'Problems: %d';
   // With how many of them stop printing and exporting
@@ -328,13 +318,7 @@ resourcestring
   rsPackedPages = 'Packed %d copies on %d pages';
   rsPacked = 'Packed %d copies';
   rsPackLeftOut = '%s; %d did not fit on the sheet and were set below it';
-  rsChangeSettings = 'Change paper';
   rsPlaceChange = 'Place new pieces';
-  rsPlaceOne = 'Place piece';
-  rsTurnChange = 'Turn piece';
-  rsFlipChange = 'Flip piece';
-  rsPages = '%d pages, %d blank, %d left out. Right-click a page to leave it out.';
-  rsLargeSheet = 'One sheet %s mm wide, %s mm long';
   rsReloaded = '%s changed on disk, so it was read again';
   rsExported = 'Wrote %s';
   // With what the print service said, such as its job number
@@ -358,13 +342,8 @@ uses
 
 const
   SIDE_WIDTH = 340;
-  NEW_NOTE_SIZE = 12;
-  NEW_NOTE_GAP = 10;
   MAX_NOTE_SIZE = 200;
   NOTE_MEMO_HEIGHT = 110;
-  // In the order of FFieldBoxes
-  TITLE_FIELDS: array[0..6] of string = (FIELD_PATTERN_NAME, FIELD_MEASUREMENTS_NAME, FIELD_LAYOUT_NAME, FIELD_DATE, FIELD_CUT_LIST, FIELD_MATERIALS,
-    FIELD_MATERIAL_NEEDED);
   SIDE_ROW_STEP = 100;
   // The status bar's panels: the problems count, then messages
   PANEL_PROBLEMS = 0;
@@ -377,10 +356,9 @@ const
   MAX_MILLIMETRES = 100;
   MAX_ROLL_WIDTH = 2000;
   PATTERN_EXTENSION = '.sloper';
-  // The last is the size typed in
-  PAPER_NAMES: array[0..3] of string = ('A4', 'A3', 'Letter', CUSTOM_PAPER);
   PATTERN_LIST_HEIGHT = 120;
   MAX_PAPER_SIDE = 2000;
+  // In the order of TITLE_FIELDS and FFieldBoxes
   NOTE_FIELD_CAPTIONS: array[0..6] of string = (rsFieldPattern, rsFieldMeasurements, rsFieldLayout, rsFieldDate, rsFieldCutList, rsFieldMaterials,
     rsFieldMaterialNeeded);
   MODIFIED_MARK: array[boolean] of string = ('', '*');
@@ -707,9 +685,9 @@ begin
   Layout := FDocument.Layout;
   FTitleBox.Checked := Layout.Title.Enabled;
   FEveryPageBox.Checked := Layout.Title.EveryPage;
-  FEveryPageBox.Enabled := Layout.Output.Kind = okTiled;
+  FEveryPageBox.Enabled := OutputSettingUsed(Layout.Output, osTitlePlace);
   FCornerBox.ItemIndex := Ord(Layout.Title.Corner);
-  FCornerBox.Enabled := Layout.Output.Kind = okTiled;
+  FCornerBox.Enabled := OutputSettingUsed(Layout.Output, osTitlePlace);
   for Index := 0 to High(FFieldBoxes) do
   begin
     Shown := False;
@@ -757,9 +735,7 @@ begin
   Title.Corner := TTitleCorner(FCornerBox.ItemIndex);
   for Index := 0 to High(FFieldBoxes) do
     Title.Fields := TitleFieldsWith(Title.Fields, TITLE_FIELDS[Index], FFieldBoxes[Index].Checked);
-  FDocument.BeginChange(rsChangeTitle);
-  FDocument.Layout.Title := Title;
-  FDocument.EndChange;
+  FDocument.ChangeTitle(Title);
 end;
 
 // Typing merges into one undo step, as long as it keeps going. A font name
@@ -767,39 +743,30 @@ end;
 procedure TPublishForm.NoteChange(Sender: TObject);
 var
   Index: integer;
+  Note: TSheetNote;
   FontName, Reason: string;
 begin
   Index := FPreview.SelectedNote;
   if FRefreshing or (Index < 0) then
     Exit;
-  FDocument.BeginChange(rsChangeNote);
-  FDocument.Layout.Notes[Index].Text := TrimRight(FNoteMemo.Text);
-  FDocument.Layout.Notes[Index].Size := FNoteSizeEdit.Value;
+  Note := FDocument.Layout.Notes[Index];
+  Note.Text := TrimRight(FNoteMemo.Text);
+  Note.Size := FNoteSizeEdit.Value;
   if FNoteAlignBox.ItemIndex >= 0 then
-    FDocument.Layout.Notes[Index].Align := TTextAlign(FNoteAlignBox.ItemIndex);
-  FDocument.Layout.Notes[Index].Boxed := FNoteBoxCheck.Checked;
+    Note.Align := TTextAlign(FNoteAlignBox.ItemIndex);
+  Note.Boxed := FNoteBoxCheck.Checked;
   if CheckFontName(FontBoxName(FNoteFontBox), FontName, Reason) then
-    FDocument.Layout.Notes[Index].Style.Font := FontName
+    Note.Style.Font := FontName
   else
     ShowStatus(Reason);
-  FDocument.Layout.Notes[Index].Style.Bold := FNoteBoldCheck.Checked;
-  FDocument.Layout.Notes[Index].Style.Italic := FNoteItalicCheck.Checked;
-  FDocument.EndChange('note:' + IntToStr(Index));
+  Note.Style.Bold := FNoteBoldCheck.Checked;
+  Note.Style.Italic := FNoteItalicCheck.Checked;
+  FDocument.ChangeNote(Index, Note);
 end;
 
 procedure TPublishForm.AddNoteClick(Sender: TObject);
-var
-  Lowest: double;
-  Added: integer;
-  Shape: TPlacedPiece;
 begin
-  Lowest := 0;
-  for Shape in FDocument.Layout.PlacedPieces do
-    Lowest := Max(Lowest, Shape.Bounds.MaxY + NEW_NOTE_GAP);
-  FDocument.BeginChange(rsAddNoteChange);
-  Added := FDocument.Layout.AddNote(rsNewNote, 0, Lowest, NEW_NOTE_SIZE);
-  FDocument.EndChange;
-  FPreview.SelectedNote := Added;
+  FPreview.SelectedNote := FDocument.AddNote;
   FNoteMemo.SetFocus;
   FNoteMemo.SelectAll;
 end;
@@ -1115,7 +1082,7 @@ end;
 procedure TPublishForm.AddSourceClick(Sender: TObject);
 var
   Dialog: TOpenDialog;
-  Before: integer;
+  Added: integer;
 begin
   Dialog := TOpenDialog.Create(Self);
   try
@@ -1123,14 +1090,10 @@ begin
     Dialog.Options := Dialog.Options + [ofFileMustExist];
     if not Dialog.Execute then
       Exit;
-    Before := Length(FDocument.Layout.Unplaced);
-    FDocument.BeginChange(rsAddPatternChange);
-    FDocument.Layout.AddSource(FDocument.Layout.StoredPath(Dialog.FileName), '', '');
-    FDocument.Layout.LoadSources;
-    FDocument.EndChange;
+    Added := FDocument.AddPattern(FDocument.Layout.StoredPath(Dialog.FileName));
     FSourceBox.ItemIndex := FSourceBox.Items.Count - 1;
     SourceSelected(Self);
-    ShowStatus(Format(rsSourceAdded, [Length(FDocument.Layout.Unplaced) - Before]));
+    ShowStatus(Format(rsSourceAdded, [Added]));
   finally
     FreeAndNil(Dialog);
   end;
@@ -1141,23 +1104,7 @@ begin
   if not Assigned(CurrentSource) then
     Exit;
   FPreview.Selected := -1;
-  FDocument.BeginChange(rsRemovePatternChange);
-  FDocument.Layout.RemoveSource(CurrentSource);
-  FDocument.EndChange;
-end;
-
-procedure TPublishForm.ChangeSource(const Description, AMeasurementFile, ASize: string);
-var
-  Source: TPatternSource;
-begin
-  Source := CurrentSource;
-  if not Assigned(Source) then
-    Exit;
-  FDocument.BeginChange(Description);
-  Source.MeasurementFile := AMeasurementFile;
-  Source.Size := ASize;
-  FDocument.Layout.LoadSources;
-  FDocument.EndChange;
+  FDocument.RemovePattern(CurrentSource);
 end;
 
 // A size belongs to its file, so a new file starts on its first
@@ -1169,8 +1116,8 @@ begin
   try
     Dialog.Filter := rsFilterMeasurements;
     Dialog.Options := Dialog.Options + [ofFileMustExist];
-    if Dialog.Execute then
-      ChangeSource(rsSetChange, FDocument.Layout.StoredPath(Dialog.FileName), '');
+    if Dialog.Execute and Assigned(CurrentSource) then
+      FDocument.SetMeasurements(CurrentSource, FDocument.Layout.StoredPath(Dialog.FileName));
   finally
     FreeAndNil(Dialog);
   end;
@@ -1178,14 +1125,15 @@ end;
 
 procedure TPublishForm.PatternSetClick(Sender: TObject);
 begin
-  ChangeSource(rsSetChange, '', '');
+  if Assigned(CurrentSource) then
+    FDocument.SetMeasurements(CurrentSource, '');
 end;
 
 procedure TPublishForm.SizeChange(Sender: TObject);
 begin
   if FRefreshing or not Assigned(CurrentSource) or (FSizeBox.ItemIndex < 0) then
     Exit;
-  ChangeSource(rsSizeChange, CurrentSource.MeasurementFile, FSizeBox.Text);
+  FDocument.SetSize(CurrentSource, FSizeBox.Text);
 end;
 
 procedure TPublishForm.BuildPiecesTab;
@@ -1315,20 +1263,16 @@ end;
 procedure TPublishForm.TrayDoubleClick(Sender: TObject);
 var
   Index: integer;
-  Copies: TUnplacedCopyArray;
 begin
   Index := FTray.ItemIndex;
   if (Index < 0) or (Index > High(FTrayCopies)) then
     Exit;
   if not FTrayCopies[Index].CanPlace then
   begin
-    ShowStatus(rsCannotPlace);
+    ShowStatus(rsLayoutCannotPlace);
     Exit;
   end;
-  Copies := Copy(FTrayCopies, Index, 1);
-  FDocument.BeginChange(rsPlaceOne);
-  FDocument.Layout.PlaceCopies(Copies);
-  FDocument.EndChange;
+  FDocument.PlaceCopy(FTrayCopies[Index]);
 end;
 
 procedure TPublishForm.PreviewDragOver(Sender, Source: TObject; X, Y: integer; State: TDragState; var Accept: boolean);
@@ -1342,15 +1286,11 @@ var
   Placed: integer;
 begin
   Item := FTrayCopies[FTray.ItemIndex];
-  if not Item.CanPlace then
-  begin
-    ShowStatus(rsCannotPlace);
-    Exit;
-  end;
-  FDocument.BeginChange(rsPlaceOne);
-  Placed := FDocument.Layout.PlaceCopyAt(Item, FPreview.LayoutAt(X, Y), PLACEMENT_STEP);
-  FDocument.EndChange;
-  FPreview.Selected := Placed;
+  Placed := FPreview.DropCopy(Item, X, Y);
+  if Placed < 0 then
+    ShowStatus(rsLayoutCannotPlace)
+  else
+    FPreview.Selected := Placed;
 end;
 
 procedure TPublishForm.RemoveClick(Sender: TObject);
@@ -1430,38 +1370,36 @@ end;
 procedure TPublishForm.RefreshControls;
 var
   Layout: TLayout;
-  Pages: TTilePageArray;
-  Page: TTilePage;
-  Rows, Columns, Blank, LeftOut, Index: integer;
+  Index: integer;
 begin
   FRefreshing := True;
   try
     Layout := FDocument.Layout;
     FKindBox.ItemIndex := Ord(Layout.Output.Kind);
     FRollEdit.Value := Layout.Output.RollWidth;
-    FRollEdit.Enabled := Layout.Output.Kind = okLarge;
-    FPaperBox.Enabled := Layout.Output.Kind = okTiled;
-    FOverlapEdit.Enabled := Layout.Output.Kind = okTiled;
+    FRollEdit.Enabled := OutputSettingUsed(Layout.Output, osRollWidth);
+    FPaperBox.Enabled := OutputSettingUsed(Layout.Output, osPaper);
+    FOverlapEdit.Enabled := OutputSettingUsed(Layout.Output, osOverlap);
     FPaperBox.ItemIndex := FPaperBox.Items.Count - 1;
     for Index := 0 to High(PAPER_NAMES) do
       if PAPER_NAMES[Index] = Layout.Output.Paper then
         FPaperBox.ItemIndex := Index;
     FPaperWidthEdit.Value := Layout.Output.Tiles.PaperWidth;
     FPaperHeightEdit.Value := Layout.Output.Tiles.PaperHeight;
-    FPaperWidthEdit.Enabled := (Layout.Output.Kind = okTiled) and (FPaperBox.ItemIndex = High(PAPER_NAMES));
+    FPaperWidthEdit.Enabled := OutputSettingUsed(Layout.Output, osPaperSize);
     FPaperHeightEdit.Enabled := FPaperWidthEdit.Enabled;
     FMarksBox.ItemIndex := Ord(Layout.Output.Marks);
-    FMarksBox.Enabled := Layout.Output.Kind = okTiled;
+    FMarksBox.Enabled := OutputSettingUsed(Layout.Output, osMarks);
     FFillBox.ItemIndex := Ord(Layout.Output.Fill);
-    FFillBox.Enabled := Layout.Output.Kind <> okProjector;
+    FFillBox.Enabled := OutputSettingUsed(Layout.Output, osFill);
     RefreshProfiles;
     RefreshMaterials;
     FMaterialWidthEdit.Value := Layout.Output.MaterialWidth;
-    FMaterialWidthEdit.Enabled := Layout.Output.Kind = okMaterial;
+    FMaterialWidthEdit.Enabled := OutputSettingUsed(Layout.Output, osMaterialSize);
     FMaterialLengthEdit.Value := Layout.Output.MaterialLength;
-    FMaterialLengthEdit.Enabled := Layout.Output.Kind = okMaterial;
+    FMaterialLengthEdit.Enabled := OutputSettingUsed(Layout.Output, osMaterialSize);
     FAllowTurnsBox.Checked := Layout.Output.AllowTurns;
-    FAllowTurnsBox.Enabled := Layout.Output.Kind = okMaterial;
+    FAllowTurnsBox.Enabled := OutputSettingUsed(Layout.Output, osAllowTurns);
     RefreshPatternsTab;
     RefreshMaterialsTab;
     FMarginEdit.Value := Layout.Output.Tiles.Margin;
@@ -1488,35 +1426,19 @@ begin
     Caption := rsPublishTitle;
   RefreshProblems;
   RefreshTray;
-  Pages := Layout.Pages(Layout.PlacedPieces, Rows, Columns);
-  if Layout.Output.Kind <> okTiled then
-  begin
-    ShowStatus(Format(rsLargeSheet, [FormatFloat('0', OneSheetWidth(Layout, Pages[0].Area.MaxX)),
-      FormatFloat('0', LargeSheetLength(Layout, Pages[0].Area.MaxY))]));
-    if Layout.Output.Kind = okMaterial then
-      ShowStatus(Layout.MaterialUse);
-    Exit;
-  end;
-  Blank := 0;
-  LeftOut := 0;
-  for Page in Pages do
-    if Page.Blank then
-      Inc(Blank)
-    else if Page.Excluded then
-      Inc(LeftOut);
-  ShowStatus(Format(rsPages, [Length(Pages), Blank, LeftOut]));
+  ShowStatus(PreviewSummary(Layout));
 end;
 
 // A run of spin clicks is one undo step. A paper that leaves no room to
 // print is put back.
 procedure TPublishForm.SettingChange(Sender: TObject);
 var
-  Output, Before: TLayoutOutput;
+  Output: TLayoutOutput;
+  Reason: string;
 begin
   if FRefreshing or (FPaperBox.ItemIndex < 0) then
     Exit;
   Output := FDocument.Layout.Output;
-  Before := Output;
   Output.Kind := TOutputKind(FKindBox.ItemIndex);
   Output.RollWidth := FRollEdit.Value;
   Output.Paper := PAPER_NAMES[FPaperBox.ItemIndex];
@@ -1546,25 +1468,14 @@ begin
     Output.OutputProfile := '';
   Output.Tiles.Margin := FMarginEdit.Value;
   Output.Tiles.Overlap := FOverlapEdit.Value;
-  // Page names mean other sheets once the grid moves
-  if (Output.Paper <> Before.Paper) or (Output.Tiles.PaperWidth <> Before.Tiles.PaperWidth) or
-    (Output.Tiles.PaperHeight <> Before.Tiles.PaperHeight) or (Output.Tiles.Margin <> Before.Tiles.Margin) or (Output.Tiles.Overlap <> Before.Tiles.Overlap) or
-    (Output.Kind <> Before.Kind) then
-    Output.ExcludedPages := nil;
-  if not TilesAreUsable(Output.Tiles) or (Output.RollWidth <= 2 * Output.Tiles.Margin) or (Output.MaterialWidth <= 0) then
+  if not FDocument.ChangeOutput(Output, Reason) then
   begin
-    ShowStatus(rsLayoutNoPrintArea);
+    ShowStatus(Reason);
     // "400" passes through "4" on the way, so a typed size is left to finish
     if not FPaperWidthEdit.Focused and not FPaperHeightEdit.Focused then
       RefreshControls;
     Exit;
   end;
-  FDocument.BeginChange(rsChangeSettings);
-  FDocument.Layout.Output := Output;
-  // Choosing a material, or a material sheet, starts from that material's size
-  if (Output.Material <> Before.Material) or (Output.Kind <> Before.Kind) then
-    FDocument.Layout.TakeMaterialSize;
-  FDocument.EndChange('paper');
   FPreview.ZoomToFit;
 end;
 
@@ -1842,27 +1753,13 @@ begin
 end;
 
 procedure TPublishForm.TurnClick(Sender: TObject);
-var
-  Index: integer;
 begin
-  Index := FPreview.Selected;
-  if Index < 0 then
-    Exit;
-  FDocument.BeginChange(rsTurnChange);
-  FDocument.Layout.Placements[Index].Rotation := (FDocument.Layout.Placements[Index].Rotation + 90) mod 360;
-  FDocument.EndChange;
+  FDocument.TurnPiece(FPreview.Selected);
 end;
 
 procedure TPublishForm.FlipClick(Sender: TObject);
-var
-  Index: integer;
 begin
-  Index := FPreview.Selected;
-  if Index < 0 then
-    Exit;
-  FDocument.BeginChange(rsFlipChange);
-  FDocument.Layout.Placements[Index].Flipped := not FDocument.Layout.Placements[Index].Flipped;
-  FDocument.EndChange;
+  FDocument.FlipPiece(FPreview.Selected);
 end;
 
 procedure TPublishForm.AboutClick(Sender: TObject);

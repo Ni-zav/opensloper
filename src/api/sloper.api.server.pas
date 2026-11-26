@@ -30,7 +30,8 @@ unit Sloper.API.Server;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Rpc, Sloper.Core.Evaluator, Sloper.Core.Materials, Sloper.Core.Piece, Sloper.Core.Seam, Sloper.Document.PatternDocument,
+  SysUtils, TypInfo, fpjson, Sloper.API.Rpc, Sloper.Core.Shortcuts, Sloper.Core.Evaluator, Sloper.Core.Materials, Sloper.Core.Piece,
+  Sloper.Core.Seam, Sloper.Document.PatternDocument,
   Sloper.Core.Stamp;
 
 type
@@ -218,6 +219,11 @@ function OptionalNumber(Params: TJSONObject; const AName: string; var Value: dou
 function BooleanParam(Params: TJSONObject; const AName: string): boolean;
 // Which of Choices, the first when absent
 function ChoiceParam(Params: TJSONObject; const AName: string; const Choices: array of string): integer;
+// An enumeration's value as the API names it: without its prefix, starting
+// in lower case, as kcToolPoint gives toolPoint
+function EnumName(Info: PTypeInfo; Value, PrefixLength: integer): string;
+// The shortcuts of one app, as its keyboard reference lists them
+function ShortcutsToJSON(App: TShortcutApp): TJSONArray;
 
 const
   // Given in place of a file name the reply may not give out
@@ -382,6 +388,33 @@ begin
 end;
 
 // True when the parameter is given, refusing one that is not a number
+function EnumName(Info: PTypeInfo; Value, PrefixLength: integer): string;
+begin
+  Result := Copy(GetEnumName(Info, Value), PrefixLength + 1, MaxInt);
+  if Result <> '' then
+    Result[1] := LowerCase(Result[1]);
+end;
+
+function ShortcutsToJSON(App: TShortcutApp): TJSONArray;
+const
+  // kc and sg
+  PREFIX_LENGTH = 2;
+  SHORTCUT_KIND_NAMES: array[TShortcutKind] of string = ('command', 'fixed', 'mouse');
+var
+  Command: TKeyCommand;
+  Info: TShortcutInfo;
+begin
+  Result := TJSONArray.Create;
+  for Command := Low(TKeyCommand) to High(TKeyCommand) do
+  begin
+    Info := ShortcutInfo(Command);
+    if App in Info.Apps then
+      Result.Add(TJSONObject.Create(['command', EnumName(TypeInfo(TKeyCommand), Ord(Command), PREFIX_LENGTH), 'keys', Info.Keys,
+        'kind', SHORTCUT_KIND_NAMES[Info.Kind], 'group', EnumName(TypeInfo(TShortcutGroup), Ord(Info.Group), PREFIX_LENGTH),
+        'description', Info.Description]));
+  end;
+end;
+
 function OptionalNumber(Params: TJSONObject; const AName: string; var Value: double): boolean;
 begin
   Result := Assigned(Params.Find(AName));

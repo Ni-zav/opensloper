@@ -6,6 +6,8 @@
     <title>OpenSloper</title>
     <link rel="icon" href="opensloper-design.svg" type="image/svg+xml" />
     <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="sidePanel.css" />
+    <link rel="stylesheet" href="printDialog.css" />
     <meta name="theme-color" content="#f2f1ed" />
     <style>
       html,
@@ -185,84 +187,6 @@
         margin: 0 8px;
         font: inherit;
       }
-      /* The side panel: a column of tab icons, and the open tab beside it */
-      .side-tabs {
-        display: flex;
-        min-height: 0;
-        border-left: 1px solid #d8d6cf;
-      }
-      .side-rail,
-      .side-column {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-      .side-rail {
-        padding: 4px;
-        border-right: 1px solid #d8d6cf;
-      }
-      .side-column {
-        flex: 1;
-        min-height: 0;
-        overflow: auto;
-      }
-      /* Tabs kept at the foot of the column, such as Problems */
-      .side-foot {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        margin-top: auto;
-      }
-      .side-column button {
-        position: relative;
-      }
-      /* A count on a tab's icon, at its top right */
-      .side-badge {
-        position: absolute;
-        top: 1px;
-        right: 1px;
-        min-width: 14px;
-        height: 14px;
-        padding: 0 3px;
-        box-sizing: border-box;
-        font-size: 9px;
-        font-weight: 700;
-        line-height: 14px;
-        text-align: center;
-        color: #fff;
-        background: #2574d6;
-        border-radius: 7px;
-      }
-      .side-badge[hidden] {
-        display: none;
-      }
-      .side-page {
-        display: flex;
-        flex-direction: column;
-        width: min(440px, 55vw);
-        min-height: 0;
-      }
-      .side-page[hidden] {
-        display: none;
-      }
-      .side-title {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 8px;
-        font-weight: 600;
-        border-bottom: 1px solid #d8d6cf;
-      }
-      .side-title img {
-        width: 18px;
-        height: 18px;
-      }
-      .side-body {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-      }
       .list-panel {
         flex: 1;
         min-height: 0;
@@ -369,63 +293,6 @@
       .property-problem {
         grid-column: 1 / -1;
       }
-      /* Print…: the paper, then open or download the PDF */
-      .print-dialog {
-        width: min(440px, 90vw);
-        padding: 12px;
-        border: 1px solid #c8c5bc;
-        background: #f2f1ed;
-      }
-      .print-dialog::backdrop {
-        background: rgb(0 0 0 / 20%);
-      }
-      .print-dialog h2 {
-        margin: 0 0 8px;
-        font-size: 15px;
-      }
-      .print-about {
-        margin: 0 0 10px;
-        color: #5d636b;
-      }
-      .print-row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-      .print-row select {
-        margin: 0;
-        font: inherit;
-      }
-      .print-notes {
-        min-height: 2.6em;
-        margin-top: 8px;
-        white-space: pre-wrap;
-        color: #5d636b;
-      }
-      .print-notes.refused {
-        color: #d13438;
-      }
-      .print-buttons {
-        display: flex;
-        gap: 6px;
-        justify-content: flex-end;
-        margin-top: 8px;
-      }
-      .print-buttons button {
-        padding: 3px 12px;
-        font: inherit;
-        border: 1px solid #c8c5bc;
-        border-radius: 3px;
-        background: #fbfaf7;
-      }
-      .print-buttons button.default {
-        color: #fff;
-        background: #2574d6;
-        border-color: #2574d6;
-      }
-      .print-buttons button:disabled {
-        opacity: 0.6;
-      }
       /* The Garment tab: its choices, the drawing and what was left out */
       .garment {
         display: flex;
@@ -508,47 +375,6 @@
         color: #fff;
         background: #2574d6;
         border-color: #2574d6;
-      }
-      /* The Problems tab: each problem in full, one to a row */
-      .problems {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-height: 0;
-        padding: 6px;
-      }
-      .problems[hidden] {
-        display: none;
-      }
-      .problems-none {
-        color: #5d636b;
-      }
-      .problems-none[hidden],
-      .problems-list[hidden] {
-        display: none;
-      }
-      .problems-list {
-        flex: 1;
-        min-height: 0;
-        margin: 0;
-        padding: 0;
-        overflow: auto;
-        list-style: none;
-        background: #fff;
-        border: 1px solid #c8c5bc;
-      }
-      .problems-list li {
-        padding: 3px 6px;
-        white-space: pre-wrap;
-        border-bottom: 1px solid #eeece6;
-        cursor: default;
-      }
-      .problems-list li:hover {
-        background: #f2f1ed;
-      }
-      .problems-list li.chosen {
-        color: #fff;
-        background: #2574d6;
       }
       /* The Materials tab, and the dialog that edits them */
       .materials {

@@ -1,0 +1,990 @@
+{
+  OpenSloper - parametric sewing pattern drafting
+  Copyright (C) 2026 The OpenSloper authors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+}
+
+// The web Publish app's methods, through the web engine's server as the page
+// calls them: a layout opened from files given as text.
+unit Sloper.Tests.PublishServer;
+
+{$mode ObjFPC}{$H+}
+
+interface
+
+uses
+  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer;
+
+type
+  TTestPublishServer = class(TOSTestCase)
+  private
+    FServer: TEditorApiServer;
+    FReply: TJSONObject;
+    // The layout's saved text, read by FirstPlacement
+    FSaved: TJSONObject;
+    procedure Call(const Method: string; Params: TJSONObject);
+    function Answer: TJSONObject;
+    function ErrorCode: integer;
+    // A files list with the skirt block example's files of these names
+    function Files(const Names: array of string): TJSONArray;
+    function Missing: string;
+    // A placement as the layout's saved text has it
+    function SavedPlacement(Index: integer): TJSONObject;
+    function FirstPlacement: TJSONObject;
+    // Where a placed piece's label is, a point inside it
+    function LabelOf(Placement: integer): TJSONObject;
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestOpenPattern;
+    procedure TestMissingSetNamed;
+    procedure TestAddFilesReadsAgain;
+    procedure TestOpenLayout;
+    procedure TestOpenNeedsLayoutOrPattern;
+    procedure TestBadFilesRefused;
+    procedure TestBadLayoutRefused;
+    procedure TestState;
+    procedure TestScene;
+    procedure TestPress;
+    procedure TestDragOneStep;
+    procedure TestDragCancelled;
+    procedure TestDragNothingHeld;
+    procedure TestDragNote;
+    procedure TestDropCopy;
+    procedure TestPackUndoRedo;
+    procedure TestPlaceWaiting;
+    procedure TestTurnFlip;
+    procedure TestUnplaceToTray;
+    procedure TestPlaceCopy;
+    procedure TestPieceEditRefused;
+    procedure TestPatterns;
+    procedure TestAddRemovePattern;
+    procedure TestAddPatternNeedsFile;
+    procedure TestMeasurementsAndSize;
+    procedure TestAddNote;
+    procedure TestSetNote;
+    procedure TestSetNoteRefused;
+    procedure TestDeleteNote;
+    procedure TestMaterials;
+    procedure TestTitle;
+    procedure TestSetTitle;
+    procedure TestOutput;
+    procedure TestSetOutput;
+    procedure TestSetOutputJoins;
+    procedure TestSetOutputRefused;
+    procedure TestTogglePage;
+    procedure TestSave;
+    procedure TestSavedOnceWritten;
+    procedure TestSnapshotOpensAgain;
+    procedure TestExport;
+    procedure TestExportRefused;
+    procedure TestTables;
+    procedure TestNotTools;
+  end;
+
+implementation
+
+uses
+  base64, Sloper.API.Rpc, Sloper.API.MCP, Sloper.API.Methods, Sloper.API.PublishServer, Sloper.Core.JSON,
+  Sloper.API.LayoutServer, Sloper.Output.Layout, Sloper.Output.LayoutDocument, Sloper.Output.Preview,
+  Sloper.Core.Geometry, Sloper.Core.TextFields, Math;
+
+const
+  PATTERN_FILE = 'skirt-darts.sloper';
+  SET_FILE = 'skirt.slm';
+
+function ExampleText(const FileName: string): string;
+var
+  Reason: string;
+begin
+  if not ReadTextFile(ConcatPaths([ExtractFileDir(ExtractFileDir(ExpandFileName(ParamStr(0)))), 'docs', 'examples',
+    'skirt-block', FileName]), Result, Reason) then
+    raise Exception.Create(Reason);
+end;
+
+procedure TTestPublishServer.SetUp;
+begin
+  FServer := TEditorApiServer.Create;
+  FReply := nil;
+  FSaved := nil;
+end;
+
+procedure TTestPublishServer.TearDown;
+begin
+  FreeAndNil(FSaved);
+  FreeAndNil(FReply);
+  FreeAndNil(FServer);
+end;
+
+procedure TTestPublishServer.Call(const Method: string; Params: TJSONObject);
+var
+  Request: TJSONObject;
+  Err: string;
+begin
+  FreeAndNil(FReply);
+  Request := TJSONObject.Create(['jsonrpc', '2.0', 'id', 1, 'method', Method, 'params', Params]);
+  try
+    if not ParseJSONObject(FServer.HandleLine(Request.AsJSON), FReply, Err) then
+      Fail(Err);
+  finally
+    FreeAndNil(Request);
+  end;
+end;
+
+function TTestPublishServer.Answer: TJSONObject;
+begin
+  if not Assigned(FReply.Find('result')) then
+    Fail('Expected a result: ' + FReply.AsJSON);
+  Result := FReply.Objects['result'];
+end;
+
+function TTestPublishServer.ErrorCode: integer;
+begin
+  if not Assigned(FReply.Find('error')) then
+    Fail('Expected an error: ' + FReply.AsJSON);
+  Result := FReply.Objects['error'].Integers['code'];
+end;
+
+function TTestPublishServer.Files(const Names: array of string): TJSONArray;
+var
+  Name: string;
+begin
+  Result := TJSONArray.Create;
+  for Name in Names do
+    Result.Add(TJSONObject.Create(['path', Name, 'text', ExampleText(Name)]));
+end;
+
+function TTestPublishServer.Missing: string;
+var
+  Index: integer;
+begin
+  Result := '';
+  for Index := 0 to Answer.Arrays['missing'].Count - 1 do
+    Result := Result + Answer.Arrays['missing'].Strings[Index] + ';';
+end;
+
+procedure TTestPublishServer.TestOpenPattern;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  AssertEquals('named after the pattern', 'skirt-darts', Answer.Strings['name']);
+  AssertEquals('nothing missing', '', Missing);
+  AssertTrue('every piece placed', Answer.Integers['placed'] > 0);
+  AssertEquals('none waiting', 0, Answer.Integers['unplaced']);
+end;
+
+procedure TTestPublishServer.TestMissingSetNamed;
+var
+  Problems: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE]), 'pattern', PATTERN_FILE]));
+  AssertEquals('the pattern''s set', SET_FILE + ';', Missing);
+  Problems := Answer.Arrays['problems'].AsJSON;
+  AssertTrue(Problems, Pos(SET_FILE, Problems) > 0);
+end;
+
+procedure TTestPublishServer.TestAddFilesReadsAgain;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_files', TJSONObject.Create(['files', Files([SET_FILE])]));
+  AssertEquals('found', '', Missing);
+  AssertEquals('its pieces wait', 0, Answer.Integers['placed']);
+  AssertTrue('to be placed', Answer.Integers['unplaced'] > 0);
+end;
+
+procedure TTestPublishServer.TestOpenLayout;
+var
+  Layout: TLayout;
+  Text: string;
+begin
+  Layout := TLayout.Create;
+  try
+    Layout.Name := 'Skirt on A4';
+    Layout.AddSource(PATTERN_FILE, '', '');
+    Text := Layout.SaveToText;
+  finally
+    FreeAndNil(Layout);
+  end;
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', Text]));
+  AssertEquals('its own name', 'Skirt on A4', Answer.Strings['name']);
+  AssertEquals('nothing missing', '', Missing);
+  AssertTrue('pieces to place', Answer.Integers['unplaced'] > 0);
+end;
+
+procedure TTestPublishServer.TestOpenNeedsLayoutOrPattern;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE])]));
+  AssertEquals(RPC_INVALID_PARAMS, ErrorCode);
+  AssertEquals(rsPublishNeedsSource, FReply.Objects['error'].Strings['message']);
+end;
+
+procedure TTestPublishServer.TestBadFilesRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['pattern', PATTERN_FILE]));
+  AssertEquals('no files', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_open', TJSONObject.Create(['files', TJSONArray.Create([TJSONObject.Create(['path', PATTERN_FILE])]),
+    'pattern', PATTERN_FILE]));
+  AssertEquals('a file with no text', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_add_files', TJSONObject.Create(['files', TJSONArray.Create(['a.sloper'])]));
+  AssertEquals('a file that is no object', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestBadLayoutRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', TJSONArray.Create, 'layout', '{"format": "something else"}']));
+  AssertEquals(RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestState;
+begin
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('an empty layout', 0, Answer.Integers['placed']);
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('as open left it', SET_FILE + ';', Missing);
+end;
+
+procedure TTestPublishServer.TestScene;
+var
+  Scene, Piece: TJSONObject;
+  Placed: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Placed := Answer.Integers['placed'];
+  Call('publish_scene', TJSONObject.Create);
+  Scene := Answer;
+  AssertTrue('tiled by default', Scene.Booleans['tiled']);
+  AssertTrue('with a cover', Scene.Find('cover').JSONType = jtObject);
+  AssertTrue('pages', Scene.Arrays['pages'].Count > 0);
+  AssertEquals('A1 first', 'A1', Scene.Arrays['pages'].Objects[0].Strings['caption']);
+  AssertEquals('every placed piece', Placed, Scene.Arrays['pieces'].Count);
+  Piece := Scene.Arrays['pieces'].Objects[0];
+  AssertEquals('the first placement', 0, Piece.Integers['placement']);
+  AssertTrue('an outline', Piece.Arrays['cutLine'].Count >= 6);
+  AssertEquals('as x, y pairs', 0, Piece.Arrays['cutLine'].Count mod 2);
+  AssertTrue('labelled', Piece.Find('label').JSONType = jtObject);
+  AssertTrue('a new layout''s information block', Scene.Arrays['titleBoxes'].Count > 0);
+  AssertTrue('its lines', Scene.Objects['title'].Arrays['lines'].Count > 0);
+end;
+
+// The skirt's layout text, its pieces waiting in the tray
+function WaitingLayout: string;
+var
+  Layout: TLayout;
+begin
+  Layout := TLayout.Create;
+  try
+    Layout.Name := 'Skirt';
+    Layout.AddSource(PATTERN_FILE, '', '');
+    Result := Layout.SaveToText;
+  finally
+    FreeAndNil(Layout);
+  end;
+end;
+
+// The caller frees it
+function TTestPublishServer.LabelOf(Placement: integer): TJSONObject;
+var
+  Index: integer;
+  Piece: TJSONObject;
+begin
+  Call('publish_scene', TJSONObject.Create);
+  for Index := 0 to Answer.Arrays['pieces'].Count - 1 do
+  begin
+    Piece := Answer.Arrays['pieces'].Objects[Index];
+    if Piece.Integers['placement'] = Placement then
+      Exit(TJSONObject(Piece.Objects['label'].Clone));
+  end;
+  Fail('no piece ' + IntToStr(Placement));
+  Result := nil;
+end;
+
+procedure TTestPublishServer.TestPress;
+var
+  Spot: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Spot := LabelOf(1);
+  Call('publish_press', Spot);
+  AssertEquals('the piece under its label', 1, Answer.Integers['placement']);
+  AssertEquals('no note', -1, Answer.Integers['note']);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('a press changes nothing', Answer.Booleans['canUndo']);
+  Call('publish_press', TJSONObject.Create(['x', -5000, 'y', -5000]));
+  AssertEquals('nothing there', -1, Answer.Integers['placement']);
+  Call('publish_press', TJSONObject.Create(['x', 10]));
+  AssertEquals('needs both', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestDragOneStep;
+var
+  Spot: TJSONObject;
+  X, Y, StartX, StartY: double;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  StartX := SavedPlacement(1).Floats['x'];
+  StartY := SavedPlacement(1).Floats['y'];
+  Spot := LabelOf(1);
+  X := Spot.Floats['x'];
+  Y := Spot.Floats['y'];
+  Call('publish_press', Spot);
+  Call('publish_drag', TJSONObject.Create(['x', X + 40.2, 'y', Y + 10]));
+  AssertTrue('moving', Answer.Booleans['moving']);
+  Call('publish_drag', TJSONObject.Create(['x', X + 120.2, 'y', Y + 30.1]));
+  Call('publish_release', TJSONObject.Create);
+  AssertEquals('followed the pointer, on the grid', RoundToStep(StartX + 120.2), SavedPlacement(1).Floats['x'], 1e-6);
+  AssertEquals('down too', RoundToStep(StartY + 30.1), SavedPlacement(1).Floats['y'], 1e-6);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named', rsPreviewMove, Answer.Strings['undo']);
+  Call('publish_undo', TJSONObject.Create);
+  AssertEquals('one step back', StartX, SavedPlacement(1).Floats['x'], 1e-9);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('the only step', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestDragCancelled;
+var
+  Spot: TJSONObject;
+  StartX: double;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  StartX := SavedPlacement(0).Floats['x'];
+  Spot := LabelOf(0);
+  Call('publish_press', TJSONObject(Spot.Clone));
+  Call('publish_drag', TJSONObject.Create(['x', Spot.Floats['x'] + 50, 'y', Spot.Floats['y']]));
+  FreeAndNil(Spot);
+  Call('publish_cancel', TJSONObject.Create);
+  AssertEquals('put back', StartX, SavedPlacement(0).Floats['x'], 1e-9);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('no step', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestDragNothingHeld;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_press', TJSONObject.Create(['x', -5000, 'y', -5000]));
+  Call('publish_drag', TJSONObject.Create(['x', 0, 'y', 0]));
+  AssertFalse('nothing to move', Answer.Booleans['moving']);
+  Call('publish_release', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('no step', Answer.Booleans['canUndo']);
+end;
+
+// A note lies over the pieces, so a press on it holds the note
+procedure TTestPublishServer.TestDragNote;
+var
+  Layout: TLayout;
+  Text: string;
+  Spread: TRect2;
+  Middle: TVec2;
+begin
+  Layout := TLayout.Create;
+  try
+    Layout.AddSource(PATTERN_FILE, '', '');
+    Layout.AddNote('Cut on the bias', 100, 100, 10);
+    Spread := NoteBounds(Layout.Notes[0], Layout.FieldValues('', ''));
+    Text := Layout.SaveToText;
+  finally
+    FreeAndNil(Layout);
+  end;
+  Middle := Vec2((Spread.MinX + Spread.MaxX) / 2, (Spread.MinY + Spread.MaxY) / 2);
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', Text]));
+  Call('publish_press', TJSONObject.Create(['x', Middle.X, 'y', Middle.Y]));
+  AssertEquals('the note', 0, Answer.Integers['note']);
+  AssertEquals('not a piece', -1, Answer.Integers['placement']);
+  Call('publish_drag', TJSONObject.Create(['x', Middle.X + 20, 'y', Middle.Y]));
+  Call('publish_release', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named', rsPreviewMoveNote, Answer.Strings['undo']);
+  AssertEquals('moved across', 120, Answer.Arrays['notes'].Objects[0].Floats['x'], 1e-6);
+end;
+
+procedure TTestPublishServer.TestDropCopy;
+var
+  Waiting: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  Waiting := Answer.Arrays['tray'].Count;
+  Call('publish_drop_copy', TJSONObject.Create(['index', 0, 'x', 300, 'y', 400]));
+  AssertEquals('the first placement', 0, Answer.Integers['placed']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('one fewer waiting', Waiting - 1, Answer.Arrays['tray'].Count);
+  AssertEquals('named as the desktop', rsLayoutPlaceOne, Answer.Strings['undo']);
+  Call('publish_drop_copy', TJSONObject.Create(['index', 99, 'x', 0, 'y', 0]));
+  AssertEquals('no such copy', RPC_REFUSED, ErrorCode);
+  Call('publish_drop_copy', TJSONObject.Create(['index', 0]));
+  AssertEquals('needs a point', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestPackUndoRedo;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  AssertFalse('nothing to undo', Answer.Booleans['canUndo']);
+  Call('publish_pack', TJSONObject.Create);
+  AssertTrue('packed', Answer.Booleans['done']);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('one step', Answer.Booleans['canUndo']);
+  AssertEquals('named', rsLayoutChangePack, Answer.Strings['undo']);
+  Call('publish_undo', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('undone', Answer.Booleans['canUndo']);
+  AssertTrue('to redo', Answer.Booleans['canRedo']);
+  Call('publish_redo', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('redone', Answer.Booleans['canUndo']);
+  Call('publish_redo', TJSONObject.Create);
+  AssertEquals('nothing to redo', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestPlaceWaiting;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  AssertTrue('waiting', Answer.Integers['unplaced'] > 0);
+  Call('publish_place_pieces', TJSONObject.Create);
+  AssertTrue('placed some', Answer.Integers['placed'] > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('none waiting', 0, Answer.Integers['unplaced']);
+  AssertTrue('changed', Answer.Booleans['modified']);
+end;
+
+function TTestPublishServer.SavedPlacement(Index: integer): TJSONObject;
+var
+  Err: string;
+begin
+  Call('publish_save', TJSONObject.Create);
+  FreeAndNil(FSaved);
+  if not ParseJSONObject(Answer.Strings['text'], FSaved, Err) then
+    Fail(Err);
+  Result := FSaved.Arrays['placements'].Objects[Index];
+end;
+
+function TTestPublishServer.FirstPlacement: TJSONObject;
+begin
+  Result := SavedPlacement(0);
+end;
+
+procedure TTestPublishServer.TestTurnFlip;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_turn', TJSONObject.Create(['placement', 0]));
+  AssertEquals('the piece', 0, Answer.Integers['placement']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutTurnPiece, Answer.Strings['undo']);
+  AssertEquals('a quarter turn', 90, FirstPlacement.Integers['rotation']);
+  Call('publish_flip', TJSONObject.Create(['placement', 0]));
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('flip named', rsLayoutFlipPiece, Answer.Strings['undo']);
+  AssertTrue('flipped', FirstPlacement.Booleans['flipped']);
+  Call('publish_undo', TJSONObject.Create);
+  AssertFalse('flip undone', FirstPlacement.Booleans['flipped']);
+  AssertEquals('turn kept', 90, FirstPlacement.Integers['rotation']);
+end;
+
+procedure TTestPublishServer.TestUnplaceToTray;
+var
+  Placed: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Placed := Answer.Integers['placed'];
+  AssertEquals('an empty tray', 0, Answer.Arrays['tray'].Count);
+  Call('publish_unplace', TJSONObject.Create(['placement', 0]));
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('one fewer placed', Placed - 1, Answer.Integers['placed']);
+  AssertEquals('in the tray', 1, Answer.Arrays['tray'].Count);
+  AssertTrue('captioned', Answer.Arrays['tray'].Objects[0].Strings['caption'] <> '');
+  AssertTrue('can go back', Answer.Arrays['tray'].Objects[0].Booleans['canPlace']);
+  AssertEquals('named as the desktop', rsLayoutUnplacePiece, Answer.Strings['undo']);
+end;
+
+procedure TTestPublishServer.TestPlaceCopy;
+var
+  Waiting: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  Waiting := Answer.Arrays['tray'].Count;
+  AssertTrue('waiting', Waiting > 1);
+  AssertEquals('as counted', Answer.Integers['unplaced'], Waiting);
+  Call('publish_place_copy', TJSONObject.Create(['index', 1]));
+  AssertEquals('the first placement', 0, Answer.Integers['placed']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('one placed', 1, Answer.Integers['placed']);
+  AssertEquals('one fewer waiting', Waiting - 1, Answer.Arrays['tray'].Count);
+  AssertEquals('named as the desktop', rsLayoutPlaceOne, Answer.Strings['undo']);
+end;
+
+procedure TTestPublishServer.TestPieceEditRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_turn', TJSONObject.Create(['placement', 999]));
+  AssertEquals('no such piece', RPC_REFUSED, ErrorCode);
+  Call('publish_flip', TJSONObject.Create);
+  AssertEquals('placement needed', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_unplace', TJSONObject.Create(['placement', 0.5]));
+  AssertEquals('a whole number', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_place_copy', TJSONObject.Create(['index', 0]));
+  AssertEquals('an empty tray', RPC_REFUSED, ErrorCode);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('nothing changed', Answer.Booleans['canUndo']);
+end;
+
+const
+  OTHER_PATTERN = 'skirt-hem.sloper';
+  SIZE_TABLE = 'size-table.slm';
+
+// The example size table, from beside the skirt block's folder
+function SizeTableText: string;
+var
+  Reason: string;
+begin
+  if not ReadTextFile(ConcatPaths([ExtractFileDir(ExtractFileDir(ExpandFileName(ParamStr(0)))), 'docs', 'examples',
+    'measurements', SIZE_TABLE]), Result, Reason) then
+    raise Exception.Create(Reason);
+end;
+
+procedure TTestPublishServer.TestPatterns;
+var
+  Item: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_patterns', TJSONObject.Create);
+  AssertEquals('one pattern', 1, Answer.Arrays['patterns'].Count);
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('its file', PATTERN_FILE, Item.Strings['pattern']);
+  AssertEquals('captioned by it', PATTERN_FILE, Item.Strings['caption']);
+  AssertEquals('the set it names', SET_FILE, Item.Strings['measurements']);
+  AssertFalse('the pattern''s own', Item.Booleans['ownSet']);
+  AssertEquals('no sizes', 0, Item.Arrays['sizes'].Count);
+  AssertEquals('read', '', Item.Strings['problem']);
+end;
+
+procedure TTestPublishServer.TestAddRemovePattern;
+var
+  Added, Id: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_pattern', TJSONObject.Create(['path', OTHER_PATTERN, 'files', Files([OTHER_PATTERN])]));
+  Added := Answer.Integers['added'];
+  AssertTrue('copies to place', Added > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('in the tray', Added, Answer.Arrays['tray'].Count);
+  AssertEquals('named as the desktop', rsLayoutAddPattern, Answer.Strings['undo']);
+  Call('publish_patterns', TJSONObject.Create);
+  AssertEquals('two patterns', 2, Answer.Arrays['patterns'].Count);
+  Id := Answer.Arrays['patterns'].Objects[1].Integers['id'];
+  Call('publish_remove_pattern', TJSONObject.Create(['source', Id]));
+  AssertEquals('one again', 1, Answer.Arrays['patterns'].Count);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('remove named', rsLayoutRemovePattern, Answer.Strings['undo']);
+  AssertEquals('its copies gone', 0, Answer.Arrays['tray'].Count);
+  Call('publish_remove_pattern', TJSONObject.Create(['source', Id]));
+  AssertEquals('gone already', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestAddPatternNeedsFile;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_pattern', TJSONObject.Create(['path', OTHER_PATTERN]));
+  AssertEquals('nothing yet', 0, Answer.Integers['added']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('asked for', OTHER_PATTERN + ';', Missing);
+  Call('publish_add_files', TJSONObject.Create(['files', Files([OTHER_PATTERN])]));
+  AssertEquals('found', '', Missing);
+  AssertTrue('its copies wait', Answer.Arrays['tray'].Count > 0);
+end;
+
+procedure TTestPublishServer.TestMeasurementsAndSize;
+var
+  Item: TJSONObject;
+  Table: TJSONArray;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Table := TJSONArray.Create;
+  Table.Add(TJSONObject.Create(['path', SIZE_TABLE, 'text', SizeTableText]));
+  Call('publish_set_measurements', TJSONObject.Create(['source', 1, 'path', SIZE_TABLE, 'files', Table]));
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('the table', SIZE_TABLE, Item.Strings['measurements']);
+  AssertTrue('chosen by the layout', Item.Booleans['ownSet']);
+  AssertEquals('its sizes', 5, Item.Arrays['sizes'].Count);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangeMeasurements, Answer.Strings['undo']);
+  Call('publish_set_size', TJSONObject.Create(['source', 1, 'size', '12']));
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('the size', '12', Item.Strings['size']);
+  AssertEquals('captioned with it', Format(rsLayoutSetAndSize, [PATTERN_FILE, '12']), Item.Strings['caption']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('size named', rsLayoutChangeSize, Answer.Strings['undo']);
+  Call('publish_set_size', TJSONObject.Create(['source', 1, 'size', 'XL']));
+  AssertEquals('no such size', RPC_REFUSED, ErrorCode);
+  Call('publish_set_measurements', TJSONObject.Create(['source', 1, 'path', '']));
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('the pattern''s own again', SET_FILE, Item.Strings['measurements']);
+  AssertFalse('not chosen', Item.Booleans['ownSet']);
+  Call('publish_set_measurements', TJSONObject.Create(['source', 1]));
+  AssertEquals('path needed', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestAddNote;
+var
+  Note: TJSONObject;
+  Lowest: double;
+  CutLine: TJSONArray;
+  Index, Point: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_scene', TJSONObject.Create);
+  AssertEquals('none yet', 0, Answer.Arrays['notes'].Count);
+  AssertTrue('as a list', Answer.Find('pieceNotes').JSONType = jtArray);
+  // The lowest y of every piece's cut line, a flat list of x, y
+  Lowest := 0;
+  for Index := 0 to Answer.Arrays['pieces'].Count - 1 do
+  begin
+    CutLine := Answer.Arrays['pieces'].Objects[Index].Arrays['cutLine'];
+    for Point := 0 to CutLine.Count div 2 - 1 do
+      Lowest := Max(Lowest, CutLine.Floats[2 * Point + 1]);
+  end;
+  Call('publish_add_note', TJSONObject.Create);
+  AssertEquals('the first', 0, Answer.Integers['note']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutAddNote, Answer.Strings['undo']);
+  Call('publish_scene', TJSONObject.Create);
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('its text', rsLayoutNewNote, Note.Arrays['lines'].Strings[0]);
+  AssertEquals('at the left', 0, Note.Arrays['box'].Floats[0], 1e-9);
+  AssertTrue('below the pieces', Note.Arrays['box'].Floats[1] > Lowest);
+  AssertEquals('text, not a stamp', 0, Note.Arrays['stamp'].Count);
+end;
+
+procedure TTestPublishServer.TestSetNote;
+var
+  Note: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_note', TJSONObject.Create);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'text', 'Cut {pattern.name}'#10'on the fold'#10, 'size', 20,
+    'align', 'centre', 'bold', True]));
+  AssertEquals('as typed, trimmed', 'Cut {pattern.name}'#10'on the fold', Answer.Strings['text']);
+  AssertEquals('centred', 'centre', Answer.Strings['align']);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'font', ' Georgia ', 'boxed', True]));
+  AssertEquals('the font, trimmed', 'Georgia', Answer.Strings['font']);
+  Call('publish_scene', TJSONObject.Create);
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('two lines', 2, Note.Arrays['lines'].Count);
+  AssertFalse('the field filled in', Pos('{', Note.Arrays['lines'].Strings[0]) > 0);
+  AssertTrue('bold', Note.Booleans['bold']);
+  AssertTrue('boxed', Note.Booleans['boxed']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangeNote, Answer.Strings['undo']);
+  // Both changes are one step, as typing is
+  Call('publish_undo', TJSONObject.Create);
+  Call('publish_note', TJSONObject.Create(['note', 0]));
+  AssertEquals('back to new', rsLayoutNewNote, Answer.Strings['text']);
+  AssertEquals('its font too', '', Answer.Strings['font']);
+end;
+
+procedure TTestPublishServer.TestSetNoteRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_note', TJSONObject.Create);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'font', 'Serif, Sans']));
+  AssertEquals('two families', RPC_REFUSED, ErrorCode);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'size', 0]));
+  AssertEquals('too small', RPC_REFUSED, ErrorCode);
+  Call('publish_set_note', TJSONObject.Create(['note', 3, 'text', 'x']));
+  AssertEquals('no such note', RPC_REFUSED, ErrorCode);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('only the add', rsLayoutAddNote, Answer.Strings['undo']);
+end;
+
+procedure TTestPublishServer.TestDeleteNote;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_note', TJSONObject.Create);
+  Call('publish_delete_note', TJSONObject.Create(['note', 0]));
+  Call('publish_scene', TJSONObject.Create);
+  AssertEquals('gone', 0, Answer.Arrays['notes'].Count);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutDeleteNote, Answer.Strings['undo']);
+  Call('publish_delete_note', TJSONObject.Create(['note', 0]));
+  AssertEquals('none left', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestMaterials;
+var
+  Need: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_materials', TJSONObject.Create);
+  AssertTrue('a material', Answer.Arrays['needs'].Count > 0);
+  Need := Answer.Arrays['needs'].Objects[0];
+  AssertTrue('named', Need.Strings['material'] <> '');
+  AssertTrue('pieces cut from it', Need.Integers['copies'] > 0);
+  AssertTrue('how much', Need.Strings['needed'] <> '');
+  AssertTrue('its notes, as a list', Need.Find('notes').JSONType = jtArray);
+  Call('publish_remove_pattern', TJSONObject.Create(['source', 1]));
+  Call('publish_materials', TJSONObject.Create);
+  AssertEquals('nothing without patterns', 0, Answer.Arrays['needs'].Count);
+end;
+
+procedure TTestPublishServer.TestTitle;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_title', TJSONObject.Create);
+  AssertTrue('a new layout shows one', Answer.Booleans['enabled']);
+  AssertTrue('with fields', Answer.Arrays['fields'].Count > 0);
+  AssertEquals('every field offered', Length(TITLE_FIELDS), Answer.Arrays['available'].Count);
+  AssertTrue('tiles place it', Answer.Booleans['placeUsed']);
+  Call('publish_set_output', TJSONObject.Create(['kind', 'large']));
+  Call('publish_title', TJSONObject.Create);
+  AssertFalse('one sheet does not', Answer.Booleans['placeUsed']);
+end;
+
+procedure TTestPublishServer.TestSetTitle;
+var
+  Count: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_title', TJSONObject.Create);
+  Count := Answer.Arrays['fields'].Count;
+  Call('publish_set_title', TJSONObject.Create(['field', FIELD_DATE, 'shown', False]));
+  Call('publish_set_title', TJSONObject.Create(['field', FIELD_DATE, 'shown', True]));
+  AssertEquals('as many', Count, Answer.Arrays['fields'].Count);
+  AssertEquals('shown anew prints last', FIELD_DATE, Answer.Arrays['fields'].Strings[Count - 1]);
+  Call('publish_set_title', TJSONObject.Create(['corner', 'topRight', 'everyPage', True, 'enabled', False]));
+  AssertEquals('the corner', 'topRight', Answer.Strings['corner']);
+  AssertTrue('every page', Answer.Booleans['everyPage']);
+  AssertFalse('hidden', Answer.Booleans['enabled']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangeTitleBlock, Answer.Strings['undo']);
+  Call('publish_scene', TJSONObject.Create);
+  AssertEquals('no block drawn', 0, Answer.Arrays['titleBoxes'].Count);
+  Call('publish_set_title', TJSONObject.Create(['field', 'weather', 'shown', True]));
+  AssertEquals('no such field', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_set_title', TJSONObject.Create(['field', FIELD_DATE]));
+  AssertEquals('shown or not', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestOutput;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_output', TJSONObject.Create);
+  AssertEquals('tiled', 'tiled', Answer.Strings['kind']);
+  AssertEquals('every paper', Length(PAPER_NAMES), Answer.Arrays['papers'].Count);
+  AssertTrue('paper applies', Answer.Objects['used'].Booleans['paper']);
+  AssertFalse('a roll does not', Answer.Objects['used'].Booleans['rollWidth']);
+  AssertFalse('nor a typed paper size', Answer.Objects['used'].Booleans['paperSize']);
+  AssertTrue('built-in output profiles', Answer.Arrays['outputProfiles'].Count > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('pages summed up', Pos('pages', Answer.Strings['summary']) > 0);
+end;
+
+procedure TTestPublishServer.TestSetOutput;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_set_output', TJSONObject.Create(['paper', 'A3']));
+  AssertEquals('A3 wide', 297, Answer.Floats['paperWidth'], 1e-9);
+  AssertEquals('A3 tall', 420, Answer.Floats['paperHeight'], 1e-9);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangePaper, Answer.Strings['undo']);
+  Call('publish_set_output', TJSONObject.Create(['paper', CUSTOM_PAPER, 'paperWidth', 500, 'paperHeight', 600]));
+  AssertTrue('a size typed in', Answer.Objects['used'].Booleans['paperSize']);
+  AssertEquals('as typed', 500, Answer.Floats['paperWidth'], 1e-9);
+  Call('publish_set_output', TJSONObject.Create(['kind', 'large', 'fill', 'hatch']));
+  AssertTrue('a roll now', Answer.Objects['used'].Booleans['rollWidth']);
+  AssertFalse('no paper', Answer.Objects['used'].Booleans['paper']);
+  AssertEquals('hatched', 'hatch', Answer.Strings['fill']);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('one sheet', Pos('One sheet', Answer.Strings['summary']) = 1);
+  Call('publish_set_output', TJSONObject.Create(['paper', 'B9']));
+  AssertEquals('unknown paper', RPC_REFUSED, ErrorCode);
+  Call('publish_set_output', TJSONObject.Create(['kind', 'round']));
+  AssertEquals('unknown kind', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// Changes within a second are one step, as a run of spin clicks
+procedure TTestPublishServer.TestSetOutputJoins;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_set_output', TJSONObject.Create(['margin', 8]));
+  Call('publish_set_output', TJSONObject.Create(['margin', 9]));
+  Call('publish_undo', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('one step', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestSetOutputRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_set_output', TJSONObject.Create(['margin', 200]));
+  AssertEquals('nothing to print on', RPC_REFUSED, ErrorCode);
+  AssertEquals('says so', rsLayoutNoPrintArea, FReply.Objects['error'].Strings['message']);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('unchanged', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestTogglePage;
+var
+  Spot: TJSONObject;
+  Page: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Spot := LabelOf(0);
+  Call('publish_toggle_page', Spot);
+  Page := Answer.Strings['page'];
+  AssertTrue('a page there', Page <> '');
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutTogglePage, Answer.Strings['undo']);
+  AssertTrue('counted left out', Pos(', 1 left out', Answer.Strings['summary']) > 0);
+  // Another paper is another page grid, so nothing is left out
+  Call('publish_set_output', TJSONObject.Create(['paper', 'A3']));
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('forgotten', Pos(', 0 left out', Answer.Strings['summary']) > 0);
+  Call('publish_toggle_page', TJSONObject.Create(['x', -5000, 'y', -5000]));
+  AssertEquals('no page there', '', Answer.Strings['page']);
+end;
+
+// Saved only once the browser says it wrote the text, and only that text
+procedure TTestPublishServer.TestSavedOnceWritten;
+var
+  Text: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_pack', TJSONObject.Create);
+  Call('publish_text', TJSONObject.Create);
+  Text := Answer.Strings['text'];
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('not saved by reading', Answer.Booleans['modified']);
+  // Changed while it was being written
+  Call('publish_turn', TJSONObject.Create(['placement', 0]));
+  Call('publish_saved', TJSONObject.Create(['text', Text]));
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('the turn is not saved', Answer.Booleans['modified']);
+  Call('publish_text', TJSONObject.Create);
+  Call('publish_saved', TJSONObject.Create(['text', Answer.Strings['text']]));
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('saved', Answer.Booleans['modified']);
+  Call('publish_saved', TJSONObject.Create);
+  AssertEquals('the text needed', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// Work in progress: the layout and its files, opened again as they were, not saved
+procedure TTestPublishServer.TestSnapshotOpensAgain;
+var
+  Snapshot: TJSONObject;
+  Placed: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_unplace', TJSONObject.Create(['placement', 0]));
+  Call('publish_state', TJSONObject.Create);
+  Placed := Answer.Integers['placed'];
+  Call('publish_snapshot', TJSONObject.Create);
+  Snapshot := TJSONObject(Answer.Clone);
+  try
+    AssertEquals('both files', 2, Snapshot.Arrays['files'].Count);
+    AssertEquals('sorted by path', PATTERN_FILE, Snapshot.Arrays['files'].Objects[0].Strings['path']);
+    Call('publish_open', TJSONObject.Create(['layout', Snapshot.Strings['layout'], 'files',
+      Snapshot.Arrays['files'].Clone]));
+  finally
+    FreeAndNil(Snapshot);
+  end;
+  AssertEquals('nothing missing', '', Missing);
+  AssertEquals('as it was', Placed, Answer.Integers['placed']);
+  AssertFalse('just opened', Answer.Booleans['modified']);
+  Call('publish_mark_unsaved', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('not saved', Answer.Booleans['modified']);
+  AssertFalse('not an undo step', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestSave;
+var
+  Text: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  AssertTrue('a new layout is not saved', Answer.Booleans['modified']);
+  Call('publish_save', TJSONObject.Create);
+  Text := Answer.Strings['text'];
+  AssertTrue(Text, Pos('"placements"', Text) > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('saved', Answer.Booleans['modified']);
+  // It opens again as it was
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', Text]));
+  AssertFalse('as saved', Answer.Booleans['modified']);
+  AssertTrue('its pieces placed', Answer.Integers['placed'] > 0);
+end;
+
+procedure TTestPublishServer.TestExport;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_export', TJSONObject.Create(['format', 'pdf']));
+  AssertEquals('a PDF', '%PDF-', Copy(DecodeStringBase64(Answer.Strings['base64']), 1, 5));
+  Call('publish_export', TJSONObject.Create(['format', 'svg']));
+  AssertTrue('an SVG', Pos('<svg', DecodeStringBase64(Answer.Strings['base64'])) > 0);
+  Call('publish_export', TJSONObject.Create(['format', 'dxf']));
+  AssertTrue('a DXF', Pos('SECTION', DecodeStringBase64(Answer.Strings['base64'])) > 0);
+  Call('publish_export', TJSONObject.Create(['format', 'machine-dxf']));
+  AssertEquals('not on the web yet', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestExportRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  Call('publish_export', TJSONObject.Create(['format', 'pdf']));
+  AssertEquals('nothing placed', RPC_REFUSED, ErrorCode);
+end;
+
+// The Publish app's own, not the design app's
+procedure TTestPublishServer.TestTables;
+var
+  Shortcuts: TJSONArray;
+  Index: integer;
+  Commands: string;
+begin
+  Call('publish_tables', TJSONObject.Create);
+  Shortcuts := Answer.Arrays['shortcuts'];
+  Commands := ';';
+  for Index := 0 to Shortcuts.Count - 1 do
+    Commands := Commands + Shortcuts.Objects[Index].Strings['command'] + '=' + Shortcuts.Objects[Index].Strings['keys'] + ';';
+  AssertTrue('undo', Pos(';undo=Mod+Z;', Commands) > 0);
+  AssertTrue('export PDF', Pos(';exportPDF=Mod+E;', Commands) > 0);
+  AssertTrue('zoom area', Pos(';toolZoom=Z;', Commands) > 0);
+  AssertTrue('back to tray', Pos(';removePiece=Delete;', Commands) > 0);
+  AssertFalse('no design tools', Pos(';toolPoint=', Commands) > 0);
+end;
+
+procedure TTestPublishServer.TestNotTools;
+var
+  Tools: TJSONArray;
+  Index: integer;
+  Method: TApiMethod;
+  ToolName: string;
+begin
+  Tools := McpTools;
+  try
+    for Index := 0 to Tools.Count - 1 do
+    begin
+      ToolName := Tools.Objects[Index].Strings['name'];
+      AssertFalse(ToolName, ToolName.StartsWith(PUBLISH_PREFIX));
+    end;
+  finally
+    FreeAndNil(Tools);
+  end;
+  AssertTrue('its own table', Length(PublishMethods) > 0);
+  for Method in PublishMethods do
+    AssertTrue(Method.Name, Method.Name.StartsWith(PUBLISH_PREFIX));
+end;
+
+initialization
+  RegisterTest(TTestPublishServer);
+end.

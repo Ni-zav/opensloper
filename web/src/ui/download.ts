@@ -18,3 +18,33 @@ export function downloadBlob(fileName: string, blob: Blob): void {
 export function baseName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
+
+// A PDF the engine wrote, from its Base64
+export function pdfBlob(base64: string): Blob {
+  return new Blob([Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))], {
+    type: 'application/pdf',
+  });
+}
+
+// How long an opened PDF's address is kept for the viewer to read it, in ms
+const OPENED_PDF_MS = 60000;
+
+// Opens a PDF in the tab opened for it while the click counted, or
+// downloads it: when no tab was asked for (undefined), or the browser
+// would not open one (null). Says which it did.
+export function deliverPdf(
+  tab: Window | null | undefined,
+  name: string,
+  blob: Blob,
+): 'opened' | 'downloaded' | 'blocked' {
+  if (tab === undefined || tab === null) {
+    downloadBlob(name, blob);
+    return tab === undefined ? 'downloaded' : 'blocked';
+  }
+  const address = URL.createObjectURL(blob);
+  tab.location.href = address;
+  setTimeout(() => {
+    URL.revokeObjectURL(address);
+  }, OPENED_PDF_MS);
+  return 'opened';
+}

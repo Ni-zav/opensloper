@@ -1,74 +1,43 @@
-// The Problems tab, at the foot of the side panel, as Sloper.UI.ProblemsPanel:
-// every problem the pattern has, in full (editor_problems), with their count
-// on the tab's icon. Choosing one shows what it is about, pointing at one
-// highlights it on the canvas, and a double-click zooms to it. It follows
-// every change while hidden too, as its count shows on the icon.
-import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
-import { numberField, recordsField, stringField } from '../engine/replies.ts';
-import { LatestOnly } from './latestOnly.ts';
+// The Problems tab every app's side panel ends with, as Sloper.UI.ProblemsPanel:
+// each problem in full, those that stop printing in red. Pointing at one or
+// choosing it tells the app what it is about, by a key the app gave it, so
+// the app can show it. It knows nothing of documents, so each app fills it
+// its own way.
 import type { SideTabContent } from './sideTabs.ts';
 import { STRINGS } from './strings.ts';
 
-// What a problem is about: an object on the canvas (or a seam) or a variable
-// by ID, a measurement by key, or nothing
-export type ProblemSubject =
-  { kind: 'object' | 'variable'; id: string } | { kind: 'measurement'; key: string } | { kind: 'none' };
-
-export interface Problem {
+export interface ListedProblem {
+  // What the problem is about, in the app's own terms; '' for none
+  key: string;
   text: string;
-  subject: ProblemSubject;
+  // It stops printing or exporting, rather than only warning
+  blocking: boolean;
 }
 
 export interface ProblemsPanelEvents {
-  // How many problems there are, for the tab's icon and caption
-  counted(count: number): void;
   // The user chose a problem, by clicking it or moving to it with the keys
-  choose(subject: ProblemSubject): void;
-  // The pointer moved onto a problem, or off them all
-  hover(subject: ProblemSubject): void;
+  choose(key: string): void;
+  // The pointer moved onto a problem, or off them all ('')
+  hover(key: string): void;
   // A double-click on a problem
-  zoom(subject: ProblemSubject): void;
-  failed(error: unknown): void;
+  zoom(key: string): void;
 }
 
-const NONE: ProblemSubject = { kind: 'none' };
-
-function parseSubject(problem: Record<string, unknown>): ProblemSubject {
-  const kind = stringField(problem, 'kind');
-  const id = numberField(problem, 'id');
-  if ((kind === 'object' || kind === 'variable') && id !== undefined) {
-    return { kind, id: String(id) };
-  }
-  const key = stringField(problem, 'key');
-  if (kind === 'measurement' && key !== undefined) {
-    return { kind, key };
-  }
-  return NONE;
-}
-
-// So a chosen problem stays chosen when the list is built again
-function problemKey(problem: Problem): string {
-  return `${JSON.stringify(problem.subject)} ${problem.text}`;
+// So a chosen problem stays chosen when the list is filled again
+function rowKey(problem: ListedProblem): string {
+  return `${problem.key} ${problem.text}`;
 }
 
 export class ProblemsPanel implements SideTabContent {
   readonly element: HTMLElement;
   private readonly events: ProblemsPanelEvents;
-  private readonly document: PatternDocument;
   private readonly empty: HTMLElement;
   private readonly list: HTMLElement;
-  private readonly loads: LatestOnly<number>;
-  private problems: Problem[] = [];
+  private problems: ListedProblem[] = [];
   private chosenKey = '';
   private hovered = -1;
-  private readonly listener = (_document: PatternDocument, changes: ReadonlySet<DocumentChange>): void => {
-    if (changes.has('pattern') || changes.has('objectsReplaced') || changes.has('measurements')) {
-      this.loads.push(0);
-    }
-  };
 
-  constructor(document: PatternDocument, events: ProblemsPanelEvents) {
-    this.document = document;
+  constructor(events: ProblemsPanelEvents) {
     this.events = events;
     const make = window.document.createElement.bind(window.document);
     this.element = make('div');
@@ -88,10 +57,9 @@ export class ProblemsPanel implements SideTabContent {
       }
     });
     this.list.addEventListener('dblclick', (event) => {
-      const index = this.indexAt(event);
-      const problem = this.problems[index];
+      const problem = this.problems[this.indexAt(event)];
       if (problem !== undefined) {
-        events.zoom(problem.subject);
+        events.zoom(problem.key);
       }
     });
     this.list.addEventListener('mousemove', (event) => {
@@ -103,17 +71,10 @@ export class ProblemsPanel implements SideTabContent {
     this.list.addEventListener('keydown', (event) => {
       this.key(event);
     });
-    this.loads = new LatestOnly(
-      async () => this.load(),
-      (error) => {
-        events.failed(error);
-      },
-    );
-    document.addListener(this.listener);
-    this.loads.push(0);
+    this.show();
   }
 
-  // The list follows every change, shown or not, so there is nothing to catch up on
+  // The app fills it on every change, shown or not, so there is nothing to catch up on
   setShown(shown: boolean): void {
     if (!shown) {
       this.setHovered(-1);
@@ -121,7 +82,6 @@ export class ProblemsPanel implements SideTabContent {
   }
 
   dispose(): void {
-    this.document.removeListener(this.listener);
     this.element.remove();
   }
 
@@ -129,15 +89,11 @@ export class ProblemsPanel implements SideTabContent {
     return this.problems.length;
   }
 
-  private async load(): Promise<void> {
-    const answer = await this.document.read('editor_problems');
-    this.problems = recordsField(answer, 'problems').map((problem) => ({
-      text: stringField(problem, 'text') ?? '',
-      subject: parseSubject(problem),
-    }));
+  // Lists these, keeping the chosen one chosen if it is still listed
+  setProblems(problems: ListedProblem[]): void {
+    this.problems = problems;
     this.hovered = -1;
     this.show();
-    this.events.counted(this.problems.length);
   }
 
   private show(): void {
@@ -147,7 +103,8 @@ export class ProblemsPanel implements SideTabContent {
       row.setAttribute('role', 'option');
       row.dataset.index = String(index);
       row.textContent = problem.text;
-      const chosen = problemKey(problem) === this.chosenKey;
+      row.classList.toggle('blocking', problem.blocking);
+      const chosen = rowKey(problem) === this.chosenKey;
       row.classList.toggle('chosen', chosen);
       row.setAttribute('aria-selected', String(chosen));
       return row;
@@ -167,7 +124,7 @@ export class ProblemsPanel implements SideTabContent {
     if (problem === undefined) {
       return;
     }
-    this.chosenKey = problemKey(problem);
+    this.chosenKey = rowKey(problem);
     for (const row of this.list.children) {
       const chosen = row instanceof HTMLElement && row.dataset.index === String(index);
       row.classList.toggle('chosen', chosen);
@@ -176,7 +133,7 @@ export class ProblemsPanel implements SideTabContent {
         row.scrollIntoView({ block: 'nearest' });
       }
     }
-    this.events.choose(problem.subject);
+    this.events.choose(problem.key);
   }
 
   private setHovered(index: number): void {
@@ -184,7 +141,7 @@ export class ProblemsPanel implements SideTabContent {
       return;
     }
     this.hovered = index;
-    this.events.hover(this.problems[index]?.subject ?? NONE);
+    this.events.hover(this.problems[index]?.key ?? '');
   }
 
   // Up and Down choose the next problem, as clicking it does
@@ -194,7 +151,7 @@ export class ProblemsPanel implements SideTabContent {
       return;
     }
     event.preventDefault();
-    const current = this.problems.findIndex((problem) => problemKey(problem) === this.chosenKey);
+    const current = this.problems.findIndex((problem) => rowKey(problem) === this.chosenKey);
     const next = current < 0 ? (step > 0 ? 0 : this.problems.length - 1) : current + step;
     if (next >= 0 && next < this.problems.length) {
       this.choose(next);

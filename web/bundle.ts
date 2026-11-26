@@ -1,10 +1,11 @@
 // Bundles the web pages with esbuild, each with the engine's worker, and
 // copies what they load beside them: the design app into out/design, with the
 // toolbar icons and the example patterns of the user guide, and the spike's page into engine/out/browser. The engine
-// (engine_lib.wasm) is built first by ./opensloper-make.sh web. Last comes the
-// design app's service worker (sw.js), given the list of every other file and
-// a version made from their contents, so it can keep them for offline use and
-// a new build installs a new one. Node runs this TypeScript as it is.
+// (engine_lib.wasm) is built first by ./opensloper-make.sh web. Each app's
+// folder ends with its manifest and its service worker (sw.js), given the list
+// of every other file and a version made from their contents, so it can keep
+// them for offline use and a new build installs a new one. Node runs this
+// TypeScript as it is.
 import { createHash } from 'node:crypto';
 import { access, copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
@@ -12,24 +13,66 @@ import { build } from 'esbuild';
 
 const ENGINE = 'engine/out/browser/engine_lib.wasm';
 const DESIGN = 'out/design';
+const PUBLISH = 'out/publish';
 const SERVICE_WORKER = 'sw.js';
 
-// What the browser needs to offer to install the app
-const MANIFEST = {
-  name: 'OpenSloper',
-  short_name: 'OpenSloper',
-  description: 'Parametric sewing pattern drafting',
-  start_url: '.',
-  scope: '.',
-  display: 'standalone',
-  background_color: '#f2f1ed',
-  theme_color: '#f2f1ed',
-  icons: [
-    { src: 'opensloper-design.svg', sizes: 'any', type: 'image/svg+xml' },
-    { src: 'opensloper-design-192.png', sizes: '192x192', type: 'image/png' },
-    { src: 'opensloper-design-512.png', sizes: '512x512', type: 'image/png' },
-  ],
-};
+// What the browser needs to offer to install an app; icon is the name of
+// its icons (resources/opensloper-design.svg and resources/web's PNGs)
+function manifest(name: string, description: string, icon: string): object {
+  return {
+    name,
+    short_name: name,
+    description,
+    start_url: '.',
+    scope: '.',
+    display: 'standalone',
+    background_color: '#f2f1ed',
+    theme_color: '#f2f1ed',
+    icons: [
+      { src: `${icon}.svg`, sizes: 'any', type: 'image/svg+xml' },
+      { src: `${icon}-192.png`, sizes: '192x192', type: 'image/png' },
+      { src: `${icon}-512.png`, sizes: '512x512', type: 'image/png' },
+    ],
+  };
+}
+
+// The app's icons and manifest, then its service worker, which keeps every
+// other file of the folder, under a version that changes when any of them does
+async function installable(folder: string, app: string, about: object, icon: string): Promise<void> {
+  await copyFile(`../resources/${icon}.svg`, join(folder, `${icon}.svg`));
+  for (const size of [192, 512]) {
+    // oxlint-disable-next-line no-await-in-loop
+    await copyFile(`../resources/web/${icon}-${String(size)}.png`, join(folder, `${icon}-${String(size)}.png`));
+  }
+  await writeFile(join(folder, 'manifest.webmanifest'), `${JSON.stringify(about, undefined, 2)}\n`);
+  // Every file of the app, with / between folders as URLs have them
+  const files = (await readdir(folder, { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(folder, join(entry.parentPath, entry.name)).split(sep).join('/'))
+    .filter((file) => file !== SERVICE_WORKER)
+    // A new array from filter, sorted so the version does not hang on the order files are read in
+    // oxlint-disable-next-line unicorn/no-array-sort
+    .sort();
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(file);
+    // oxlint-disable-next-line no-await-in-loop
+    hash.update(await readFile(join(folder, file)));
+  }
+  await build({
+    entryPoints: ['src/ui/serviceWorker.ts'],
+    bundle: true,
+    format: 'iife',
+    target: 'es2022',
+    outfile: join(folder, SERVICE_WORKER),
+    define: {
+      SW_APP: JSON.stringify(app),
+      SW_FILES: JSON.stringify(files),
+      SW_VERSION: JSON.stringify(hash.digest('hex').slice(0, 16)),
+    },
+    logLevel: 'warning',
+  });
+}
 
 async function bundle(entries: string[], outdir: string): Promise<void> {
   await build({
@@ -55,6 +98,8 @@ await rm(DESIGN, { recursive: true, force: true });
 await mkdir(DESIGN, { recursive: true });
 await bundle(['src/design/main.ts', 'src/engine/worker.ts'], 'out/design');
 await copyFile('src/design/index.html', 'out/design/index.html');
+await copyFile('src/ui/sidePanel.css', 'out/design/sidePanel.css');
+await copyFile('src/ui/printDialog.css', 'out/design/printDialog.css');
 await copyFile(ENGINE, 'out/design/engine_lib.wasm');
 await cp('../data/icons', 'out/design/icons', { recursive: true });
 // Patterns and measurement files, laid out as in the guide so each finds its
@@ -63,41 +108,29 @@ await cp('../docs/examples', 'out/design/examples', {
   recursive: true,
   filter: (source) => !source.endsWith('.sdrape'),
 });
-await copyFile('../resources/opensloper-design.svg', 'out/design/opensloper-design.svg');
-for (const size of [192, 512]) {
-  // oxlint-disable-next-line no-await-in-loop
-  await copyFile(
-    `../resources/web/opensloper-design-${String(size)}.png`,
-    `out/design/opensloper-design-${String(size)}.png`,
-  );
-}
-await writeFile('out/design/manifest.webmanifest', `${JSON.stringify(MANIFEST, undefined, 2)}\n`);
+await installable(
+  DESIGN,
+  'design',
+  manifest('OpenSloper', 'Parametric sewing pattern drafting', 'opensloper-design'),
+  'opensloper-design',
+);
 
-// Every file of the app, with / between folders as URLs have them, and a
-// version that changes when any of them does
-const files = (await readdir(DESIGN, { recursive: true, withFileTypes: true }))
-  .filter((entry) => entry.isFile())
-  .map((entry) => relative(DESIGN, join(entry.parentPath, entry.name)).split(sep).join('/'))
-  .filter((file) => file !== SERVICE_WORKER)
-  // A new array from filter, sorted so the version does not hang on the order files are read in
-  // oxlint-disable-next-line unicorn/no-array-sort
-  .sort();
-const hash = createHash('sha256');
-for (const file of files) {
-  hash.update(file);
-  // oxlint-disable-next-line no-await-in-loop
-  hash.update(await readFile(join(DESIGN, file)));
-}
-await build({
-  entryPoints: ['src/design/serviceWorker.ts'],
-  bundle: true,
-  format: 'iife',
-  target: 'es2022',
-  outfile: join(DESIGN, SERVICE_WORKER),
-  define: { SW_FILES: JSON.stringify(files), SW_VERSION: JSON.stringify(hash.digest('hex').slice(0, 16)) },
-  logLevel: 'warning',
-});
+// The Publish app, its own page with the same engine
+await rm(PUBLISH, { recursive: true, force: true });
+await mkdir(PUBLISH, { recursive: true });
+await bundle(['src/publish/main.ts', 'src/engine/worker.ts'], PUBLISH);
+await copyFile('src/publish/index.html', join(PUBLISH, 'index.html'));
+await copyFile('src/ui/sidePanel.css', join(PUBLISH, 'sidePanel.css'));
+await copyFile('src/ui/printDialog.css', join(PUBLISH, 'printDialog.css'));
+await copyFile(ENGINE, join(PUBLISH, 'engine_lib.wasm'));
+await cp('../data/icons', join(PUBLISH, 'icons'), { recursive: true });
+await installable(
+  PUBLISH,
+  'publish',
+  manifest('OpenSloper Publish', 'Print sewing patterns at true size, tiled or on one sheet', 'opensloper-publish'),
+  'opensloper-publish',
+);
 
 await bundle(['engine/browser/main.ts', 'src/engine/worker.ts'], 'engine/out/browser');
 await copyFile('engine/browser/index.html', 'engine/out/browser/index.html');
-console.log('Bundled out/design and engine/out/browser');
+console.log('Bundled out/design, out/publish and engine/out/browser');

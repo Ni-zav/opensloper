@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSloper Publish</title>
+    <link rel="icon" href="opensloper-publish.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="sidePanel.css" />
+    <link rel="stylesheet" href="printDialog.css" />
+    <meta name="theme-color" content="#f2f1ed" />
+    <style>
+      /* As the design app's page */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto 1fr auto;
+        font:
+          13px system-ui,
+          sans-serif;
+        color: #222428;
+        background: #f2f1ed;
+      }
+      #toolbar {
+        grid-column: 1 / 3;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        border-bottom: 1px solid #d8d6cf;
+      }
+      button {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: none;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      /* A toggle that is on, as Zoom Area */
+      #toolbar button.chosen {
+        border-color: #8fb3e6;
+        background: #dce9fa;
+      }
+      #preview.zoom-area {
+        cursor: zoom-in;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      /* Between the toolbar's groups, as the desktop's dividers */
+      .divider {
+        width: 1px;
+        align-self: stretch;
+        margin: 2px 4px;
+        background: #d8d6cf;
+      }
+      button img {
+        width: 18px;
+        height: 18px;
+      }
+      /* The pages, drawn from the engine's scene */
+      #preview {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        display: block;
+        touch-action: none;
+      }
+      /* A message, and the problems' count at the end, as the desktop's status bar */
+      #status {
+        grid-column: 1 / 3;
+        display: flex;
+        gap: 16px;
+        padding: 4px 8px;
+        border-top: 1px solid #d8d6cf;
+        min-height: 1.4em;
+        white-space: nowrap;
+      }
+      #message {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* It opens the Problems tab, as the desktop's does */
+      #problem-count {
+        cursor: pointer;
+      }
+      #open-input {
+        display: none;
+      }
+      /* A tab not open, whose display: flex would otherwise show it */
+      .materials[hidden],
+      .info[hidden],
+      .notes[hidden],
+      .patterns[hidden],
+      .pieces[hidden],
+      .output[hidden] {
+        display: none;
+      }
+      /* The Materials tab: a row for each material, then the notes */
+      .materials {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .needs-table {
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .needs-table th,
+      .needs-table td {
+        padding: 3px 6px;
+        text-align: left;
+        border-bottom: 1px solid #eeece6;
+      }
+      .needs-table th {
+        font-weight: 600;
+        background: #f2f1ed;
+      }
+      .needs-caption {
+        margin-top: 6px;
+      }
+      .needs-notes {
+        padding: 4px 6px;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .needs-notes p {
+        margin: 0 0 6px;
+      }
+      /* The Info tab: the block's boxes, its fields indented under Show */
+      .info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .info-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-left: 20px;
+      }
+      .info-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .info-check:has(input:disabled),
+      .info-row select:disabled {
+        opacity: 0.5;
+      }
+      .info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .info-row select {
+        font: inherit;
+        padding: 2px 4px;
+      }
+      /* The Notes tab: the chosen note's settings, each a caption over its control */
+      .notes {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .notes-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .notes-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .notes-help {
+        margin: 0;
+        color: #5d636b;
+      }
+      .notes textarea,
+      .notes input[type='text'],
+      .notes input[type='number'],
+      .notes select {
+        font: inherit;
+        padding: 2px 4px;
+      }
+      .notes button {
+        align-self: flex-start;
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      .notes :disabled,
+      .notes-check:has(input:disabled) {
+        opacity: 0.5;
+      }
+      /* The Patterns tab: the list with its buttons, then the chosen one's set */
+      .patterns {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .patterns-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 4px 6px 6px;
+        border: 1px solid #d8d6cf;
+      }
+      .patterns-list {
+        height: 120px;
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .patterns-list li {
+        padding: 3px 6px;
+        border-bottom: 1px solid #eeece6;
+        cursor: default;
+      }
+      .patterns-list li:hover {
+        background: #f2f1ed;
+      }
+      .patterns-list li.chosen {
+        color: #fff;
+        background: #2574d6;
+      }
+      /* A pattern that could not be read, its reason in the tooltip */
+      .patterns-list li.has-problem:not(.chosen) {
+        color: #b3261e;
+      }
+      .patterns-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .patterns-group button {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      .patterns-size {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .patterns-size select {
+        font: inherit;
+        padding: 2px 4px;
+      }
+      /* The Output tab: groups of settings, each a caption over its control */
+      .output {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .output-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 4px 6px 6px;
+        border: 1px solid #d8d6cf;
+      }
+      .output-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .output-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .output-group input[type='number'],
+      .output-group select {
+        font: inherit;
+        padding: 2px 4px;
+      }
+      .output-group input:disabled,
+      .output-group select:disabled,
+      .output-check:has(input:disabled) {
+        opacity: 0.5;
+      }
+      .output-group button {
+        align-self: flex-start;
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      /* The Pieces tab: groups of buttons over the tray, which takes the rest */
+      .pieces {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        gap: 6px;
+        padding: 6px;
+      }
+      .pieces-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0;
+        padding: 4px 6px 6px;
+        border: 1px solid #d8d6cf;
+      }
+      .pieces-group button {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      .pieces-tray {
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+        flex-wrap: nowrap;
+      }
+      .tray-list {
+        flex: 1;
+        min-height: 4em;
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .tray-list li {
+        padding: 3px 6px;
+        border-bottom: 1px solid #eeece6;
+        cursor: default;
+        user-select: none;
+      }
+      .tray-list li:hover {
+        background: #f2f1ed;
+      }
+      .tray-list li.chosen {
+        color: #fff;
+        background: #2574d6;
+      }
+      /* A copy whose piece has a problem in the pattern */
+      .tray-list li.cannot-place {
+        color: #8a8f96;
+      }
+      .tray-list li.chosen.cannot-place {
+        color: #e8eef6;
+      }
+      .tray-list li.tray-note {
+        color: #5d636b;
+        border-bottom: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar"></div>
+    <canvas id="preview"></canvas>
+    <div id="side"></div>
+    <div id="status"><span id="message"></span><span id="problem-count"></span></div>
+    <input id="open-input" type="file" accept=".slayout,.sloper,.slm" multiple />
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

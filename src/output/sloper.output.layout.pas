@@ -54,6 +54,10 @@ type
   // okMaterial is the material or board itself, cut as the pieces lie
   TOutputKind = (okTiled, okLarge, okProjector, okMaterial);
 
+  // The Output tab's settings that apply to some kinds of output only
+  // osTitlePlace is the Info tab's corner and every page, which only tiles have
+  TOutputSetting = (osRollWidth, osMaterialSize, osAllowTurns, osPaper, osPaperSize, osOverlap, osMarks, osFill, osTitlePlace);
+
   TLayoutOutput = record
     Kind: TOutputKind;
     // The width of the sheet for okLarge; its length follows the layout
@@ -226,6 +230,10 @@ type
     procedure LoadSources;
     // Reads a source from its files' contents instead, as the web editor holds them
     procedure LoadSourceText(Source: TPatternSource; const PatternText, MeasurementText: string);
+    // LoadSources reads the files given here from now on, not disk, until
+    // ReadSourcesFromDisk; their paths are as SourceFiles' keys
+    function UseSourceFiles: TSourceFiles;
+    procedure ReadSourcesFromDisk;
     function SaveToText: string;
     function LoadFromText(const Text: string; out ErrorMessage: string): boolean;
     function SaveToFile(const AFileName: string; out ErrorMessage: string): boolean;
@@ -311,12 +319,20 @@ function WholeOutline(const Points: TVec2Array; const Fold: TLine2): TVec2Array;
 function PublishTargetFor(const PatternFile: string): string;
 // The width and height of a named paper; False when the name is unknown
 function PaperSize(const AName: string; out AWidth, AHeight: double): boolean;
+// Whether a setting of the publish app's Output tab changes what Output
+// prints; the others are greyed out
+function OutputSettingUsed(const Output: TLayoutOutput; Setting: TOutputSetting): boolean;
 // False with the reason when the file cannot be written
 function WriteBytesToFile(const FileName: string; const Bytes: rawbytestring; out ErrorMessage: string): boolean;
 // The version files are written at, and the steps that bring older files up to it
 function LayoutFileVersions: TFormatVersions;
 
 const
+  // The fields the information block can show, in the order the Info tab lists them
+  TITLE_FIELDS: array[0..6] of string = (FIELD_PATTERN_NAME, FIELD_MEASUREMENTS_NAME, FIELD_LAYOUT_NAME, FIELD_DATE,
+    FIELD_CUT_LIST, FIELD_MATERIALS, FIELD_MATERIAL_NEEDED);
+  // The papers the Output tab offers, in its order; the last is the size typed in
+  PAPER_NAMES: array[0..3] of string = ('A4', 'A3', 'Letter', CUSTOM_PAPER);
   // As the layout file names them
   CORNER_NAMES: array[TTitleCorner] of string = ('bottomRight', 'bottomLeft', 'topRight');
   MARKS_NAMES: array[TLayoutMarks] of string = ('diamond', 'none', 'halfCircle');
@@ -394,6 +410,19 @@ begin
   Result := ChangeFileExt(PatternFile, LAYOUT_EXTENSION);
   if not FileExists(Result) then
     Result := PatternFile;
+end;
+
+function OutputSettingUsed(const Output: TLayoutOutput; Setting: TOutputSetting): boolean;
+begin
+  case Setting of
+    osRollWidth: Result := Output.Kind = okLarge;
+    osMaterialSize, osAllowTurns: Result := Output.Kind = okMaterial;
+    osPaper, osOverlap, osMarks, osTitlePlace: Result := Output.Kind = okTiled;
+    osPaperSize: Result := (Output.Kind = okTiled) and (Output.Paper = CUSTOM_PAPER);
+    osFill: Result := Output.Kind <> okProjector;
+    else
+      Result := True;
+  end;
 end;
 
 function PaperSize(const AName: string; out AWidth, AHeight: double): boolean;
@@ -691,6 +720,16 @@ end;
 procedure TLayout.LoadSourceText(Source: TPatternSource; const PatternText, MeasurementText: string);
 begin
   FSources.LoadText(Source, PatternText, MeasurementText);
+end;
+
+function TLayout.UseSourceFiles: TSourceFiles;
+begin
+  Result := FSources.UseFiles;
+end;
+
+procedure TLayout.ReadSourcesFromDisk;
+begin
+  FSources.UseDisk;
 end;
 
 function TLayout.GetSources: TPatternSourceList;

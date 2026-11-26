@@ -8,12 +8,12 @@ import { extname, join, normalize, relative } from 'node:path';
 import { launch, type Browser, type KeyInput, type Page } from 'puppeteer-core';
 import { isMac } from '../src/ui/shortcuts.ts';
 
-const ROOT = 'out/design';
 export const TIMEOUT_MS = 30000;
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'text/javascript',
+  '.css': 'text/css',
   '.wasm': 'application/wasm',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -25,20 +25,23 @@ const TYPES: Record<string, string> = {
 export interface ServeOptions {
   // The port to listen on, as when serving again after going offline; a free one by default
   port?: number;
-  // Changes a file as it is served, by its path under out/design, as a new build would
+  // The app's built folder; out/design by default
+  root?: string;
+  // Changes a file as it is served, by its path under the root, as a new build would
   alter?: (file: string, data: Buffer) => Buffer;
 }
 
 // Serves the app until close is called, which drops every connection, so
 // the page is offline until it is served again
 export async function serveApp(options: ServeOptions = {}): Promise<{ port: number; close: () => void }> {
+  const root = options.root ?? 'out/design';
   const server = createServer((request, response) => {
-    const path = normalize(join(ROOT, decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)));
-    const file = path.endsWith('/') || path === ROOT ? join(path, 'index.html') : path;
+    const path = normalize(join(root, decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname)));
+    const file = path.endsWith('/') || path === root ? join(path, 'index.html') : path;
     readFile(file)
       .then((data) => {
         response.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
-        response.end(options.alter === undefined ? data : options.alter(relative(ROOT, file), data));
+        response.end(options.alter === undefined ? data : options.alter(relative(root, file), data));
         return undefined;
       })
       .catch(() => {
@@ -135,4 +138,89 @@ export async function waitForStatus(page: Page, start: string): Promise<void> {
 
 export async function status(page: Page): Promise<string> {
   return page.$eval('#status', (element) => element.textContent);
+}
+
+// File System Access in headless Chromium, whose pickers cannot be clicked
+// through: they are stood in for by ones over the page's private file system
+// The pickers, over OPFS: each takes the next path the test has queued in
+// window.testPicks ('' is the top folder)
+export function standInPickers(): void {
+  const picks: (string | string[])[] = [];
+  Reflect.set(window, 'testPicks', picks);
+  const next = (): string[] => {
+    const pick = picks.shift();
+    if (pick === undefined) {
+      throw new DOMException('no pick queued', 'AbortError');
+    }
+    return typeof pick === 'string' ? [pick] : pick;
+  };
+  // Inside, as the page is sent this function alone
+  // oxlint-disable-next-line unicorn/consistent-function-scoping
+  const folderAt = async (parts: string[], create: boolean): Promise<FileSystemDirectoryHandle> => {
+    let folder = await navigator.storage.getDirectory();
+    for (const part of parts) {
+      // oxlint-disable-next-line no-await-in-loop
+      folder = await folder.getDirectoryHandle(part, { create });
+    }
+    return folder;
+  };
+  const fileAt = async (path: string, create: boolean): Promise<FileSystemFileHandle> => {
+    const parts = path.split('/');
+    const name = parts.pop() ?? '';
+    return (await folderAt(parts, create)).getFileHandle(name, { create });
+  };
+  Object.defineProperty(window, 'showOpenFilePicker', {
+    value: async () => Promise.all(next().map(async (path) => fileAt(path, false))),
+  });
+  Object.defineProperty(window, 'showSaveFilePicker', {
+    value: async () => fileAt(next()[0] ?? '', true),
+  });
+  Object.defineProperty(window, 'showDirectoryPicker', {
+    value: async () =>
+      folderAt(
+        (next()[0] ?? '').split('/').filter((part) => part !== ''),
+        false,
+      ),
+  });
+}
+
+export async function queuePicks(page: Page, ...picks: (string | string[])[]): Promise<void> {
+  await page.evaluate((queued) => {
+    const list: unknown = Reflect.get(window, 'testPicks');
+    if (Array.isArray(list)) {
+      list.push(...queued);
+    }
+  }, picks);
+}
+
+export async function writeOpfs(page: Page, path: string, text: string): Promise<void> {
+  await page.evaluate(
+    async (where, contents) => {
+      const parts = where.split('/');
+      const name = parts.pop() ?? '';
+      let folder = await navigator.storage.getDirectory();
+      for (const part of parts) {
+        // oxlint-disable-next-line no-await-in-loop
+        folder = await folder.getDirectoryHandle(part, { create: true });
+      }
+      const stream = await (await folder.getFileHandle(name, { create: true })).createWritable();
+      await stream.write(contents);
+      await stream.close();
+    },
+    path,
+    text,
+  );
+}
+
+export async function readOpfs(page: Page, path: string): Promise<string> {
+  return page.evaluate(async (where) => {
+    const parts = where.split('/');
+    const name = parts.pop() ?? '';
+    let folder = await navigator.storage.getDirectory();
+    for (const part of parts) {
+      // oxlint-disable-next-line no-await-in-loop
+      folder = await folder.getDirectoryHandle(part);
+    }
+    return (await (await folder.getFileHandle(name)).getFile()).text();
+  }, path);
 }

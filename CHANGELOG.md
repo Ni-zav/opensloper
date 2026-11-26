@@ -13,6 +13,21 @@ Changed, Fixed and Removed under each version.
 
 ## 0.9.0
 
+### Added
+
+- The Publish app runs in the browser too, as a beta at
+  opensloper.com/publish/, linked from the home page (#85). It opens a
+  layout with its patterns and measurement files, or patterns to start one,
+  on the same engine as the desktop app. Pieces and notes are dragged,
+  turned, flipped, placed from the tray and packed, and pages left out. Its
+  side panel has the desktop's tabs but Claude's: Patterns, Pieces,
+  Materials, Information Block, Notes, Output and Problems, with the
+  desktop's keys. It prints through the browser and exports PDF, SVG and
+  DXF-AAMA; Machine DXF stays on the desktop. Chrome and Edge save layouts
+  back to their files and find a layout's files in a chosen folder. Work not
+  yet saved is kept in the browser, and once loaded the app can be
+  installed and works offline.
+
 ### Fixed
 
 - In the web Design app, a drag or click right after an undo no longer fails

@@ -1,6 +1,6 @@
 # Web version
 
-Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design editor is built, as a beta; the Measurements and Publish apps are not.
+Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design and Publish apps are built, as a beta; the Measurements app is not.
 
 **Why it is possible.** The core has no LCL dependency, and the Automation API already exposes every document operation as JSON-RPC. So the web needs a new UI, not a new engine. Name rules, formula checks and undo are the same code everywhere.
 
@@ -143,6 +143,8 @@ A run of changes to a number is one undo step, as the desktop's spin boxes merge
 - A pattern opened from text has no file name and no measurement set. The reply's `measurementsFile` is the reference the pattern stores; the editor resolves it against the pattern's folder and supplies the file.
 - References between files stay relative paths with `/`, resolved by whoever supplies the file. So a set of files moves between desktop and web unchanged.
 - A set given as text is never read or written on disk, so file watching skips it. `ChangeMeasurements` changes it in memory (`TPatternDocument.MeasurementText`), for the editor to save as a download. `set_measurement` refuses it, as its reply could not hand the file back.
+- A layout's sources are read from files given as text (`TSourceFiles`), not disk, once the layout document has them (`TLayoutDocument.SourceFiles`, `OpenText`). They are kept by path, relative to the layout and with `/`, so undo, redo and reloading read them again.
+- A pattern's measurement file is looked for beside it, as on disk. A source whose file is not given names its path (`MissingFile`), for the editor to find and give.
 
 File watching is dropped on the web. File formats do not change.
 
@@ -173,7 +175,7 @@ File watching is dropped on the web. File formats do not change.
 
 ## Editor
 
-A TypeScript single-page app per job, as on the desktop, sharing one engine module. Drafting comes first, opening measurement files the user supplies. The measurements editor follows on the same structure, then publish. There are no measurement forms on the server.
+A TypeScript single-page app per job, as on the desktop, sharing one engine module. Each has its own page on the site: `/design/`, `/measurements/` and `/publish/`. Drafting comes first, opening measurement files the user supplies. The measurements editor follows on the same structure, then publish. There are no measurement forms on the server.
 
 - The canvas draws from the computed geometry the engine reports (Canvas2D, WebGL if needed), not from `render`'s SVG.
 - Tools, shortcuts, snapping, undo steps and colours match the desktop, following these design files.
@@ -248,6 +250,9 @@ The design app's page is built (`web/`, see its README). The TypeScript is one n
   - Export… downloads the SVG at true size, or a PNG of the width asked for. The browser draws the PNG from the SVG, so its shading is the SVG's gradients rather than the desktop PNG's.
   - Light and shading strength are the defaults until the web has preferences.
 - **Problems** (`ProblemsPanel` in `ui/problemsPanel.ts`) is at the foot of the column, as in every desktop app. Its title and icon count the problems, and it follows every change while hidden, for the count.
+  - As `Sloper.UI.ProblemsPanel`, it knows nothing of documents and is shared by every app's page. Each app fills it with problems keyed by what they are about, and is told which key is chosen, pointed at or double-clicked. Those that stop printing are red.
+  - The design page fills it from `editor_problems`, keying each by its object, variable or measurement.
+  - The side panel's and the Problems tab's styles are in `ui/sidePanel.css`, which each page links.
   - Choosing a problem, by a click or Up and Down, selects its object on the canvas and brings it into view.
   - For a variable or measurement it opens that tab at its row (`chooseKeys`, which scrolls the row into view once it is listed).
   - Pointing at a problem highlights its object on the canvas. A double-click zooms to it.
@@ -283,6 +288,110 @@ A fix or feature then lands in the same place in both. Names follow TypeScript's
 - **No `Free`, but listeners are removed** when a panel goes, through a `dispose` method, so a closed panel is never kept alive by the document.
 - **Shared tables come from the engine**, not copied. Shortcuts, commands and their captions are read from it as JSON, so the two editors cannot drift. User-visible text sits in one strings module, as `resourcestring` does on the desktop.
 
+### The Publish editor
+
+The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.MainForm`), built in small steps (#85), and a beta like the Design app.
+
+- **Open** takes a layout with its patterns and measurement files, or patterns alone, which start a layout as the desktop's Open does.
+- `LayoutDocument` (`document/layoutDocument.ts`) is the open layout, as the desktop's `TLayoutDocument`.
+- The engine says which files the sources still need, by their paths from the layout. The chosen files have names only, so each is matched by name and given. A pattern found may name a measurement file, which is looked for in turn.
+- The title names the layout. The status bar has a message and the problems' count, as on the desktop, with how many stop printing. After each change the message sums up the pages, blank and left out, or the one sheet's size, or the material used (`PreviewSummary`), unless a command says what it did.
+- **The preview** (`PreviewCanvas` in `ui/previewCanvas.ts`, as `Sloper.Publish.PreviewCanvas`) is drawn with Canvas2D from `publish_scene`: the cover, the pages (blank ones grey, left-out ones crossed), the pieces with their tint, seam line, marks, lines and label, and the information block's boxes, with its text once it is large enough to read.
+- Fit Pages, Zoom In, Zoom Out and Zoom Area are on the toolbar. The wheel zooms about the pointer, and the middle button or Space with a drag pans. A new layout is fitted.
+  - Zoom Area zooms to a box dragged, in on a click, out on a Shift+click; pieces cannot be pressed while it is on. Escape or its key turns it off.
+- **Keys** come from the engine's tables (`publish_tables`, the desktop's `saPublish` shortcuts), as the design page's do:
+  - The toolbar's commands (Open, Save, Save As, Export PDF, Undo, Redo, the zooms and Zoom Area) click their button, so a disabled one does nothing. Each button's hint names its keys, with Mod as Ctrl, or Cmd on macOS (`shortcutText`).
+  - A field being typed in keeps its own Undo, Redo and letters.
+  - Away from fields, as the desktop's preview takes them: Delete or Backspace sends the selected piece back to the tray or deletes the selected note; Escape lets go of a drag, a box, Zoom Area or the selection, the first there is.
+  - Print waits for step 11; Reload has nothing to read again on the web.
+- A press selects the piece under it, outlined in blue, as `publish_press` finds it. Dragging moves it, one undo step:
+  - The engine moves it (`publish_drag`), on the desktop's 0.5 mm grid, and the scene is read again after each move. Only the newest move waits to be sent.
+  - Letting go ends the step (`publish_release`). A drag the browser takes away puts the piece back (`publish_cancel`).
+  - The press, the drag and the drop are `TPreviewDrag` (`Sloper.Output.Preview`), which the desktop's preview uses too.
+- Sheet notes are drawn over the pieces, each in a dotted frame, as the desktop's `DrawNotes`: the leader, the white box, then the drawing or the text in its size and font, a tint when too small to read. The pattern notes printing with the pieces are drawn too, without a frame. The engine gives each in the design editor's scene shape (`SceneNote`).
+  - A press on a note chooses it, outlined in blue, and opens the Notes tab. It lies over pieces, so it is found first. Dragging moves it, one undo step, as a piece.
+- **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, Zoom Area, then Print…, Export PDF, SVG and DXF.
+  - Where the browser has File System Access, Open uses its picker, and Save writes the layout back to the file it came from; Save As, shown only there, writes another. A new layout's first Save asks where. Only the text written counts as saved (`publish_text`, then `publish_saved`), so a failed write or a change made meanwhile keeps the layout marked.
+  - The files the sources still need are looked for by their paths from the layout, or from the pattern a new layout was started for, in a folder the user has granted (`FileAccess.findBeside`), round after round, as a pattern found may name a measurement file. A folder the page may not read yet needs a click on Find them…, which asks for it. A layout started before its pattern's files were found is started again with them, so every piece is placed, as on the desktop.
+  - Elsewhere Save downloads the layout file and counts it saved, and Open uploads.
+  - The title marks a layout not saved, and leaving or opening another asks first.
+  - Work not saved is kept in the browser as the design page's is (`Autosave`): the layout's text and every file its sources were given (`publish_snapshot`), with the files it came from, so it still saves to them. Another tab offers it once the tab that kept it has closed; opened again it counts as not saved (`publish_mark_unsaved`). Each app's work is its own, as both share the site.
+- **Offline**: the page has a service worker and manifest of its own, as the design page has (`ui/serviceWorker.ts`, `ui/offline.ts`), with its own cache, and an Update button when a new build is ready.
+  - Not yet as the desktop: a pattern or measurement file added in the Patterns tab is recorded by its name, beside the layout, where the desktop records its path from the layout; Save As into another folder keeps the paths the sources had.
+  - Undo names the step it would take, as the desktop's menu does.
+  - Print… (`publish/printDialog.ts`, as `Sloper.Publish.PrintDialog`) opens the PDF Export PDF writes in the browser's viewer, in a tab opened while the click counts, or downloads it, as the design page's Print… does (`deliverPdf`). The browser's print dialog chooses the printer, copies and pages, so this one says which to print first: the cover with the test square, then the rest. It is refused while a problem stops printing.
+  - Printer calibration waits for preferences on the web, so it prints at exactly 100%.
+  - Exports are downloads, refused while a problem stops printing.
+  - Machine DXF, for cutting machines, is the desktop's only, with the machine profiles it needs. The web stops at PDF, SVG and DXF-AAMA.
+- **The side panel** (`SideTabs`) has the desktop's tabs in its order. The Patterns tab (`publish/patternsTab.ts`) comes first:
+  - The patterns in the layout, each captioned with its size once one is chosen, in red when it cannot be read.
+  - Add pattern… and Remove pattern. Choosing a pattern adds it with its copies in the tray, one undo step each, and says how many.
+  - For the pattern chosen: its measurement file, Choose measurements…, Use the pattern's own, and its size.
+  - Files come from the browser's file picker and are given to the engine by name, as Open gives them. A pattern added may name a measurement file the layout lacks; one chosen with it is found by name, else the engine says it is missing.
+  - The edits are `TLayoutDocument`'s (`AddPattern`, `RemovePattern`, `SetMeasurements`, `SetSize`), which the desktop calls too.
+- The Materials tab (`publish/materialsTab.ts`), as the desktop's: a row for each material the patterns need, with its size, pieces and how much, then each material's notes and how the estimate is made. It only reads (`LayoutMaterialNeeds`).
+- The Info tab (`publish/infoTab.ts`), as the desktop's Information Block tab: Show, the fields it shows, On every page and the corner.
+  - The fields are greyed while the block is hidden; the corner and every page while the output is not tiled (`OutputSettingUsed`).
+  - A field shown anew prints last (`TitleFieldsWith`). Each change is `TLayoutDocument.ChangeTitle`, one undo step, which the desktop calls too.
+- The Notes tab (`publish/notesTab.ts`), as the desktop's:
+  - Add note puts one at the left below the pieces, chosen, its text ready to type over.
+  - The chosen note's text with fields, size, lines, white box, font, bold and italic, and Delete note.
+  - Typing sends the newest text once the one before is answered. Changes to one note within a second join one undo step.
+  - A font name the engine cannot use (`CheckFontName`) is refused, said in the status bar and put back.
+  - The edits are `TLayoutDocument`'s (`AddNote`, `ChangeNote`, `DeleteNote`), which the desktop calls too.
+- Then the Pieces tab (`publish/piecesTab.ts`), as the desktop's:
+  - Selected Piece: Turn 90°, Flip and Back to tray, for the piece selected on the pages.
+  - Arrange: Place new pieces and Pack pieces. Pack fits the view and says what it did in the status bar.
+  - Tray: the copies waiting to be placed. One dragged onto the pages is placed centred where it is let go, kept on the sheet (`publish_drop_copy`). A double-click or Enter places one in the rows below the others. Either way it is selected. A copy whose piece has a problem in the pattern is greyed and cannot be placed.
+  - The edits are `TLayoutDocument`'s (`TurnPiece`, `FlipPiece`, `UnplacePiece`, `PlaceCopy`), which the desktop calls too, so both name the undo steps alike.
+- The Output tab (`publish/outputTab.ts`), last above Problems, as on the desktop:
+  - Output: tiled pages, large format, projector or material sheet, with the roll's or material's sizes and quarter turns.
+  - Paper: A4, A3, Letter or a custom size, the margin, the overlap and the alignment marks.
+  - Content: the piece fill, the output profile and the material the layout is limited to.
+  - Export: PDF, SVG and DXF, as on the toolbar. Print joins them once the web can print.
+  - Settings that do not apply to the kind of output are greyed (`OutputSettingUsed`). A number is sent once typed or stepped.
+  - Each change is `TLayoutDocument.ChangeOutput`, as the desktop's: changes within a second join one undo step; pages left out are forgotten once the page grid moves; a new material or kind takes its material's size. A change leaving nothing to print on is refused, said in the status bar and put back.
+  - The machine profile is left out: it is only for Machine DXF, which the web does not offer.
+- A right-click on a page leaves it out of the print, or puts it back (`TLayoutDocument.TogglePage`), whatever is on it.
+- The side panel has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
+- The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.
+
+**Its methods** are named `publish_`, in their own table (`PublishMethods` in `Sloper.API.PublishServer`). The editor server passes them to a `TPublishApiServer`, which holds the layout document, so both pages use one engine module. They are not MCP tools.
+
+| Method | Does |
+| --- | --- |
+| `publish_tables` | The Publish app's shortcuts, as `editor_tables` gives the design app's |
+| `publish_open` | Opens a layout from its text, or starts one for a pattern among the files, with the files given (`OpenText`, `NewForPattern`) |
+| `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
+| `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; `tray`: the copies waiting, each with its caption and whether it can be placed; and `summary`, the status bar's |
+| `publish_patterns` | The Patterns tab's list: each pattern's source id, caption, measurement file, whether the layout chose it, its size and sizes, and its problem |
+| `publish_add_pattern` | Adds a pattern by its path, with files for it to read; one undo step |
+| `publish_remove_pattern`, `publish_set_size` | Removes a pattern, or reads it at another size, by its source id; one undo step |
+| `publish_set_measurements` | Reads a pattern with another measurement file, given with it, or its own for an empty path; one undo step |
+| `publish_add_note`, `publish_delete_note` | Adds a sheet note below the pieces, or deletes one by its index; one undo step |
+| `publish_note` | A sheet note as typed, for the Notes tab |
+| `publish_set_note` | Changes a sheet note's text, size, lines, box, font, bold or italic; refuses a font name that cannot be used |
+| `publish_materials` | What each material the patterns need, as the Materials tab lists it |
+| `publish_title` | The information block: whether it shows, its fields, every field there is, its corner, every page, and whether the corner and every page apply |
+| `publish_set_title` | Shows or hides it or one field, or changes its corner or every page; one undo step |
+| `publish_output` | The Output tab's settings, which apply (`used`), and the papers, materials and output profiles to choose from |
+| `publish_set_output` | Changes them, as the desktop's tab does (`ChangeOutput`); refused when nothing is left to print on |
+| `publish_toggle_page` | Leaves the page at a point out of the print, or puts it back; one undo step |
+| `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`), with the sheet notes and the pattern notes printing with pieces |
+| `publish_press` | Holds the sheet note at a point, or else the smallest placed piece (`ShapeAt`), for a drag; changes nothing |
+| `publish_drag` | Moves what the press holds; the first move opens one undo step |
+| `publish_release`, `publish_cancel` | Ends the drag's step, or puts back what it moved |
+| `publish_drop_copy` | Places one copy from the tray centred on a point (`PlaceCopyAt`), one undo step |
+| `publish_undo`, `publish_redo`, `publish_place_pieces`, `publish_pack` | The layout methods of the same names (`Sloper.API.LayoutServer`), each one undo step |
+| `publish_turn`, `publish_flip`, `publish_unplace` | Turn 90°, Flip and Back to tray for a placed piece, by its placement index; each one undo step |
+| `publish_place_copy` | Places one copy from the tray, by its index there, in the rows below the others; refused when its piece cannot be placed |
+| `publish_save` | The layout file's text, counted as saved (`TLayoutDocument.SaveText`), to download |
+| `publish_snapshot`, `publish_mark_unsaved` | The layout's text and the files its sources were given, kept as work in progress; and counting work opened again as not saved |
+| `publish_text`, `publish_saved` | The layout file's text, to write to a file, and then that it was written (`TLayoutDocument.MarkSaved`): only that text counts as saved |
+| `publish_export` | The layout as PDF, SVG or DXF-AAMA, in Base64, refused as the desktop's export is (`LayoutBytes`) |
+
+The replies of the first three are `publish_state`'s, which also gives the undo state and whether the layout is modified. `LayoutDocument` asks for it after every change and tells its listeners.
+
 ## Server
 
 Django serves the editor and `.wasm` file, accounts (with the admin as back office), subscriptions and simple pages as templates. It stores no patterns or measurements and runs no engine jobs. Its own packages are kept to what the job needs and locked, and nothing they use reaches the engine.
@@ -305,7 +414,7 @@ To be checked with a lawyer before the service is sold.
 
 **Built so far** (`site/`, issue #86):
 
-- the home page, with the web Design app at `/design/` as a beta, free with no sign-up, and the desktop downloads beside it;
+- the home page, with the web Design app at `/design/` and Publish app at `/publish/` as a beta, free with no sign-up, and the desktop downloads beside it;
 - no database yet;
 - `manage.py import_opensloper`, which copies the built app and the site's pictures and version from the checkout;
 - Django under gunicorn behind the ISPConfig server's Apache, which serves the app and the static files itself.

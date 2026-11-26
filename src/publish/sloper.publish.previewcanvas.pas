@@ -55,7 +55,8 @@ type
     FSelectedNote: integer;
     FMode: TPreviewMode;
     FPressPos, FLastPos: TPoint;
-    FGrab: TVec2;
+    // The piece or note a press holds, made with the document
+    FDrag: TPreviewDrag;
     FNeedsFit: boolean;
     FSpaceDown: boolean;
     FZoomArea: boolean;
@@ -82,7 +83,7 @@ type
     procedure DrawTitleBoxes;
     // The pages, the cover and the blocks, for Fit
     function ShownBounds(out Bounds: TRect2): boolean;
-    function HoldsTarget: boolean;
+    procedure SetDocument(Value: TLayoutDocument);
     procedure DragTo(X, Y: integer);
     procedure TogglePageAt(const At: TVec2);
     procedure DrawPage(const Page: TTilePage);
@@ -108,7 +109,10 @@ type
     function LayoutAt(X, Y: integer): TVec2;
     // Sends the selected copy back to the tray, or deletes the selected note
     procedure RemoveSelected;
-    property Document: TLayoutDocument read FDocument write FDocument;
+    // Places a copy from the tray with its middle under a point of this
+    // control; its placement index, or -1 when it cannot be placed
+    function DropCopy(const Item: TUnplacedCopy; X, Y: integer): integer;
+    property Document: TLayoutDocument read FDocument write SetDocument;
     property Selected: integer read FSelected write SetSelected;
     property SelectedNote: integer read FSelectedNote write SetSelectedNote;
     property OnSelectionChange: TNotifyEvent read FOnSelectionChange write FOnSelectionChange;
@@ -124,11 +128,6 @@ type
   end;
 
 resourcestring
-  rsPreviewMove = 'Move piece';
-  rsPreviewTogglePage = 'Leave page out';
-  rsPreviewRemove = 'Unplace piece';
-  rsPreviewMoveNote = 'Move note';
-  rsPreviewDeleteNote = 'Delete note';
   rsPreviewCover = 'Cover';
   rsPreviewZoomAreaHint = 'Zoom Area: drag a box to zoom to it, click to zoom in, Shift+click to zoom out';
 
@@ -210,6 +209,7 @@ end;
 
 destructor TPreviewCanvas.Destroy;
 begin
+  FreeAndNil(FDrag);
   FreeAndNil(FBitmap);
   inherited Destroy;
 end;
@@ -280,18 +280,19 @@ begin
   begin
     Index := FSelectedNote;
     SetSelectedNote(-1);
-    FDocument.BeginChange(rsPreviewDeleteNote);
-    FDocument.Layout.RemoveNote(Index);
-    FDocument.EndChange;
+    FDocument.DeleteNote(Index);
     Exit;
   end;
   Index := FSelected;
   if Index < 0 then
     Exit;
   SetSelected(-1);
-  FDocument.BeginChange(rsPreviewRemove);
-  FDocument.Layout.RemovePlacement(Index);
-  FDocument.EndChange;
+  FDocument.UnplacePiece(Index);
+end;
+
+function TPreviewCanvas.DropCopy(const Item: TUnplacedCopy; X, Y: integer): integer;
+begin
+  Result := FDrag.DropCopy(Item, LayoutAt(X, Y));
 end;
 
 procedure TPreviewCanvas.SetSelectedNote(Value: integer);
@@ -318,38 +319,21 @@ begin
     FOnSelectionChange(Self);
 end;
 
-// The piece or note a press or drag moves is still there: a reload of the
-// layout can take it
-function TPreviewCanvas.HoldsTarget: boolean;
+procedure TPreviewCanvas.SetDocument(Value: TLayoutDocument);
 begin
-  if FSelectedNote >= 0 then
-    Result := FSelectedNote < Length(FDocument.Layout.Notes)
-  else
-    Result := (FSelected >= 0) and (FSelected < Length(FDocument.Layout.Placements));
+  if Value = FDocument then
+    Exit;
+  FreeAndNil(FDrag);
+  FDocument := Value;
+  if Assigned(FDocument) then
+    FDrag := TPreviewDrag.Create(FDocument);
 end;
 
+// A reload of the layout can take what is held, which ends the drag
 procedure TPreviewCanvas.DragTo(X, Y: integer);
-var
-  At: TVec2;
 begin
-  if not HoldsTarget then
-  begin
+  if not FDrag.MoveTo(FView.ToLayout(Vec2(X, Y))) then
     FMode := pmIdle;
-    FDocument.CancelChange;
-    Exit;
-  end;
-  At := FView.ToLayout(Vec2(X, Y));
-  if FSelectedNote >= 0 then
-  begin
-    FDocument.Layout.Notes[FSelectedNote].X := RoundToStep(At.X + FGrab.X);
-    FDocument.Layout.Notes[FSelectedNote].Y := RoundToStep(At.Y + FGrab.Y);
-  end
-  else
-  begin
-    FDocument.Layout.Placements[FSelected].X := RoundToStep(At.X + FGrab.X);
-    FDocument.Layout.Placements[FSelected].Y := RoundToStep(At.Y + FGrab.Y);
-  end;
-  FDocument.LiveUpdate;
 end;
 
 procedure TPreviewCanvas.TogglePageAt(const At: TVec2);
@@ -359,9 +343,7 @@ begin
   PageName := PageCaptionAt(FPages, At);
   if PageName = '' then
     Exit;
-  FDocument.BeginChange(rsPreviewTogglePage);
-  FDocument.Layout.TogglePage(PageName);
-  FDocument.EndChange;
+  FDocument.TogglePage(PageName);
 end;
 
 // SetFocus does nothing while this is already the active control, even when a
@@ -447,7 +429,6 @@ end;
 
 procedure TPreviewCanvas.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: integer);
 var
-  Hit: integer;
   At: TVec2;
 begin
   inherited MouseDown(Button, Shift, X, Y);
@@ -475,25 +456,16 @@ begin
   end;
   if Button <> mbLeft then
     Exit;
-  // Notes lie over pieces
-  Hit := NoteAt(FDocument.Layout.Notes, FDocument.Layout.FieldValues('', ''), At);
-  if Hit >= 0 then
+  FDrag.Press(FShapes, At);
+  if FDrag.Note >= 0 then
+    SetSelectedNote(FDrag.Note)
+  else
   begin
-    SetSelectedNote(Hit);
-    FGrab := Vec2(FDocument.Layout.Notes[Hit].X - At.X, FDocument.Layout.Notes[Hit].Y - At.Y);
+    SetSelectedNote(-1);
+    SetSelected(FDrag.Placement);
+  end;
+  if FDrag.Holds then
     FMode := pmPressed;
-    Exit;
-  end;
-  SetSelectedNote(-1);
-  Hit := ShapeAt(FShapes, At);
-  if Hit < 0 then
-  begin
-    SetSelected(-1);
-    Exit;
-  end;
-  SetSelected(FShapes[Hit].Placement);
-  FGrab := Vec2(FDocument.Layout.Placements[FSelected].X - At.X, FDocument.Layout.Placements[FSelected].Y - At.Y);
-  FMode := pmPressed;
 end;
 
 procedure TPreviewCanvas.MouseMove(Shift: TShiftState; X, Y: integer);
@@ -506,14 +478,10 @@ begin
       Invalidate;
     end;
     pmPressed:
-      if not HoldsTarget then
+      if not FDrag.Holds then
         FMode := pmIdle
       else if Max(Abs(X - FPressPos.X), Abs(Y - FPressPos.Y)) >= DRAG_THRESHOLD then
       begin
-        if FSelectedNote >= 0 then
-          FDocument.BeginChange(rsPreviewMoveNote)
-        else
-          FDocument.BeginChange(rsPreviewMove);
         FMode := pmDragging;
         DragTo(X, Y);
       end;
@@ -536,7 +504,7 @@ begin
   inherited MouseUp(Button, Shift, X, Y);
   case FMode of
     pmDragging:
-      FDocument.EndChange;
+      FDrag.Release;
     pmZoomBoxing:
     begin
       FView.ZoomToBox(Vec2(FPressPos.X, FPressPos.Y), Vec2(X, Y), ClientWidth, ClientHeight);
@@ -578,7 +546,7 @@ begin
       if FMode = pmDragging then
       begin
         FMode := pmIdle;
-        FDocument.CancelChange;
+        FDrag.Cancel;
       end
       else if FMode = pmZoomBoxing then
       begin

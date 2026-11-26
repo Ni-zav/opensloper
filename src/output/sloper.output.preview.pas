@@ -17,8 +17,9 @@
 }
 
 // The publish preview without its drawing: how layout millimetres map to
-// screen pixels, and what is under the cursor. Both y axes point down. Kept
-// free of the LCL so it can be unit-tested.
+// screen pixels, what is under the cursor, and dragging pieces and notes, for
+// the desktop's preview and the web page's alike. Both y axes point down.
+// Kept free of the LCL so it can be unit-tested.
 unit Sloper.Output.Preview;
 
 {$mode ObjFPC}{$H+}
@@ -27,7 +28,7 @@ unit Sloper.Output.Preview;
 interface
 
 uses
-  Sloper.Core.Geometry, Sloper.Core.TextFields, Sloper.Output.Layout, Sloper.Output.Tiling;
+  Sloper.Core.Geometry, Sloper.Core.TextFields, Sloper.Output.Layout, Sloper.Output.Tiling, Sloper.Output.LayoutDocument;
 
 const
   PREVIEW_ZOOM_STEP = 1.25;
@@ -51,6 +52,44 @@ type
     procedure ZoomToBox(const Corner, OtherCorner: TVec2; Width, Height: double);
   end;
 
+  // A press on the pages and the drag after it. Press holds the note or piece
+  // under the point; MoveTo moves it there, held where it was grabbed, on
+  // the placement grid. The first move opens one undo step, which Release
+  // ends. The layout may be read again between moves, as undo does, so a
+  // move that finds its piece gone cancels the step.
+  TPreviewDrag = class
+  private
+    FDocument: TLayoutDocument;
+    FPlacement, FNote: integer;
+    FGrab: TVec2;
+    FMoving: boolean;
+  public
+    constructor Create(ADocument: TLayoutDocument);
+    // Notes lie over pieces, so one is found first; else the smallest piece
+    // of Shapes. Placement and Note say what was found, -1 for neither.
+    procedure Press(const Shapes: TPlacedPieceArray; const At: TVec2);
+    // The piece or note pressed is still there
+    function Holds: boolean;
+    // False, with the step cancelled, when nothing is held
+    function MoveTo(const At: TVec2): boolean;
+    // Ends the step a move opened, and lets go
+    procedure Release;
+    // Puts back what the moves changed, and lets go
+    procedure Cancel;
+    // Places a copy from the tray with its middle at At, one undo step; its
+    // placement index, or -1 when its piece cannot be placed
+    function DropCopy(const Item: TUnplacedCopy; const At: TVec2): integer;
+    property Placement: integer read FPlacement;
+    property Note: integer read FNote;
+    property Moving: boolean read FMoving;
+  end;
+
+resourcestring
+  rsPreviewMove = 'Move piece';
+  rsPreviewMoveNote = 'Move note';
+  rsPreviewPages = '%d pages, %d blank, %d left out. Right-click a page to leave it out.';
+  rsPreviewLargeSheet = 'One sheet %s mm wide, %s mm long';
+
 function DefaultPreviewView: TPreviewView;
 // The index in Shapes of the smallest piece containing At, or -1
 function ShapeAt(const Shapes: TPlacedPieceArray; const At: TVec2): integer;
@@ -62,11 +101,14 @@ function PageCaptionAt(const Pages: TTilePageArray; const At: TVec2): string;
 // The area every page covers; False when there are none
 function PagesBounds(const Pages: TTilePageArray; out Bounds: TRect2): boolean;
 function RoundToStep(Value: double): double;
+// What the status bar says of the layout: its pages, blank and left out, or
+// its one sheet's size, or for a material the length it uses
+function PreviewSummary(Layout: TLayout): string;
 
 implementation
 
 uses
-  Math;
+  SysUtils, Math, Sloper.Output.LayoutPDF;
 
 const
   MIN_PREVIEW_SCALE = 0.02;
@@ -202,6 +244,122 @@ end;
 function RoundToStep(Value: double): double;
 begin
   Result := Round(Value / PLACEMENT_STEP) * PLACEMENT_STEP;
+end;
+
+function PreviewSummary(Layout: TLayout): string;
+var
+  Pages: TTilePageArray;
+  Page: TTilePage;
+  Rows, Columns, Blank, LeftOut: integer;
+begin
+  Pages := Layout.Pages(Layout.PlacedPieces, Rows, Columns);
+  if Layout.Output.Kind = okMaterial then
+    Exit(Layout.MaterialUse);
+  if Layout.Output.Kind <> okTiled then
+    Exit(Format(rsPreviewLargeSheet, [FormatFloat('0', OneSheetWidth(Layout, Pages[0].Area.MaxX)),
+      FormatFloat('0', LargeSheetLength(Layout, Pages[0].Area.MaxY))]));
+  Blank := 0;
+  LeftOut := 0;
+  for Page in Pages do
+    if Page.Blank then
+      Inc(Blank)
+    else if Page.Excluded then
+      Inc(LeftOut);
+  Result := Format(rsPreviewPages, [Length(Pages), Blank, LeftOut]);
+end;
+
+constructor TPreviewDrag.Create(ADocument: TLayoutDocument);
+begin
+  inherited Create;
+  FDocument := ADocument;
+  FPlacement := -1;
+  FNote := -1;
+end;
+
+procedure TPreviewDrag.Press(const Shapes: TPlacedPieceArray; const At: TVec2);
+var
+  Layout: TLayout;
+  Hit: integer;
+begin
+  Release;
+  Layout := FDocument.Layout;
+  FPlacement := -1;
+  FNote := NoteAt(Layout.Notes, Layout.FieldValues('', ''), At);
+  if FNote >= 0 then
+  begin
+    FGrab := Vec2(Layout.Notes[FNote].X - At.X, Layout.Notes[FNote].Y - At.Y);
+    Exit;
+  end;
+  Hit := ShapeAt(Shapes, At);
+  if Hit < 0 then
+    Exit;
+  FPlacement := Shapes[Hit].Placement;
+  FGrab := Vec2(Layout.Placements[FPlacement].X - At.X, Layout.Placements[FPlacement].Y - At.Y);
+end;
+
+function TPreviewDrag.Holds: boolean;
+begin
+  if FNote >= 0 then
+    Result := FNote < Length(FDocument.Layout.Notes)
+  else
+    Result := (FPlacement >= 0) and (FPlacement < Length(FDocument.Layout.Placements));
+end;
+
+function TPreviewDrag.MoveTo(const At: TVec2): boolean;
+begin
+  Result := Holds;
+  if not Result then
+  begin
+    if FMoving then
+      FDocument.CancelChange;
+    FMoving := False;
+    FPlacement := -1;
+    FNote := -1;
+    Exit;
+  end;
+  if not FMoving then
+  begin
+    if FNote >= 0 then
+      FDocument.BeginChange(rsPreviewMoveNote)
+    else
+      FDocument.BeginChange(rsPreviewMove);
+    FMoving := True;
+  end;
+  if FNote >= 0 then
+  begin
+    FDocument.Layout.Notes[FNote].X := RoundToStep(At.X + FGrab.X);
+    FDocument.Layout.Notes[FNote].Y := RoundToStep(At.Y + FGrab.Y);
+  end
+  else
+  begin
+    FDocument.Layout.Placements[FPlacement].X := RoundToStep(At.X + FGrab.X);
+    FDocument.Layout.Placements[FPlacement].Y := RoundToStep(At.Y + FGrab.Y);
+  end;
+  FDocument.LiveUpdate;
+end;
+
+procedure TPreviewDrag.Release;
+begin
+  if FMoving then
+    FDocument.EndChange;
+  FMoving := False;
+end;
+
+procedure TPreviewDrag.Cancel;
+begin
+  if FMoving then
+    FDocument.CancelChange;
+  FMoving := False;
+end;
+
+function TPreviewDrag.DropCopy(const Item: TUnplacedCopy; const At: TVec2): integer;
+begin
+  Release;
+  if not Item.CanPlace then
+    Exit(-1);
+  FDocument.BeginChange(rsLayoutPlaceOne);
+  Result := FDocument.Layout.PlaceCopyAt(Item, At, PLACEMENT_STEP);
+  FDocument.EndChange;
 end;
 
 end.

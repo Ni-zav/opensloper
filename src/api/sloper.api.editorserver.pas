@@ -20,7 +20,9 @@
 // what lies under the cursor, and what a click would snap to. They are named
 // editor_ and served with the API by the web engine and opensloper-cli serve,
 // but are not offered to Claude as tools, for whom a mouse position means
-// nothing. Positions are in mm, as the API's. No LCL dependency.
+// nothing. Positions are in mm, as the API's. The web Publish app's methods,
+// named publish_, go to a TPublishApiServer, made when first called, as the
+// pages share one engine. No LCL dependency.
 unit Sloper.API.EditorServer;
 
 {$mode ObjFPC}{$H+}
@@ -30,7 +32,7 @@ interface
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
   Sloper.Core.Geometry, Sloper.Core.Evaluator, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits,
-  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment;
+  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment, Sloper.API.PublishServer;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -58,6 +60,7 @@ type
     FGradeKey, FGradeField: string;
     // Keeps the Garment tab's pieces, so only those that changed are built again
     FGarment: TGarmentBuilder;
+    FPublish: TPublishApiServer;
     // The Garment tab's scene: as the canvas shows the pieces, of the call's material
     function GarmentScene(Params: TJSONObject): TGarmentScene;
     function DoGarment(Params: TJSONObject): TJSONData;
@@ -534,7 +537,8 @@ uses
   Sloper.Core.Shortcuts, Sloper.Core.IconSet, Sloper.Editor.Scene, Sloper.Editor.Completion, Sloper.Editor.ObjectList,
   Sloper.Editor.Suggestion, Sloper.Editor.Tools, Sloper.Editor.SelectionEdits, Sloper.Editor.ToolEdits, Sloper.Editor.PropertyText,
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
-  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
+  Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment,
+  Sloper.Core.VariableImport, Sloper.API.Shapes,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange, Sloper.Output.GarmentSVG,
   Sloper.Editor.Garment, Sloper.Core.Variables, Sloper.Core.SvgImport;
 
@@ -559,7 +563,6 @@ const
     'allowTurns', 'fabric');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
   ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
-  SHORTCUT_KIND_NAMES: array[TShortcutKind] of string = ('command', 'fixed', 'mouse');
   DOCUMENT_CHANGE_NAMES: array[TDocumentChange] of string = ('pattern', 'objectsReplaced', 'measurements', 'history', 'file',
     'view');
 
@@ -821,33 +824,6 @@ begin
   Result := TJSONArray.Create;
   for Text in Texts do
     Result.Add(Text);
-end;
-
-function LineToJSON(const Line: TVec2Array): TJSONArray;
-var
-  Point: TVec2;
-begin
-  Result := TJSONArray.Create;
-  for Point in Line do
-  begin
-    Result.Add(ReportFloat(Point.X));
-    Result.Add(ReportFloat(Point.Y));
-  end;
-end;
-
-// Line segments as one flat list: x1, y1, x2, y2 for each
-function SegmentsToJSON(const Segments: TLine2Array): TJSONArray;
-var
-  Segment: TLine2;
-begin
-  Result := TJSONArray.Create;
-  for Segment in Segments do
-  begin
-    Result.Add(ReportFloat(Segment.P1.X));
-    Result.Add(ReportFloat(Segment.P1.Y));
-    Result.Add(ReportFloat(Segment.P2.X));
-    Result.Add(ReportFloat(Segment.P2.Y));
-  end;
 end;
 
 // A notch is drawn from where it is cut to its tip
@@ -2323,14 +2299,6 @@ begin
     NotePreviewText(Document.Pattern, RequireString(Params, 'text')))]);
 end;
 
-// An enumeration's value as the API names it: without its prefix, starting
-// in lower case, as kcToolPoint gives toolPoint
-function EnumName(Info: PTypeInfo; Value, PrefixLength: integer): string;
-begin
-  Result := Copy(GetEnumName(Info, Value), PrefixLength + 1, MaxInt);
-  if Result <> '' then
-    Result[1] := LowerCase(Result[1]);
-end;
 
 function ToolsToJSON: TJSONArray;
 var
@@ -2357,24 +2325,6 @@ begin
         ICON_PLACE_NAMES[Command.Place], 'menu', Command.Menu, 'keys', Command.Keys, 'description', Command.Description]));
 end;
 
-function ShortcutsToJSON: TJSONArray;
-const
-  // kc and sg
-  PREFIX_LENGTH = 2;
-var
-  Command: TKeyCommand;
-  Info: TShortcutInfo;
-begin
-  Result := TJSONArray.Create;
-  for Command := Low(TKeyCommand) to High(TKeyCommand) do
-  begin
-    Info := ShortcutInfo(Command);
-    if saDesign in Info.Apps then
-      Result.Add(TJSONObject.Create(['command', EnumName(TypeInfo(TKeyCommand), Ord(Command), PREFIX_LENGTH), 'keys', Info.Keys,
-        'kind', SHORTCUT_KIND_NAMES[Info.Kind], 'group', EnumName(TypeInfo(TShortcutGroup), Ord(Info.Group), PREFIX_LENGTH),
-        'description', Info.Description]));
-  end;
-end;
 
 procedure TEditorApiServer.AfterConstruction;
 begin
@@ -2389,6 +2339,7 @@ begin
   FreeAndNil(FPending);
   FreeAndNil(FGrade);
   FreeAndNil(FGarment);
+  FreeAndNil(FPublish);
   inherited Destroy;
 end;
 
@@ -2959,10 +2910,17 @@ begin
     'editor_drag_to': Result := DoDragTo(Params);
     'editor_drag_end': Result := DoDragEnd(False);
     'editor_drag_cancel': Result := DoDragEnd(True);
-    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON,
+    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON(saDesign),
         'roles', RolesToJSON, 'pointTypes', PointTypesToJSON]);
     else
-      Result := inherited DispatchMethod(Method, Params);
+      if StartsStr(PUBLISH_PREFIX, Method) then
+      begin
+        if not Assigned(FPublish) then
+          FPublish := TPublishApiServer.Create;
+        Result := FPublish.CallMethod(Method, Params);
+      end
+      else
+        Result := inherited DispatchMethod(Method, Params);
   end;
 end;
 

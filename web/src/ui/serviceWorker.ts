@@ -1,16 +1,19 @@
-// The design app's service worker, which makes it work offline as an
-// installed web app: it keeps every file the site serves for the app (the
-// page, its scripts, the engine's .wasm, the icons and the example patterns)
-// in a cache named after the build, and answers from it before the network.
+// An app's service worker, the design app's or the publish app's, which
+// makes it work offline as an installed web app: it keeps every file the
+// site serves for the app (the page, its scripts, the engine's .wasm, the
+// icons and, for the design app, the example patterns) in a cache named
+// after the app and the build, and answers from it before the network.
 // A new build has a new version, so its worker installs beside the old one
 // and waits; the page offers to reload into it, and the old cache goes once
 // it takes over. Users' files never pass through it. The bundler (bundle.ts)
-// fills in the files and the version.
+// fills in the app, the files and the version.
 
+declare const SW_APP: string;
 declare const SW_FILES: string[];
 declare const SW_VERSION: string;
 
-const CACHE_PREFIX = 'opensloper-design-';
+// Each app's own, as both are served from one site
+const CACHE_PREFIX = `opensloper-${SW_APP}-`;
 const CACHE = CACHE_PREFIX + SW_VERSION;
 // The page a navigation to the app's folder gets
 const PAGE = 'index.html';

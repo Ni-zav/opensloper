@@ -14,6 +14,7 @@ class PagesTest(SimpleTestCase):
         page = self.client.get("/")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'href="/design/"')
+        self.assertContains(page, 'href="/publish/"')
         self.assertContains(page, f"Download {version()}")
         self.assertContains(page, "Beta")
         # The logo and drawings are inlined from the checkout
@@ -42,17 +43,24 @@ class PagesTest(SimpleTestCase):
             self.assertIsNone(release_version(Path(folder)))
 
     def test_app_needs_its_slash(self):
-        page = self.client.get("/design")
-        self.assertEqual(page.status_code, 301)
-        self.assertEqual(page["Location"], "/design/")
+        for app in ("design", "publish"):
+            page = self.client.get(f"/{app}")
+            self.assertEqual(page.status_code, 301)
+            self.assertEqual(page["Location"], f"/{app}/")
 
     def test_app_is_served_while_developing(self):
         with self.settings(DEBUG=True):
-            page = self.client.get("/design/")
-            self.assertEqual(page.status_code, 200)
-            self.assertIn(b'src="main.js"', b"".join(page.streaming_content))
+            for app in ("design", "publish"):
+                page = self.client.get(f"/{app}/")
+                self.assertEqual(page.status_code, 200)
+                self.assertIn(b'src="main.js"', b"".join(page.streaming_content))
+
+    def test_apps_only_while_developing(self):
+        self.assertEqual(self.client.get("/publish/").status_code, 404)
 
     def test_search_engine_files(self):
         self.assertContains(self.client.get("/robots.txt"), "Sitemap: https://www.opensloper.com/sitemap.xml")
-        self.assertContains(self.client.get("/sitemap.xml"), "https://www.opensloper.com/design/")
+        sitemap = self.client.get("/sitemap.xml")
+        self.assertContains(sitemap, "https://www.opensloper.com/design/")
+        self.assertContains(sitemap, "https://www.opensloper.com/publish/")
         self.assertEqual(self.client.get("/favicon.svg")["Content-Type"], "image/svg+xml")

@@ -50,10 +50,26 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    // Replaces the layout with one for this pattern, every piece placed
+    // Replaces the layout with one for this pattern, every piece placed. The
+    // pattern is read from SourceFiles when it has been given
     procedure NewForPattern(const PatternFile: string);
+    // Opens a layout file from disk, and its sources from disk too
     function Open(const FileName: string; out ErrorMessage: string): boolean;
+    // Opens a layout from its file's text, with no file name, reading its
+    // sources from SourceFiles, as the browser does. A source whose file is
+    // missing gets a problem naming it (MissingFile); once SourceFiles has
+    // it, Reload reads it.
+    function OpenText(const Text: string; out ErrorMessage: string): boolean;
     function Save(const FileName: string; out ErrorMessage: string): boolean;
+    // The layout's text, as Save writes it, counted as saved: the browser
+    // downloads it, so no file is written here
+    function SaveText: string;
+    // Counts Text as the layout saved, once the browser has written it; a
+    // change made meanwhile leaves the layout modified
+    procedure MarkSaved(const Text: string);
+    // Counts the layout as not saved, as work in progress opened again is;
+    // not an undo step
+    procedure MarkUnsaved;
     // Reads the pattern files again; not an undo step
     procedure Reload;
     // Call regularly: reads the sources again once a saved file has stopped
@@ -67,6 +83,43 @@ type
     procedure LiveUpdate;
     procedure Undo;
     procedure Redo;
+    // The edits the publish window and the web page both make to one placed
+    // piece, by its placement index, each one undo step
+    procedure TurnPiece(Index: integer);
+    procedure FlipPiece(Index: integer);
+    // Back to the tray
+    procedure UnplacePiece(Index: integer);
+    // Places one copy from the tray in the rows below the others; False, and
+    // nothing changed, when its piece cannot be placed
+    function PlaceCopy(const Item: TUnplacedCopy): boolean;
+    // The Output tab's settings, one undo step, which changes within a
+    // second of each other join, as a run of spin clicks. Pages left out are
+    // forgotten once the page grid moves, and a new material or kind takes
+    // its material's size. False with the reason, nothing changed, when the
+    // paper or sheet leaves nothing to print on.
+    function ChangeOutput(const Output: TLayoutOutput; out Reason: string): boolean;
+    // Leaves the page with this caption out of the print, or puts it back
+    procedure TogglePage(const Caption: string);
+    // The Patterns tab's edits, each one undo step. Paths are as the layout
+    // stores them (TLayout.StoredPath). AddPattern returns how many copies
+    // it put in the tray.
+    function AddPattern(const Path: string): integer;
+    procedure RemovePattern(Source: TPatternSource);
+    // The measurement file to use, '' for the one the pattern names; the
+    // size goes back to the file's first, as a size belongs to its file
+    procedure SetMeasurements(Source: TPatternSource; const MeasurementFile: string);
+    procedure SetSize(Source: TPatternSource; const Size: string);
+    // The Notes tab's edits, each one undo step. A new note goes at the left,
+    // below the pieces; its index.
+    function AddNote: integer;
+    // Changes within a second to the same note join one step, as typing
+    procedure ChangeNote(Index: integer; const Note: TSheetNote);
+    procedure DeleteNote(Index: integer);
+    // The Info tab's information block, one undo step
+    procedure ChangeTitle(const Title: TTitleBlock);
+    // The files' contents sources are read from, from now on, in place of
+    // disk; undo and Reload read them again
+    function SourceFiles: TSourceFiles;
     property Layout: TLayout read FLayout;
     property Modified: boolean read GetModified;
     property CanUndo: boolean read GetCanUndo;
@@ -80,7 +133,33 @@ type
     property Generation: integer read FGeneration;
   end;
 
+resourcestring
+  rsLayoutTurnPiece = 'Turn piece';
+  rsLayoutFlipPiece = 'Flip piece';
+  rsLayoutUnplacePiece = 'Unplace piece';
+  rsLayoutPlaceOne = 'Place piece';
+  rsLayoutChangePaper = 'Change paper';
+  rsLayoutAddPattern = 'Add pattern';
+  rsLayoutAddNote = 'Add note';
+  rsLayoutChangeTitleBlock = 'Change title block';
+  rsLayoutNewNote = 'New note';
+  rsLayoutChangeNote = 'Change note';
+  rsLayoutDeleteNote = 'Delete note';
+  rsLayoutRemovePattern = 'Remove pattern';
+  rsLayoutChangeMeasurements = 'Change measurements';
+  rsLayoutChangeSize = 'Change size';
+  rsLayoutTogglePage = 'Leave page out';
+  rsLayoutCannotPlace = 'This piece has a problem in the pattern, so it cannot be placed yet';
+
 implementation
+
+uses
+  Math, Sloper.Output.Tiling;
+
+const
+  // A new note's text size, in points, and its gap below the pieces, in mm
+  NEW_NOTE_SIZE = 12;
+  NEW_NOTE_GAP = 10;
 
 constructor TLayoutDocument.Create;
 begin
@@ -102,6 +181,11 @@ begin
     FOnChange(Self);
 end;
 
+function TLayoutDocument.SourceFiles: TSourceFiles;
+begin
+  Result := FLayout.UseSourceFiles;
+end;
+
 procedure TLayoutDocument.NewForPattern(const PatternFile: string);
 begin
   Inc(FGeneration);
@@ -121,7 +205,22 @@ end;
 function TLayoutDocument.Open(const FileName: string; out ErrorMessage: string): boolean;
 begin
   Inc(FGeneration);
+  FLayout.ReadSourcesFromDisk;
   Result := FLayout.LoadFromFile(FileName, ErrorMessage);
+  if not Result then
+    Exit;
+  FLayout.LoadSources;
+  FHistory.Clear;
+  FSavedText := FLayout.SaveToText;
+  Changed;
+end;
+
+function TLayoutDocument.OpenText(const Text: string; out ErrorMessage: string): boolean;
+begin
+  Inc(FGeneration);
+  FLayout.UseSourceFiles;
+  FLayout.FileName := '';
+  Result := FLayout.LoadFromText(Text, ErrorMessage);
   if not Result then
     Exit;
   FLayout.LoadSources;
@@ -139,6 +238,25 @@ begin
     FHistory.EndMerging;
     Changed;
   end;
+end;
+
+function TLayoutDocument.SaveText: string;
+begin
+  Result := FLayout.SaveToText;
+  MarkSaved(Result);
+end;
+
+procedure TLayoutDocument.MarkUnsaved;
+begin
+  FSavedText := '';
+  Changed;
+end;
+
+procedure TLayoutDocument.MarkSaved(const Text: string);
+begin
+  FSavedText := Text;
+  FHistory.EndMerging;
+  Changed;
 end;
 
 procedure TLayoutDocument.Reload;
@@ -251,6 +369,152 @@ procedure TLayoutDocument.Redo;
 begin
   if CanRedo then
     Restore(FHistory.Redo(FLayout.SaveToText));
+end;
+
+procedure TLayoutDocument.TurnPiece(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Placements)) then
+    Exit;
+  BeginChange(rsLayoutTurnPiece);
+  FLayout.Placements[Index].Rotation := (FLayout.Placements[Index].Rotation + 90) mod 360;
+  EndChange;
+end;
+
+procedure TLayoutDocument.FlipPiece(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Placements)) then
+    Exit;
+  BeginChange(rsLayoutFlipPiece);
+  FLayout.Placements[Index].Flipped := not FLayout.Placements[Index].Flipped;
+  EndChange;
+end;
+
+procedure TLayoutDocument.UnplacePiece(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Placements)) then
+    Exit;
+  BeginChange(rsLayoutUnplacePiece);
+  FLayout.RemovePlacement(Index);
+  EndChange;
+end;
+
+function TLayoutDocument.ChangeOutput(const Output: TLayoutOutput; out Reason: string): boolean;
+var
+  Wanted, Before: TLayoutOutput;
+begin
+  Reason := '';
+  Wanted := Output;
+  Before := FLayout.Output;
+  // Page names mean other sheets once the grid moves
+  if (Wanted.Paper <> Before.Paper) or (Wanted.Tiles.PaperWidth <> Before.Tiles.PaperWidth) or
+    (Wanted.Tiles.PaperHeight <> Before.Tiles.PaperHeight) or (Wanted.Tiles.Margin <> Before.Tiles.Margin) or
+    (Wanted.Tiles.Overlap <> Before.Tiles.Overlap) or (Wanted.Kind <> Before.Kind) then
+    Wanted.ExcludedPages := nil;
+  if not TilesAreUsable(Wanted.Tiles) or (Wanted.RollWidth <= 2 * Wanted.Tiles.Margin) or (Wanted.MaterialWidth <= 0) then
+  begin
+    Reason := rsLayoutNoPrintArea;
+    Exit(False);
+  end;
+  BeginChange(rsLayoutChangePaper);
+  FLayout.Output := Wanted;
+  // Choosing a material, or a material sheet, starts from that material's size
+  if (Wanted.Material <> Before.Material) or (Wanted.Kind <> Before.Kind) then
+    FLayout.TakeMaterialSize;
+  EndChange('paper');
+  Result := True;
+end;
+
+procedure TLayoutDocument.TogglePage(const Caption: string);
+begin
+  if Caption = '' then
+    Exit;
+  BeginChange(rsLayoutTogglePage);
+  FLayout.TogglePage(Caption);
+  EndChange;
+end;
+
+function TLayoutDocument.AddPattern(const Path: string): integer;
+var
+  Before: integer;
+begin
+  Before := Length(FLayout.Unplaced);
+  BeginChange(rsLayoutAddPattern);
+  FLayout.AddSource(Path, '', '');
+  FLayout.LoadSources;
+  EndChange;
+  Result := Length(FLayout.Unplaced) - Before;
+end;
+
+procedure TLayoutDocument.RemovePattern(Source: TPatternSource);
+begin
+  BeginChange(rsLayoutRemovePattern);
+  FLayout.RemoveSource(Source);
+  EndChange;
+end;
+
+procedure TLayoutDocument.SetMeasurements(Source: TPatternSource; const MeasurementFile: string);
+begin
+  BeginChange(rsLayoutChangeMeasurements);
+  Source.MeasurementFile := MeasurementFile;
+  Source.Size := '';
+  FLayout.LoadSources;
+  EndChange;
+end;
+
+procedure TLayoutDocument.SetSize(Source: TPatternSource; const Size: string);
+begin
+  BeginChange(rsLayoutChangeSize);
+  Source.Size := Size;
+  FLayout.LoadSources;
+  EndChange;
+end;
+
+function TLayoutDocument.AddNote: integer;
+var
+  Lowest: double;
+  Shape: TPlacedPiece;
+begin
+  Lowest := 0;
+  for Shape in FLayout.PlacedPieces do
+    Lowest := Max(Lowest, Shape.Bounds.MaxY + NEW_NOTE_GAP);
+  BeginChange(rsLayoutAddNote);
+  Result := FLayout.AddNote(rsLayoutNewNote, 0, Lowest, NEW_NOTE_SIZE);
+  EndChange;
+end;
+
+procedure TLayoutDocument.ChangeNote(Index: integer; const Note: TSheetNote);
+begin
+  if (Index < 0) or (Index > High(FLayout.Notes)) then
+    Exit;
+  BeginChange(rsLayoutChangeNote);
+  FLayout.Notes[Index] := Note;
+  EndChange('note:' + IntToStr(Index));
+end;
+
+procedure TLayoutDocument.DeleteNote(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Notes)) then
+    Exit;
+  BeginChange(rsLayoutDeleteNote);
+  FLayout.RemoveNote(Index);
+  EndChange;
+end;
+
+procedure TLayoutDocument.ChangeTitle(const Title: TTitleBlock);
+begin
+  BeginChange(rsLayoutChangeTitleBlock);
+  FLayout.Title := Title;
+  EndChange;
+end;
+
+function TLayoutDocument.PlaceCopy(const Item: TUnplacedCopy): boolean;
+begin
+  Result := Item.CanPlace;
+  if not Result then
+    Exit;
+  BeginChange(rsLayoutPlaceOne);
+  FLayout.PlaceCopies([Item]);
+  EndChange;
 end;
 
 end.

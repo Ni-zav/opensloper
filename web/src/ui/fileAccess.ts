@@ -1,6 +1,6 @@
 // Files on the user's machine through the browser's File System Access API,
-// where the browser has it (Chromium-based ones): a pattern opened from a
-// file saves back to it, and its measurement file is found beside it from a
+// where the browser has it (Chromium-based ones): a pattern or layout opened
+// from a file saves back to it, and the files it names are found beside it from a
 // folder the user grants once, which the browser keeps (IndexedDB holds the
 // folder's handle, never the files). Elsewhere the app falls back to
 // uploading and downloading. Nothing leaves the machine.
@@ -34,6 +34,7 @@ interface PermissionMethods {
 
 export const PATTERN_EXTENSION = '.sloper';
 export const MEASUREMENTS_EXTENSION = '.slm';
+export const LAYOUT_EXTENSION = '.slayout';
 const PATTERN_TYPE: PickerType = {
   description: STRINGS.patternFiles,
   accept: { 'application/json': [PATTERN_EXTENSION] },
@@ -41,6 +42,10 @@ const PATTERN_TYPE: PickerType = {
 const MEASUREMENTS_TYPE: PickerType = {
   description: STRINGS.measurementFiles,
   accept: { 'application/json': [MEASUREMENTS_EXTENSION] },
+};
+const LAYOUT_TYPE: PickerType = {
+  description: STRINGS.layoutFileType,
+  accept: { 'application/json': [LAYOUT_EXTENSION] },
 };
 // The pickers remember the folder last used under these
 const PATTERNS_ID = 'patterns';
@@ -173,6 +178,38 @@ export class FileAccess {
     }
   }
 
+  // A layout with its patterns and measurement files, or patterns to start
+  // one, as the Publish app's Open takes them; empty when cancelled
+  async openLayout(startIn: FileSystemHandle | undefined): Promise<FileSystemFileHandle[]> {
+    return this.openMany([LAYOUT_TYPE, PATTERN_TYPE, MEASUREMENTS_TYPE], startIn);
+  }
+
+  // Patterns, or measurement files, to add to a layout; empty when cancelled
+  async openSources(
+    kind: 'pattern' | 'measurements',
+    startIn: FileSystemHandle | undefined,
+  ): Promise<FileSystemFileHandle[]> {
+    return kind === 'pattern'
+      ? this.openMany([PATTERN_TYPE, MEASUREMENTS_TYPE], startIn)
+      : this.openMany([MEASUREMENTS_TYPE], startIn);
+  }
+
+  private async openMany(types: PickerType[], startIn: FileSystemHandle | undefined): Promise<FileSystemFileHandle[]> {
+    try {
+      return await this.pickers.showOpenFilePicker({
+        id: PATTERNS_ID,
+        multiple: true,
+        types,
+        ...(startIn === undefined ? {} : { startIn }),
+      });
+    } catch (error: unknown) {
+      if (cancelled(error)) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
   // Another pattern, to import its variables; undefined when cancelled
   async openOtherPattern(startIn: FileSystemHandle | undefined): Promise<FileSystemFileHandle | undefined> {
     try {
@@ -210,14 +247,15 @@ export class FileAccess {
   // Where to save a new file; undefined when cancelled
   async chooseSave(
     suggestedName: string,
-    kind: 'pattern' | 'measurements',
+    kind: 'pattern' | 'measurements' | 'layout',
     startIn: FileSystemHandle | undefined,
   ): Promise<FileSystemFileHandle | undefined> {
+    const types = { pattern: PATTERN_TYPE, measurements: MEASUREMENTS_TYPE, layout: LAYOUT_TYPE };
     try {
       return await this.pickers.showSaveFilePicker({
-        id: kind === 'pattern' ? PATTERNS_ID : MEASUREMENTS_ID,
+        id: kind === 'measurements' ? MEASUREMENTS_ID : PATTERNS_ID,
         suggestedName,
-        types: [kind === 'pattern' ? PATTERN_TYPE : MEASUREMENTS_TYPE],
+        types: [types[kind]],
         ...(startIn === undefined ? {} : { startIn }),
       });
     } catch (error: unknown) {

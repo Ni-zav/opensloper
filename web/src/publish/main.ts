@@ -9,10 +9,11 @@
 // count of problems, which opens the Problems tab. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
+import { FileAccess, LAYOUT_EXTENSION, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import type { Vec2 } from '../editor/view.ts';
 import { Engine } from '../engine/engine.ts';
 import { booleanField, numberField, recordsField, stringField } from '../engine/replies.ts';
-import { downloadBlob, downloadText } from '../ui/download.ts';
+import { baseName, downloadBlob, downloadText } from '../ui/download.ts';
 import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
@@ -26,14 +27,12 @@ import { PatternsTab } from './patternsTab.ts';
 import { PrintDialog } from './printDialog.ts';
 import { PiecesTab } from './piecesTab.ts';
 
-const LAYOUT_EXTENSION = '.slayout';
-const PATTERN_EXTENSION = '.sloper';
-
 // The desktop's icons for the toolbar's commands and the side panel's tabs
 // (APP_ICON_NAMES)
 const ICONS = {
   open: 'folder-open',
   save: 'device-floppy',
+  saveAs: 'file-pencil',
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
   zoomIn: 'zoom-in',
@@ -66,11 +65,11 @@ const EXPORTS = [
 
 // The toolbar's buttons that keys work, by the engine's names for the
 // commands (publish_tables); the keys click the button, so they do nothing
-// while it is disabled. Save As downloads, as Save does.
+// while it is disabled.
 const KEY_BUTTONS: [command: string, button: string][] = [
   ['open', 'open'],
   ['save', 'save'],
-  ['saveAs', 'save'],
+  ['saveAs', 'saveAs'],
   ['print', 'print'],
   ['exportPDF', 'exportPdf'],
   ['undo', 'undo'],
@@ -110,6 +109,18 @@ const sideElement = element('side', HTMLElement);
 
 function showMessage(text: string): void {
   message.textContent = text;
+}
+
+// A message with buttons after it, as the design page's
+function showActions(text: string, actions: [caption: string, action: () => void][]): void {
+  message.replaceChildren(text);
+  for (const [caption, action] of actions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = caption;
+    button.addEventListener('click', action);
+    message.append(' ', button);
+  }
 }
 
 function showFailure(error: unknown): void {
@@ -161,6 +172,17 @@ class PublishApp {
 
   // Each command's keys, as Mod+Z, from the engine's tables
   private readonly shortcuts: ReadonlyMap<string, string>;
+  // Where the browser lets files be opened and saved in place
+  private readonly files = FileAccess.create();
+  // The layout's file, once opened from one or saved to one; Save writes it
+  private layoutHandle: FileSystemFileHandle | undefined;
+  // The file the paths the layout's sources record start from: the layout's,
+  // or the pattern a new layout was started for
+  private sourcesHandle: FileSystemFileHandle | undefined;
+  private saving = false;
+  // A layout started for a pattern whose files were not all chosen: once
+  // they are found, it is started again with them, so every piece is placed
+  private started: { pattern: string; files: Map<string, string> } | undefined;
 
   constructor(engine: Engine, shortcuts: ReadonlyMap<string, string>) {
     this.shortcuts = shortcuts;
@@ -285,12 +307,25 @@ class PublishApp {
     toolbar.append(
       this.button('open', STRINGS.open, STRINGS.publishOpenHint, () => {
         if (!this.document.state.modified || window.confirm(STRINGS.layoutDiscardChanges)) {
-          openInput.click();
+          this.open();
         }
       }),
-      this.button('save', STRINGS.save, STRINGS.layoutSaveHint, () => {
-        this.run(this.save());
-      }),
+      this.button(
+        'save',
+        STRINGS.save,
+        this.files === undefined ? STRINGS.layoutSaveHint : STRINGS.layoutSaveToFileHint,
+        () => {
+          this.run(this.save(false));
+        },
+      ),
+      // A download asks where to put it anyway
+      ...(this.files === undefined
+        ? []
+        : [
+            this.button('saveAs', STRINGS.saveAs, STRINGS.layoutSaveAsHint, () => {
+              this.run(this.save(true));
+            }),
+          ]),
       divider(),
       this.button('undo', STRINGS.undo, STRINGS.undoHint, () => {
         this.run(this.document.undo());
@@ -326,7 +361,7 @@ class PublishApp {
       }),
     );
     openInput.addEventListener('change', () => {
-      this.run(this.openFiles([...(openInput.files ?? [])]));
+      this.run(this.openFiles([...(openInput.files ?? [])].map((file) => ({ file, handle: undefined }))));
       openInput.value = '';
     });
     window.addEventListener('keydown', (event) => {
@@ -361,10 +396,153 @@ class PublishApp {
     return this.document.fileName.replace(/\.[^.]*$/, '');
   }
 
-  private async save(): Promise<void> {
+  // With File System Access, the files are chosen in the browser's picker,
+  // starting where the layout is, so they can be saved back to
+  private open(): void {
+    const files = this.files;
+    if (files === undefined) {
+      openInput.click();
+      return;
+    }
+    this.run(
+      files
+        .openLayout(this.sourcesHandle)
+        .then(async (handles) =>
+          this.openFiles(await Promise.all(handles.map(async (handle) => ({ file: await handle.getFile(), handle })))),
+        ),
+    );
+  }
+
+  // Writes the layout to its file, or one the user chooses for a new one or
+  // with Save As; without File System Access it is downloaded, and the
+  // browser asks where or puts it in Downloads. Only the text written counts
+  // as saved, so a change made meanwhile keeps the layout modified.
+  private async save(saveAs: boolean): Promise<void> {
     const name = `${this.baseName()}${LAYOUT_EXTENSION}`;
-    downloadText(name, await this.document.save());
-    showMessage(STRINGS.downloaded(name));
+    const files = this.files;
+    if (files === undefined) {
+      downloadText(name, await this.document.save());
+      showMessage(STRINGS.downloaded(name));
+      return;
+    }
+    if (this.saving) {
+      return;
+    }
+    this.saving = true;
+    const generation = this.document.generation;
+    try {
+      // Leave to write is asked while the click still counts
+      let handle = saveAs ? undefined : this.layoutHandle;
+      if (handle !== undefined && !(await files.mayWrite(handle))) {
+        showMessage(STRINGS.writeRefused(handle.name));
+        return;
+      }
+      handle ??= await files.chooseSave(name, 'layout', this.sourcesHandle);
+      if (handle === undefined || this.document.generation !== generation) {
+        return;
+      }
+      const text = await this.document.text();
+      if (!(await files.write(handle, text))) {
+        showMessage(STRINGS.writeRefused(handle.name));
+        return;
+      }
+      await this.document.saved(text);
+      this.layoutHandle = handle;
+      this.sourcesHandle = handle;
+      this.document.fileName = handle.name;
+      this.showState();
+      showMessage(STRINGS.saved(handle.name));
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  // The files the sources still need, found by their paths from the layout
+  // in a folder the user has granted, as the design page finds a pattern's
+  // measurement file. Ask lets it ask for leave, or for the folder, which
+  // needs a click the user has just made.
+  private async findSources(ask: boolean): Promise<void> {
+    const files = this.files;
+    const from = this.sourcesHandle;
+    if (files === undefined || from === undefined) {
+      return;
+    }
+    // Every file found, by name, for a layout started again
+    const allFound = new Map<string, string>();
+    const search = async (askNow: boolean): Promise<{ found: Map<string, string>; needsLeave: boolean }> => {
+      const found = new Map<string, string>();
+      let needsLeave = false;
+      for (const path of this.document.state.missing) {
+        // One after another: each may ask the user
+        // oxlint-disable-next-line no-await-in-loop
+        const result = await files.findBeside(from, path, askNow);
+        if (result.file !== undefined) {
+          // oxlint-disable-next-line no-await-in-loop
+          found.set(path, await (await result.file.getFile()).text());
+        } else if (result.needsLeave !== undefined) {
+          needsLeave = true;
+        }
+      }
+      return { found, needsLeave };
+    };
+    // A pattern found may name a measurement file, looked for in the next round
+    let askNow = ask;
+    while (this.document.state.missing.length > 0 && this.sourcesHandle === from) {
+      // Each round needs the files the one before found
+      // oxlint-disable-next-line no-await-in-loop
+      let result = await search(askNow);
+      if (askNow && result.found.size === 0 && !result.needsLeave) {
+        // oxlint-disable-next-line no-await-in-loop
+        if ((await files.grantFolder(from)) === undefined) {
+          break;
+        }
+        // oxlint-disable-next-line no-await-in-loop
+        result = await search(false);
+      }
+      if (result.found.size === 0 || this.sourcesHandle !== from) {
+        break;
+      }
+      for (const [path, text] of result.found) {
+        allFound.set(baseName(path), text);
+      }
+      // oxlint-disable-next-line no-await-in-loop
+      await this.document.giveFiles(result.found);
+      // Leave was given in this round, or the folder granted
+      askNow = false;
+    }
+    await this.startAgain(allFound);
+    if (this.document.state.missing.length > 0 && this.sourcesHandle === from) {
+      this.offerFind();
+    }
+  }
+
+  // A new layout untouched since it was started is started again with the
+  // files found, as the desktop's would have read them all at once
+  private async startAgain(found: ReadonlyMap<string, string>): Promise<void> {
+    const started = this.started;
+    const state = this.document.state;
+    if (started === undefined || found.size === 0 || state.missing.length > 0 || state.canUndo) {
+      return;
+    }
+    const files = new Map([...started.files, ...found]);
+    this.started = { pattern: started.pattern, files };
+    const generation = this.document.generation;
+    await this.document.open(files, { pattern: started.pattern });
+    if (this.document.generation === generation + 1) {
+      this.document.fileName = started.pattern.replace(/\.[^.]*$/, LAYOUT_EXTENSION);
+      this.showState(STRINGS.layoutStarted(started.pattern));
+    }
+  }
+
+  private offerFind(): void {
+    showActions(STRINGS.layoutFindFiles(this.document.state.missing), [
+      [
+        STRINGS.layoutFindFilesButton,
+        () => {
+          this.run(this.findSources(true));
+        },
+      ],
+    ]);
   }
 
   // Turn or Flip, for the piece selected on the pages
@@ -434,33 +612,46 @@ class PublishApp {
   }
 
   // A layout among the files is opened with the rest as its sources' files;
-  // otherwise the first pattern starts a layout, as on the desktop
-  private async openFiles(chosen: File[]): Promise<void> {
-    const layout = chosen.find((file) => hasExtension(file, LAYOUT_EXTENSION));
-    const pattern = chosen.find((file) => hasExtension(file, PATTERN_EXTENSION));
+  // otherwise the first pattern starts a layout, as on the desktop. The file
+  // it came from, when the browser gives it, is where Save writes, and where
+  // the files the sources still need are looked for.
+  private async openFiles(chosen: { file: File; handle: FileSystemFileHandle | undefined }[]): Promise<void> {
+    const layout = chosen.find((each) => hasExtension(each.file, LAYOUT_EXTENSION));
+    const pattern = chosen.find((each) => hasExtension(each.file, PATTERN_EXTENSION));
     if (layout === undefined && pattern === undefined) {
       if (chosen[0] !== undefined) {
-        showMessage(STRINGS.notALayout(chosen[0].name));
+        showMessage(STRINGS.notALayout(chosen[0].file.name));
       }
       return;
     }
     const files = new Map<string, string>();
-    for (const file of chosen) {
-      if (file !== layout) {
+    for (const each of chosen) {
+      if (each !== layout) {
         // oxlint-disable-next-line no-await-in-loop
-        files.set(file.name, await file.text());
+        files.set(each.file.name, await each.file.text());
       }
     }
     if (layout === undefined) {
-      // Only a pattern was chosen, so there is one
-      const name = pattern?.name ?? '';
+      // Only a pattern was chosen, so there is one; the new layout has no file yet
+      const name = pattern?.file.name ?? '';
       await this.document.open(files, { pattern: name });
+      this.layoutHandle = undefined;
+      this.sourcesHandle = pattern?.handle;
+      this.started = { pattern: name, files };
       this.document.fileName = name.replace(/\.[^.]*$/, LAYOUT_EXTENSION);
       this.showState(STRINGS.layoutStarted(name));
     } else {
-      await this.document.open(files, { layout: await layout.text() });
-      this.document.fileName = layout.name;
-      this.showState(STRINGS.layoutOpened(layout.name));
+      await this.document.open(files, { layout: await layout.file.text() });
+      this.layoutHandle = layout.handle;
+      this.sourcesHandle = layout.handle;
+      this.started = undefined;
+      this.document.fileName = layout.file.name;
+      this.showState(STRINGS.layoutOpened(layout.file.name));
+    }
+    // Reading a folder the browser has not let the page read since it was
+    // granted needs a click on the button offered
+    if (this.document.state.missing.length > 0 && this.sourcesHandle !== undefined) {
+      await this.findSources(false);
     }
   }
 
@@ -525,6 +716,7 @@ class PublishApp {
     const blocked = state.problems.some((problem) => problem.blocking);
     const enabled: Record<string, boolean> = {
       save: open,
+      saveAs: open,
       undo: state.canUndo,
       redo: state.canRedo,
       zoomArea: open,

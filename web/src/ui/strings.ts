@@ -44,6 +44,7 @@ export const STRINGS = {
   // The kinds of file the pickers offer
   patternFiles: 'OpenSloper pattern',
   measurementFiles: 'OpenSloper measurements',
+  layoutFileType: 'OpenSloper layout',
   // When the measurement file is not among those the browser lets the page read
   findMeasurements: (file: string): string =>
     `The pattern uses the measurement file ${file}: find it in the folder that holds them, or choose it with Measurements…`,
@@ -234,6 +235,12 @@ export const STRINGS = {
   zoomOut: 'Zoom Out',
   zoomOutHint: 'Zoom out from the middle',
   layoutSaveHint: 'Download the layout file',
+  layoutSaveToFileHint: 'Save the layout to its file',
+  layoutSaveAsHint: 'Save the layout to another file',
+  // When files the layout names are not among those the browser lets the page read
+  layoutFindFiles: (files: string[]): string =>
+    `The layout needs ${files.join(', ')}: find them in the folder that holds them, or open them with the layout`,
+  layoutFindFilesButton: 'Find them…',
   layoutDiscardChanges: 'The layout has changes not saved. Drop them?',
   undoHint: 'Take back the last change',
   redoHint: 'Make the change undone again',

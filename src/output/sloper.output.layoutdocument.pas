@@ -64,6 +64,9 @@ type
     // The layout's text, as Save writes it, counted as saved: the browser
     // downloads it, so no file is written here
     function SaveText: string;
+    // Counts Text as the layout saved, once the browser has written it; a
+    // change made meanwhile leaves the layout modified
+    procedure MarkSaved(const Text: string);
     // Reads the pattern files again; not an undo step
     procedure Reload;
     // Call regularly: reads the sources again once a saved file has stopped
@@ -237,7 +240,12 @@ end;
 function TLayoutDocument.SaveText: string;
 begin
   Result := FLayout.SaveToText;
-  FSavedText := Result;
+  MarkSaved(Result);
+end;
+
+procedure TLayoutDocument.MarkSaved(const Text: string);
+begin
+  FSavedText := Text;
   FHistory.EndMerging;
   Changed;
 end;

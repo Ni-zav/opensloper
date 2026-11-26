@@ -247,6 +247,13 @@ try {
   const layoutFile = join(folder, 'skirt.slayout');
   await writeFile(layoutFile, JSON.stringify(LAYOUT));
   const page = await browser.newPage();
+  // Opening and saving through uploads and downloads, as where the browser
+  // has no File System Access (publishFiles.ts drives that)
+  await page.evaluateOnNewDocument(() => {
+    for (const name of ['showOpenFilePicker', 'showSaveFilePicker', 'showDirectoryPicker']) {
+      Object.defineProperty(window, name, { value: undefined });
+    }
+  });
   const problems = watchProblems(page);
   const session = await page.createCDPSession();
   await session.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });

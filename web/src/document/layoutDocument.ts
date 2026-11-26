@@ -170,6 +170,24 @@ export class LayoutDocument {
     await this.ignoreRefusal(this.call('publish_redo'));
   }
 
+  // The layout file's text, to write to a file; not counted as saved
+  async text(): Promise<string> {
+    return stringField(await this.engine.call('publish_text'), 'text') ?? '';
+  }
+
+  // The text was written to the file, so it counts as saved
+  async saved(text: string): Promise<void> {
+    await this.call('publish_saved', { text });
+  }
+
+  // Gives files the sources still need, found by their paths, and reads
+  // them again, with any measurement file they name in turn among files
+  async giveFiles(found: ReadonlyMap<string, string>, files: ReadonlyMap<string, string> = new Map()): Promise<void> {
+    this.current = parseState(await this.engine.call('publish_add_files', { files: fileList(found) }));
+    await this.giveMissing(files);
+    this.changed();
+  }
+
   // The layout file's text, to download, counted as saved
   async save(): Promise<string> {
     return stringField(await this.call('publish_save'), 'text') ?? '';

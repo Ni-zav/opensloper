@@ -116,6 +116,11 @@ resourcestring
     'one undo step. Refused when its piece has a problem in the pattern.';
   rsPublishLayoutMethod = 'As the layout method %s, on the open layout; one undo step.';
   rsPublishLayoutReturns = 'What %s gives';
+  rsPublishText = 'The layout file''s text, to write to the file it came from or another the user chooses; not ' +
+    'counted as saved until publish_saved says it was written.';
+  rsPublishSaved = 'Counts the text publish_text gave as saved, once it is written. A change made since leaves the ' +
+    'layout modified.';
+  rsPublishSavedText = 'The text written, as publish_text gave it';
   rsPublishSave = 'The layout file''s text, to download, counted as saved.';
   rsPublishSaveReturns = '`text`, the layout file''s text';
   rsPublishExport = 'The layout written as PDF, SVG or DXF-AAMA, to download. The problems that block a PDF block ' +
@@ -322,6 +327,9 @@ begin
     AddApiParam(Built, 'shown', apFlag, False, rsPublishTitleShown);
     AddApiParam(Built, 'corner', apChoice, False, rsPublishTitleCorner, string.Join(', ', CORNER_NAMES));
     AddApiParam(Built, 'everyPage', apFlag, False, rsPublishTitleEveryPage);
+    AddApiMethod(Built, 'publish_text', rsPublishText, rsPublishSaveReturns, True);
+    AddApiMethod(Built, 'publish_saved', rsPublishSaved, rsPublishDone);
+    AddApiParam(Built, 'text', apText, True, rsPublishSavedText);
     AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
@@ -1089,6 +1097,12 @@ begin
     'publish_materials': Result := DoMaterials;
     'publish_title': Result := DoTitle;
     'publish_set_title': Result := DoSetTitle(Params);
+    'publish_text': Result := TJSONObject.Create(['text', FDocument.Layout.SaveToText]);
+    'publish_saved':
+    begin
+      FDocument.MarkSaved(RequireString(Params, 'text'));
+      Result := TJSONObject.Create;
+    end;
     'publish_save': Result := DoSave;
     'publish_export': Result := DoExport(Params);
     else

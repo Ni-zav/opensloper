@@ -15,12 +15,16 @@ import {
   bodyData,
   launchBrowser,
   pressWithMod,
+  queuePicks,
+  readOpfs,
   serveApp,
+  standInPickers,
   status,
   TIMEOUT_MS,
   waitForData,
   waitForStatus,
   watchProblems,
+  writeOpfs,
 } from './browser.ts';
 
 const PATTERNS = '../tests/patterns';
@@ -29,89 +33,6 @@ const MEASUREMENTS = 'patterns/skirt-small.slm';
 // How long a page is given to offer work left over that it should not, in ms
 const IDLE_MS = 1000;
 const WRITE_FAILURE = 'Simulated pattern write failure';
-
-// The pickers, over OPFS: each takes the next path the test has queued in
-// window.testPicks ('' is the top folder)
-function standInPickers(): void {
-  const picks: (string | string[])[] = [];
-  Reflect.set(window, 'testPicks', picks);
-  const next = (): string[] => {
-    const pick = picks.shift();
-    if (pick === undefined) {
-      throw new DOMException('no pick queued', 'AbortError');
-    }
-    return typeof pick === 'string' ? [pick] : pick;
-  };
-  // Inside, as the page is sent this function alone
-  // oxlint-disable-next-line unicorn/consistent-function-scoping
-  const folderAt = async (parts: string[], create: boolean): Promise<FileSystemDirectoryHandle> => {
-    let folder = await navigator.storage.getDirectory();
-    for (const part of parts) {
-      // oxlint-disable-next-line no-await-in-loop
-      folder = await folder.getDirectoryHandle(part, { create });
-    }
-    return folder;
-  };
-  const fileAt = async (path: string, create: boolean): Promise<FileSystemFileHandle> => {
-    const parts = path.split('/');
-    const name = parts.pop() ?? '';
-    return (await folderAt(parts, create)).getFileHandle(name, { create });
-  };
-  Object.defineProperty(window, 'showOpenFilePicker', {
-    value: async () => Promise.all(next().map(async (path) => fileAt(path, false))),
-  });
-  Object.defineProperty(window, 'showSaveFilePicker', {
-    value: async () => fileAt(next()[0] ?? '', true),
-  });
-  Object.defineProperty(window, 'showDirectoryPicker', {
-    value: async () =>
-      folderAt(
-        (next()[0] ?? '').split('/').filter((part) => part !== ''),
-        false,
-      ),
-  });
-}
-
-async function queuePicks(page: Page, ...picks: (string | string[])[]): Promise<void> {
-  await page.evaluate((queued) => {
-    const list: unknown = Reflect.get(window, 'testPicks');
-    if (Array.isArray(list)) {
-      list.push(...queued);
-    }
-  }, picks);
-}
-
-async function writeOpfs(page: Page, path: string, text: string): Promise<void> {
-  await page.evaluate(
-    async (where, contents) => {
-      const parts = where.split('/');
-      const name = parts.pop() ?? '';
-      let folder = await navigator.storage.getDirectory();
-      for (const part of parts) {
-        // oxlint-disable-next-line no-await-in-loop
-        folder = await folder.getDirectoryHandle(part, { create: true });
-      }
-      const stream = await (await folder.getFileHandle(name, { create: true })).createWritable();
-      await stream.write(contents);
-      await stream.close();
-    },
-    path,
-    text,
-  );
-}
-
-async function readOpfs(page: Page, path: string): Promise<string> {
-  return page.evaluate(async (where) => {
-    const parts = where.split('/');
-    const name = parts.pop() ?? '';
-    let folder = await navigator.storage.getDirectory();
-    for (const part of parts) {
-      // oxlint-disable-next-line no-await-in-loop
-      folder = await folder.getDirectoryHandle(part);
-    }
-    return (await (await folder.getFileHandle(name)).getFile()).text();
-  }, path);
-}
 
 async function clickToolbar(page: Page, hint: string): Promise<void> {
   await page.click(`#toolbar button[title="${hint}"]`);

@@ -255,7 +255,7 @@ export const STRINGS = {
   unplacePieceHint: 'Take the selected piece off the pages, back to the tray',
   arrange: 'Arrange',
   trayGroup: 'Tray',
-  trayHint: 'Unplaced: double-click one to place it',
+  trayHint: 'Unplaced: drag onto the pages',
   trayEmpty: 'Every piece is placed',
   trayNoPieces: 'No pieces to place',
   cannotPlace: 'This piece has a problem in the pattern, so it cannot be placed yet',

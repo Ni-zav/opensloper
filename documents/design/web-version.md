@@ -298,7 +298,11 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 - The title names the layout. The status bar has a message and the problems' count, as on the desktop, with how many stop printing.
 - **The preview** (`PreviewCanvas` in `ui/previewCanvas.ts`, as `Sloper.Publish.PreviewCanvas`) is drawn with Canvas2D from `publish_scene`: the cover, the pages (blank ones grey, left-out ones crossed), the pieces with their tint, seam line, marks, lines and label, and the information block's boxes, with its text once it is large enough to read.
 - Fit Pages, Zoom In and Zoom Out are on the toolbar. The wheel zooms about the pointer and the middle button pans. A new layout is fitted.
-- A click selects the piece under it, outlined in blue, as `publish_at` finds it.
+- A press selects the piece under it, outlined in blue, as `publish_press` finds it. Dragging moves it, one undo step:
+  - The engine moves it (`publish_drag`), on the desktop's 0.5 mm grid, and the scene is read again after each move. Only the newest move waits to be sent.
+  - Letting go ends the step (`publish_release`). A drag the browser takes away puts the piece back (`publish_cancel`).
+  - The press, the drag and the drop are `TPreviewDrag` (`Sloper.Output.Preview`), which the desktop's preview uses too.
+  - Sheet notes are held by a press too, as on the desktop, but are not dragged here until the preview draws them.
 - **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, then Export PDF, SVG and DXF.
   - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
   - Undo names the step it would take, as the desktop's menu does.
@@ -306,7 +310,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 - **The side panel** (`SideTabs`) has the Pieces tab (`publish/piecesTab.ts`), as the desktop's:
   - Selected Piece: Turn 90°, Flip and Back to tray, for the piece selected on the pages.
   - Arrange: Place new pieces and Pack pieces. Pack fits the view and says what it did in the status bar.
-  - Tray: the copies waiting to be placed. A double-click or Enter places one, selected. A copy whose piece has a problem in the pattern is greyed and cannot be placed.
+  - Tray: the copies waiting to be placed. One dragged onto the pages is placed centred where it is let go, kept on the sheet (`publish_drop_copy`). A double-click or Enter places one in the rows below the others. Either way it is selected. A copy whose piece has a problem in the pattern is greyed and cannot be placed.
   - The edits are `TLayoutDocument`'s (`TurnPiece`, `FlipPiece`, `UnplacePiece`, `PlaceCopy`), which the desktop calls too, so both name the undo steps alike.
 - The side panel has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
 - The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.
@@ -319,7 +323,10 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
 | `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; and `tray`: the copies waiting, each with its caption and whether it can be placed |
 | `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`) |
-| `publish_at` | The placed piece at a point (`ShapeAt`), the smallest where they overlap |
+| `publish_press` | Holds the sheet note at a point, or else the smallest placed piece (`ShapeAt`), for a drag; changes nothing |
+| `publish_drag` | Moves what the press holds; the first move opens one undo step |
+| `publish_release`, `publish_cancel` | Ends the drag's step, or puts back what it moved |
+| `publish_drop_copy` | Places one copy from the tray centred on a point (`PlaceCopyAt`), one undo step |
 | `publish_undo`, `publish_redo`, `publish_place_pieces`, `publish_pack` | The layout methods of the same names (`Sloper.API.LayoutServer`), each one undo step |
 | `publish_turn`, `publish_flip`, `publish_unplace` | Turn 90°, Flip and Back to tray for a placed piece, by its placement index; each one undo step |
 | `publish_place_copy` | Places one copy from the tray, by its index there, in the rows below the others; refused when its piece cannot be placed |

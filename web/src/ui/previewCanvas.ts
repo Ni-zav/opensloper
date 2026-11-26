@@ -1,8 +1,12 @@
 // The publish preview, as Sloper.Publish.PreviewCanvas: the pages with the
 // pieces on them, drawn with Canvas2D from what publish_scene gives. Blank
 // pages are greyed out, and pages left out crossed. The wheel zooms about
-// the pointer, the middle button pans, and a click selects the piece under
-// it, which publish_at finds. A new layout is fitted to the view.
+// the pointer and the middle button pans. A press selects the piece under
+// it, which publish_press finds and holds, and dragging moves it, one undo
+// step: the engine moves it (publish_drag), so it lands on the desktop's
+// grid, and the scene is read again after each move, the newest only. A copy
+// dragged from the tray is dropped where it is let go. A new layout is fitted
+// to the view.
 import type { LayoutDocument } from '../document/layoutDocument.ts';
 import {
   booleanField,
@@ -57,8 +61,13 @@ interface Scene {
 export interface PreviewCanvasEvents {
   // A piece was chosen by its placement index, or -1 for none
   selectionChanged(placement: number): void;
+  // A copy from the tray, by its index there, let go at a point of the layout
+  dropCopy(index: number, at: Vec2): void;
   failed(error: unknown): void;
 }
+
+// What a tray line carries when dragged: its index in the tray
+export const TRAY_DRAG_TYPE = 'application/x-opensloper-tray-copy';
 
 const EMPTY_SCENE: Scene = {
   cover: undefined,
@@ -171,6 +180,10 @@ export class PreviewCanvas {
   private readonly events: PreviewCanvasEvents;
   private readonly view = new ViewTransform();
   private readonly scenes: LatestOnly<number>;
+  // A drag's moves, each sent once the one before is answered
+  private readonly drags: LatestOnly<Vec2>;
+  // The press the engine is still answering; a drag waits for it
+  private pressing: Promise<boolean> = Promise.resolve(false);
   private readonly resizer: ResizeObserver;
   private readonly listener = (): void => {
     this.refresh();
@@ -179,7 +192,7 @@ export class PreviewCanvas {
   private generation = -1;
   private needsFit = true;
   private selectedPlacement = -1;
-  private mode: 'idle' | 'pressed' | 'panning' = 'idle';
+  private mode: 'idle' | 'pressed' | 'dragging' | 'panning' = 'idle';
   private pointerId: number | undefined;
   private pressAt: Vec2 = { x: 0, y: 0 };
   private lastAt: Vec2 = { x: 0, y: 0 };
@@ -190,6 +203,12 @@ export class PreviewCanvas {
     this.events = events;
     this.scenes = new LatestOnly(
       async () => this.loadScene(),
+      (error) => {
+        events.failed(error);
+      },
+    );
+    this.drags = new LatestOnly(
+      async (at) => this.dragTo(at),
       (error) => {
         events.failed(error);
       },
@@ -207,6 +226,19 @@ export class PreviewCanvas {
     element.addEventListener('wheel', this.wheel, { passive: false });
     element.addEventListener('contextmenu', (event) => {
       event.preventDefault();
+    });
+    element.addEventListener('dragover', (event) => {
+      if (event.dataTransfer?.types.includes(TRAY_DRAG_TYPE) === true) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    });
+    element.addEventListener('drop', (event) => {
+      const index = event.dataTransfer?.getData(TRAY_DRAG_TYPE) ?? '';
+      if (index !== '') {
+        event.preventDefault();
+        events.dropCopy(Number(index), this.view.toModel(this.screenAt(event)));
+      }
     });
   }
 
@@ -293,6 +325,10 @@ export class PreviewCanvas {
       this.mode = 'panning';
     } else if (event.button === LEFT_BUTTON) {
       this.mode = 'pressed';
+      this.pressing = this.press(at);
+      this.pressing.catch((error: unknown) => {
+        this.events.failed(error);
+      });
     } else {
       return;
     }
@@ -314,6 +350,11 @@ export class PreviewCanvas {
       this.view.pan(at.x - previous.x, at.y - previous.y);
       this.needsFit = false;
       this.repaint();
+    } else if (this.mode === 'pressed' && Math.hypot(at.x - this.pressAt.x, at.y - this.pressAt.y) > DRAG_THRESHOLD) {
+      this.mode = 'dragging';
+    }
+    if (this.mode === 'dragging') {
+      this.drags.push(this.view.toModel(at));
     }
   };
 
@@ -321,22 +362,34 @@ export class PreviewCanvas {
     if (event.pointerId !== this.pointerId) {
       return;
     }
-    const at = this.screenAt(event);
-    const clicked =
-      this.mode === 'pressed' && Math.hypot(at.x - this.pressAt.x, at.y - this.pressAt.y) <= DRAG_THRESHOLD;
+    const dragged = this.mode === 'dragging';
     this.endPointer();
-    if (clicked) {
-      this.selectAt(at).catch((error: unknown) => {
-        this.events.failed(error);
-      });
+    if (dragged) {
+      this.endDrag('publish_release');
     }
   };
 
+  // A drag the browser took away puts back what it moved
   private readonly pointerInterrupted = (event: PointerEvent): void => {
     if (event.pointerId === this.pointerId) {
+      const dragged = this.mode === 'dragging';
       this.endPointer();
+      if (dragged) {
+        this.endDrag('publish_cancel');
+      }
     }
   };
+
+  // Once the last move is answered, so the step holds every one
+  private endDrag(method: string): void {
+    const ending = async (): Promise<void> => {
+      await this.drags.idle();
+      await this.document.call(method);
+    };
+    ending().catch((error: unknown) => {
+      this.events.failed(error);
+    });
+  }
 
   private endPointer(): void {
     if (this.pointerId !== undefined && this.element.hasPointerCapture(this.pointerId)) {
@@ -353,10 +406,24 @@ export class PreviewCanvas {
     this.repaint();
   };
 
-  private async selectAt(at: Vec2): Promise<void> {
+  // Selects the piece pressed, as the desktop does on the button going
+  // down; true when the engine holds one to drag. Sheet notes are not drawn
+  // here yet, so one pressed is not dragged.
+  private async press(at: Vec2): Promise<boolean> {
     const layoutAt = this.view.toModel(at);
-    const answer = await this.document.read('publish_at', { x: layoutAt.x, y: layoutAt.y });
-    this.selected = numberField(answer, 'placement') ?? -1;
+    const answer = await this.document.live('publish_press', { x: layoutAt.x, y: layoutAt.y });
+    const placement = numberField(answer, 'placement') ?? -1;
+    this.selected = placement;
+    return placement >= 0;
+  }
+
+  // Moves what the press holds, and shows it moved
+  private async dragTo(at: Vec2): Promise<void> {
+    if (!(await this.pressing)) {
+      return;
+    }
+    await this.document.live('publish_drag', { x: at.x, y: at.y });
+    await this.loadScene();
   }
 
   // Drawing

@@ -2,7 +2,8 @@
 // its measurement file names the file it needs, then with it starts a layout
 // whose pages the preview draws and whose pieces a click selects. The
 // selected piece is turned, flipped and sent back to the tray, from which a
-// double-click places it again. The layout is packed, undone and redone,
+// double-click places it again; a piece is dragged, and a copy dragged from
+// the tray onto the pages. The layout is packed, undone and redone,
 // saved and exported, and the saved file opens again. A layout whose sources
 // sit in other folders finds its files by name, lists what stops it printing
 // in the Problems tab, and its waiting pieces are placed.
@@ -107,15 +108,21 @@ async function waitForPaper(page: Page): Promise<void> {
 }
 
 // Clicks across the preview until a piece is selected; its placement index
-async function selectSomePiece(page: Page): Promise<string> {
+// and the point clicked
+async function selectSomePiece(page: Page): Promise<{ placement: string; x: number; y: number }> {
   const box = await (await page.$('#preview'))?.boundingBox();
   assert.ok(box);
+  // Nothing selected first, so an earlier selection is not taken for a hit
+  await page.mouse.click(box.x + 2, box.y + 2);
+  await page.waitForFunction(() => Number(document.body.dataset.selected ?? '-1') < 0);
   const steps = 6;
   for (let row = 1; row < steps; row += 1) {
     for (let column = 1; column < steps; column += 1) {
       // One click at a time, each waiting for the engine's answer
+      const x = box.x + (box.width * column) / steps;
+      const y = box.y + (box.height * row) / steps;
       // oxlint-disable-next-line no-await-in-loop
-      await page.mouse.click(box.x + (box.width * column) / steps, box.y + (box.height * row) / steps);
+      await page.mouse.click(x, y);
       // oxlint-disable-next-line no-await-in-loop
       const selected = await page
         .waitForFunction(() => Number(document.body.dataset.selected ?? '-1') >= 0, { timeout: 300 })
@@ -124,7 +131,8 @@ async function selectSomePiece(page: Page): Promise<string> {
           () => false,
         );
       if (selected) {
-        return bodyData(page, 'selected');
+        // oxlint-disable-next-line no-await-in-loop
+        return { placement: await bodyData(page, 'selected'), x, y };
       }
     }
   }
@@ -156,7 +164,7 @@ try {
   assert.equal(await page.title(), '• skirt-darts — OpenSloper Publish', 'not saved yet');
   assert.doesNotMatch(await status(page), /stop printing/u);
   await waitForPaper(page);
-  const selected = await selectSomePiece(page);
+  const { placement: selected } = await selectSomePiece(page);
   // The selected piece turned, flipped and sent back to the tray, each one step
   await piecesButton(page, 'Turn 90°');
   await waitForUndo(page, 'Turn piece');
@@ -172,6 +180,36 @@ try {
   await waitForUndo(page, 'Place piece');
   await page.waitForFunction(() => Number(document.body.dataset.selected ?? '-1') >= 0);
   await page.waitForFunction(() => document.querySelector('.tray-list li')?.textContent === 'Every piece is placed');
+  // A drag moves a piece, one step however many moves
+  const grabbed = await selectSomePiece(page);
+  await page.mouse.move(grabbed.x, grabbed.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 6; step += 1) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.mouse.move(grabbed.x + step * 10, grabbed.y + step * 4);
+  }
+  await page.mouse.up();
+  await waitForUndo(page, 'Move piece');
+  assert.equal(await bodyData(page, 'selected'), grabbed.placement, 'still selected');
+  // A copy dragged from the tray is placed where it is let go
+  await piecesButton(page, 'Back to tray');
+  await waitForUndo(page, 'Unplace piece');
+  await page.waitForSelector('.tray-list li[data-index="0"][draggable="true"]');
+  await page.evaluate(() => {
+    const line = document.querySelector('.tray-list li[data-index="0"]');
+    const canvas = document.querySelector('#preview');
+    if (line === null || canvas === null) {
+      throw new Error('no tray line or preview');
+    }
+    const bounds = canvas.getBoundingClientRect();
+    const carried = new DataTransfer();
+    line.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: carried }));
+    const at = { clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2 };
+    canvas.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: carried, ...at }));
+    canvas.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: carried, ...at }));
+  });
+  await waitForUndo(page, 'Place piece');
+  await page.waitForFunction(() => Number(document.body.dataset.selected ?? '-1') >= 0);
   // A click on the desk's corner selects nothing
   const box = await (await page.$('#preview'))?.boundingBox();
   assert.ok(box);

@@ -1,7 +1,8 @@
 # opensloper.com
 
 The project's website: the home page and, under `/design/`, the web Design
-app (a beta, `web/`). A Django 5.2 site with no database: it keeps no
+app (a beta, `web/`), with the web Publish app under `/publish/` (being
+built, not linked yet). A Django 5.2 site with no database: it keeps no
 accounts, patterns or measurements (`documents/design/web-version.md`,
 Server). Its own packages are pinned in `requirements.txt`.
 
@@ -21,7 +22,8 @@ Server). Its own packages are pinned in `requirements.txt`.
 
 `site` installs Django into the repository's `venv`, then runs
 `manage.py import_opensloper`, which copies the logo, app icons, tutorial
-drawings and version from the checkout, and `web/out/design`, into
+drawings and version from the checkout, and `web/out/design` and
+`web/out/publish`, into
 `imported/`. The version is the latest release, the newest `v*` tag in the
 checkout's history, so a version bump on `development` does not show until
 its release is tagged; without git it is `APP_VERSION`. Run it again after any of those change. While developing,
@@ -60,7 +62,7 @@ included, by `deploy/deploy.sh`. The server's details stay out of git, in
 `deploy/deploy.local.sh` (copy `deploy.local.sh.example`): `SITE_HOST`, an
 `~/.ssh/config` entry for the site's SSH account, and `SITE_DIR`, a folder
 outside the public `web` folder, such as the ISPConfig site's `private`
-folder, which Apache serves `/static/` and `/design/` from. The environment
+folder, which Apache serves `/static/`, `/design/` and `/publish/` from. The environment
 file is `SITE_DIR.env`, beside it. The SSH account is the site's web user,
 the one the service runs as, so deploying needs no root.
 

@@ -90,6 +90,7 @@ uses
   Sloper.Tests.Layout,
   Sloper.Tests.LayoutExports,
   Sloper.Tests.SourceFiles,
+  Sloper.Tests.PublishServer,
   Sloper.Tests.Nesting,
   Sloper.Tests.Features,
   Sloper.Tests.Facing,

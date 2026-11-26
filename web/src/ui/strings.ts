@@ -215,4 +215,17 @@ export const STRINGS = {
   discardMeasurementEdits: 'The measurement edits in bold are not saved. Drop them?',
   // Shown in the title while the pattern has changes not saved
   modifiedMark: '•',
+  // The Publish app, as Sloper.Publish.MainForm
+  publishName: 'OpenSloper Publish',
+  publishOpenHint: 'Open a layout with its patterns and measurement files, or patterns to start a layout',
+  layoutFiles: 'OpenSloper layouts and patterns',
+  notALayout: (name: string): string => `${name} is not a layout (.slayout) or pattern file (.sloper)`,
+  layoutOpened: (name: string): string => `Opened ${name}`,
+  layoutStarted: (name: string): string => `Started a layout for ${name}`,
+  layoutNeedsFiles: (files: string[]): string =>
+    `The layout needs ${files.join(', ')}: open them with the layout or pattern`,
+  noProblems: 'No problems',
+  problemCount: (count: number): string => `Problems: ${String(count)}`,
+  problemCountBlocking: (count: number, blocking: number): string =>
+    `Problems: ${String(count)}, ${String(blocking)} stop printing`,
 } as const;

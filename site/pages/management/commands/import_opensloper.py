@@ -1,8 +1,8 @@
 """Copies what the site shows from an OpenSloper checkout into imported/:
 the logo, app icons and tutorial drawings as template snippets to inline,
 the favicon, the release version (the latest v* tag in the checkout's
-history, else APP_VERSION when there is no git), and the built web apps (web/out/design,
-from ./opensloper-make.sh web). Run it again after any of those change."""
+history, else APP_VERSION when there is no git), and the built web apps (web/out/design and
+web/out/publish, from ./opensloper-make.sh web). Run it again after any of those change."""
 import re
 import shutil
 import subprocess
@@ -29,6 +29,7 @@ SVGS = {
 # Web app folder under imported/apps: its build in the checkout
 APPS = {
     "design": "web/out/design",
+    "publish": "web/out/publish",
 }
 
 

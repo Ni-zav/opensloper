@@ -16,6 +16,7 @@ import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { NotesTab } from './notesTab.ts';
 import { OutputTab } from './outputTab.ts';
 import { PatternsTab } from './patternsTab.ts';
 import { PiecesTab } from './piecesTab.ts';
@@ -38,6 +39,7 @@ const ICONS = {
   exportDxf: 'file-vector',
   patternsTab: 'files',
   piecesTab: 'puzzle',
+  notesTab: 'notes',
   outputTab: 'printer',
   problemsTab: 'alert-triangle',
 } as const;
@@ -111,6 +113,7 @@ class PublishApp {
   private readonly side: SideTabs;
   private readonly patterns: PatternsTab;
   private readonly pieces: PiecesTab;
+  private readonly notes: NotesTab;
   private readonly output: OutputTab;
   private readonly problems: ProblemsPanel;
   private readonly buttons = new Map<string, HTMLButtonElement>();
@@ -121,6 +124,14 @@ class PublishApp {
       selectionChanged: (placement) => {
         document.body.dataset.selected = String(placement);
         this.showPieces();
+      },
+      // A note picked on the pages opens its details, as on the desktop
+      noteChanged: (note) => {
+        document.body.dataset.note = String(note);
+        this.notes.choose(note);
+        if (note >= 0) {
+          this.side.open('notes');
+        }
       },
       dropCopy: (index, at) => {
         this.run(this.placeCopy(index, at));
@@ -152,6 +163,18 @@ class PublishApp {
       },
     });
     this.side.addSection('pieces', STRINGS.tabPieces, ICONS.piecesTab, this.pieces);
+    this.notes = new NotesTab(this.document, {
+      added: (note) => {
+        this.preview.selectedNote = note;
+        this.notes.focusText();
+      },
+      deleted: () => {
+        this.preview.selectedNote = -1;
+      },
+      message: showMessage,
+      failed: showFailure,
+    });
+    this.side.addSection('notes', STRINGS.tabNotes, ICONS.notesTab, this.notes);
     this.output = new OutputTab(this.document, {
       changed: () => {
         this.preview.zoomToFit();
@@ -165,10 +188,11 @@ class PublishApp {
     // Last of the tabs, as on the desktop, where it sits just above Problems
     this.side.addSection('output', STRINGS.tabOutput, ICONS.outputTab, this.output);
     this.problems = new ProblemsPanel({
-      // A sheet note is chosen once the preview shows notes
       choose: (key) => {
         if (key.startsWith(PLACEMENT_KEY)) {
           this.preview.selected = Number(key.slice(PLACEMENT_KEY.length));
+        } else if (key.startsWith(NOTE_KEY)) {
+          this.preview.selectedNote = Number(key.slice(NOTE_KEY.length));
         }
       },
       hover: () => undefined,

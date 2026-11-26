@@ -302,7 +302,8 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - The engine moves it (`publish_drag`), on the desktop's 0.5 mm grid, and the scene is read again after each move. Only the newest move waits to be sent.
   - Letting go ends the step (`publish_release`). A drag the browser takes away puts the piece back (`publish_cancel`).
   - The press, the drag and the drop are `TPreviewDrag` (`Sloper.Output.Preview`), which the desktop's preview uses too.
-  - Sheet notes are held by a press too, as on the desktop, but are not dragged here until the preview draws them.
+- Sheet notes are drawn over the pieces, each in a dotted frame, as the desktop's `DrawNotes`: the leader, the white box, then the drawing or the text in its size and font, a tint when too small to read. The pattern notes printing with the pieces are drawn too, without a frame. The engine gives each in the design editor's scene shape (`SceneNote`).
+  - A press on a note chooses it, outlined in blue, and opens the Notes tab. It lies over pieces, so it is found first. Dragging moves it, one undo step, as a piece.
 - **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, then Export PDF, SVG and DXF.
   - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
   - Undo names the step it would take, as the desktop's menu does.
@@ -313,6 +314,12 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - For the pattern chosen: its measurement file, Choose measurements…, Use the pattern's own, and its size.
   - Files come from the browser's file picker and are given to the engine by name, as Open gives them. A pattern added may name a measurement file the layout lacks; one chosen with it is found by name, else the engine says it is missing.
   - The edits are `TLayoutDocument`'s (`AddPattern`, `RemovePattern`, `SetMeasurements`, `SetSize`), which the desktop calls too.
+- The Notes tab (`publish/notesTab.ts`), as the desktop's:
+  - Add note puts one at the left below the pieces, chosen, its text ready to type over.
+  - The chosen note's text with fields, size, lines, white box, font, bold and italic, and Delete note.
+  - Typing sends the newest text once the one before is answered. Changes to one note within a second join one undo step.
+  - A font name the engine cannot use (`CheckFontName`) is refused, said in the status bar and put back.
+  - The edits are `TLayoutDocument`'s (`AddNote`, `ChangeNote`, `DeleteNote`), which the desktop calls too.
 - Then the Pieces tab (`publish/piecesTab.ts`), as the desktop's:
   - Selected Piece: Turn 90°, Flip and Back to tray, for the piece selected on the pages.
   - Arrange: Place new pieces and Pack pieces. Pack fits the view and says what it did in the status bar.
@@ -341,10 +348,13 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_add_pattern` | Adds a pattern by its path, with files for it to read; one undo step |
 | `publish_remove_pattern`, `publish_set_size` | Removes a pattern, or reads it at another size, by its source id; one undo step |
 | `publish_set_measurements` | Reads a pattern with another measurement file, given with it, or its own for an empty path; one undo step |
+| `publish_add_note`, `publish_delete_note` | Adds a sheet note below the pieces, or deletes one by its index; one undo step |
+| `publish_note` | A sheet note as typed, for the Notes tab |
+| `publish_set_note` | Changes a sheet note's text, size, lines, box, font, bold or italic; refuses a font name that cannot be used |
 | `publish_output` | The Output tab's settings, which apply (`used`), and the papers, materials and output profiles to choose from |
 | `publish_set_output` | Changes them, as the desktop's tab does (`ChangeOutput`); refused when nothing is left to print on |
 | `publish_toggle_page` | Leaves the page at a point out of the print, or puts it back; one undo step |
-| `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`) |
+| `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`), with the sheet notes and the pattern notes printing with pieces |
 | `publish_press` | Holds the sheet note at a point, or else the smallest placed piece (`ShapeAt`), for a drag; changes nothing |
 | `publish_drag` | Moves what the press holds; the first move opens one undo step |
 | `publish_release`, `publish_cancel` | Ends the drag's step, or puts back what it moved |

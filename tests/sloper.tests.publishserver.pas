@@ -74,6 +74,10 @@ type
     procedure TestAddRemovePattern;
     procedure TestAddPatternNeedsFile;
     procedure TestMeasurementsAndSize;
+    procedure TestAddNote;
+    procedure TestSetNote;
+    procedure TestSetNoteRefused;
+    procedure TestDeleteNote;
     procedure TestOutput;
     procedure TestSetOutput;
     procedure TestSetOutputJoins;
@@ -90,7 +94,7 @@ implementation
 uses
   base64, Sloper.API.Rpc, Sloper.API.MCP, Sloper.API.Methods, Sloper.API.PublishServer, Sloper.Core.JSON,
   Sloper.API.LayoutServer, Sloper.Output.Layout, Sloper.Output.LayoutDocument, Sloper.Output.Preview,
-  Sloper.Core.Geometry;
+  Sloper.Core.Geometry, Math;
 
 const
   PATTERN_FILE = 'skirt-darts.sloper';
@@ -623,6 +627,91 @@ begin
   AssertFalse('not chosen', Item.Booleans['ownSet']);
   Call('publish_set_measurements', TJSONObject.Create(['source', 1]));
   AssertEquals('path needed', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestAddNote;
+var
+  Note: TJSONObject;
+  Lowest: double;
+  CutLine: TJSONArray;
+  Index, Point: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_scene', TJSONObject.Create);
+  AssertEquals('none yet', 0, Answer.Arrays['notes'].Count);
+  AssertTrue('as a list', Answer.Find('pieceNotes').JSONType = jtArray);
+  // The lowest y of every piece's cut line, a flat list of x, y
+  Lowest := 0;
+  for Index := 0 to Answer.Arrays['pieces'].Count - 1 do
+  begin
+    CutLine := Answer.Arrays['pieces'].Objects[Index].Arrays['cutLine'];
+    for Point := 0 to CutLine.Count div 2 - 1 do
+      Lowest := Max(Lowest, CutLine.Floats[2 * Point + 1]);
+  end;
+  Call('publish_add_note', TJSONObject.Create);
+  AssertEquals('the first', 0, Answer.Integers['note']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutAddNote, Answer.Strings['undo']);
+  Call('publish_scene', TJSONObject.Create);
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('its text', rsLayoutNewNote, Note.Arrays['lines'].Strings[0]);
+  AssertEquals('at the left', 0, Note.Arrays['box'].Floats[0], 1e-9);
+  AssertTrue('below the pieces', Note.Arrays['box'].Floats[1] > Lowest);
+  AssertEquals('text, not a stamp', 0, Note.Arrays['stamp'].Count);
+end;
+
+procedure TTestPublishServer.TestSetNote;
+var
+  Note: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_note', TJSONObject.Create);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'text', 'Cut {pattern.name}'#10'on the fold'#10, 'size', 20,
+    'align', 'centre', 'bold', True]));
+  AssertEquals('as typed, trimmed', 'Cut {pattern.name}'#10'on the fold', Answer.Strings['text']);
+  AssertEquals('centred', 'centre', Answer.Strings['align']);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'font', ' Georgia ', 'boxed', True]));
+  AssertEquals('the font, trimmed', 'Georgia', Answer.Strings['font']);
+  Call('publish_scene', TJSONObject.Create);
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('two lines', 2, Note.Arrays['lines'].Count);
+  AssertFalse('the field filled in', Pos('{', Note.Arrays['lines'].Strings[0]) > 0);
+  AssertTrue('bold', Note.Booleans['bold']);
+  AssertTrue('boxed', Note.Booleans['boxed']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangeNote, Answer.Strings['undo']);
+  // Both changes are one step, as typing is
+  Call('publish_undo', TJSONObject.Create);
+  Call('publish_note', TJSONObject.Create(['note', 0]));
+  AssertEquals('back to new', rsLayoutNewNote, Answer.Strings['text']);
+  AssertEquals('its font too', '', Answer.Strings['font']);
+end;
+
+procedure TTestPublishServer.TestSetNoteRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_note', TJSONObject.Create);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'font', 'Serif, Sans']));
+  AssertEquals('two families', RPC_REFUSED, ErrorCode);
+  Call('publish_set_note', TJSONObject.Create(['note', 0, 'size', 0]));
+  AssertEquals('too small', RPC_REFUSED, ErrorCode);
+  Call('publish_set_note', TJSONObject.Create(['note', 3, 'text', 'x']));
+  AssertEquals('no such note', RPC_REFUSED, ErrorCode);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('only the add', rsLayoutAddNote, Answer.Strings['undo']);
+end;
+
+procedure TTestPublishServer.TestDeleteNote;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_note', TJSONObject.Create);
+  Call('publish_delete_note', TJSONObject.Create(['note', 0]));
+  Call('publish_scene', TJSONObject.Create);
+  AssertEquals('gone', 0, Answer.Arrays['notes'].Count);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutDeleteNote, Answer.Strings['undo']);
+  Call('publish_delete_note', TJSONObject.Create(['note', 0]));
+  AssertEquals('none left', RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestPublishServer.TestOutput;

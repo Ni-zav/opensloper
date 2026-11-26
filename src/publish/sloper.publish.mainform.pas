@@ -296,10 +296,7 @@ resourcestring
   rsAddNote = 'Add note';
   rsDeleteNote = 'Delete note';
   rsNoteHelp = 'Fields: {pattern.name} {measurements.name} {size} {date} {page} {pages} {cutlist} {materials} {materialneeded}';
-  rsNewNote = 'New note';
   rsChangeTitle = 'Change title block';
-  rsChangeNote = 'Change note';
-  rsAddNoteChange = 'Add note';
   rsNoProblems = 'No problems';
   rsProblemCount = 'Problems: %d';
   // With how many of them stop printing and exporting
@@ -346,8 +343,6 @@ uses
 
 const
   SIDE_WIDTH = 340;
-  NEW_NOTE_SIZE = 12;
-  NEW_NOTE_GAP = 10;
   MAX_NOTE_SIZE = 200;
   NOTE_MEMO_HEIGHT = 110;
   // In the order of FFieldBoxes
@@ -753,39 +748,30 @@ end;
 procedure TPublishForm.NoteChange(Sender: TObject);
 var
   Index: integer;
+  Note: TSheetNote;
   FontName, Reason: string;
 begin
   Index := FPreview.SelectedNote;
   if FRefreshing or (Index < 0) then
     Exit;
-  FDocument.BeginChange(rsChangeNote);
-  FDocument.Layout.Notes[Index].Text := TrimRight(FNoteMemo.Text);
-  FDocument.Layout.Notes[Index].Size := FNoteSizeEdit.Value;
+  Note := FDocument.Layout.Notes[Index];
+  Note.Text := TrimRight(FNoteMemo.Text);
+  Note.Size := FNoteSizeEdit.Value;
   if FNoteAlignBox.ItemIndex >= 0 then
-    FDocument.Layout.Notes[Index].Align := TTextAlign(FNoteAlignBox.ItemIndex);
-  FDocument.Layout.Notes[Index].Boxed := FNoteBoxCheck.Checked;
+    Note.Align := TTextAlign(FNoteAlignBox.ItemIndex);
+  Note.Boxed := FNoteBoxCheck.Checked;
   if CheckFontName(FontBoxName(FNoteFontBox), FontName, Reason) then
-    FDocument.Layout.Notes[Index].Style.Font := FontName
+    Note.Style.Font := FontName
   else
     ShowStatus(Reason);
-  FDocument.Layout.Notes[Index].Style.Bold := FNoteBoldCheck.Checked;
-  FDocument.Layout.Notes[Index].Style.Italic := FNoteItalicCheck.Checked;
-  FDocument.EndChange('note:' + IntToStr(Index));
+  Note.Style.Bold := FNoteBoldCheck.Checked;
+  Note.Style.Italic := FNoteItalicCheck.Checked;
+  FDocument.ChangeNote(Index, Note);
 end;
 
 procedure TPublishForm.AddNoteClick(Sender: TObject);
-var
-  Lowest: double;
-  Added: integer;
-  Shape: TPlacedPiece;
 begin
-  Lowest := 0;
-  for Shape in FDocument.Layout.PlacedPieces do
-    Lowest := Max(Lowest, Shape.Bounds.MaxY + NEW_NOTE_GAP);
-  FDocument.BeginChange(rsAddNoteChange);
-  Added := FDocument.Layout.AddNote(rsNewNote, 0, Lowest, NEW_NOTE_SIZE);
-  FDocument.EndChange;
-  FPreview.SelectedNote := Added;
+  FPreview.SelectedNote := FDocument.AddNote;
   FNoteMemo.SetFocus;
   FNoteMemo.SelectAll;
 end;

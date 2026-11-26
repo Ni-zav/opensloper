@@ -96,10 +96,49 @@
         display: none;
       }
       /* A tab not open, whose display: flex would otherwise show it */
+      .notes[hidden],
       .patterns[hidden],
       .pieces[hidden],
       .output[hidden] {
         display: none;
+      }
+      /* The Notes tab: the chosen note's settings, each a caption over its control */
+      .notes {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .notes-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .notes-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .notes-help {
+        margin: 0;
+        color: #5d636b;
+      }
+      .notes textarea,
+      .notes input[type='text'],
+      .notes input[type='number'],
+      .notes select {
+        font: inherit;
+        padding: 2px 4px;
+      }
+      .notes button {
+        align-self: flex-start;
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      .notes :disabled,
+      .notes-check:has(input:disabled) {
+        opacity: 0.5;
       }
       /* The Patterns tab: the list with its buttons, then the chosen one's set */
       .patterns {

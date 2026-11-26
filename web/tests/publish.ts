@@ -7,7 +7,8 @@
 // double-click places it again; a piece is dragged, and a copy dragged from
 // the tray onto the pages. The Output tab changes the paper, refuses a
 // margin that leaves nothing to print on, and turns the pages into one large
-// sheet and back; a right-click leaves a page out. The layout is packed, undone and redone,
+// sheet and back; a right-click leaves a page out. A sheet note is added,
+// typed in, refused a font, dragged on the pages and deleted. The layout is packed, undone and redone,
 // saved and exported, and the saved file opens again. A layout whose sources
 // sit in other folders finds its files by name, lists what stops it printing
 // in the Problems tab, and its waiting pieces are placed.
@@ -86,6 +87,24 @@ async function waitForMessagePart(page: Page, part: string): Promise<void> {
   await page.waitForFunction((text) => document.querySelector('#message')?.textContent.includes(text), {}, part);
 }
 
+// Clicks the Notes tab's button with this caption, once it is enabled
+async function notesButton(page: Page, caption: string): Promise<void> {
+  await page.waitForFunction(
+    (text) => {
+      const button = [...document.querySelectorAll('.notes button')].find(
+        (each) => each.textContent === text && each instanceof HTMLButtonElement && !each.disabled,
+      );
+      if (button instanceof HTMLButtonElement) {
+        button.click();
+        return true;
+      }
+      return false;
+    },
+    {},
+    caption,
+  );
+}
+
 // Clicks the Patterns tab's button with this caption, once it is enabled
 async function patternsButton(page: Page, caption: string): Promise<void> {
   await page.waitForFunction(
@@ -102,6 +121,45 @@ async function patternsButton(page: Page, caption: string): Promise<void> {
     {},
     caption,
   );
+}
+
+// The middle of what the preview draws in the selection's blue, in page
+// pixels: the chosen note's frame and text
+async function selectionMiddle(page: Page): Promise<{ x: number; y: number }> {
+  const found = await page.evaluate(() => {
+    const canvas = document.querySelector('#preview');
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      return undefined;
+    }
+    const pixels = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data ?? [];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let index = 0; index < pixels.length; index += 4) {
+      // Near rgb(37, 116, 214), as antialiasing blends it
+      const red = pixels[index] ?? 0;
+      const green = pixels[index + 1] ?? 0;
+      const blue = pixels[index + 2] ?? 0;
+      if (red < 110 && green > 100 && green < 170 && blue > 190) {
+        const pixel = index / 4;
+        const x = pixel % canvas.width;
+        const y = Math.floor(pixel / canvas.width);
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    if (minX > maxX) {
+      return undefined;
+    }
+    const bounds = canvas.getBoundingClientRect();
+    const ratio = canvas.width / bounds.width;
+    return { x: bounds.left + (minX + maxX) / 2 / ratio, y: bounds.top + (minY + maxY) / 2 / ratio };
+  });
+  assert.ok(found, 'nothing drawn in the selection colour');
+  return found;
 }
 
 // Waits for the toolbar's Undo to name this step
@@ -325,6 +383,59 @@ try {
   await waitForMessagePart(page, ', 1 left out');
   await page.mouse.click(sheet.x + sheet.width / 2, sheet.y + sheet.height / 2, { button: 'right' });
   await waitForMessagePart(page, ', 0 left out');
+
+  // A sheet note: added below the pieces, chosen, and its text typed over
+  await openTab(page, 'notes');
+  await notesButton(page, 'Add note');
+  await waitForUndo(page, 'Add note');
+  await waitForData(page, 'note', '0');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('name') === 'text');
+  // A font the engine cannot use is refused and said, before anything is typed
+  await page.$eval('.notes input[name="font"]', (font) => {
+    if (font instanceof HTMLInputElement) {
+      font.value = 'Serif, Sans';
+      font.dispatchEvent(new Event('change'));
+    }
+  });
+  await waitForStatus(page, 'A font name cannot hold ,');
+  await page.$eval('.notes textarea', (area) => {
+    if (area instanceof HTMLTextAreaElement) {
+      area.focus();
+      area.select();
+    }
+  });
+  await page.keyboard.type('Cut on the bias');
+  await waitForUndo(page, 'Change note');
+  await page.waitForFunction(
+    () => document.querySelector<HTMLTextAreaElement>('.notes textarea')?.value === 'Cut on the bias',
+  );
+  // Large enough to see and grab at the fitted zoom, then dragged by its middle, one step
+  await page.$eval('.notes input[name="size"]', (size) => {
+    if (size instanceof HTMLInputElement) {
+      size.value = '120';
+      size.dispatchEvent(new Event('change'));
+    }
+  });
+  await page.waitForFunction(
+    () => document.querySelector<HTMLInputElement>('.notes input[name="size"]')?.value === '120',
+  );
+  await command(page, 'Fit Pages');
+  await new Promise((resolve) => {
+    setTimeout(resolve, 300);
+  });
+  const note = await selectionMiddle(page);
+  await page.mouse.move(note.x, note.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 5; step += 1) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.mouse.move(note.x + step * 8, note.y);
+  }
+  await page.mouse.up();
+  await waitForUndo(page, 'Move note');
+  assert.equal(await bodyData(page, 'note'), '0', 'still chosen');
+  await notesButton(page, 'Delete note');
+  await waitForUndo(page, 'Delete note');
+  await waitForData(page, 'note', '-1');
 
   // Saved as a download, counted saved; then exported
   await command(page, 'Save');

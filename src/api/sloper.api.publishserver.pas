@@ -58,6 +58,9 @@ type
     function DoOutput: TJSONData;
     function DoSetOutput(Params: TJSONObject): TJSONData;
     function DoTogglePage(Params: TJSONObject): TJSONData;
+    function NoteParam(Params: TJSONObject): integer;
+    function DoNote(Params: TJSONObject): TJSONData;
+    function DoSetNote(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
     function DoExport(Params: TJSONObject): TJSONData;
   public
@@ -88,7 +91,11 @@ resourcestring
   rsPublishNeedsSource = 'Give a layout, or the pattern to start one for';
   rsPublishScene = 'What the preview shows, in layout mm with y down, as the desktop''s preview draws it.';
   rsPublishSceneReturns = '`tiled`, true for tiled pages; `cover`, the tiled print''s cover (minX, minY, maxX, maxY) or ' +
-    'null; `pages`, each with its `caption`, its area and whether it is `blank` or `excluded`; `pieces`, each with ' +
+    'null; `notes`, the sheet notes, and `pieceNotes`, the pattern notes printing with the pieces, each with its ' +
+    '`lines` (fields filled in), `size`, `lineHeight`, `align`, `boxed`, `font`, `bold`, `italic`, `box` and `frame` ' +
+    '(each [minX, minY, maxX, maxY]), ' +
+    '`leader` and its `leaderStrokes`, and its `stamp` paths for a drawing; `pages`, each with its `caption`, its area and whether it is `blank` or `excluded`; `pieces`, each with '
+    +
     'its `placement` index, `caption`, `fillColor` (empty when not filled), `cutLine` and `seamLine` (flat lists of ' +
     'x, y), `marks` (flat segments), `lines` (each with flat `points` and `dashed`) and `label` (x, y), or null when ' +
     'labels are left out; `titleBoxes`, the information block''s boxes; `title`, its `lines`, text `size`, ' +
@@ -168,13 +175,31 @@ resourcestring
   rsPublishUnknownPaper = 'Unknown paper "%s"';
   rsPublishTogglePage = 'Leaves the page at a point of the layout out of the print, or puts it back; one undo step.';
   rsPublishTogglePageReturns = '`page`, the page''s caption, empty when there is none there';
+  rsPublishAddNote = 'Adds a sheet note at the left, below the pieces, as the desktop''s Add note; one undo step.';
+  rsPublishAddNoteReturns = '`note`, its index';
+  rsPublishNote = 'A sheet note as typed, for the Notes tab.';
+  rsPublishNoteReturns = '`text` (fields not filled in), `size` in points, `align`, `boxed`, `font`, `bold` and ' +
+    '`italic`';
+  rsPublishNoteIndex = 'The note''s index, as publish_scene lists the notes';
+  rsPublishSetNote = 'Changes a sheet note, as the desktop''s Notes tab does; changes within a second join one undo ' +
+    'step. A font name that cannot be used is refused, with nothing changed.';
+  rsPublishNoteText = 'Its text, with fields such as {pattern.name}';
+  rsPublishNoteSize = 'Its text size, in points';
+  rsPublishNoteAlign = 'left, centre or right';
+  rsPublishNoteBoxed = 'Whether it prints on a white box';
+  rsPublishNoteFont = 'Its font''s name; empty for the default';
+  rsPublishNoteBold = 'Bold';
+  rsPublishNoteItalic = 'Italic';
+  rsPublishDeleteNote = 'Deletes a sheet note; one undo step.';
+  rsPublishNoNote = 'There is no sheet note %d';
+  rsPublishBadNoteSize = 'A note''s size is from 1 to %d points';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
 implementation
 
 uses
-  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Geometry,
+  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.Core.Note, Sloper.Core.Stamp, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
   Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.LayoutExport, Sloper.API.Shapes,
   base64;
@@ -253,6 +278,20 @@ begin
     AddApiMethod(Built, 'publish_toggle_page', rsPublishTogglePage, rsPublishTogglePageReturns);
     AddApiParam(Built, 'x', apNumber, True, rsPublishX);
     AddApiParam(Built, 'y', apNumber, True, rsPublishY);
+    AddApiMethod(Built, 'publish_add_note', rsPublishAddNote, rsPublishAddNoteReturns);
+    AddApiMethod(Built, 'publish_note', rsPublishNote, rsPublishNoteReturns, True);
+    AddApiParam(Built, 'note', apWhole, True, rsPublishNoteIndex);
+    AddApiMethod(Built, 'publish_set_note', rsPublishSetNote, rsPublishNoteReturns);
+    AddApiParam(Built, 'note', apWhole, True, rsPublishNoteIndex);
+    AddApiParam(Built, 'text', apText, False, rsPublishNoteText);
+    AddApiParam(Built, 'size', apNumber, False, rsPublishNoteSize);
+    AddApiParam(Built, 'align', apChoice, False, rsPublishNoteAlign, string.Join(', ', TEXT_ALIGN_NAMES));
+    AddApiParam(Built, 'boxed', apFlag, False, rsPublishNoteBoxed);
+    AddApiParam(Built, 'font', apText, False, rsPublishNoteFont);
+    AddApiParam(Built, 'bold', apFlag, False, rsPublishNoteBold);
+    AddApiParam(Built, 'italic', apFlag, False, rsPublishNoteItalic);
+    AddApiMethod(Built, 'publish_delete_note', rsPublishDeleteNote, rsPublishDone);
+    AddApiParam(Built, 'note', apWhole, True, rsPublishNoteIndex);
     AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
@@ -414,6 +453,60 @@ begin
     Result.Add('label', TJSONNull.Create);
 end;
 
+// A rectangle as the design editor's scene gives one: [minX, minY, maxX, maxY]
+function SceneRectJSON(const Area: TRect2): TJSONArray;
+begin
+  Result := TJSONArray.Create([ReportFloat(Area.MinX), ReportFloat(Area.MinY), ReportFloat(Area.MaxX),
+    ReportFloat(Area.MaxY)]);
+end;
+
+// A note as the preview draws it, as the design editor's scene gives one
+// (editor_scene): its lines with fields filled in, its look, where its text
+// and frame are, its leader, and a stamp's paths
+function SheetNoteJSON(const Note: TSheetNote; const Values: TFieldValues): TJSONObject;
+var
+  Lines, Stamp: TJSONArray;
+  Line: string;
+  Frame: TRect2;
+  Start: TVec2;
+  Path: TStampPath;
+begin
+  Frame := NoteFrameBounds(Note, Values);
+  Result := TJSONObject.Create;
+  try
+    Lines := TJSONArray.Create;
+    Result.Add('lines', Lines);
+    if not HasDrawing(Note.Drawing) then
+      for Line in TextLines(ExpandFields(Note.Text, Values)) do
+        Lines.Add(Line);
+    Result.Add('size', ReportFloat(Note.Size));
+    Result.Add('lineHeight', ReportFloat(LineHeight(Note.Size)));
+    Result.Add('align', TEXT_ALIGN_NAMES[Note.Align]);
+    Result.Add('boxed', Note.Boxed);
+    Result.Add('font', Note.Style.Font);
+    Result.Add('bold', Note.Style.Bold);
+    Result.Add('italic', Note.Style.Italic);
+    Result.Add('box', SceneRectJSON(NoteBounds(Note, Values)));
+    Result.Add('frame', SceneRectJSON(Frame));
+    Result.Add('leader', NOTE_LEADER_NAMES[Note.Leader]);
+    if (Note.Leader <> nlNone) and LeaderStart(Frame, Note.Tip, Start) then
+      Result.Add('leaderStrokes', SegmentsToJSON(LeaderStrokes(Start, Note.Tip, Note.Leader)))
+    else
+      Result.Add('leaderStrokes', TJSONArray.Create);
+    Result.Add('anchorAt', LineToJSON([Note.Tip]));
+    Stamp := TJSONArray.Create;
+    Result.Add('stamp', Stamp);
+    if HasDrawing(Note.Drawing) then
+      for Path in Note.Drawing.Paths do
+        Stamp.Add(TJSONObject.Create(['d', StampPathData(Path, Vec2(Note.X, Note.Y), Note.Scale), 'fill',
+          StampColourText(Path.Fill), 'stroke', StampColourText(Path.Stroke), 'strokeWidth',
+          ReportFloat(Path.StrokeWidth * Note.Scale), 'evenOdd', Path.EvenOdd]));
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
+end;
+
 // As TPreviewCanvas.Refresh works it out and Paint draws it
 function TPublishApiServer.DoScene: TJSONData;
 var
@@ -427,9 +520,10 @@ var
   Answer: TJSONObject;
   List: TJSONArray;
   Item: TJSONObject;
-  Rows, Columns: integer;
+  Rows, Columns, Index: integer;
   Tiled: boolean;
   Text: string;
+  Note: TSheetNote;
 begin
   Layout := FDocument.Layout;
   Shapes := Layout.PlacedPieces;
@@ -456,6 +550,15 @@ begin
     Answer.Add('pieces', List);
     for Shape in Shapes do
       List.Add(PieceJSON(Shape));
+    List := TJSONArray.Create;
+    Answer.Add('notes', List);
+    for Index := 0 to High(Layout.Notes) do
+      List.Add(SheetNoteJSON(Layout.Notes[Index], Values));
+    List := TJSONArray.Create;
+    Answer.Add('pieceNotes', List);
+    for Shape in Shapes do
+      for Note in Shape.Notes do
+        List.Add(SheetNoteJSON(Note, Values));
     List := TJSONArray.Create;
     Answer.Add('titleBoxes', List);
     for Box in PreviewTitleBoxes(Layout, Pages, Values) do
@@ -774,6 +877,59 @@ begin
   Result := TJSONObject.Create(['page', Caption]);
 end;
 
+function TPublishApiServer.NoteParam(Params: TJSONObject): integer;
+begin
+  Result := IndexParam(Params, 'note');
+  if Result > High(FDocument.Layout.Notes) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsPublishNoNote, [Result]));
+end;
+
+function TPublishApiServer.DoNote(Params: TJSONObject): TJSONData;
+var
+  Note: TSheetNote;
+begin
+  Note := FDocument.Layout.Notes[NoteParam(Params)];
+  Result := TJSONObject.Create(['text', Note.Text, 'size', ReportFloat(Note.Size), 'align', TEXT_ALIGN_NAMES[Note.Align],
+    'boxed', Note.Boxed, 'font', Note.Style.Font, 'bold', Note.Style.Bold, 'italic', Note.Style.Italic]);
+end;
+
+// As the desktop's Notes tab changes one
+function TPublishApiServer.DoSetNote(Params: TJSONObject): TJSONData;
+var
+  Index: integer;
+  Note: TSheetNote;
+  Size: double;
+  FontName, Reason: string;
+begin
+  Index := NoteParam(Params);
+  Note := FDocument.Layout.Notes[Index];
+  if Assigned(Params.Find('text')) then
+    Note.Text := TrimRight(OptionalString(Params, 'text'));
+  Size := Note.Size;
+  if OptionalNumber(Params, 'size', Size) then
+  begin
+    if (Size < 1) or (Size > MAX_NOTE_SIZE) then
+      raise EApiError.Create(RPC_REFUSED, Format(rsPublishBadNoteSize, [MAX_NOTE_SIZE]));
+    Note.Size := Size;
+  end;
+  if Assigned(Params.Find('align')) then
+    Note.Align := TTextAlign(ChoiceParam(Params, 'align', TEXT_ALIGN_NAMES));
+  if Assigned(Params.Find('boxed')) then
+    Note.Boxed := BooleanParam(Params, 'boxed');
+  if Assigned(Params.Find('font')) then
+  begin
+    if not CheckFontName(OptionalString(Params, 'font'), FontName, Reason) then
+      raise EApiError.Create(RPC_REFUSED, Reason);
+    Note.Style.Font := FontName;
+  end;
+  if Assigned(Params.Find('bold')) then
+    Note.Style.Bold := BooleanParam(Params, 'bold');
+  if Assigned(Params.Find('italic')) then
+    Note.Style.Italic := BooleanParam(Params, 'italic');
+  FDocument.ChangeNote(Index, Note);
+  Result := DoNote(Params);
+end;
+
 function TPublishApiServer.DoSave: TJSONData;
 begin
   Result := TJSONObject.Create(['text', FDocument.SaveText]);
@@ -828,6 +984,14 @@ begin
     'publish_output': Result := DoOutput;
     'publish_set_output': Result := DoSetOutput(Params);
     'publish_toggle_page': Result := DoTogglePage(Params);
+    'publish_add_note': Result := TJSONObject.Create(['note', FDocument.AddNote]);
+    'publish_note': Result := DoNote(Params);
+    'publish_set_note': Result := DoSetNote(Params);
+    'publish_delete_note':
+    begin
+      FDocument.DeleteNote(NoteParam(Params));
+      Result := TJSONObject.Create;
+    end;
     'publish_save': Result := DoSave;
     'publish_export': Result := DoExport(Params);
     else

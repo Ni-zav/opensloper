@@ -311,7 +311,11 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 - Sheet notes are drawn over the pieces, each in a dotted frame, as the desktop's `DrawNotes`: the leader, the white box, then the drawing or the text in its size and font, a tint when too small to read. The pattern notes printing with the pieces are drawn too, without a frame. The engine gives each in the design editor's scene shape (`SceneNote`).
   - A press on a note chooses it, outlined in blue, and opens the Notes tab. It lies over pieces, so it is found first. Dragging moves it, one undo step, as a piece.
 - **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, Zoom Area, then Print…, Export PDF, SVG and DXF.
-  - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
+  - Where the browser has File System Access, Open uses its picker, and Save writes the layout back to the file it came from; Save As, shown only there, writes another. A new layout's first Save asks where. Only the text written counts as saved (`publish_text`, then `publish_saved`), so a failed write or a change made meanwhile keeps the layout marked.
+  - The files the sources still need are looked for by their paths from the layout, or from the pattern a new layout was started for, in a folder the user has granted (`FileAccess.findBeside`), round after round, as a pattern found may name a measurement file. A folder the page may not read yet needs a click on Find them…, which asks for it. A layout started before its pattern's files were found is started again with them, so every piece is placed, as on the desktop.
+  - Elsewhere Save downloads the layout file and counts it saved, and Open uploads.
+  - The title marks a layout not saved, and leaving or opening another asks first.
+  - Not yet as the desktop: a pattern or measurement file added in the Patterns tab is recorded by its name, beside the layout, where the desktop records its path from the layout; Save As into another folder keeps the paths the sources had.
   - Undo names the step it would take, as the desktop's menu does.
   - Print… (`publish/printDialog.ts`, as `Sloper.Publish.PrintDialog`) opens the PDF Export PDF writes in the browser's viewer, in a tab opened while the click counts, or downloads it, as the design page's Print… does (`deliverPdf`). The browser's print dialog chooses the printer, copies and pages, so this one says which to print first: the cover with the test square, then the rest. It is refused while a problem stops printing.
   - Printer calibration waits for preferences on the web, so it prints at exactly 100%.
@@ -379,7 +383,8 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_undo`, `publish_redo`, `publish_place_pieces`, `publish_pack` | The layout methods of the same names (`Sloper.API.LayoutServer`), each one undo step |
 | `publish_turn`, `publish_flip`, `publish_unplace` | Turn 90°, Flip and Back to tray for a placed piece, by its placement index; each one undo step |
 | `publish_place_copy` | Places one copy from the tray, by its index there, in the rows below the others; refused when its piece cannot be placed |
-| `publish_save` | The layout file's text, counted as saved (`TLayoutDocument.SaveText`) |
+| `publish_save` | The layout file's text, counted as saved (`TLayoutDocument.SaveText`), to download |
+| `publish_text`, `publish_saved` | The layout file's text, to write to a file, and then that it was written (`TLayoutDocument.MarkSaved`): only that text counts as saved |
 | `publish_export` | The layout as PDF, SVG or DXF-AAMA, in Base64, refused as the desktop's export is (`LayoutBytes`) |
 
 The replies of the first three are `publish_state`'s, which also gives the undo state and whether the layout is modified. `LayoutDocument` asks for it after every change and tells its listeners.

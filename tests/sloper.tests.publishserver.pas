@@ -87,6 +87,7 @@ type
     procedure TestSetOutputRefused;
     procedure TestTogglePage;
     procedure TestSave;
+    procedure TestSavedOnceWritten;
     procedure TestExport;
     procedure TestExportRefused;
     procedure TestTables;
@@ -850,6 +851,30 @@ begin
   AssertTrue('forgotten', Pos(', 0 left out', Answer.Strings['summary']) > 0);
   Call('publish_toggle_page', TJSONObject.Create(['x', -5000, 'y', -5000]));
   AssertEquals('no page there', '', Answer.Strings['page']);
+end;
+
+// Saved only once the browser says it wrote the text, and only that text
+procedure TTestPublishServer.TestSavedOnceWritten;
+var
+  Text: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_pack', TJSONObject.Create);
+  Call('publish_text', TJSONObject.Create);
+  Text := Answer.Strings['text'];
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('not saved by reading', Answer.Booleans['modified']);
+  // Changed while it was being written
+  Call('publish_turn', TJSONObject.Create(['placement', 0]));
+  Call('publish_saved', TJSONObject.Create(['text', Text]));
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('the turn is not saved', Answer.Booleans['modified']);
+  Call('publish_text', TJSONObject.Create);
+  Call('publish_saved', TJSONObject.Create(['text', Answer.Strings['text']]));
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('saved', Answer.Booleans['modified']);
+  Call('publish_saved', TJSONObject.Create);
+  AssertEquals('the text needed', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 procedure TTestPublishServer.TestSave;

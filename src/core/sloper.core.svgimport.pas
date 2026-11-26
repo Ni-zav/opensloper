@@ -66,7 +66,7 @@ resourcestring
 implementation
 
 uses
-  Classes, Math, StrUtils, DOM, XMLRead, Sloper.Core.Geometry, Sloper.Core.JSON;
+  Classes, Math, StrUtils, DOM, XMLRead, XMLUtils, Sloper.Core.Geometry, Sloper.Core.JSON;
 
 const
   SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -1162,7 +1162,7 @@ const
   XML_SPACE = [#9, #10, #13, ' '];
   UTF8_BOM = #$EF#$BB#$BF;
 var
-  Cursor, Start, EndMarker: SizeInt;
+  Cursor, Start, NameStart, EndMarker: SizeInt;
   Quote: char;
 
   function Take(const Token: string): boolean;
@@ -1222,7 +1222,12 @@ begin
       Break;
   until False;
   Start := Cursor;
-  if not Take('<!DOCTYPE') or not SkipSpace or not Take('svg') then
+  if not Take('<!DOCTYPE') or not SkipSpace then
+    Exit;
+  NameStart := Cursor;
+  while (Cursor <= Length(SvgText)) and not (SvgText[Cursor] in XML_SPACE + ['[', '>']) do
+    Inc(Cursor);
+  if not IsXmlName(UTF8Decode(Copy(SvgText, NameStart, Cursor - NameStart))) then
     Exit;
   if SkipSpace then
   begin

@@ -204,6 +204,9 @@ begin
   AssertEquals('the drawing imports', 1, Length(Drawing.Paths));
   Drawing := Read('<!DOCTYPE svg SYSTEM "urn:example:stamp[1]">' + SVG_RECTANGLE, Warnings);
   AssertEquals('a quoted bracket is part of the identifier', 1, Length(Drawing.Paths));
+  Drawing := Read('<!DOCTYPE stamp:svg><stamp:svg xmlns:stamp="http://www.w3.org/2000/svg" ' + MM_SIZE +
+    '><stamp:rect width="5" height="5"/></stamp:svg>', Warnings);
+  AssertEquals('the SVG root can use a prefix', 1, Length(Drawing.Paths));
 end;
 
 procedure TTestStamps.TestDoctypeSubsetRefused;

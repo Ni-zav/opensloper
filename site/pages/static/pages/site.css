@@ -78,6 +78,7 @@ code,.mono{font-family:var(--mono);font-size:.9em}
 .tool p{font-size:15px;color:var(--mist)}
 .tool-shot{margin:6px 0 0;border-radius:8px;overflow:hidden;background:var(--white);box-shadow:0 14px 30px -18px rgba(0,0,0,.6)}
 .tool-shot img{display:block;width:100%;height:auto}
+.web-shot figcaption{font-size:14px;color:var(--slate);padding:10px 14px;border-top:1px solid var(--rule)}
 .tool.wide{grid-column:1/-1}
 .tools-foot{margin-top:36px;font-size:15px;color:var(--mist);max-width:52em}
 

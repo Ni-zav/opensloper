@@ -17,6 +17,7 @@ class PagesTest(SimpleTestCase):
         self.assertContains(page, 'href="/publish/"')
         self.assertContains(page, f"Download {version()}")
         self.assertContains(page, "Beta")
+        self.assertContains(page, "images/web-publish.webp")
         # The logo and drawings are inlined from the checkout
         self.assertContains(page, "<svg", count=None)
 

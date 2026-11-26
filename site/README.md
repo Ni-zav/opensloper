@@ -34,6 +34,10 @@ The screenshots in `pages/static/pages/images/` are 1280x800 WebP:
 - `web-design`, the hero: the web Design app in headless Chromium with the
   bodice block example opened from the Examples box, point SB chosen in the
   Objects tab, then the Properties tab shown.
+- `web-publish`, in the browser section: the web Publish app in headless
+  Chromium at 1280x800, with `docs/examples/circle-skirt/circle-skirt.sloper`
+  and `docs/examples/measurements/size-table.slm` opened together, then
+  Pack pieces in the Pieces tab.
 - One per desktop app in The apps section (`measurements-app`,
   `design-features`, `publish-app`, `drape-app`), and `design-app`, taken in
   Xvfb (`Xvfb :78 -screen 0 1280x800x24`) with no window manager, the light

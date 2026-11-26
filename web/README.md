@@ -1,7 +1,6 @@
 # The web version
 
-The web design app (issue #78), and the Publish app being built (issue
-#85), as `documents/design/web-version.md` plans them: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
+The web Design app (issue #78) and Publish app (issue #85), as `documents/design/web-version.md` plans them: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
 Worker, under an editor in plain TypeScript. Files stay on the user's
 machine: the page opens and saves them as text, and sends nothing anywhere.
 

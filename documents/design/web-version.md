@@ -1,6 +1,6 @@
 # Web version
 
-Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design editor is built, as a beta. The Publish app is being built; the Measurements app is not.
+Part of the [OpenSloper design](../opensloper-design-document.md). A web version runs in the browser with the same Pascal engine as the desktop apps, compiled to WebAssembly, under a new TypeScript editor. A Django server will handle accounts and subscriptions. The site never holds users' files. The Design and Publish apps are built, as a beta; the Measurements app is not.
 
 **Why it is possible.** The core has no LCL dependency, and the Automation API already exposes every document operation as JSON-RPC. So the web needs a new UI, not a new engine. Name rules, formula checks and undo are the same code everywhere.
 
@@ -290,7 +290,7 @@ A fix or feature then lands in the same place in both. Names follow TypeScript's
 
 ### The Publish editor
 
-The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.MainForm`), built in small steps (#85). It is not linked from the site until it can print.
+The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.MainForm`), built in small steps (#85), and a beta like the Design app.
 
 - **Open** takes a layout with its patterns and measurement files, or patterns alone, which start a layout as the desktop's Open does.
 - `LayoutDocument` (`document/layoutDocument.ts`) is the open layout, as the desktop's `TLayoutDocument`.
@@ -414,7 +414,7 @@ To be checked with a lawyer before the service is sold.
 
 **Built so far** (`site/`, issue #86):
 
-- the home page, with the web Design app at `/design/` as a beta, free with no sign-up, and the desktop downloads beside it;
+- the home page, with the web Design app at `/design/` and Publish app at `/publish/` as a beta, free with no sign-up, and the desktop downloads beside it;
 - no database yet;
 - `manage.py import_opensloper`, which copies the built app and the site's pictures and version from the checkout;
 - Django under gunicorn behind the ISPConfig server's Apache, which serves the app and the static files itself.

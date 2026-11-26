@@ -128,7 +128,6 @@ type
   end;
 
 resourcestring
-  rsPreviewTogglePage = 'Leave page out';
   rsPreviewDeleteNote = 'Delete note';
   rsPreviewCover = 'Cover';
   rsPreviewZoomAreaHint = 'Zoom Area: drag a box to zoom to it, click to zoom in, Shift+click to zoom out';
@@ -347,9 +346,7 @@ begin
   PageName := PageCaptionAt(FPages, At);
   if PageName = '' then
     Exit;
-  FDocument.BeginChange(rsPreviewTogglePage);
-  FDocument.Layout.TogglePage(PageName);
-  FDocument.EndChange;
+  FDocument.TogglePage(PageName);
 end;
 
 // SetFocus does nothing while this is already the active control, even when a

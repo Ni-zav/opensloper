@@ -39,6 +39,8 @@ export interface LayoutState {
   unplaced: number;
   // The copies waiting to be placed, in the order the engine places them
   tray: TrayCopy[];
+  // What the status bar says of the pages or sheet
+  summary: string;
   problems: LayoutProblem[];
   // The files the sources need and were not given, by their paths from the layout
   missing: string[];
@@ -62,6 +64,7 @@ const EMPTY: LayoutState = {
   placed: 0,
   unplaced: 0,
   tray: [],
+  summary: '',
   problems: [],
   missing: [],
   canUndo: false,
@@ -80,6 +83,7 @@ function parseState(answer: JsonRecord): LayoutState {
       caption: stringField(copy, 'caption') ?? '',
       canPlace: booleanField(copy, 'canPlace') ?? false,
     })),
+    summary: stringField(answer, 'summary') ?? '',
     problems: recordsField(answer, 'problems').map((problem) => ({
       text: stringField(problem, 'text') ?? '',
       blocking: booleanField(problem, 'blocking') ?? false,

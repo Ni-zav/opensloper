@@ -1,7 +1,8 @@
 // The publish preview, as Sloper.Publish.PreviewCanvas: the pages with the
 // pieces on them, drawn with Canvas2D from what publish_scene gives. Blank
 // pages are greyed out, and pages left out crossed. The wheel zooms about
-// the pointer and the middle button pans. A press selects the piece under
+// the pointer and the middle button pans. A right-click leaves the page under
+// it out of the print, or puts it back. A press selects the piece under
 // it, which publish_press finds and holds, and dragging moves it, one undo
 // step: the engine moves it (publish_drag), so it lands on the desktop's
 // grid, and the scene is read again after each move, the newest only. A copy
@@ -100,6 +101,7 @@ const DASH = [6, 4];
 
 const LEFT_BUTTON = 0;
 const MIDDLE_BUTTON = 1;
+const RIGHT_BUTTON = 2;
 
 function parseRect(item: unknown): Rect2 | undefined {
   if (!isRecord(item)) {
@@ -321,6 +323,14 @@ export class PreviewCanvas {
       return;
     }
     const at = this.screenAt(event);
+    // A page is often all piece, so a right click reaches it whatever is on it
+    if (event.button === RIGHT_BUTTON) {
+      const layoutAt = this.view.toModel(at);
+      this.document.call('publish_toggle_page', { x: layoutAt.x, y: layoutAt.y }).catch((error: unknown) => {
+        this.events.failed(error);
+      });
+      return;
+    }
     if (event.button === MIDDLE_BUTTON) {
       this.mode = 'panning';
     } else if (event.button === LEFT_BUTTON) {

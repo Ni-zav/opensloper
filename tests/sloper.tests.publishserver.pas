@@ -70,6 +70,11 @@ type
     procedure TestUnplaceToTray;
     procedure TestPlaceCopy;
     procedure TestPieceEditRefused;
+    procedure TestOutput;
+    procedure TestSetOutput;
+    procedure TestSetOutputJoins;
+    procedure TestSetOutputRefused;
+    procedure TestTogglePage;
     procedure TestSave;
     procedure TestExport;
     procedure TestExportRefused;
@@ -518,6 +523,85 @@ begin
   AssertEquals('an empty tray', RPC_REFUSED, ErrorCode);
   Call('publish_state', TJSONObject.Create);
   AssertFalse('nothing changed', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestOutput;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_output', TJSONObject.Create);
+  AssertEquals('tiled', 'tiled', Answer.Strings['kind']);
+  AssertEquals('every paper', Length(PAPER_NAMES), Answer.Arrays['papers'].Count);
+  AssertTrue('paper applies', Answer.Objects['used'].Booleans['paper']);
+  AssertFalse('a roll does not', Answer.Objects['used'].Booleans['rollWidth']);
+  AssertFalse('nor a typed paper size', Answer.Objects['used'].Booleans['paperSize']);
+  AssertTrue('built-in output profiles', Answer.Arrays['outputProfiles'].Count > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('pages summed up', Pos('pages', Answer.Strings['summary']) > 0);
+end;
+
+procedure TTestPublishServer.TestSetOutput;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_set_output', TJSONObject.Create(['paper', 'A3']));
+  AssertEquals('A3 wide', 297, Answer.Floats['paperWidth'], 1e-9);
+  AssertEquals('A3 tall', 420, Answer.Floats['paperHeight'], 1e-9);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangePaper, Answer.Strings['undo']);
+  Call('publish_set_output', TJSONObject.Create(['paper', CUSTOM_PAPER, 'paperWidth', 500, 'paperHeight', 600]));
+  AssertTrue('a size typed in', Answer.Objects['used'].Booleans['paperSize']);
+  AssertEquals('as typed', 500, Answer.Floats['paperWidth'], 1e-9);
+  Call('publish_set_output', TJSONObject.Create(['kind', 'large', 'fill', 'hatch']));
+  AssertTrue('a roll now', Answer.Objects['used'].Booleans['rollWidth']);
+  AssertFalse('no paper', Answer.Objects['used'].Booleans['paper']);
+  AssertEquals('hatched', 'hatch', Answer.Strings['fill']);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('one sheet', Pos('One sheet', Answer.Strings['summary']) = 1);
+  Call('publish_set_output', TJSONObject.Create(['paper', 'B9']));
+  AssertEquals('unknown paper', RPC_REFUSED, ErrorCode);
+  Call('publish_set_output', TJSONObject.Create(['kind', 'round']));
+  AssertEquals('unknown kind', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// Changes within a second are one step, as a run of spin clicks
+procedure TTestPublishServer.TestSetOutputJoins;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_set_output', TJSONObject.Create(['margin', 8]));
+  Call('publish_set_output', TJSONObject.Create(['margin', 9]));
+  Call('publish_undo', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('one step', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestSetOutputRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_set_output', TJSONObject.Create(['margin', 200]));
+  AssertEquals('nothing to print on', RPC_REFUSED, ErrorCode);
+  AssertEquals('says so', rsLayoutNoPrintArea, FReply.Objects['error'].Strings['message']);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('unchanged', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestPublishServer.TestTogglePage;
+var
+  Spot: TJSONObject;
+  Page: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Spot := LabelOf(0);
+  Call('publish_toggle_page', Spot);
+  Page := Answer.Strings['page'];
+  AssertTrue('a page there', Page <> '');
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutTogglePage, Answer.Strings['undo']);
+  AssertTrue('counted left out', Pos(', 1 left out', Answer.Strings['summary']) > 0);
+  // Another paper is another page grid, so nothing is left out
+  Call('publish_set_output', TJSONObject.Create(['paper', 'A3']));
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('forgotten', Pos(', 0 left out', Answer.Strings['summary']) > 0);
+  Call('publish_toggle_page', TJSONObject.Create(['x', -5000, 'y', -5000]));
+  AssertEquals('no page there', '', Answer.Strings['page']);
 end;
 
 procedure TTestPublishServer.TestSave;

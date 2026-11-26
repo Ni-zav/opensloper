@@ -295,7 +295,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 - **Open** takes a layout with its patterns and measurement files, or patterns alone, which start a layout as the desktop's Open does.
 - `LayoutDocument` (`document/layoutDocument.ts`) is the open layout, as the desktop's `TLayoutDocument`.
 - The engine says which files the sources still need, by their paths from the layout. The chosen files have names only, so each is matched by name and given. A pattern found may name a measurement file, which is looked for in turn.
-- The title names the layout. The status bar has a message and the problems' count, as on the desktop, with how many stop printing.
+- The title names the layout. The status bar has a message and the problems' count, as on the desktop, with how many stop printing. After each change the message sums up the pages, blank and left out, or the one sheet's size, or the material used (`PreviewSummary`), unless a command says what it did.
 - **The preview** (`PreviewCanvas` in `ui/previewCanvas.ts`, as `Sloper.Publish.PreviewCanvas`) is drawn with Canvas2D from `publish_scene`: the cover, the pages (blank ones grey, left-out ones crossed), the pieces with their tint, seam line, marks, lines and label, and the information block's boxes, with its text once it is large enough to read.
 - Fit Pages, Zoom In and Zoom Out are on the toolbar. The wheel zooms about the pointer and the middle button pans. A new layout is fitted.
 - A press selects the piece under it, outlined in blue, as `publish_press` finds it. Dragging moves it, one undo step:
@@ -312,6 +312,15 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - Arrange: Place new pieces and Pack pieces. Pack fits the view and says what it did in the status bar.
   - Tray: the copies waiting to be placed. One dragged onto the pages is placed centred where it is let go, kept on the sheet (`publish_drop_copy`). A double-click or Enter places one in the rows below the others. Either way it is selected. A copy whose piece has a problem in the pattern is greyed and cannot be placed.
   - The edits are `TLayoutDocument`'s (`TurnPiece`, `FlipPiece`, `UnplacePiece`, `PlaceCopy`), which the desktop calls too, so both name the undo steps alike.
+- The Output tab (`publish/outputTab.ts`), last above Problems, as on the desktop:
+  - Output: tiled pages, large format, projector or material sheet, with the roll's or material's sizes and quarter turns.
+  - Paper: A4, A3, Letter or a custom size, the margin, the overlap and the alignment marks.
+  - Content: the piece fill, the output profile and the material the layout is limited to.
+  - Export: PDF, SVG and DXF, as on the toolbar. Print joins them once the web can print.
+  - Settings that do not apply to the kind of output are greyed (`OutputSettingUsed`). A number is sent once typed or stepped.
+  - Each change is `TLayoutDocument.ChangeOutput`, as the desktop's: changes within a second join one undo step; pages left out are forgotten once the page grid moves; a new material or kind takes its material's size. A change leaving nothing to print on is refused, said in the status bar and put back.
+  - The machine profile waits for machine profiles on the web.
+- A right-click on a page leaves it out of the print, or puts it back (`TLayoutDocument.TogglePage`), whatever is on it.
 - The side panel has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
 - The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.
 
@@ -321,7 +330,10 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | --- | --- |
 | `publish_open` | Opens a layout from its text, or starts one for a pattern among the files, with the files given (`OpenText`, `NewForPattern`) |
 | `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
-| `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; and `tray`: the copies waiting, each with its caption and whether it can be placed |
+| `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; `tray`: the copies waiting, each with its caption and whether it can be placed; and `summary`, the status bar's |
+| `publish_output` | The Output tab's settings, which apply (`used`), and the papers, materials and output profiles to choose from |
+| `publish_set_output` | Changes them, as the desktop's tab does (`ChangeOutput`); refused when nothing is left to print on |
+| `publish_toggle_page` | Leaves the page at a point out of the print, or puts it back; one undo step |
 | `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`) |
 | `publish_press` | Holds the sheet note at a point, or else the smallest placed piece (`ShapeAt`), for a drag; changes nothing |
 | `publish_drag` | Moves what the press holds; the first move opens one undo step |

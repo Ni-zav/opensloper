@@ -95,6 +95,52 @@
       #open-input {
         display: none;
       }
+      /* A tab not open, whose display: flex would otherwise show it */
+      .pieces[hidden],
+      .output[hidden] {
+        display: none;
+      }
+      /* The Output tab: groups of settings, each a caption over its control */
+      .output {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .output-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 4px 6px 6px;
+        border: 1px solid #d8d6cf;
+      }
+      .output-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .output-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .output-group input[type='number'],
+      .output-group select {
+        font: inherit;
+        padding: 2px 4px;
+      }
+      .output-group input:disabled,
+      .output-group select:disabled,
+      .output-check:has(input:disabled) {
+        opacity: 0.5;
+      }
+      .output-group button {
+        align-self: flex-start;
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
       /* The Pieces tab: groups of buttons over the tray, which takes the rest */
       .pieces {
         display: flex;

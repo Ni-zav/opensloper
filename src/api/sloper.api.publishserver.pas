@@ -50,6 +50,9 @@ type
     function DoDropCopy(Params: TJSONObject): TJSONData;
     function DoPieceEdit(const Method: string; Params: TJSONObject): TJSONData;
     function DoPlaceCopy(Params: TJSONObject): TJSONData;
+    function DoOutput: TJSONData;
+    function DoSetOutput(Params: TJSONObject): TJSONData;
+    function DoTogglePage(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
     function DoExport(Params: TJSONObject): TJSONData;
   public
@@ -75,8 +78,8 @@ resourcestring
   rsPublishAddFiles = 'Gives more files, as those named in `missing`, and reads the sources again. Not an undo step.';
   rsPublishState = 'The layout, as layout_state gives it, with the files still needed.';
   rsPublishStateReturns = 'What layout_state gives, with `missing`: the paths, from the layout, of the files sources ' +
-    'need and were not given; and `tray`: the copies waiting to be placed, each with its `caption` and whether it ' +
-    '`canPlace`';
+    'need and were not given; `tray`: the copies waiting to be placed, each with its `caption` and whether it ' +
+    '`canPlace`; and `summary`, what the status bar says of the pages or sheet';
   rsPublishNeedsSource = 'Give a layout, or the pattern to start one for';
   rsPublishScene = 'What the preview shows, in layout mm with y down, as the desktop''s preview draws it.';
   rsPublishSceneReturns = '`tiled`, true for tiled pages; `cover`, the tiled print''s cover (minX, minY, maxX, maxY) or ' +
@@ -114,13 +117,40 @@ resourcestring
   rsPublishTrayIndex = 'The copy''s index in publish_state''s `tray`';
   rsPublishPlaceCopyReturns = '`placed`, the new placement''s index';
   rsPublishNoCopy = 'There is no copy %d in the tray';
+  rsPublishOutput = 'The Output tab: the layout''s output settings, which of them apply to its kind of output, and ' +
+    'the papers, materials and output profiles to choose from.';
+  rsPublishOutputReturns = 'The settings (`kind`, `paper`, `paperWidth`, `paperHeight`, `margin`, `overlap`, ' +
+    '`rollWidth`, `materialWidth`, `materialLength`, `allowTurns`, `material`, `marks`, `fill`, `outputProfile`); ' +
+    '`used`, whether each of `rollWidth`, `materialSize`, `allowTurns`, `paper`, `paperSize`, `overlap`, `marks` and ' +
+    '`fill` applies; and the lists `papers`, `materials` and `outputProfiles`';
+  rsPublishSetOutput = 'Changes the Output tab''s settings, as the desktop''s tab does: one undo step, joining changes ' +
+    'within a second. Pages left out are forgotten once the page grid moves. Refused when nothing would be left to ' +
+    'print on.';
+  rsPublishSetOutputReturns = 'What publish_output gives';
+  rsPublishKind = 'tiled, large, projector or material';
+  rsPublishPaper = 'A4, A3, Letter, or custom for paperWidth and paperHeight';
+  rsPublishPaperWidth = 'A custom paper''s width, in mm';
+  rsPublishPaperHeight = 'A custom paper''s height, in mm';
+  rsPublishMargin = 'The margin, in mm';
+  rsPublishOverlap = 'Tiles'' overlap, in mm';
+  rsPublishRollWidth = 'A large format roll''s width, in mm';
+  rsPublishMaterialWidth = 'A material sheet''s width, in mm';
+  rsPublishMaterialLength = 'A material sheet''s length, in mm; 0 for a roll';
+  rsPublishAllowTurns = 'Whether packing may turn pieces a quarter on a material with no grain';
+  rsPublishMaterial = 'The material to limit the layout to; empty for all';
+  rsPublishMarks = 'diamond, none or halfCircle';
+  rsPublishFill = 'none, tint or hatch';
+  rsPublishOutputProfile = 'The output profile; empty for everything';
+  rsPublishUnknownPaper = 'Unknown paper "%s"';
+  rsPublishTogglePage = 'Leaves the page at a point of the layout out of the print, or puts it back; one undo step.';
+  rsPublishTogglePageReturns = '`page`, the page''s caption, empty when there is none there';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
 implementation
 
 uses
-  StrUtils, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources, Sloper.Core.Geometry,
+  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
   Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.LayoutExport, Sloper.API.Shapes,
   base64;
@@ -163,6 +193,25 @@ begin
     AddApiParam(Built, 'placement', apWhole, True, rsPublishPlacement);
     AddApiMethod(Built, 'publish_place_copy', rsPublishPlaceCopy, rsPublishPlaceCopyReturns);
     AddApiParam(Built, 'index', apWhole, True, rsPublishTrayIndex);
+    AddApiMethod(Built, 'publish_output', rsPublishOutput, rsPublishOutputReturns, True);
+    AddApiMethod(Built, 'publish_set_output', rsPublishSetOutput, rsPublishSetOutputReturns);
+    AddApiParam(Built, 'kind', apChoice, False, rsPublishKind, string.Join(', ', KIND_NAMES));
+    AddApiParam(Built, 'paper', apText, False, rsPublishPaper);
+    AddApiParam(Built, 'paperWidth', apNumber, False, rsPublishPaperWidth);
+    AddApiParam(Built, 'paperHeight', apNumber, False, rsPublishPaperHeight);
+    AddApiParam(Built, 'margin', apNumber, False, rsPublishMargin);
+    AddApiParam(Built, 'overlap', apNumber, False, rsPublishOverlap);
+    AddApiParam(Built, 'rollWidth', apNumber, False, rsPublishRollWidth);
+    AddApiParam(Built, 'materialWidth', apNumber, False, rsPublishMaterialWidth);
+    AddApiParam(Built, 'materialLength', apNumber, False, rsPublishMaterialLength);
+    AddApiParam(Built, 'allowTurns', apFlag, False, rsPublishAllowTurns);
+    AddApiParam(Built, 'material', apText, False, rsPublishMaterial);
+    AddApiParam(Built, 'marks', apChoice, False, rsPublishMarks, string.Join(', ', MARKS_NAMES));
+    AddApiParam(Built, 'fill', apChoice, False, rsPublishFill, string.Join(', ', FILL_NAMES));
+    AddApiParam(Built, 'outputProfile', apText, False, rsPublishOutputProfile);
+    AddApiMethod(Built, 'publish_toggle_page', rsPublishTogglePage, rsPublishTogglePageReturns);
+    AddApiParam(Built, 'x', apNumber, True, rsPublishX);
+    AddApiParam(Built, 'y', apNumber, True, rsPublishY);
     AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
@@ -283,6 +332,7 @@ begin
     Answer.Add('missing', Missing);
     for Path in MissingFiles(FDocument) do
       Missing.Add(Path);
+    Answer.Add('summary', PreviewSummary(FDocument.Layout));
     Tray := TJSONArray.Create;
     Answer.Add('tray', Tray);
     for Waiting in FDocument.Layout.Unplaced do
@@ -462,6 +512,130 @@ begin
   Result := TJSONObject.Create(['placed', High(FDocument.Layout.Placements)]);
 end;
 
+const
+  OUTPUT_SETTING_NAMES: array[TOutputSetting] of string = ('rollWidth', 'materialSize', 'allowTurns', 'paper',
+    'paperSize', 'overlap', 'marks', 'fill');
+
+function TPublishApiServer.DoOutput: TJSONData;
+var
+  Layout: TLayout;
+  Output: TLayoutOutput;
+  Answer, Used: TJSONObject;
+  List: TJSONArray;
+  Setting: TOutputSetting;
+  Source: TPatternSource;
+  Profile: TOutputProfile;
+  Index: integer;
+
+  procedure AddOnce(const Name: string);
+  var
+    Item: integer;
+  begin
+    for Item := 0 to List.Count - 1 do
+      if List.Strings[Item] = Name then
+        Exit;
+    List.Add(Name);
+  end;
+
+begin
+  Layout := FDocument.Layout;
+  Output := Layout.Output;
+  Answer := TJSONObject.Create(['kind', KIND_NAMES[Output.Kind], 'paper', Output.Paper, 'paperWidth',
+    Output.Tiles.PaperWidth, 'paperHeight', Output.Tiles.PaperHeight, 'margin', Output.Tiles.Margin, 'overlap',
+    Output.Tiles.Overlap, 'rollWidth', Output.RollWidth, 'materialWidth', Output.MaterialWidth, 'materialLength',
+    Output.MaterialLength, 'allowTurns', Output.AllowTurns, 'material', Output.Material, 'marks',
+    MARKS_NAMES[Output.Marks], 'fill', FILL_NAMES[Output.Fill], 'outputProfile', Output.OutputProfile]);
+  try
+    Used := TJSONObject.Create;
+    Answer.Add('used', Used);
+    for Setting in TOutputSetting do
+      Used.Add(OUTPUT_SETTING_NAMES[Setting], OutputSettingUsed(Output, Setting));
+    List := TJSONArray.Create;
+    Answer.Add('papers', List);
+    for Index := 0 to High(PAPER_NAMES) do
+      List.Add(PAPER_NAMES[Index]);
+    // Every material in the layout's patterns, each once; a name no pattern
+    // has stays listed, so the choice is not lost when a pattern changes
+    List := TJSONArray.Create;
+    Answer.Add('materials', List);
+    for Source in Layout.Sources do
+      if Assigned(Source.Pattern) then
+        for Index := 0 to Source.Pattern.MaterialCount - 1 do
+          AddOnce(Source.Pattern.Materials[Index].Name);
+    if Output.Material <> '' then
+      AddOnce(Output.Material);
+    List := TJSONArray.Create;
+    Answer.Add('outputProfiles', List);
+    for Profile in AllOutputProfiles(Layout.OutputProfiles) do
+      AddOnce(Profile.Name);
+    if Output.OutputProfile <> '' then
+      AddOnce(Output.OutputProfile);
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
+function TPublishApiServer.DoSetOutput(Params: TJSONObject): TJSONData;
+var
+  Output: TLayoutOutput;
+  Value: double;
+  Reason: string;
+begin
+  if not Assigned(Params) then
+    Exit(DoOutput);
+  Output := FDocument.Layout.Output;
+  if Assigned(Params.Find('kind')) then
+    Output.Kind := TOutputKind(ChoiceParam(Params, 'kind', KIND_NAMES));
+  if Assigned(Params.Find('paper')) then
+  begin
+    Output.Paper := RequireString(Params, 'paper');
+    if (Output.Paper <> CUSTOM_PAPER) and not PaperSize(Output.Paper, Output.Tiles.PaperWidth,
+      Output.Tiles.PaperHeight) then
+      raise EApiError.Create(RPC_REFUSED, Format(rsPublishUnknownPaper, [Output.Paper]));
+  end;
+  // A paper's own size, unless it is one typed in
+  Value := 0;
+  if (Output.Paper = CUSTOM_PAPER) and OptionalNumber(Params, 'paperWidth', Value) then
+    Output.Tiles.PaperWidth := Value;
+  if (Output.Paper = CUSTOM_PAPER) and OptionalNumber(Params, 'paperHeight', Value) then
+    Output.Tiles.PaperHeight := Value;
+  if OptionalNumber(Params, 'margin', Value) then
+    Output.Tiles.Margin := Max(0, Value);
+  if OptionalNumber(Params, 'overlap', Value) then
+    Output.Tiles.Overlap := Max(0, Value);
+  if OptionalNumber(Params, 'rollWidth', Value) then
+    Output.RollWidth := Value;
+  if OptionalNumber(Params, 'materialWidth', Value) then
+    Output.MaterialWidth := Value;
+  if OptionalNumber(Params, 'materialLength', Value) then
+    Output.MaterialLength := Max(0, Value);
+  if Assigned(Params.Find('allowTurns')) then
+    Output.AllowTurns := BooleanParam(Params, 'allowTurns');
+  if Assigned(Params.Find('material')) then
+    Output.Material := OptionalString(Params, 'material');
+  if Assigned(Params.Find('marks')) then
+    Output.Marks := TLayoutMarks(ChoiceParam(Params, 'marks', MARKS_NAMES));
+  if Assigned(Params.Find('fill')) then
+    Output.Fill := TLayoutFill(ChoiceParam(Params, 'fill', FILL_NAMES));
+  if Assigned(Params.Find('outputProfile')) then
+    Output.OutputProfile := OptionalString(Params, 'outputProfile');
+  if not FDocument.ChangeOutput(Output, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Result := DoOutput;
+end;
+
+function TPublishApiServer.DoTogglePage(Params: TJSONObject): TJSONData;
+var
+  Rows, Columns: integer;
+  Caption: string;
+begin
+  Caption := PageCaptionAt(FDocument.Layout.Pages(FDocument.Layout.PlacedPieces, Rows, Columns), PointParam(Params));
+  FDocument.TogglePage(Caption);
+  Result := TJSONObject.Create(['page', Caption]);
+end;
+
 function TPublishApiServer.DoSave: TJSONData;
 begin
   Result := TJSONObject.Create(['text', FDocument.SaveText]);
@@ -504,6 +678,9 @@ begin
     'publish_drop_copy': Result := DoDropCopy(Params);
     'publish_turn', 'publish_flip', 'publish_unplace': Result := DoPieceEdit(Method, Params);
     'publish_place_copy': Result := DoPlaceCopy(Params);
+    'publish_output': Result := DoOutput;
+    'publish_set_output': Result := DoSetOutput(Params);
+    'publish_toggle_page': Result := DoTogglePage(Params);
     'publish_save': Result := DoSave;
     'publish_export': Result := DoExport(Params);
     else

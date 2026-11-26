@@ -16,6 +16,7 @@ import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { OutputTab } from './outputTab.ts';
 import { PiecesTab } from './piecesTab.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
@@ -35,6 +36,7 @@ const ICONS = {
   exportSvg: 'file-type-svg',
   exportDxf: 'file-vector',
   piecesTab: 'puzzle',
+  outputTab: 'printer',
   problemsTab: 'alert-triangle',
 } as const;
 
@@ -106,6 +108,7 @@ class PublishApp {
   private readonly preview: PreviewCanvas;
   private readonly side: SideTabs;
   private readonly pieces: PiecesTab;
+  private readonly output: OutputTab;
   private readonly problems: ProblemsPanel;
   private readonly buttons = new Map<string, HTMLButtonElement>();
 
@@ -143,6 +146,18 @@ class PublishApp {
       },
     });
     this.side.addSection('pieces', STRINGS.tabPieces, ICONS.piecesTab, this.pieces);
+    this.output = new OutputTab(this.document, {
+      changed: () => {
+        this.preview.zoomToFit();
+      },
+      message: showMessage,
+      export: (format) => {
+        this.run(this.export(format));
+      },
+      failed: showFailure,
+    });
+    // Last of the tabs, as on the desktop, where it sits just above Problems
+    this.side.addSection('output', STRINGS.tabOutput, ICONS.outputTab, this.output);
     this.problems = new ProblemsPanel({
       // A sheet note is chosen once the preview shows notes
       choose: (key) => {
@@ -341,6 +356,9 @@ class PublishApp {
       showMessage(STRINGS.layoutNeedsFiles(state.missing));
     } else if (opened !== undefined) {
       showMessage(opened);
+    } else if (this.document.fileName !== '') {
+      // As the desktop's, after every change; a command's own message follows
+      showMessage(state.summary);
     }
     const blocking = state.problems.filter((problem) => problem.blocking).length;
     if (this.document.fileName === '') {
@@ -401,6 +419,7 @@ class PublishApp {
         button.disabled = !on;
       }
     }
+    this.output.setExportsEnabled(open && !blocked);
     const undo = this.buttons.get('undo');
     if (undo !== undefined) {
       undo.title = state.canUndo ? STRINGS.undoStep(state.undo) : STRINGS.undoHint;

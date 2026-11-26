@@ -3,7 +3,9 @@
 // whose pages the preview draws and whose pieces a click selects. The
 // selected piece is turned, flipped and sent back to the tray, from which a
 // double-click places it again; a piece is dragged, and a copy dragged from
-// the tray onto the pages. The layout is packed, undone and redone,
+// the tray onto the pages. The Output tab changes the paper, refuses a
+// margin that leaves nothing to print on, and turns the pages into one large
+// sheet and back; a right-click leaves a page out. The layout is packed, undone and redone,
 // saved and exported, and the saved file opens again. A layout whose sources
 // sit in other folders finds its files by name, lists what stops it printing
 // in the Problems tab, and its waiting pieces are placed.
@@ -66,6 +68,11 @@ async function piecesButton(page: Page, caption: string): Promise<void> {
     {},
     caption,
   );
+}
+
+// Waits for the status bar's message to hold the text anywhere
+async function waitForMessagePart(page: Page, part: string): Promise<void> {
+  await page.waitForFunction((text) => document.querySelector('#message')?.textContent.includes(text), {}, part);
 }
 
 // Waits for the toolbar's Undo to name this step
@@ -228,6 +235,39 @@ try {
   await waitForUndo(page, 'Place piece');
   await command(page, 'Redo');
   await waitForUndo(page, 'Pack pieces');
+
+  // The Output tab: each change one step, as the desktop's
+  await page.click('.side-column button[data-tab="output"]');
+  await page.waitForSelector('.output', { visible: true });
+  await page.waitForSelector('.output select[name="paper"] option[value="A3"]');
+  await page.select('.output select[name="paper"]', 'A3');
+  await waitForUndo(page, 'Change paper');
+  await waitForMessagePart(page, 'pages, ');
+  await page.$eval('.output input[name="margin"]', (margin) => {
+    if (margin instanceof HTMLInputElement) {
+      margin.value = '200';
+      margin.dispatchEvent(new Event('change'));
+    }
+  });
+  await waitForStatus(page, 'The margin and overlap leave nothing to print on');
+  // Put back as it was, since the engine refused it
+  await page.waitForFunction(
+    () => document.querySelector<HTMLInputElement>('.output input[name="margin"]')?.value !== '200',
+  );
+  await page.select('.output select[name="kind"]', 'large');
+  await waitForStatus(page, 'One sheet');
+  assert.equal(await page.$eval('.output input[name="rollWidth"]', (control) => control.matches(':disabled')), false);
+  assert.equal(await page.$eval('.output select[name="paper"]', (control) => control.matches(':disabled')), true);
+  await page.select('.output select[name="kind"]', 'tiled');
+  await waitForMessagePart(page, ', 0 left out');
+  // A right-click leaves the page under it out, and again puts it back
+  const sheet = await (await page.$('#preview'))?.boundingBox();
+  assert.ok(sheet);
+  await page.mouse.click(sheet.x + sheet.width / 2, sheet.y + sheet.height / 2, { button: 'right' });
+  await waitForUndo(page, 'Leave page out');
+  await waitForMessagePart(page, ', 1 left out');
+  await page.mouse.click(sheet.x + sheet.width / 2, sheet.y + sheet.height / 2, { button: 'right' });
+  await waitForMessagePart(page, ', 0 left out');
 
   // Saved as a download, counted saved; then exported
   await command(page, 'Save');

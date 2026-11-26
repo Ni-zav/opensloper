@@ -54,6 +54,9 @@ type
   // okMaterial is the material or board itself, cut as the pieces lie
   TOutputKind = (okTiled, okLarge, okProjector, okMaterial);
 
+  // The Output tab's settings that apply to some kinds of output only
+  TOutputSetting = (osRollWidth, osMaterialSize, osAllowTurns, osPaper, osPaperSize, osOverlap, osMarks, osFill);
+
   TLayoutOutput = record
     Kind: TOutputKind;
     // The width of the sheet for okLarge; its length follows the layout
@@ -315,12 +318,17 @@ function WholeOutline(const Points: TVec2Array; const Fold: TLine2): TVec2Array;
 function PublishTargetFor(const PatternFile: string): string;
 // The width and height of a named paper; False when the name is unknown
 function PaperSize(const AName: string; out AWidth, AHeight: double): boolean;
+// Whether a setting of the publish app's Output tab changes what Output
+// prints; the others are greyed out
+function OutputSettingUsed(const Output: TLayoutOutput; Setting: TOutputSetting): boolean;
 // False with the reason when the file cannot be written
 function WriteBytesToFile(const FileName: string; const Bytes: rawbytestring; out ErrorMessage: string): boolean;
 // The version files are written at, and the steps that bring older files up to it
 function LayoutFileVersions: TFormatVersions;
 
 const
+  // The papers the Output tab offers, in its order; the last is the size typed in
+  PAPER_NAMES: array[0..3] of string = ('A4', 'A3', 'Letter', CUSTOM_PAPER);
   // As the layout file names them
   CORNER_NAMES: array[TTitleCorner] of string = ('bottomRight', 'bottomLeft', 'topRight');
   MARKS_NAMES: array[TLayoutMarks] of string = ('diamond', 'none', 'halfCircle');
@@ -398,6 +406,19 @@ begin
   Result := ChangeFileExt(PatternFile, LAYOUT_EXTENSION);
   if not FileExists(Result) then
     Result := PatternFile;
+end;
+
+function OutputSettingUsed(const Output: TLayoutOutput; Setting: TOutputSetting): boolean;
+begin
+  case Setting of
+    osRollWidth: Result := Output.Kind = okLarge;
+    osMaterialSize, osAllowTurns: Result := Output.Kind = okMaterial;
+    osPaper, osOverlap, osMarks: Result := Output.Kind = okTiled;
+    osPaperSize: Result := (Output.Kind = okTiled) and (Output.Paper = CUSTOM_PAPER);
+    osFill: Result := Output.Kind <> okProjector;
+    else
+      Result := True;
+  end;
 end;
 
 function PaperSize(const AName: string; out AWidth, AHeight: double): boolean;

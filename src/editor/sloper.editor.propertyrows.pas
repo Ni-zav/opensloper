@@ -126,6 +126,8 @@ const
   PROPERTY_ROW_STAMP_SCALE = 'stampScale';
   // Followed by the input's index in PointInputs
   PROPERTY_ROW_INPUT = 'input';
+  // An offset point's mode: length and angle, or across and down
+  PROPERTY_ROW_OFFSET_MODE = 'offsetMode';
   MAX_CUT_COUNT = 99;
   NOTE_SIZE_STEP = 1;
   STAMP_SCALE_STEP = 0.1;
@@ -201,6 +203,11 @@ function SetLockedStep(Document: TPatternDocument; Node: TEvalNode; Lock: boolea
 // Makes the edge a line or curve, as Choice in EdgeTypeChoices says. The
 // edge is replaced by one with the same ID.
 function ConvertEdgeStep(Document: TPatternDocument; Node: TEvalNode; Choice: integer; out Reason: string): boolean;
+// An offset point's mode, its numbers worked out so it stays where it is;
+// formulas it had become plain numbers
+function SetOffsetModeStep(Document: TPatternDocument; Node: TEvalNode; Mode: TOffsetMode; out Reason: string): boolean;
+// The offset mode row's items, in TOffsetMode's order
+function OffsetModeChoices: TStringArray;
 function SetEdgeRoleStep(Document: TPatternDocument; Node: TEvalNode; Role: TEdgeRole; out Reason: string): boolean;
 function SetMarkerStep(Document: TPatternDocument; Node: TEvalNode; Marker: TPointMarker; out Reason: string): boolean;
 function SetRepeatEndsStep(Document: TPatternDocument; Node: TEvalNode; Include: boolean; out Reason: string): boolean;
@@ -300,6 +307,10 @@ resourcestring
   rsPropInputRepeat = 'Repeat';
   rsPropInputCopyOf = 'Copy of';
   rsPropChangeType = 'Change edge type';
+  rsPropOffsetBy = 'Offset by';
+  rsPropOffsetPolar = 'Length and angle';
+  rsPropOffsetCartesian = 'Across and down';
+  rsPropChangeOffsetMode = 'Change offset';
   rsPropEdit = 'Change %s';
   rsPropRename = 'Rename';
   rsPropChangeRole = 'Change role';
@@ -627,6 +638,8 @@ begin
   Inputs := PointInputs(Pattern, Node);
   for Index := 0 to High(Inputs) do
     Builder.Add(PROPERTY_ROW_INPUT + IntToStr(Index), prkText, Inputs[Index].Caption, NameOf(Pattern, Inputs[Index].Key));
+  if Node is TOffsetPoint then
+    Builder.AddChoice(PROPERTY_ROW_OFFSET_MODE, rsPropOffsetBy, OffsetModeChoices, Ord(TOffsetPoint(Node).Mode));
 end;
 
 procedure AddCommonRows(var Builder: TRowBuilder; Pattern: TPattern; Node: TEvalNode; Place: TSectionPlace);
@@ -1156,6 +1169,26 @@ begin
   Result := FinishStep(Document, Done, Reason);
 end;
 
+function OffsetModeChoices: TStringArray;
+begin
+  Result := nil;
+  SetLength(Result, Ord(High(TOffsetMode)) + 1);
+  Result[Ord(omPolar)] := rsPropOffsetPolar;
+  Result[Ord(omCartesian)] := rsPropOffsetCartesian;
+end;
+
+function SetOffsetModeStep(Document: TPatternDocument; Node: TEvalNode; Mode: TOffsetMode; out Reason: string): boolean;
+begin
+  Reason := '';
+  if not (Node is TOffsetPoint) then
+    Exit(Refuse(Reason));
+  if TOffsetPoint(Node).Mode = Mode then
+    Exit(True);
+  Document.BeginChange(rsPropChangeOffsetMode);
+  Result := FinishStep(Document, Assigned(Document.Pattern.ConvertPoint(TPointObject(Node), pcOffset,
+    [TOffsetPoint(Node).Base], Mode)), Reason);
+end;
+
 function SetEdgeRoleStep(Document: TPatternDocument; Node: TEvalNode; Role: TEdgeRole; out Reason: string): boolean;
 begin
   Reason := '';
@@ -1679,6 +1712,11 @@ begin
     Result := SetLockedStep(Document, Node, Value <> 0, Reason)
   else if RowId = PROPERTY_ROW_TYPE then
     Result := ConvertEdgeStep(Document, Node, Value, Reason)
+  else if RowId = PROPERTY_ROW_OFFSET_MODE then
+  begin
+    if not BadChoice(Value, Ord(High(TOffsetMode)) + 1, Reason) then
+      Result := SetOffsetModeStep(Document, Node, TOffsetMode(Value), Reason);
+  end
   else if RowId = PROPERTY_ROW_ROLE then
   begin
     if not BadChoice(Value, Ord(High(TEdgeRole)) + 1, Reason) then

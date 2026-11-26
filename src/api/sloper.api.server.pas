@@ -2649,17 +2649,21 @@ var
   Conversion: TPointConversion;
   Inputs: TStringArray;
   Converted: TPointObject;
+  Mode: TOffsetMode;
 begin
   Target := FindTarget(Params);
   if not (Target is TPointObject) then
     raise EApiError.Create(RPC_REFUSED, Format(rsApiNotAPoint, [Target.DisplayName]));
   if not Assigned(Params.Find('type')) then
     raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['type']));
-  // Read before the change opens, as a bad type or reference raises
+  // Read before the change opens, as a bad type, mode or reference raises
   Conversion := TPointConversion(ChoiceParam(Params, 'type', POINT_CONVERSION_TYPES));
+  Mode := omCartesian;
+  if Assigned(Params.Find('mode')) then
+    Mode := TOffsetMode(ChoiceParam(Params, 'mode', ['polar', 'cartesian']));
   Inputs := ReferenceList(Params, 'from');
   BeginChange(rsApiConvertPoint);
-  Converted := FDocument.Pattern.ConvertPoint(TPointObject(Target), Conversion, Inputs);
+  Converted := FDocument.Pattern.ConvertPoint(TPointObject(Target), Conversion, Inputs, Mode);
   if not Assigned(Converted) then
     RefuseChange;
   Result := AddedNode(Converted);

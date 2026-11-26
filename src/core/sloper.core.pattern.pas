@@ -418,8 +418,9 @@ type
     function ConvertToBetween(Point: TPointObject; const FirstId, LastId: string; Mode: TAlongMode; const Value: string): TBetweenPoint;
     function ConvertToAlongEdge(Point: TPointObject; const EdgeId: string; FromEnd: boolean; Mode: TAlongMode; const Value: string): TAlongEdgePoint;
     // Changes a point's operation, its numbers worked out so it stays where it
-    // is (see Sloper.Core.TypeChange.ConvertPoint)
-    function ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+    // is (see Sloper.Core.TypeChange.ConvertPoint); Mode is an offset's
+    function ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
+      Mode: TOffsetMode = omCartesian): TPointObject;
     // An edge changed between line and curve in place: its ID, role and place
     // stay, so pieces, seams and formulas that use it go on using it, and a
     // name the user gave it is kept. An arc becomes a line between two new
@@ -3741,9 +3742,10 @@ begin
   Result := Sloper.Core.TypeChange.ConvertToAlongEdge(Self, Point, EdgeId, FromEnd, Mode, Value);
 end;
 
-function TPattern.ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+function TPattern.ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
+  Mode: TOffsetMode): TPointObject;
 begin
-  Result := Sloper.Core.TypeChange.ConvertPoint(Self, Point, Conversion, Inputs);
+  Result := Sloper.Core.TypeChange.ConvertPoint(Self, Point, Conversion, Inputs, Mode);
 end;
 
 function TPattern.MergePoints(const Keys: array of string): TPointObject;

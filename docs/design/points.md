@@ -27,6 +27,15 @@ name: an offset point's **From**, the edge a point lies **Along** and the
 end it is **Measured from**, and so on. These rows are for reading only; to
 place the point from something else, [change its type](#changing-a-points-type).
 
+An offset point's **Offset by** row chooses how it is placed from its base:
+
+- **Length and angle**: a distance at an angle, 0° right and 90° up.
+- **Across and down**: a distance right and a distance down.
+
+Changing it keeps the point where it is. Its two formulas become plain
+numbers, as when a point's type changes: Edit → Undo brings them back, and the
+[formula suggestions](formulas.md) can find formulas for the new numbers.
+
 ## Changing a point's type
 
 When a point was placed the wrong way, say a free point that should have been

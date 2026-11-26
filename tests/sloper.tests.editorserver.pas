@@ -170,6 +170,7 @@ type
     procedure TestPointInputRows;
     // Its edits, each one undo step, refused with the reason
     procedure TestPropertyEdits;
+    procedure TestOffsetModeEdit;
     // A piece's rows: cut, fold, own allowance, grainline, material and fill
     procedure TestPiecePropertyEdits;
     // A note's rows: text, size, printing, look, font and making it free
@@ -1751,7 +1752,7 @@ begin
   Ids := '';
   for Index := 0 to Rows.Count - 1 do
     Ids := Ids + Rows.Objects[Index].Strings['id'] + ' ';
-  AssertEquals('in order', 'type name locked input0 dx dy marker markedOn result problem ', Ids);
+  AssertEquals('in order', 'type name locked input0 offsetMode dx dy marker markedOn result problem ', Ids);
   // Names follow a rename
   Call('rename', '{"name": "A", "newName": "Start"}');
   AssertEquals('renamed', 'From: Start', Inputs('P'));
@@ -1811,6 +1812,39 @@ begin
   AssertFalse('no such row', Answer.Booleans['done']);
   Call('editor_property_set', '{"id": ' + IdEdge + '}');
   AssertEquals('which row', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// Length and angle, or across and down: the point stays, its formulas become
+// numbers, and one undo puts them back
+procedure TTestEditorServer.TestOffsetModeEdit;
+var
+  IdP: string;
+begin
+  AddSquare;
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "15 * 2", "dy": "-40"}');
+  IdP := IntToStr(IdOf('P'));
+  Call('editor_properties', '{"selection": [' + IdP + ']}');
+  AssertEquals('a choice', 'choice', PropertyRow('offsetMode').Strings['kind']);
+  AssertEquals('across and down', 1, PropertyRow('offsetMode').Integers['choice']);
+  AssertEquals('two ways', 2, PropertyRow('offsetMode').Arrays['choices'].Count);
+  Call('editor_property_set', '{"id": ' + IdP + ', "row": "offsetMode", "value": 0}');
+  AssertTrue('length and angle', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('its step', 'Change offset', Answer.Strings['undo']);
+  Call('editor_properties', '{"selection": [' + IdP + ']}');
+  AssertEquals('now length and angle', 0, PropertyRow('offsetMode').Integers['choice']);
+  AssertEquals('a number', '50', PropertyRow('length').Strings['text']);
+  AssertEquals('no across', 0, Pos('"dx"', Answer.Arrays['rows'].AsJSON));
+  Call('get_object', '{"name": "P"}');
+  AssertEquals('stays across', 30, Answer.Get('x', 0.0), 0.1);
+  AssertEquals('and up', -40, Answer.Get('y', 0.0), 0.1);
+  Call('undo');
+  Call('editor_properties', '{"selection": [' + IdP + ']}');
+  AssertEquals('its formula back', '15 * 2', PropertyRow('dx').Strings['text']);
+  Call('editor_property_set', '{"id": ' + IdP + ', "row": "offsetMode", "value": 1}');
+  AssertTrue('already so, nothing to do', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id": ' + IdP + ', "row": "offsetMode", "value": 2}');
+  AssertFalse('no such mode', Answer.Booleans['done']);
 end;
 
 procedure TTestEditorServer.TestPiecePropertyEdits;

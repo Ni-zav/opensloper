@@ -28,6 +28,13 @@ Changed, Fixed and Removed under each version.
   yet saved is kept in the browser, and once loaded the app can be
   installed and works offline.
 
+### Changed
+
+- The design canvas's dependency arrows are solid and wider, with larger
+  heads, so an arrow along an outline, such as from an offset point to the
+  point it starts from, shows over the line. A piece's direction chevrons
+  grow to match, on the desktop and the web (#145).
+
 ### Fixed
 
 - In the web Design app, a drag or click right after an undo no longer fails

@@ -160,7 +160,8 @@ const
   // Labels this far off the canvas are left out, in pixels
   OFFSCREEN_LABEL_PIXELS = 200;
   SNAP_MARKER_SIZE = 6;
-  CHEVRON_SIZE = 7;
+  // As large as a dependency arrow's head
+  CHEVRON_SIZE = 10;
   CHEVRON_SPREAD = 150;
   SEAM_LINE_WIDTH = 4;
   // A copied point's diamond reaches this many dot radii from its centre, a
@@ -174,10 +175,11 @@ const
   PROBLEM_HALO_WIDTH = 10;
   PROBLEM_HALO_GROW = 6;
   // A dependency arrow: its width, how far it stops short of each end, and
-  // the length of its head, in pixels
-  LINK_ARROW_WIDTH = 1.2;
+  // the length of its head, in pixels; wide enough to read over an outline
+  // it runs along
+  LINK_ARROW_WIDTH = 2;
   LINK_ARROW_GAP = 6;
-  LINK_ARROW_HEAD = 7;
+  LINK_ARROW_HEAD = 10;
   // Text smaller than this many pixels is drawn as a faint bar
   MIN_NOTE_PIXELS = 3;
   DASH_PIXELS_PER_MILLIMETRE = 2.5;
@@ -278,15 +280,16 @@ begin
   Result := BGRA(37, 116, 214, 170);
 end;
 
-// From an object to what it reads, and to what reads it
+// From an object to what it reads, and to what reads it: solid, so an arrow
+// along an outline shows over it rather than darkened by it
 function InputLinkInk: TBGRAPixel;
 begin
-  Result := BGRA(37, 116, 214, 130);
+  Result := BGRA(37, 116, 214);
 end;
 
 function DependentLinkInk: TBGRAPixel;
 begin
-  Result := BGRA(140, 80, 200, 130);
+  Result := BGRA(140, 80, 200);
 end;
 
 function StateInk(State: TEvalState; const Normal: TBGRAPixel): TBGRAPixel;
@@ -846,7 +849,7 @@ begin
   FBitmap.PenStyle := psSolid;
 end;
 
-// Faint arrows from the hovered and selected objects to what they read, and
+// Arrows from the hovered and selected objects to what they read, and
 // to what reads them when asked, stopping short of both ends so the points
 // stay clear, with the head at the far end
 procedure TPatternPainter.DrawDependencyLinks;

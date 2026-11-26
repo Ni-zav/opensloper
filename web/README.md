@@ -1,64 +1,68 @@
 # The web version
 
-The web Design app (issue #78) and Publish app (issue #85), as `documents/design/web-version.md` plans them: the engine (`engine/`, the Pascal core compiled to WebAssembly) in a Web
-Worker, under an editor in plain TypeScript. Files stay on the user's
-machine: the page opens and saves them as text, and sends nothing anywhere.
+The web Design app (issue #78) and Publish app (issue #85), as
+`documents/design/web-version.md` plans them.
 
-| Folder          | What it is                                                                                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                                                                    |
-| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                                                                               |
-| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels, and `LayoutDocument`, the open layout                                                                             |
-| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                                                                        |
-| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units                                                                 |
-| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                                                                            |
-| `src/publish/`  | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                                                                                          |
-| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts`, `files.ts`, `offline.ts`, `publish.ts`, `publishFiles.ts` and `publishOffline.ts` drive the built apps in headless Chromium, `browser.ts` serves them |
-| `bundle.ts`     | Bundles the pages with esbuild into `out/design`, `out/publish` and `engine/out/browser`                                                                                                                    |
+- The engine is the Pascal core compiled to WebAssembly (`engine/`). It runs in a Web Worker.
+- The editor on top of it is plain TypeScript.
+- Files stay on the user's machine. The page opens and saves them as text and sends nothing anywhere.
 
-So far the canvas draws the scene (pieces with their marks, notches and
-direction, edges, selected seams, notes and callouts, markers, points and
-labels placed clear of each other, and the selected curves' handles), zooms
-with the wheel, pans with the middle button, selects by clicking and boxing,
-and drags points, notes, curve handles and callout tips as one undo step;
-every drawing tool of the desktop's works (Point, Line, Curve, Circle,
-Rectangle, Piece, Notch, Seam, Text and Callout), and a note's text is typed
-over the canvas. Open, Measurements, Save, Save as (where the browser has
-File System Access, which saves files in place and finds a pattern's
-measurement file in a folder granted once; elsewhere files are uploaded and
-downloaded), Undo, Redo, Fit, the user guide's
-example patterns (copied from `docs/examples` when the app is built), the
-role box and the labels mode are on the toolbar. The side panel has the
-Objects, Variables and Measurements tabs, searchable, with the Objects tab
-following the canvas selection and setting it, the Variables tab edited in
-the grid, with name completion in formulas, and the Measurements tab edited
-in the grid too, its edits in bold until Save writes the measurement file,
-with the size box and the test size. The Properties tab, first as on the
-desktop, shows the selected object's rows as the engine lists them: name and
-formulas edited with completion, refused entries kept in red with the reason,
-and choices, boxes, numbers, colours and buttons, with a piece's cut, fold,
-darts, own allowances, ends, grainline, material and fill, and a note's text,
-size, look and font, with formula suggestions under a formula's row.
-Work not yet saved is kept in the browser (OPFS) and offered back after
-the tab that had it closes.
-A service worker keeps the app for offline use and installation, with an
-Update button when a new build is ready.
+| Folder          | What it is                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                 |
+| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                            |
+| `src/document/` | `PatternDocument`, the open pattern, as the desktop's `TPatternDocument`; `LayoutDocument`, the open layout                              |
+| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                     |
+| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels, the properties panel, shortcuts and strings, named after their `src/ui` units |
+| `src/design/`   | The Design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                         |
+| `src/publish/`  | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                       |
+| `tests/`        | Unit tests (`*.test.ts`, run with `node --test`) and the browser tests (see below); `browser.ts` serves the apps for them                |
+| `bundle.ts`     | Bundles the pages with esbuild into `out/design`, `out/publish` and `engine/out/browser`                                                 |
 
-The Publish app (`out/publish`) opens a layout with its patterns and
-measurement files, or patterns to start one, and previews its pages, pieces
-and notes. Pieces and notes are dragged, turned and placed from the tray, and
-pages left out. Its side panel has the desktop's tabs but Claude's: Patterns,
-Pieces, Materials, Information Block, Notes, Output and Problems. It prints
-through the browser and exports PDF, SVG and DXF-AAMA; Machine DXF stays a
-desktop export. The keys are the desktop's. With File System Access it saves
-in place and finds a layout's files in a granted folder. Work not yet saved
-is kept and offered back, and a service worker of its own keeps it for
-offline use.
+## The Design app
+
+Built into `out/design`.
+
+- **The canvas** draws pieces, edges, seams, notes, callouts, markers, points and labels.
+  - The wheel zooms and the middle button pans. Rulers and a grid in the pattern's unit can be shown.
+  - Click or box to select. A drag of a point, note, curve handle or callout tip is one undo step.
+- **Every drawing tool** of the desktop's: Point, Line, Curve, Circle, Rectangle, Piece, Notch, Seam, Text and Callout.
+- **The toolbar** has Open, Measurements, Save, Save as, Undo, Redo, Fit, Examples, Print, Export SVG, Import SVG Stamp, the role box, the labels mode, rulers and the _Change point to…_ box.
+- **Editing** has cut, copy, paste and Delete.
+- **The side panel**, as the desktop's:
+
+  | Tab          | What it does                                                                                                               |
+  | ------------ | -------------------------------------------------------------------------------------------------------------------------- |
+  | Properties   | The selected object's rows, from the engine: formulas with completion and suggestions, choices, boxes, numbers and colours |
+  | Objects      | Searchable; follows the canvas selection and sets it                                                                       |
+  | Variables    | Edited in the grid, with name completion; Import… takes them from another pattern                                          |
+  | Measurements | Edited in the grid, in bold until Save writes the file; the size box and the test size                                     |
+  | Features     | Zips, darts, hems, facings and buttons                                                                                     |
+  | Materials    | The pattern's materials                                                                                                    |
+  | Garment      | The pieces as sewn                                                                                                         |
+  | Problems     | At the foot; click a problem to go to it                                                                                   |
+
+## The Publish app
+
+Built into `out/publish`.
+
+- **Open** takes a layout with its patterns and measurement files, or patterns to start one.
+- **The preview** shows the pages, pieces and notes.
+  - Pieces and notes are dragged, turned and placed from the tray.
+  - A right-click leaves a page out.
+- **The side panel** has the desktop's tabs but Claude's: Patterns, Pieces, Materials, Information Block, Notes, Output and Problems.
+- **Print** goes through the browser. Export writes PDF, SVG and DXF-AAMA. Machine DXF stays on the desktop.
+- **The keys** are the desktop's.
+
+## Both apps
+
+- **File System Access**, in Chrome and Edge, saves files in place. It also finds a pattern's measurement file, or a layout's patterns, in a folder granted once. Other browsers upload and download files.
+- **Work not yet saved** is kept in the browser (OPFS). It is offered back after the tab that had it closes.
+- **A service worker** keeps each app for offline use and installing. An Update button shows when a new build is ready.
 
 ## Setting up
 
-Node and npm come from the repository's Python `venv`, through `nodeenv`, so
-nothing is installed system-wide:
+Node and npm come from the repository's Python `venv`, through `nodeenv`. Nothing is installed system-wide:
 
 ```
 ./venv/bin/pip install nodeenv
@@ -68,21 +72,33 @@ cd web && npm ci
 
 ## Building and running
 
+From the repository's root:
+
 ```
-./opensloper-make.sh web       # the engine, then npm run build: check, unit tests, bundle
-(cd web && npm run test:browser) # the app in a headless browser (SCREENSHOT=name keeps name.png)
-python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design  # from the repository's root
+./opensloper-make.sh web               # the engine, then npm run build: check, unit tests, bundle
+./opensloper-make.sh site --serve      # both apps in the Django site, at 127.0.0.1:8000/design/ and /publish/
 ```
 
-The browser tests use `/usr/bin/chromium` on Linux and Google Chrome in
-`/Applications` on macOS. Set `CHROMIUM` to use a different browser executable.
+Or serve one app on its own:
 
-The app is then at `http://127.0.0.1:8766/`; a module worker does not load
-from `file://`. Its service worker answers from the build it
-kept, so after rebuilding, use the Update button (or the browser's developer
-tools) to load the new one. Open a `.sloper` file, choosing its measurement file with it,
-or later with Measurements….
+```
+python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design    # http://127.0.0.1:8766/
+python3 -m http.server 8767 --bind 127.0.0.1 --directory web/out/publish   # http://127.0.0.1:8767/
+```
 
-`npm run check` runs `tsc`, Oxlint and Prettier, as the TypeScript section of
-`documents/coding-standards.md` describes, and `npm run format` lays the
-files out; `./opensloper-make.sh check` and `format` run them as well.
+- Serve the app over HTTP. Its module worker does not load from `file://`.
+- The service worker keeps answering from the build it has. After rebuilding, click Update, or clear it in the browser's developer tools.
+- In Design, open a `.sloper` file and choose its measurement file with it, or later with Measurements….
+- In Publish, open a `.slayout` with its patterns, or a pattern with its measurement file.
+
+## Testing
+
+```
+(cd web && npm run test:browser)   # the apps in headless Chromium; SCREENSHOT=name keeps name.png
+```
+
+- The browser tests are `design.ts`, `files.ts`, `offline.ts`, `publish.ts`, `publishFiles.ts` and `publishOffline.ts`.
+- They use `/usr/bin/chromium` on Linux and Google Chrome in `/Applications` on macOS. Set `CHROMIUM` to use another browser.
+- If `npm` is not found, put the `venv` on the path first: `export PATH=$PWD/../venv/bin:$PATH`.
+
+`npm run check` runs `tsc`, Oxlint and Prettier, as the TypeScript section of `documents/coding-standards.md` describes. `npm run format` lays the files out. `./opensloper-make.sh check` and `format` run them too.

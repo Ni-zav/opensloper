@@ -875,6 +875,7 @@ class OpenSloper:
         type: Literal["freePoint", "offsetPoint", "alongEdgePoint", "betweenPoint", "intersectPoint", "circleEdgePoint", "circleCirclePoint", "projectPoint"],
         *,
         from_: list[int | str] | None = None,
+        mode: Literal["polar", "cartesian"] | None = None,
     ) -> Any:
         """Changes how a point is placed, keeping its ID, name and users. Its numbers are worked out
         so it stays where it is, or moves onto its new edge, line or crossing (at most 10 mm);
@@ -887,6 +888,8 @@ class OpenSloper:
                 betweenPoint two points; intersectPoint two edges; circleEdgePoint the centre and an
                 edge; circleCirclePoint the two centres; projectPoint the point and the edge. None
                 for freePoint.
+            mode: For offsetPoint: polar, a length and angle, or cartesian, across and down (the
+                default). An offset point can change mode from the same base.
 
         Returns:
             The object, as `get_object` gives it.
@@ -894,6 +897,7 @@ class OpenSloper:
         return self._send("convert_point", _target(target), {
             "type": type,
             "from": from_,
+            "mode": mode,
         })
 
     def merge_points(self, points: list[int | str]) -> Any:

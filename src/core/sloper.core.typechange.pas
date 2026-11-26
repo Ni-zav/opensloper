@@ -37,7 +37,8 @@ function ConvertToAlongEdge(Pattern: TPattern; Point: TPointObject; const EdgeId
 // Changes Point to the operation Conversion, placed from Inputs: the keys
 // POINT_CONVERSION_INPUTS says, in that order. Its numbers are plain, worked
 // out from where it is now, so it stays there: a free point at its x and y,
-// an offset across and down from the base, along an edge or between points a
+// an offset across and down from the base, or with Mode omPolar a length and
+// angle from it, along an edge or between points a
 // length from the nearer end or the first point, a compass step at its
 // distance from the centre, a projection square to the edge when it is the
 // foot of the perpendicular and otherwise at the angle it lies at. Where the
@@ -47,8 +48,10 @@ function ConvertToAlongEdge(Pattern: TPattern; Point: TPointObject; const EdgeId
 // it had are replaced. Refused, with the reason in LastError and Point left
 // as it was, for a repeat's point, a copy, a rounded corner's end, a point
 // with no place yet, inputs of the wrong kind or with no place, the operation
-// and inputs it already has, and inputs that read Point.
-function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+// and inputs it already has (an offset's mode too), and inputs that read
+// Point. Mode is only read for pcOffset.
+function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
+  Mode: TOffsetMode = omCartesian): TPointObject;
 // What a point becomes, for messages: "an offset point"
 function PointConversionName(Conversion: TPointConversion): string;
 // Its role and place stay, and a name the user gave it is kept. An arc
@@ -488,7 +491,7 @@ end;
 
 // Where Conversion puts the point and with what, from Nodes, the inputs
 function PlanConversion(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Nodes: array of TDraftObject;
-  out Plan: TConversionPlan): boolean;
+  Mode: TOffsetMode; out Plan: TConversionPlan): boolean;
 var
   Here: TVec2;
 begin
@@ -503,10 +506,16 @@ begin
       AddField(Plan, 'y', LengthText(Pattern, Here.Y));
     end;
     pcOffset:
-    begin
-      AddField(Plan, 'dx', LengthText(Pattern, Here.X - TPointObject(Nodes[0]).Position.X));
-      AddField(Plan, 'dy', LengthText(Pattern, Here.Y - TPointObject(Nodes[0]).Position.Y));
-    end;
+      if Mode = omPolar then
+      begin
+        AddField(Plan, 'length', LengthText(Pattern, Distance(TPointObject(Nodes[0]).Position, Here)));
+        AddField(Plan, 'angle', FormatJSONFloat(RoundTo(AngleBetween(TPointObject(Nodes[0]).Position, Here), -CONVERT_ANGLE_DECIMALS)));
+      end
+      else
+      begin
+        AddField(Plan, 'dx', LengthText(Pattern, Here.X - TPointObject(Nodes[0]).Position.X));
+        AddField(Plan, 'dy', LengthText(Pattern, Here.Y - TPointObject(Nodes[0]).Position.Y));
+      end;
     pcAlongEdge: Result := PlanAlongEdge(TEdgeObject(Nodes[0]), Pattern, Here, Plan);
     pcBetween: Result := PlanBetween(TPointObject(Nodes[0]), TPointObject(Nodes[1]), Pattern, Here, Plan);
     pcIntersect: Result := PlanIntersect(TEdgeObject(Nodes[0]), TEdgeObject(Nodes[1]), Pattern, Here, Plan);
@@ -519,11 +528,11 @@ begin
 end;
 
 function NewConvertedPoint(const Key: string; Conversion: TPointConversion; const Inputs: array of string;
-  const Plan: TConversionPlan): TPointObject;
+  const Plan: TConversionPlan; Mode: TOffsetMode): TPointObject;
 begin
   case Conversion of
     pcFree: Result := TFreePoint.Create(Key);
-    pcOffset: Result := TOffsetPoint.Create(Key, Inputs[0], omCartesian);
+    pcOffset: Result := TOffsetPoint.Create(Key, Inputs[0], Mode);
     pcAlongEdge: Result := TAlongEdgePoint.Create(Key, Inputs[0], Plan.FromEnd, amLength);
     pcBetween: Result := TBetweenPoint.Create(Key, Inputs[0], Inputs[1], amLength);
     pcIntersect: Result := TIntersectPoint.Create(Key, Inputs[0], Inputs[1], Plan.ExtendA, Plan.ExtendB, Plan.Pick);
@@ -568,13 +577,17 @@ begin
   Result := True;
 end;
 
-// Point is already Conversion from these inputs, so there is nothing to change
-function AlreadyConverted(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): boolean;
+// Point is already Conversion from these inputs, an offset in that mode, so
+// there is nothing to change
+function AlreadyConverted(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
+  Mode: TOffsetMode): boolean;
 var
   Current: TStringArray;
   Index: integer;
 begin
   if Point.ClassType <> CONVERSION_CLASSES[Conversion] then
+    Exit(False);
+  if (Point is TOffsetPoint) and (TOffsetPoint(Point).Mode <> Mode) then
     Exit(False);
   Current := Point.InputKeys;
   if Length(Current) <> Length(Inputs) then
@@ -585,7 +598,8 @@ begin
   Result := True;
 end;
 
-function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string): TPointObject;
+function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
+  Mode: TOffsetMode): TPointObject;
 var
   Nodes: TDraftObjectArray;
   Plan: TConversionPlan;
@@ -598,15 +612,15 @@ begin
   end;
   if not ConversionInputs(Pattern, Point, Conversion, Inputs, Nodes) then
     Exit;
-  if AlreadyConverted(Point, Conversion, Inputs) then
+  if AlreadyConverted(Point, Conversion, Inputs, Mode) then
   begin
     Pattern.SetError(Format(rsPatternConvertAlready, [Point.DisplayName]));
     Exit;
   end;
-  if not PlanConversion(Pattern, Point, Conversion, Nodes, Plan) then
+  if not PlanConversion(Pattern, Point, Conversion, Nodes, Mode, Plan) then
     Exit;
   // ReplacePoint frees the new point when it refuses it
-  Result := NewConvertedPoint(Point.Key, Conversion, Inputs, Plan);
+  Result := NewConvertedPoint(Point.Key, Conversion, Inputs, Plan, Mode);
   if not Pattern.ReplacePoint(Point, Result, Plan.Names, Plan.Texts) then
     Result := nil;
 end;

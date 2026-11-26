@@ -27,6 +27,10 @@ Changed, Fixed and Removed under each version.
   back to their files and find a layout's files in a chosen folder. Work not
   yet saved is kept in the browser, and once loaded the app can be
   installed and works offline.
+- An offset point's Properties have an *Offset by* row, to switch it between
+  a length and angle and across and down. It stays where it is; its formulas
+  become plain numbers, which Undo brings back. `convert_point` in the
+  Automation API takes the same choice as `mode` (#146).
 
 ### Changed
 

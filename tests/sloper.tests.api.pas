@@ -1796,6 +1796,19 @@ begin
   Call('undo');
   Call('get_object', '{"name": "M"}');
   AssertEquals('free again', 'freePoint', Answer.Get('type', ''));
+  // An offset by length and angle, then across and down from the same base
+  Call('convert_point', '{"name": "M", "type": "offsetPoint", "from": ["A"], "mode": "polar"}');
+  AssertEquals('offsetPoint', Answer.Get('type', ''));
+  AssertTrue('a length', Assigned(TJSONObject(Answer.Find('formulas')).Find('length')));
+  Call('convert_point', '{"name": "M", "type": "offsetPoint", "from": ["A"], "mode": "polar"}');
+  AssertEquals('already polar', RPC_REFUSED, ErrorCode);
+  Call('convert_point', '{"name": "M", "type": "offsetPoint", "from": ["A"]}');
+  AssertTrue('across', Assigned(TJSONObject(Answer.Find('formulas')).Find('dx')));
+  Call('get_object', '{"name": "M"}');
+  AssertEquals('stays across', 50, Answer.Get('x', 0.0), 0.1);
+  AssertEquals('and down', 2, Answer.Get('y', 0.0), 0.1);
+  Call('convert_point', '{"name": "M", "type": "offsetPoint", "from": ["A"], "mode": "spiral"}');
+  AssertEquals('no such mode', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 // The line from Corner now starts at the kept point, under the user's name

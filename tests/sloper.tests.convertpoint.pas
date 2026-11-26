@@ -56,6 +56,9 @@ type
     procedure TestTooFarRefused;
     procedure TestAlreadySoRefused;
     procedure TestOffsetFromAnotherBaseAllowed;
+    procedure TestOffsetAcrossToLengthAndAngle;
+    procedure TestOffsetLengthAndAngleToAcross;
+    procedure TestOffsetModeAlreadySoRefused;
     procedure TestWrongInputsRefused;
     procedure TestReadingItselfRefused;
     procedure TestCornerPointRefused;
@@ -291,6 +294,55 @@ begin
   AssertEquals('30', Converted.Field('dx').StoredText);
   AssertEquals('-10', Converted.Field('dy').StoredText);
   AssertPointsNear('stays', Vec2(50, 0), Converted.Position);
+end;
+
+// Across and down becomes a length and angle that keep it where it is, its
+// formulas plain numbers
+procedure TTestConvertPoint.TestOffsetAcrossToLengthAndAngle;
+var
+  Base, Key: string;
+  Converted: TPointObject;
+begin
+  Base := Pt('A', 10, 10);
+  Key := FPattern.AddOffsetPoint('P', Base, omCartesian, '15 * 2', '-40').Key;
+  Converted := FPattern.ConvertPoint(TPointObject(FPattern.FindNode(Key)), pcOffset, [Base], omPolar);
+  AssertNotNull(FPattern.LastError, Converted);
+  AssertEquals('same ID', Key, Converted.Key);
+  AssertEquals('P', Converted.DisplayName);
+  AssertTrue('length and angle', TOffsetPoint(Converted).Mode = omPolar);
+  AssertEquals('50', Converted.Field('length').StoredText);
+  AssertEquals('53.13', Converted.Field('angle').StoredText);
+  FPattern.Evaluate;
+  AssertPointsNear('stays', Vec2(40, -30), Converted.Position, ROUNDING_MOVE);
+end;
+
+procedure TTestConvertPoint.TestOffsetLengthAndAngleToAcross;
+var
+  Base, Key: string;
+  Converted: TPointObject;
+begin
+  Base := Pt('A', 0, 0);
+  Key := FPattern.AddOffsetPoint('P', Base, omPolar, '50', '90').Key;
+  Converted := Convert(Key, pcOffset, [Base]);
+  AssertTrue('across and down', TOffsetPoint(Converted).Mode = omCartesian);
+  AssertEquals('0', Converted.Field('dx').StoredText);
+  AssertEquals('-50', Converted.Field('dy').StoredText);
+  AssertPointsNear('stays', Vec2(0, -50), Converted.Position);
+end;
+
+procedure TTestConvertPoint.TestOffsetModeAlreadySoRefused;
+var
+  Base, Polar, Across: string;
+  Before: TEvalNode;
+begin
+  Base := Pt('A', 0, 0);
+  Polar := FPattern.AddOffsetPoint('P', Base, omPolar, '50', '0').Key;
+  Before := FPattern.FindNode(Polar);
+  AssertNull('polar again', FPattern.ConvertPoint(TPointObject(Before), pcOffset, [Base], omPolar));
+  AssertTrue(FPattern.LastError, Pos('already', FPattern.LastError) > 0);
+  AssertTrue('left as it was', FPattern.FindNode(Polar) = Before);
+  Across := FPattern.AddOffsetPoint('Q', Base, omCartesian, '10', '0').Key;
+  Refused(Across, pcOffset, [Base], 'already');
 end;
 
 procedure TTestConvertPoint.TestWrongInputsRefused;

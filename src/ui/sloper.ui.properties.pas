@@ -364,13 +364,19 @@ type
     procedure QueuedChangeDue(Change, Data: integer); override;
   end;
 
-  // What a point is placed from, read only, after its name (PointInputs)
+  // What a point is placed from, read only, after its name (PointInputs),
+  // and an offset point's mode
   TInputSection = class(TPropertySection)
   private
     FTexts: array of TGridLabel;
+    FModeBox: TComboBox;
+    procedure ModeChange(Sender: TObject);
+    // ItemIndex is the mode box's choice
+    procedure ChangeMode(ItemIndex: integer);
   public
     procedure Build(Node: TEvalNode; Place: TSectionPlace); override;
     procedure Refresh(Node: TEvalNode); override;
+    procedure QueuedChangeDue(Change, Data: integer); override;
   end;
 
   // What a repeat runs between or along, and whether it includes the ends
@@ -442,9 +448,10 @@ const
   // The suggestions button and its icon, at 96 pixels per inch
   WAND_WIDTH96 = 24;
   WAND_ICON96 = 16;
-  // The edge and marker sections' queued changes
+  // The edge, marker and input sections' queued changes
   QUEUED_CONVERT_TYPE = 0;
   QUEUED_MARKER = 1;
+  QUEUED_OFFSET_MODE = 2;
 
 function SameNames(const First, Second: TStringArray): boolean;
 var
@@ -1863,6 +1870,44 @@ begin
   FTexts := nil;
   for Input in PointInputs(Panel.Document.Pattern, Node) do
     Insert(Panel.AddTextRow(Input.Caption, ''), FTexts, Length(FTexts));
+  FModeBox := nil;
+  if Node is TOffsetPoint then
+  begin
+    FModeBox := Panel.AddChoiceRow(rsPropOffsetBy, OffsetModeChoices, nil);
+    FModeBox.ItemIndex := Ord(TOffsetPoint(Node).Mode);
+    FModeBox.OnChange := @ModeChange;
+  end;
+end;
+
+// Changing mode replaces the point and rebuilds the panel, box and all
+procedure TInputSection.ModeChange(Sender: TObject);
+begin
+  Panel.QueueChange(Self, QUEUED_OFFSET_MODE, FModeBox.ItemIndex);
+end;
+
+procedure TInputSection.QueuedChangeDue(Change, Data: integer);
+begin
+  if Change = QUEUED_OFFSET_MODE then
+    ChangeMode(Data);
+end;
+
+// The commit rebuilds the panel, which frees this section, so only the panel
+// is used after it
+procedure TInputSection.ChangeMode(ItemIndex: integer);
+var
+  APanel: TPropertiesPanel;
+  Node: TEvalNode;
+  Reason: string;
+begin
+  if not Assigned(FModeBox) or (ItemIndex < 0) then
+    Exit;
+  APanel := Panel;
+  Node := APanel.SelectedNode;
+  if not (Node is TOffsetPoint) or SetOffsetModeStep(APanel.Document, Node, TOffsetMode(ItemIndex), Reason) then
+    Exit;
+  // The box goes back to the mode the point still has
+  APanel.Rebuild;
+  APanel.Report(Reason);
 end;
 
 // The names, which follow a rename
@@ -1881,6 +1926,8 @@ begin
     else
       FTexts[Index].Caption := Inputs[Index].Key;
   end;
+  if Assigned(FModeBox) and (Node is TOffsetPoint) then
+    FModeBox.ItemIndex := Ord(TOffsetPoint(Node).Mode);
 end;
 
 procedure TRepeatSection.Build(Node: TEvalNode; Place: TSectionPlace);

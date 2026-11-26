@@ -7,6 +7,7 @@
     <link rel="icon" href="opensloper-design.svg" type="image/svg+xml" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="sidePanel.css" />
+    <link rel="stylesheet" href="printDialog.css" />
     <meta name="theme-color" content="#f2f1ed" />
     <style>
       html,
@@ -291,63 +292,6 @@
       }
       .property-problem {
         grid-column: 1 / -1;
-      }
-      /* Print…: the paper, then open or download the PDF */
-      .print-dialog {
-        width: min(440px, 90vw);
-        padding: 12px;
-        border: 1px solid #c8c5bc;
-        background: #f2f1ed;
-      }
-      .print-dialog::backdrop {
-        background: rgb(0 0 0 / 20%);
-      }
-      .print-dialog h2 {
-        margin: 0 0 8px;
-        font-size: 15px;
-      }
-      .print-about {
-        margin: 0 0 10px;
-        color: #5d636b;
-      }
-      .print-row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-      .print-row select {
-        margin: 0;
-        font: inherit;
-      }
-      .print-notes {
-        min-height: 2.6em;
-        margin-top: 8px;
-        white-space: pre-wrap;
-        color: #5d636b;
-      }
-      .print-notes.refused {
-        color: #d13438;
-      }
-      .print-buttons {
-        display: flex;
-        gap: 6px;
-        justify-content: flex-end;
-        margin-top: 8px;
-      }
-      .print-buttons button {
-        padding: 3px 12px;
-        font: inherit;
-        border: 1px solid #c8c5bc;
-        border-radius: 3px;
-        background: #fbfaf7;
-      }
-      .print-buttons button.default {
-        color: #fff;
-        background: #2574d6;
-        border-color: #2574d6;
-      }
-      .print-buttons button:disabled {
-        opacity: 0.6;
       }
       /* The Garment tab: its choices, the drawing and what was left out */
       .garment {

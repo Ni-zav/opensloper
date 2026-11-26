@@ -228,7 +228,7 @@ uses
 const
   // The layout methods (Sloper.API.LayoutServer) the page calls as publish_ ones
   LAYOUT_COMMANDS: array[0..3] of string = ('undo', 'redo', 'place_pieces', 'pack');
-  // A machine DXF needs the user's machine profiles, which the web has not yet
+  // Machine DXF, for cutting machines, stays a desktop export
   WEB_EXPORTS: array[0..2] of TExportFormat = (efPDF, efSVG, efDXF);
   WEB_EXPORT_NAMES: array[0..2] of string = ('pdf', 'svg', 'dxf');
 

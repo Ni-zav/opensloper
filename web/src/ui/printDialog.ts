@@ -5,28 +5,17 @@
 // or is downloaded. Nothing is saved, and unsaved edits are included.
 import type { PatternDocument } from '../document/patternDocument.ts';
 import { booleanField, stringField, stringsField } from '../engine/replies.ts';
-import { downloadBlob } from './download.ts';
+import { deliverPdf, pdfBlob } from './download.ts';
 import { STRINGS } from './strings.ts';
 
 const PAPERS = ['A4', 'A3', 'Letter'] as const;
 // Where Letter is the usual paper
 const LETTER_REGIONS = new Set(['US', 'CA', 'MX', 'PH', 'CL', 'CO', 'VE']);
-// How long an opened PDF's address is kept for the viewer to read it, in ms
-const OPENED_PDF_MS = 60000;
 
 // Letter where it is the usual paper, else A4
 function usualPaper(): string {
   const region = navigator.language.split('-')[1]?.toUpperCase() ?? '';
   return LETTER_REGIONS.has(region) ? 'Letter' : 'A4';
-}
-
-function pdfBlob(base64: string): Blob {
-  const text = atob(base64);
-  const bytes = new Uint8Array(text.length);
-  for (let index = 0; index < text.length; index++) {
-    bytes[index] = text.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: 'application/pdf' });
 }
 
 export interface PrintDialogEvents {
@@ -141,22 +130,14 @@ export class PrintDialog {
     this.notes.textContent = warnings.join('\n');
     const blob = pdfBlob(stringField(answer, 'pdf') ?? '');
     const pdfName = `${fileName.replace(/\.[^.]*$/, '')}.pdf`;
-    if (tab === undefined) {
-      downloadBlob(pdfName, blob);
-      this.events.message(STRINGS.printDownloaded(pdfName));
-      return;
-    }
-    if (tab === null) {
-      // The browser would not open a window: the PDF is downloaded instead
-      downloadBlob(pdfName, blob);
+    const done = deliverPdf(tab, pdfName, blob);
+    if (done === 'opened') {
+      this.events.message(STRINGS.printOpened);
+    } else if (done === 'blocked') {
+      // The browser would not open a window: the PDF was downloaded instead
       this.events.message(STRINGS.printBlocked(pdfName));
-      return;
+    } else {
+      this.events.message(STRINGS.printDownloaded(pdfName));
     }
-    const address = URL.createObjectURL(blob);
-    tab.location.href = address;
-    setTimeout(() => {
-      URL.revokeObjectURL(address);
-    }, OPENED_PDF_MS);
-    this.events.message(STRINGS.printOpened);
   }
 }

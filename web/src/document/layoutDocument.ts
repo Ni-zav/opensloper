@@ -37,6 +37,8 @@ export interface LayoutState {
   kind: string;
   placed: number;
   unplaced: number;
+  // Tiled pages, or 1 for one sheet
+  pages: number;
   // The copies waiting to be placed, in the order the engine places them
   tray: TrayCopy[];
   // What the status bar says of the pages or sheet
@@ -63,6 +65,7 @@ const EMPTY: LayoutState = {
   kind: 'tiled',
   placed: 0,
   unplaced: 0,
+  pages: 0,
   tray: [],
   summary: '',
   problems: [],
@@ -79,6 +82,7 @@ function parseState(answer: JsonRecord): LayoutState {
     kind: (isRecord(answer.output) ? stringField(answer.output, 'kind') : undefined) ?? 'tiled',
     placed: numberField(answer, 'placed') ?? 0,
     unplaced: numberField(answer, 'unplaced') ?? 0,
+    pages: numberField(answer, 'pages') ?? 0,
     tray: recordsField(answer, 'tray').map((copy) => ({
       caption: stringField(copy, 'caption') ?? '',
       canPlace: booleanField(copy, 'canPlace') ?? false,

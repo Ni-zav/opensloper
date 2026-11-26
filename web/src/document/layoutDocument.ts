@@ -137,6 +137,12 @@ export class LayoutDocument {
     return this.engine.call(method, params);
   }
 
+  // A press or a drag's move: the engine holds or moves something without
+  // ending an undo step, so the state is left until the drag ends with call
+  async live(method: string, params: object = {}): Promise<JsonRecord> {
+    return this.engine.call(method, params);
+  }
+
   // A method that may change the layout; the listeners hear of it whether it
   // succeeded or was refused
   async call(method: string, params: object = {}): Promise<JsonRecord> {

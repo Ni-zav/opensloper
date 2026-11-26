@@ -28,7 +28,7 @@ unit Sloper.API.PublishServer;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.LayoutServer, Sloper.Output.LayoutDocument;
+  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.LayoutServer, Sloper.Output.LayoutDocument, Sloper.Output.Preview;
 
 const
   PUBLISH_PREFIX = 'publish_';
@@ -38,12 +38,16 @@ type
   private
     FDocument: TLayoutDocument;
     FLayoutServer: TLayoutApiServer;
+    // What a press on the pages holds, to drag
+    FDrag: TPreviewDrag;
     procedure AddFiles(Params: TJSONObject);
     function DoOpen(Params: TJSONObject): TJSONData;
     function DoAddFiles(Params: TJSONObject): TJSONData;
     function DoState: TJSONData;
     function DoScene: TJSONData;
-    function DoAt(Params: TJSONObject): TJSONData;
+    function DoPress(Params: TJSONObject): TJSONData;
+    function DoDrag(Params: TJSONObject): TJSONData;
+    function DoDropCopy(Params: TJSONObject): TJSONData;
     function DoPieceEdit(const Method: string; Params: TJSONObject): TJSONData;
     function DoPlaceCopy(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
@@ -81,8 +85,17 @@ resourcestring
     'x, y), `marks` (flat segments), `lines` (each with flat `points` and `dashed`) and `label` (x, y), or null when ' +
     'labels are left out; `titleBoxes`, the information block''s boxes; `title`, its `lines`, text `size`, ' +
     '`lineHeight` and `padding` in mm';
-  rsPublishAt = 'The placed piece at a point of the layout, the smallest where they overlap.';
-  rsPublishAtReturns = '`placement`, the piece''s placement index, or -1 for none';
+  rsPublishPress = 'A press on the pages: finds the sheet note at a point of the layout, which lies over pieces, or ' +
+    'else the smallest placed piece, and holds it for publish_drag. Changes nothing.';
+  rsPublishPressReturns = '`placement`, the piece''s placement index, and `note`, the note''s index; -1 for none';
+  rsPublishDrag = 'Moves what publish_press holds so the point pressed follows this one, on the 0.5 mm grid. The ' +
+    'first move opens one undo step, which publish_release ends.';
+  rsPublishDragReturns = '`moving`, false when nothing is held, as when an undo took it';
+  rsPublishRelease = 'Ends a drag, making its moves one undo step, and lets go.';
+  rsPublishCancel = 'Ends a drag, putting back what it moved.';
+  rsPublishDone = 'An empty object';
+  rsPublishDropCopy = 'Places one copy waiting in the tray centred on a point of the layout, kept on the sheet; ' +
+    'one undo step. Refused when its piece has a problem in the pattern.';
   rsPublishLayoutMethod = 'As the layout method %s, on the open layout; one undo step.';
   rsPublishLayoutReturns = 'What %s gives';
   rsPublishSave = 'The layout file''s text, to download, counted as saved.';
@@ -94,7 +107,7 @@ resourcestring
   rsPublishTurn = 'Turns a placed piece a quarter turn anticlockwise, as the Pieces tab''s Turn 90°; one undo step.';
   rsPublishFlip = 'Flips a placed piece over, as the Pieces tab''s Flip; one undo step.';
   rsPublishUnplace = 'Takes a placed piece off the pages, back to the tray; one undo step.';
-  rsPublishPlacement = 'The piece''s placement index, as publish_at gives it';
+  rsPublishPlacement = 'The piece''s placement index, as publish_press gives it';
   rsPublishPieceReturns = '`placement`, the piece''s index';
   rsPublishPlaceCopy = 'Places one copy waiting in the tray, in the rows below the others; one undo step. Refused when ' +
     'its piece has a problem in the pattern.';
@@ -109,7 +122,7 @@ implementation
 uses
   StrUtils, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
-  Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.Preview, Sloper.Output.LayoutExport, Sloper.API.Shapes,
+  Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.LayoutExport, Sloper.API.Shapes,
   base64;
 
 const
@@ -154,7 +167,16 @@ begin
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
     AddApiMethod(Built, 'publish_scene', rsPublishScene, rsPublishSceneReturns, True);
-    AddApiMethod(Built, 'publish_at', rsPublishAt, rsPublishAtReturns, True);
+    AddApiMethod(Built, 'publish_press', rsPublishPress, rsPublishPressReturns);
+    AddApiParam(Built, 'x', apNumber, True, rsPublishX);
+    AddApiParam(Built, 'y', apNumber, True, rsPublishY);
+    AddApiMethod(Built, 'publish_drag', rsPublishDrag, rsPublishDragReturns);
+    AddApiParam(Built, 'x', apNumber, True, rsPublishX);
+    AddApiParam(Built, 'y', apNumber, True, rsPublishY);
+    AddApiMethod(Built, 'publish_release', rsPublishRelease, rsPublishDone);
+    AddApiMethod(Built, 'publish_cancel', rsPublishCancel, rsPublishDone);
+    AddApiMethod(Built, 'publish_drop_copy', rsPublishDropCopy, rsPublishPlaceCopyReturns);
+    AddApiParam(Built, 'index', apWhole, True, rsPublishTrayIndex);
     AddApiParam(Built, 'x', apNumber, True, rsPublishX);
     AddApiParam(Built, 'y', apNumber, True, rsPublishY);
   end;
@@ -166,10 +188,12 @@ begin
   inherited Create;
   FDocument := TLayoutDocument.Create;
   FLayoutServer := TLayoutApiServer.Create(FDocument);
+  FDrag := TPreviewDrag.Create(FDocument);
 end;
 
 destructor TPublishApiServer.Destroy;
 begin
+  FreeAndNil(FDrag);
   FreeAndNil(FLayoutServer);
   FreeAndNil(FDocument);
   inherited Destroy;
@@ -209,6 +233,8 @@ begin
   HasPattern := Assigned(Params) and GetJSONString(Params, 'pattern', PatternPath) and (PatternPath <> '');
   if not HasLayout and not HasPattern then
     raise EApiError.Create(RPC_INVALID_PARAMS, rsPublishNeedsSource);
+  // A drag left open belongs to the layout open before
+  FDrag.Cancel;
   // The files of the layout open before are no use to this one
   FDocument.SourceFiles.Clear;
   AddFiles(Params);
@@ -373,18 +399,37 @@ begin
   Result := Trunc(Value);
 end;
 
-function TPublishApiServer.DoAt(Params: TJSONObject): TJSONData;
-var
-  Shapes: TPlacedPieceArray;
-  At: TVec2;
-  Index: integer;
+function PointParam(Params: TJSONObject): TVec2;
 begin
-  At := Vec2(NumberParam(Params, 'x'), NumberParam(Params, 'y'));
-  Shapes := FDocument.Layout.PlacedPieces;
-  Index := ShapeAt(Shapes, At);
-  if Index >= 0 then
-    Index := Shapes[Index].Placement;
-  Result := TJSONObject.Create(['placement', Index]);
+  Result := Vec2(NumberParam(Params, 'x'), NumberParam(Params, 'y'));
+end;
+
+function TPublishApiServer.DoPress(Params: TJSONObject): TJSONData;
+begin
+  FDrag.Press(FDocument.Layout.PlacedPieces, PointParam(Params));
+  Result := TJSONObject.Create(['placement', FDrag.Placement, 'note', FDrag.Note]);
+end;
+
+function TPublishApiServer.DoDrag(Params: TJSONObject): TJSONData;
+begin
+  Result := TJSONObject.Create(['moving', FDrag.MoveTo(PointParam(Params))]);
+end;
+
+function TPublishApiServer.DoDropCopy(Params: TJSONObject): TJSONData;
+var
+  Tray: TUnplacedCopyArray;
+  Index, Placed: integer;
+  At: TVec2;
+begin
+  Index := IndexParam(Params, 'index');
+  At := PointParam(Params);
+  Tray := FDocument.Layout.Unplaced;
+  if Index > High(Tray) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsPublishNoCopy, [Index]));
+  Placed := FDrag.DropCopy(Tray[Index], At);
+  if Placed < 0 then
+    raise EApiError.Create(RPC_REFUSED, rsLayoutCannotPlace);
+  Result := TJSONObject.Create(['placed', Placed]);
 end;
 
 // Turn, Flip and Back to tray, for the selected piece
@@ -444,7 +489,19 @@ begin
     'publish_add_files': Result := DoAddFiles(Params);
     'publish_state': Result := DoState;
     'publish_scene': Result := DoScene;
-    'publish_at': Result := DoAt(Params);
+    'publish_press': Result := DoPress(Params);
+    'publish_drag': Result := DoDrag(Params);
+    'publish_release':
+    begin
+      FDrag.Release;
+      Result := TJSONObject.Create;
+    end;
+    'publish_cancel':
+    begin
+      FDrag.Cancel;
+      Result := TJSONObject.Create;
+    end;
+    'publish_drop_copy': Result := DoDropCopy(Params);
     'publish_turn', 'publish_flip', 'publish_unplace': Result := DoPieceEdit(Method, Params);
     'publish_place_copy': Result := DoPlaceCopy(Params);
     'publish_save': Result := DoSave;

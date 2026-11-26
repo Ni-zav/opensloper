@@ -8,6 +8,7 @@
 // count of problems, which opens the Problems tab. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
+import type { Vec2 } from '../editor/view.ts';
 import { Engine } from '../engine/engine.ts';
 import { booleanField, numberField, stringField } from '../engine/replies.ts';
 import { downloadBlob, downloadText } from '../ui/download.ts';
@@ -114,6 +115,9 @@ class PublishApp {
       selectionChanged: (placement) => {
         document.body.dataset.selected = String(placement);
         this.showPieces();
+      },
+      dropCopy: (index, at) => {
+        this.run(this.placeCopy(index, at));
       },
       failed: showFailure,
     });
@@ -247,13 +251,17 @@ class PublishApp {
     }
   }
 
-  // One copy from the tray, selected once placed
-  private async placeCopy(index: number): Promise<void> {
+  // One copy from the tray, selected once placed: dropped at a point of the
+  // pages, or else in the rows below the others
+  private async placeCopy(index: number, at?: Vec2): Promise<void> {
     if (this.document.state.tray[index]?.canPlace !== true) {
       showMessage(STRINGS.cannotPlace);
       return;
     }
-    const answer = await this.document.call('publish_place_copy', { index });
+    const answer =
+      at === undefined
+        ? await this.document.call('publish_place_copy', { index })
+        : await this.document.call('publish_drop_copy', { index, x: at.x, y: at.y });
     this.preview.selected = numberField(answer, 'placed') ?? -1;
   }
 

@@ -1,10 +1,12 @@
 // The Pieces tab of the Publish app's side panel, as the desktop builds it in
 // Sloper.Publish.MainForm (BuildPiecesTab): Turn 90°, Flip and Back to tray
 // for the piece selected on the pages; Place new pieces and Pack pieces; and
-// the tray, listing the copies waiting to be placed. A double-click on one,
-// or Enter, places it. The engine makes every change (publish_ methods), so
+// the tray, listing the copies waiting to be placed. One is dragged onto the
+// pages (the preview takes the drop), or a double-click or Enter places it in
+// the rows below the others. The engine makes every change (publish_ methods), so
 // the tab only shows the layout's state and says what was asked.
 import type { LayoutState } from '../document/layoutDocument.ts';
+import { TRAY_DRAG_TYPE } from '../ui/previewCanvas.ts';
 import type { SideTabContent } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 
@@ -90,6 +92,16 @@ export class PiecesTab implements SideTabContent {
     this.tray.addEventListener('dblclick', (event) => {
       this.place(this.indexAt(event));
     });
+    this.tray.addEventListener('dragstart', (event) => {
+      const index = this.indexAt(event);
+      if (index < 0 || event.dataTransfer === null) {
+        event.preventDefault();
+        return;
+      }
+      this.choose(index);
+      event.dataTransfer.setData(TRAY_DRAG_TYPE, String(index));
+      event.dataTransfer.effectAllowed = 'copy';
+    });
     this.tray.addEventListener('keydown', (event) => {
       this.key(event);
     });
@@ -131,7 +143,9 @@ export class PiecesTab implements SideTabContent {
       item.setAttribute('role', 'option');
       item.dataset.index = String(index);
       item.classList.toggle('cannot-place', !copy.canPlace);
-      if (!copy.canPlace) {
+      if (copy.canPlace) {
+        item.draggable = true;
+      } else {
         item.title = STRINGS.cannotPlace;
       }
       return item;

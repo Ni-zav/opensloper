@@ -1334,15 +1334,11 @@ var
   Placed: integer;
 begin
   Item := FTrayCopies[FTray.ItemIndex];
-  if not Item.CanPlace then
-  begin
-    ShowStatus(rsLayoutCannotPlace);
-    Exit;
-  end;
-  FDocument.BeginChange(rsLayoutPlaceOne);
-  Placed := FDocument.Layout.PlaceCopyAt(Item, FPreview.LayoutAt(X, Y), PLACEMENT_STEP);
-  FDocument.EndChange;
-  FPreview.Selected := Placed;
+  Placed := FPreview.DropCopy(Item, X, Y);
+  if Placed < 0 then
+    ShowStatus(rsLayoutCannotPlace)
+  else
+    FPreview.Selected := Placed;
 end;
 
 procedure TPublishForm.RemoveClick(Sender: TObject);

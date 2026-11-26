@@ -92,6 +92,7 @@ type
     procedure TestUnplacedIsAWarning;
     procedure TestPatternWithoutPiecesIsNamed;
     procedure TestNothingPlacedRefusesExport;
+    procedure TestEmptyLayoutHasNoProblems;
     procedure TestSkirtPiecesPublish;
     procedure TestMissingPatternBlocks;
     procedure TestDeletedPieceBlocks;
@@ -1163,6 +1164,25 @@ begin
   AssertFalse(ExportLayoutPDF(FLayout, Target, ErrorMessage));
   AssertTrue(ErrorMessage, Pos(rsLayoutNothingPlaced, ErrorMessage) > 0);
   AssertFalse('nothing written', FileExists(Target));
+end;
+
+// A new layout with no patterns yet, as the publish app starts, lists no
+// problems (#152), but still has nothing to export
+procedure TTestLayout.TestEmptyLayoutHasNoProblems;
+var
+  Empty: TLayout;
+  Target, ErrorMessage: string;
+begin
+  Empty := TLayout.Create;
+  try
+    AssertEquals('no problems', 0, Length(Empty.Problems));
+    Target := ConcatPaths([FFolder, 'empty.pdf']);
+    AssertFalse(ExportLayoutPDF(Empty, Target, ErrorMessage));
+    AssertTrue(ErrorMessage, Pos(rsLayoutNothingPlaced, ErrorMessage) > 0);
+    AssertFalse('nothing written', FileExists(Target));
+  finally
+    FreeAndNil(Empty);
+  end;
 end;
 
 // The regression pattern with pieces, from file to PDF

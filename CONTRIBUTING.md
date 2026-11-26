@@ -45,6 +45,7 @@ CI runs the same checks on every pull request, with the Linked issue check, and 
 
 ## What a good pull request looks like
 
+- **The issue in the title.** End the title with the number of the issue it is for, such as `Fix the hem allowance (#123)`. The Linked issue check fails without it.
 - **One change per pull request.** Keep refactoring separate from features and fixes.
 - **Tests.** New geometry and formula code comes with core tests. A bug fix starts with a test that fails without the fix. Compare coordinates with a tolerance, never with exact equality.
 - **No leaks.** heaptrc must report 0 unfreed blocks.

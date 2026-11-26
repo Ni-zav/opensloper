@@ -55,7 +55,8 @@ type
   TOutputKind = (okTiled, okLarge, okProjector, okMaterial);
 
   // The Output tab's settings that apply to some kinds of output only
-  TOutputSetting = (osRollWidth, osMaterialSize, osAllowTurns, osPaper, osPaperSize, osOverlap, osMarks, osFill);
+  // osTitlePlace is the Info tab's corner and every page, which only tiles have
+  TOutputSetting = (osRollWidth, osMaterialSize, osAllowTurns, osPaper, osPaperSize, osOverlap, osMarks, osFill, osTitlePlace);
 
   TLayoutOutput = record
     Kind: TOutputKind;
@@ -327,6 +328,9 @@ function WriteBytesToFile(const FileName: string; const Bytes: rawbytestring; ou
 function LayoutFileVersions: TFormatVersions;
 
 const
+  // The fields the information block can show, in the order the Info tab lists them
+  TITLE_FIELDS: array[0..6] of string = (FIELD_PATTERN_NAME, FIELD_MEASUREMENTS_NAME, FIELD_LAYOUT_NAME, FIELD_DATE,
+    FIELD_CUT_LIST, FIELD_MATERIALS, FIELD_MATERIAL_NEEDED);
   // The papers the Output tab offers, in its order; the last is the size typed in
   PAPER_NAMES: array[0..3] of string = ('A4', 'A3', 'Letter', CUSTOM_PAPER);
   // As the layout file names them
@@ -413,7 +417,7 @@ begin
   case Setting of
     osRollWidth: Result := Output.Kind = okLarge;
     osMaterialSize, osAllowTurns: Result := Output.Kind = okMaterial;
-    osPaper, osOverlap, osMarks: Result := Output.Kind = okTiled;
+    osPaper, osOverlap, osMarks, osTitlePlace: Result := Output.Kind = okTiled;
     osPaperSize: Result := (Output.Kind = okTiled) and (Output.Paper = CUSTOM_PAPER);
     osFill: Result := Output.Kind <> okProjector;
     else

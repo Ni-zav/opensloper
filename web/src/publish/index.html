@@ -96,11 +96,44 @@
         display: none;
       }
       /* A tab not open, whose display: flex would otherwise show it */
+      .info[hidden],
       .notes[hidden],
       .patterns[hidden],
       .pieces[hidden],
       .output[hidden] {
         display: none;
+      }
+      /* The Info tab: the block's boxes, its fields indented under Show */
+      .info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .info-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-left: 20px;
+      }
+      .info-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .info-check:has(input:disabled),
+      .info-row select:disabled {
+        opacity: 0.5;
+      }
+      .info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .info-row select {
+        font: inherit;
+        padding: 2px 4px;
       }
       /* The Notes tab: the chosen note's settings, each a caption over its control */
       .notes {

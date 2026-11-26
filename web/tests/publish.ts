@@ -8,7 +8,9 @@
 // the tray onto the pages. The Output tab changes the paper, refuses a
 // margin that leaves nothing to print on, and turns the pages into one large
 // sheet and back; a right-click leaves a page out. A sheet note is added,
-// typed in, refused a font, dragged on the pages and deleted. The layout is packed, undone and redone,
+// typed in, refused a font, dragged on the pages and deleted. The Info tab
+// hides the date from the information block and shows it again, moves the
+// block to the top right, and hides the block and shows it again. The layout is packed, undone and redone,
 // saved and exported, and the saved file opens again. A layout whose sources
 // sit in other folders finds its files by name, lists what stops it printing
 // in the Problems tab, and its waiting pieces are placed.
@@ -436,6 +438,20 @@ try {
   await notesButton(page, 'Delete note');
   await waitForUndo(page, 'Delete note');
   await waitForData(page, 'note', '-1');
+
+  // The Info tab: each change one step
+  await openTab(page, 'info');
+  await page.waitForSelector('.info input[name="field:date"]:checked');
+  await page.click('.info input[name="field:date"]');
+  await waitForUndo(page, 'Change title block');
+  await page.waitForSelector('.info input[name="field:date"]:not(:checked)');
+  await page.click('.info input[name="field:date"]');
+  await page.waitForSelector('.info input[name="field:date"]:checked');
+  await page.select('.info select[name="corner"]', 'topRight');
+  await page.click('.info input[name="enabled"]');
+  await page.waitForSelector('.info input[name="field:date"]:disabled');
+  await page.click('.info input[name="enabled"]');
+  await page.waitForSelector('.info input[name="field:date"]:enabled');
 
   // Saved as a download, counted saved; then exported
   await command(page, 'Save');

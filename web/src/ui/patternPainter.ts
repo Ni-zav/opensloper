@@ -35,7 +35,7 @@ const GUIDE_DOTS = [1, 2];
 const PIECE_MARK_WIDTH = 1.5;
 const NOTCH_WIDTH = 2;
 const SEAM_LINE_WIDTH = 4;
-const CHEVRON_SIZE = 7;
+const CHEVRON_SIZE = 10;
 // Degrees either side of the way a chevron points, to its wings
 const CHEVRON_SPREAD = 150;
 const CHEVRON_WIDTH = 2;

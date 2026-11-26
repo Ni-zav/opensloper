@@ -52,7 +52,7 @@ properties are listed in [Operations and objects](../reference/operations.md).
 
 ### What reads what
 
-Point at a point or an edge, or select one, and faint blue arrows run from it
+Point at a point or an edge, or select one, and blue arrows run from it
 to the points and edges it is built from: the point an offset starts from,
 the edge a point lies along, the objects its formulas read. An edge's own end
 points get no arrow. With View → Dependents on, purple arrows also run to the

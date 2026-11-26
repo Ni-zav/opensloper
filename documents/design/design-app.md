@@ -201,10 +201,10 @@ Direction and dependency marks appear only on hover or selection, never permanen
 | --- | --- | --- |
 | Piece direction | Hovering or selecting a piece | Chevrons at each edge's middle |
 | Copy source | Hovering or selecting a copy or its transform | Faint dashed line to the highlighted source |
-| Inputs | Hovering or selecting a point or edge | Faint blue arrow to each point and edge it reads |
-| Dependents | As inputs, with View → Dependents on | Faint purple arrow to each point and edge that reads it |
+| Inputs | Hovering or selecting a point or edge | Solid blue arrow to each point and edge it reads, over the lines |
+| Dependents | As inputs, with View → Dependents on | Solid purple arrow to each point and edge that reads it |
 
-Dependency arrows (`DependencyLinks`) use the evaluator's graph, so formula references count as inputs do. Only points and edges are linked; an edge's own ends and copies are left out, and a selection over 10 objects gets none.
+Arrowheads and chevrons are one size on screen, whatever the zoom; the grainline, fold and leader arrows are in mm, as printed. Dependency arrows (`DependencyLinks`) use the evaluator's graph, so formula references count as inputs do. Only points and edges are linked; an edge's own ends and copies are left out, and a selection over 10 objects gets none.
 
 **Problems** (`Sloper.Core.PatternCheck`) are listed in plain words and counted in the status bar: failing objects, gaps where a piece no longer closes, seams out of tolerance, pieces too big for their material, markings outside their piece, and outline edges in no piece. Each carries the key of its object (`PatternProblemList`). The canvas draws a faint red halo under each object with a problem (View → Problems, `showProblems`). The same list is the Problems tab, the Objects tab's filter, `check` in the CLI and the API.
 

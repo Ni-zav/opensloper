@@ -303,8 +303,12 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
   - Undo names the step it would take, as the desktop's menu does.
   - Exports are downloads, refused while a problem stops printing. Machine DXF waits for machine profiles on the web.
-  - Place new pieces and Pack pieces sit on the toolbar until the web has the Pieces tab. Pack fits the view and says what it did in the status bar, as on the desktop.
-- **The side panel** (`SideTabs`) has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
+- **The side panel** (`SideTabs`) has the Pieces tab (`publish/piecesTab.ts`), as the desktop's:
+  - Selected Piece: Turn 90°, Flip and Back to tray, for the piece selected on the pages.
+  - Arrange: Place new pieces and Pack pieces. Pack fits the view and says what it did in the status bar.
+  - Tray: the copies waiting to be placed. A double-click or Enter places one, selected. A copy whose piece has a problem in the pattern is greyed and cannot be placed.
+  - The edits are `TLayoutDocument`'s (`TurnPiece`, `FlipPiece`, `UnplacePiece`, `PlaceCopy`), which the desktop calls too, so both name the undo steps alike.
+- The side panel has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
 - The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.
 
 **Its methods** are named `publish_`, in their own table (`PublishMethods` in `Sloper.API.PublishServer`). The editor server passes them to a `TPublishApiServer`, which holds the layout document, so both pages use one engine module. They are not MCP tools.
@@ -313,10 +317,12 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | --- | --- |
 | `publish_open` | Opens a layout from its text, or starts one for a pattern among the files, with the files given (`OpenText`, `NewForPattern`) |
 | `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
-| `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given |
+| `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; and `tray`: the copies waiting, each with its caption and whether it can be placed |
 | `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`) |
 | `publish_at` | The placed piece at a point (`ShapeAt`), the smallest where they overlap |
 | `publish_undo`, `publish_redo`, `publish_place_pieces`, `publish_pack` | The layout methods of the same names (`Sloper.API.LayoutServer`), each one undo step |
+| `publish_turn`, `publish_flip`, `publish_unplace` | Turn 90°, Flip and Back to tray for a placed piece, by its placement index; each one undo step |
+| `publish_place_copy` | Places one copy from the tray, by its index there, in the rows below the others; refused when its piece cannot be placed |
 | `publish_save` | The layout file's text, counted as saved (`TLayoutDocument.SaveText`) |
 | `publish_export` | The layout as PDF, SVG or DXF-AAMA, in Base64, refused as the desktop's export is (`LayoutBytes`) |
 

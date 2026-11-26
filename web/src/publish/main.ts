@@ -1,10 +1,11 @@
 // The web Publish app, as Sloper.Publish.MainForm: starts the engine and opens
 // a layout with its patterns and measurement files, or patterns to start a
 // layout, as the desktop's Open does. The preview shows its pages and pieces;
-// the toolbar saves, undoes, places and packs, and exports, each file a
-// download; the side panel has the Problems tab at its foot. The title names
-// the layout, and the status bar has a message and the count of problems,
-// which opens the Problems tab. Nothing leaves the
+// the toolbar saves, undoes and exports, each file a download. The side
+// panel has the Pieces tab, which turns, flips and unplaces the selected
+// piece, places and packs, and holds the tray, and the Problems tab at its
+// foot. The title names the layout, and the status bar has a message and the
+// count of problems, which opens the Problems tab. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
 import { Engine } from '../engine/engine.ts';
@@ -14,12 +15,13 @@ import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { PiecesTab } from './piecesTab.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
 const PATTERN_EXTENSION = '.sloper';
 
-// The desktop's icons for the toolbar's commands (APP_ICON_NAMES); Place and
-// Pack have none there, being buttons on the Pieces tab
+// The desktop's icons for the toolbar's commands and the side panel's tabs
+// (APP_ICON_NAMES)
 const ICONS = {
   open: 'folder-open',
   save: 'device-floppy',
@@ -28,11 +30,10 @@ const ICONS = {
   zoomIn: 'zoom-in',
   zoomOut: 'zoom-out',
   fit: 'zoom-scan',
-  place: 'stack-front',
-  pack: 'puzzle',
   exportPdf: 'file-type-pdf',
   exportSvg: 'file-type-svg',
   exportDxf: 'file-vector',
+  piecesTab: 'puzzle',
   problemsTab: 'alert-triangle',
 } as const;
 
@@ -103,6 +104,7 @@ class PublishApp {
   private readonly document: LayoutDocument;
   private readonly preview: PreviewCanvas;
   private readonly side: SideTabs;
+  private readonly pieces: PiecesTab;
   private readonly problems: ProblemsPanel;
   private readonly buttons = new Map<string, HTMLButtonElement>();
 
@@ -111,10 +113,32 @@ class PublishApp {
     this.preview = new PreviewCanvas(previewElement, this.document, {
       selectionChanged: (placement) => {
         document.body.dataset.selected = String(placement);
+        this.showPieces();
       },
       failed: showFailure,
     });
     this.side = new SideTabs(sideElement, window.matchMedia('(max-width: 640px)').matches);
+    this.pieces = new PiecesTab({
+      turn: () => {
+        this.run(this.editSelected('publish_turn'));
+      },
+      flip: () => {
+        this.run(this.editSelected('publish_flip'));
+      },
+      unplace: () => {
+        this.run(this.unplace());
+      },
+      placeNew: () => {
+        this.run(this.placeNew());
+      },
+      pack: () => {
+        this.run(this.pack());
+      },
+      placeCopy: (index) => {
+        this.run(this.placeCopy(index));
+      },
+    });
+    this.side.addSection('pieces', STRINGS.tabPieces, ICONS.piecesTab, this.pieces);
     this.problems = new ProblemsPanel({
       // A sheet note is chosen once the preview shows notes
       choose: (key) => {
@@ -165,13 +189,6 @@ class PublishApp {
         this.preview.zoomToFit();
       }),
       divider(),
-      this.button('place', STRINGS.placeNew, STRINGS.placeNewHint, () => {
-        this.run(this.placeNew());
-      }),
-      this.button('pack', STRINGS.packPieces, STRINGS.packPiecesHint, () => {
-        this.run(this.pack());
-      }),
-      divider(),
       this.button('exportPdf', STRINGS.exportPdf, STRINGS.exportPdfHint, () => {
         this.run(this.export(0));
       }),
@@ -211,6 +228,33 @@ class PublishApp {
     const name = `${this.baseName()}${LAYOUT_EXTENSION}`;
     downloadText(name, await this.document.save());
     showMessage(STRINGS.downloaded(name));
+  }
+
+  // Turn or Flip, for the piece selected on the pages
+  private async editSelected(method: string): Promise<void> {
+    const placement = this.preview.selected;
+    if (placement >= 0) {
+      await this.document.call(method, { placement });
+    }
+  }
+
+  // Back to the tray, so nothing stays selected, as on the desktop
+  private async unplace(): Promise<void> {
+    const placement = this.preview.selected;
+    if (placement >= 0) {
+      this.preview.selected = -1;
+      await this.document.call('publish_unplace', { placement });
+    }
+  }
+
+  // One copy from the tray, selected once placed
+  private async placeCopy(index: number): Promise<void> {
+    if (this.document.state.tray[index]?.canPlace !== true) {
+      showMessage(STRINGS.cannotPlace);
+      return;
+    }
+    const answer = await this.document.call('publish_place_copy', { index });
+    this.preview.selected = numberField(answer, 'placed') ?? -1;
   }
 
   private async placeNew(): Promise<void> {
@@ -301,7 +345,12 @@ class PublishApp {
       problemCount.textContent = STRINGS.problemCountBlocking(state.problems.length, blocking);
     }
     problemCount.title = state.problems.length > 0 ? STRINGS.problemsHint : '';
+    this.showPieces();
     this.showProblems();
+  }
+
+  private showPieces(): void {
+    this.pieces.show(this.document.state, this.preview.selected, this.document.fileName !== '');
   }
 
   // The Problems tab, each keyed by the placement or note it names
@@ -334,8 +383,6 @@ class PublishApp {
       save: open,
       undo: state.canUndo,
       redo: state.canRedo,
-      place: state.unplaced > 0,
-      pack: state.placed + state.unplaced > 0,
       exportPdf: open && !blocked,
       exportSvg: open && !blocked,
       exportDxf: open && !blocked,

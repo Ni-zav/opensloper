@@ -305,7 +305,6 @@ resourcestring
   rsChangeTitle = 'Change title block';
   rsChangeNote = 'Change note';
   rsAddNoteChange = 'Add note';
-  rsCannotPlace = 'This piece has a problem in the pattern, so it cannot be placed yet';
   rsNoProblems = 'No problems';
   rsProblemCount = 'Problems: %d';
   // With how many of them stop printing and exporting
@@ -330,9 +329,6 @@ resourcestring
   rsPackLeftOut = '%s; %d did not fit on the sheet and were set below it';
   rsChangeSettings = 'Change paper';
   rsPlaceChange = 'Place new pieces';
-  rsPlaceOne = 'Place piece';
-  rsTurnChange = 'Turn piece';
-  rsFlipChange = 'Flip piece';
   rsPages = '%d pages, %d blank, %d left out. Right-click a page to leave it out.';
   rsLargeSheet = 'One sheet %s mm wide, %s mm long';
   rsReloaded = '%s changed on disk, so it was read again';
@@ -1315,20 +1311,16 @@ end;
 procedure TPublishForm.TrayDoubleClick(Sender: TObject);
 var
   Index: integer;
-  Copies: TUnplacedCopyArray;
 begin
   Index := FTray.ItemIndex;
   if (Index < 0) or (Index > High(FTrayCopies)) then
     Exit;
   if not FTrayCopies[Index].CanPlace then
   begin
-    ShowStatus(rsCannotPlace);
+    ShowStatus(rsLayoutCannotPlace);
     Exit;
   end;
-  Copies := Copy(FTrayCopies, Index, 1);
-  FDocument.BeginChange(rsPlaceOne);
-  FDocument.Layout.PlaceCopies(Copies);
-  FDocument.EndChange;
+  FDocument.PlaceCopy(FTrayCopies[Index]);
 end;
 
 procedure TPublishForm.PreviewDragOver(Sender, Source: TObject; X, Y: integer; State: TDragState; var Accept: boolean);
@@ -1344,10 +1336,10 @@ begin
   Item := FTrayCopies[FTray.ItemIndex];
   if not Item.CanPlace then
   begin
-    ShowStatus(rsCannotPlace);
+    ShowStatus(rsLayoutCannotPlace);
     Exit;
   end;
-  FDocument.BeginChange(rsPlaceOne);
+  FDocument.BeginChange(rsLayoutPlaceOne);
   Placed := FDocument.Layout.PlaceCopyAt(Item, FPreview.LayoutAt(X, Y), PLACEMENT_STEP);
   FDocument.EndChange;
   FPreview.Selected := Placed;
@@ -1842,27 +1834,13 @@ begin
 end;
 
 procedure TPublishForm.TurnClick(Sender: TObject);
-var
-  Index: integer;
 begin
-  Index := FPreview.Selected;
-  if Index < 0 then
-    Exit;
-  FDocument.BeginChange(rsTurnChange);
-  FDocument.Layout.Placements[Index].Rotation := (FDocument.Layout.Placements[Index].Rotation + 90) mod 360;
-  FDocument.EndChange;
+  FDocument.TurnPiece(FPreview.Selected);
 end;
 
 procedure TPublishForm.FlipClick(Sender: TObject);
-var
-  Index: integer;
 begin
-  Index := FPreview.Selected;
-  if Index < 0 then
-    Exit;
-  FDocument.BeginChange(rsFlipChange);
-  FDocument.Layout.Placements[Index].Flipped := not FDocument.Layout.Placements[Index].Flipped;
-  FDocument.EndChange;
+  FDocument.FlipPiece(FPreview.Selected);
 end;
 
 procedure TPublishForm.AboutClick(Sender: TObject);

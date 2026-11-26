@@ -32,12 +32,16 @@ type
   private
     FServer: TEditorApiServer;
     FReply: TJSONObject;
+    // The layout's saved text, read by FirstPlacement
+    FSaved: TJSONObject;
     procedure Call(const Method: string; Params: TJSONObject);
     function Answer: TJSONObject;
     function ErrorCode: integer;
     // A files list with the skirt block example's files of these names
     function Files(const Names: array of string): TJSONArray;
     function Missing: string;
+    // The first placement as the layout's saved text has it
+    function FirstPlacement: TJSONObject;
   protected
     procedure SetUp; override;
     procedure TearDown; override;
@@ -54,6 +58,10 @@ type
     procedure TestPieceAt;
     procedure TestPackUndoRedo;
     procedure TestPlaceWaiting;
+    procedure TestTurnFlip;
+    procedure TestUnplaceToTray;
+    procedure TestPlaceCopy;
+    procedure TestPieceEditRefused;
     procedure TestSave;
     procedure TestExport;
     procedure TestExportRefused;
@@ -64,7 +72,7 @@ implementation
 
 uses
   base64, Sloper.API.Rpc, Sloper.API.MCP, Sloper.API.Methods, Sloper.API.PublishServer, Sloper.Core.JSON,
-  Sloper.API.LayoutServer, Sloper.Output.Layout;
+  Sloper.API.LayoutServer, Sloper.Output.Layout, Sloper.Output.LayoutDocument;
 
 const
   PATTERN_FILE = 'skirt-darts.sloper';
@@ -83,10 +91,12 @@ procedure TTestPublishServer.SetUp;
 begin
   FServer := TEditorApiServer.Create;
   FReply := nil;
+  FSaved := nil;
 end;
 
 procedure TTestPublishServer.TearDown;
 begin
+  FreeAndNil(FSaved);
   FreeAndNil(FReply);
   FreeAndNil(FServer);
 end;
@@ -305,6 +315,81 @@ begin
   Call('publish_state', TJSONObject.Create);
   AssertEquals('none waiting', 0, Answer.Integers['unplaced']);
   AssertTrue('changed', Answer.Booleans['modified']);
+end;
+
+function TTestPublishServer.FirstPlacement: TJSONObject;
+var
+  Err: string;
+begin
+  Call('publish_save', TJSONObject.Create);
+  FreeAndNil(FSaved);
+  if not ParseJSONObject(Answer.Strings['text'], FSaved, Err) then
+    Fail(Err);
+  Result := FSaved.Arrays['placements'].Objects[0];
+end;
+
+procedure TTestPublishServer.TestTurnFlip;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_turn', TJSONObject.Create(['placement', 0]));
+  AssertEquals('the piece', 0, Answer.Integers['placement']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutTurnPiece, Answer.Strings['undo']);
+  AssertEquals('a quarter turn', 90, FirstPlacement.Integers['rotation']);
+  Call('publish_flip', TJSONObject.Create(['placement', 0]));
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('flip named', rsLayoutFlipPiece, Answer.Strings['undo']);
+  AssertTrue('flipped', FirstPlacement.Booleans['flipped']);
+  Call('publish_undo', TJSONObject.Create);
+  AssertFalse('flip undone', FirstPlacement.Booleans['flipped']);
+  AssertEquals('turn kept', 90, FirstPlacement.Integers['rotation']);
+end;
+
+procedure TTestPublishServer.TestUnplaceToTray;
+var
+  Placed: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Placed := Answer.Integers['placed'];
+  AssertEquals('an empty tray', 0, Answer.Arrays['tray'].Count);
+  Call('publish_unplace', TJSONObject.Create(['placement', 0]));
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('one fewer placed', Placed - 1, Answer.Integers['placed']);
+  AssertEquals('in the tray', 1, Answer.Arrays['tray'].Count);
+  AssertTrue('captioned', Answer.Arrays['tray'].Objects[0].Strings['caption'] <> '');
+  AssertTrue('can go back', Answer.Arrays['tray'].Objects[0].Booleans['canPlace']);
+  AssertEquals('named as the desktop', rsLayoutUnplacePiece, Answer.Strings['undo']);
+end;
+
+procedure TTestPublishServer.TestPlaceCopy;
+var
+  Waiting: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  Waiting := Answer.Arrays['tray'].Count;
+  AssertTrue('waiting', Waiting > 1);
+  AssertEquals('as counted', Answer.Integers['unplaced'], Waiting);
+  Call('publish_place_copy', TJSONObject.Create(['index', 1]));
+  AssertEquals('the first placement', 0, Answer.Integers['placed']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('one placed', 1, Answer.Integers['placed']);
+  AssertEquals('one fewer waiting', Waiting - 1, Answer.Arrays['tray'].Count);
+  AssertEquals('named as the desktop', rsLayoutPlaceOne, Answer.Strings['undo']);
+end;
+
+procedure TTestPublishServer.TestPieceEditRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_turn', TJSONObject.Create(['placement', 999]));
+  AssertEquals('no such piece', RPC_REFUSED, ErrorCode);
+  Call('publish_flip', TJSONObject.Create);
+  AssertEquals('placement needed', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_unplace', TJSONObject.Create(['placement', 0.5]));
+  AssertEquals('a whole number', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_place_copy', TJSONObject.Create(['index', 0]));
+  AssertEquals('an empty tray', RPC_REFUSED, ErrorCode);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('nothing changed', Answer.Booleans['canUndo']);
 end;
 
 procedure TTestPublishServer.TestSave;

@@ -6,6 +6,7 @@
 import { EngineError, type Engine } from '../engine/engine.ts';
 import {
   booleanField,
+  isRecord,
   numberField,
   recordsField,
   stringField,
@@ -23,10 +24,21 @@ export interface LayoutProblem {
   note: number;
 }
 
+// A copy waiting in the tray to be placed
+export interface TrayCopy {
+  caption: string;
+  // False while its piece has a problem in the pattern
+  canPlace: boolean;
+}
+
 export interface LayoutState {
   name: string;
+  // What it is printed or cut on: tiled, large, projector or material
+  kind: string;
   placed: number;
   unplaced: number;
+  // The copies waiting to be placed, in the order the engine places them
+  tray: TrayCopy[];
   problems: LayoutProblem[];
   // The files the sources need and were not given, by their paths from the layout
   missing: string[];
@@ -46,8 +58,10 @@ export type LayoutListener = (document: LayoutDocument) => void;
 
 const EMPTY: LayoutState = {
   name: '',
+  kind: 'tiled',
   placed: 0,
   unplaced: 0,
+  tray: [],
   problems: [],
   missing: [],
   canUndo: false,
@@ -59,8 +73,13 @@ const EMPTY: LayoutState = {
 function parseState(answer: JsonRecord): LayoutState {
   return {
     name: stringField(answer, 'name') ?? '',
+    kind: (isRecord(answer.output) ? stringField(answer.output, 'kind') : undefined) ?? 'tiled',
     placed: numberField(answer, 'placed') ?? 0,
     unplaced: numberField(answer, 'unplaced') ?? 0,
+    tray: recordsField(answer, 'tray').map((copy) => ({
+      caption: stringField(copy, 'caption') ?? '',
+      canPlace: booleanField(copy, 'canPlace') ?? false,
+    })),
     problems: recordsField(answer, 'problems').map((problem) => ({
       text: stringField(problem, 'text') ?? '',
       blocking: booleanField(problem, 'blocking') ?? false,

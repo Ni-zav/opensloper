@@ -14,6 +14,7 @@ class PagesTest(SimpleTestCase):
         page = self.client.get("/")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'href="/design/"')
+        self.assertContains(page, 'href="/publish/"')
         self.assertContains(page, f"Download {version()}")
         self.assertContains(page, "Beta")
         # The logo and drawings are inlined from the checkout
@@ -59,5 +60,7 @@ class PagesTest(SimpleTestCase):
 
     def test_search_engine_files(self):
         self.assertContains(self.client.get("/robots.txt"), "Sitemap: https://www.opensloper.com/sitemap.xml")
-        self.assertContains(self.client.get("/sitemap.xml"), "https://www.opensloper.com/design/")
+        sitemap = self.client.get("/sitemap.xml")
+        self.assertContains(sitemap, "https://www.opensloper.com/design/")
+        self.assertContains(sitemap, "https://www.opensloper.com/publish/")
         self.assertEqual(self.client.get("/favicon.svg")["Content-Type"], "image/svg+xml")

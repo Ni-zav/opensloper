@@ -1,8 +1,8 @@
 # opensloper.com
 
 The project's website: the home page and, under `/design/`, the web Design
-app (a beta, `web/`), with the web Publish app under `/publish/` (being
-built, not linked yet). A Django 5.2 site with no database: it keeps no
+app (a beta, `web/`), with the web Publish app, also a beta, under
+`/publish/`. A Django 5.2 site with no database: it keeps no
 accounts, patterns or measurements (`documents/design/web-version.md`,
 Server). Its own packages are pinned in `requirements.txt`.
 

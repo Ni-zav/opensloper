@@ -87,6 +87,8 @@ type
 resourcestring
   rsPreviewMove = 'Move piece';
   rsPreviewMoveNote = 'Move note';
+  rsPreviewPages = '%d pages, %d blank, %d left out. Right-click a page to leave it out.';
+  rsPreviewLargeSheet = 'One sheet %s mm wide, %s mm long';
 
 function DefaultPreviewView: TPreviewView;
 // The index in Shapes of the smallest piece containing At, or -1
@@ -99,11 +101,14 @@ function PageCaptionAt(const Pages: TTilePageArray; const At: TVec2): string;
 // The area every page covers; False when there are none
 function PagesBounds(const Pages: TTilePageArray; out Bounds: TRect2): boolean;
 function RoundToStep(Value: double): double;
+// What the status bar says of the layout: its pages, blank and left out, or
+// its one sheet's size, or for a material the length it uses
+function PreviewSummary(Layout: TLayout): string;
 
 implementation
 
 uses
-  Math;
+  SysUtils, Math, Sloper.Output.LayoutPDF;
 
 const
   MIN_PREVIEW_SCALE = 0.02;
@@ -239,6 +244,28 @@ end;
 function RoundToStep(Value: double): double;
 begin
   Result := Round(Value / PLACEMENT_STEP) * PLACEMENT_STEP;
+end;
+
+function PreviewSummary(Layout: TLayout): string;
+var
+  Pages: TTilePageArray;
+  Page: TTilePage;
+  Rows, Columns, Blank, LeftOut: integer;
+begin
+  Pages := Layout.Pages(Layout.PlacedPieces, Rows, Columns);
+  if Layout.Output.Kind = okMaterial then
+    Exit(Layout.MaterialUse);
+  if Layout.Output.Kind <> okTiled then
+    Exit(Format(rsPreviewLargeSheet, [FormatFloat('0', OneSheetWidth(Layout, Pages[0].Area.MaxX)),
+      FormatFloat('0', LargeSheetLength(Layout, Pages[0].Area.MaxY))]));
+  Blank := 0;
+  LeftOut := 0;
+  for Page in Pages do
+    if Page.Blank then
+      Inc(Blank)
+    else if Page.Excluded then
+      Inc(LeftOut);
+  Result := Format(rsPreviewPages, [Length(Pages), Blank, LeftOut]);
 end;
 
 constructor TPreviewDrag.Create(ADocument: TLayoutDocument);

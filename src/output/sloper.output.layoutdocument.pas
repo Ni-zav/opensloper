@@ -86,6 +86,14 @@ type
     // Places one copy from the tray in the rows below the others; False, and
     // nothing changed, when its piece cannot be placed
     function PlaceCopy(const Item: TUnplacedCopy): boolean;
+    // The Output tab's settings, one undo step, which changes within a
+    // second of each other join, as a run of spin clicks. Pages left out are
+    // forgotten once the page grid moves, and a new material or kind takes
+    // its material's size. False with the reason, nothing changed, when the
+    // paper or sheet leaves nothing to print on.
+    function ChangeOutput(const Output: TLayoutOutput; out Reason: string): boolean;
+    // Leaves the page with this caption out of the print, or puts it back
+    procedure TogglePage(const Caption: string);
     // The files' contents sources are read from, from now on, in place of
     // disk; undo and Reload read them again
     function SourceFiles: TSourceFiles;
@@ -107,9 +115,14 @@ resourcestring
   rsLayoutFlipPiece = 'Flip piece';
   rsLayoutUnplacePiece = 'Unplace piece';
   rsLayoutPlaceOne = 'Place piece';
+  rsLayoutChangePaper = 'Change paper';
+  rsLayoutTogglePage = 'Leave page out';
   rsLayoutCannotPlace = 'This piece has a problem in the pattern, so it cannot be placed yet';
 
 implementation
+
+uses
+  Sloper.Output.Tiling;
 
 constructor TLayoutDocument.Create;
 begin
@@ -334,6 +347,41 @@ begin
     Exit;
   BeginChange(rsLayoutUnplacePiece);
   FLayout.RemovePlacement(Index);
+  EndChange;
+end;
+
+function TLayoutDocument.ChangeOutput(const Output: TLayoutOutput; out Reason: string): boolean;
+var
+  Wanted, Before: TLayoutOutput;
+begin
+  Reason := '';
+  Wanted := Output;
+  Before := FLayout.Output;
+  // Page names mean other sheets once the grid moves
+  if (Wanted.Paper <> Before.Paper) or (Wanted.Tiles.PaperWidth <> Before.Tiles.PaperWidth) or
+    (Wanted.Tiles.PaperHeight <> Before.Tiles.PaperHeight) or (Wanted.Tiles.Margin <> Before.Tiles.Margin) or
+    (Wanted.Tiles.Overlap <> Before.Tiles.Overlap) or (Wanted.Kind <> Before.Kind) then
+    Wanted.ExcludedPages := nil;
+  if not TilesAreUsable(Wanted.Tiles) or (Wanted.RollWidth <= 2 * Wanted.Tiles.Margin) or (Wanted.MaterialWidth <= 0) then
+  begin
+    Reason := rsLayoutNoPrintArea;
+    Exit(False);
+  end;
+  BeginChange(rsLayoutChangePaper);
+  FLayout.Output := Wanted;
+  // Choosing a material, or a material sheet, starts from that material's size
+  if (Wanted.Material <> Before.Material) or (Wanted.Kind <> Before.Kind) then
+    FLayout.TakeMaterialSize;
+  EndChange('paper');
+  Result := True;
+end;
+
+procedure TLayoutDocument.TogglePage(const Caption: string);
+begin
+  if Caption = '' then
+    Exit;
+  BeginChange(rsLayoutTogglePage);
+  FLayout.TogglePage(Caption);
   EndChange;
 end;
 

@@ -327,10 +327,7 @@ resourcestring
   rsPackedPages = 'Packed %d copies on %d pages';
   rsPacked = 'Packed %d copies';
   rsPackLeftOut = '%s; %d did not fit on the sheet and were set below it';
-  rsChangeSettings = 'Change paper';
   rsPlaceChange = 'Place new pieces';
-  rsPages = '%d pages, %d blank, %d left out. Right-click a page to leave it out.';
-  rsLargeSheet = 'One sheet %s mm wide, %s mm long';
   rsReloaded = '%s changed on disk, so it was read again';
   rsExported = 'Wrote %s';
   // With what the print service said, such as its job number
@@ -373,8 +370,6 @@ const
   MAX_MILLIMETRES = 100;
   MAX_ROLL_WIDTH = 2000;
   PATTERN_EXTENSION = '.sloper';
-  // The last is the size typed in
-  PAPER_NAMES: array[0..3] of string = ('A4', 'A3', 'Letter', CUSTOM_PAPER);
   PATTERN_LIST_HEIGHT = 120;
   MAX_PAPER_SIDE = 2000;
   NOTE_FIELD_CAPTIONS: array[0..6] of string = (rsFieldPattern, rsFieldMeasurements, rsFieldLayout, rsFieldDate, rsFieldCutList, rsFieldMaterials,
@@ -1418,38 +1413,36 @@ end;
 procedure TPublishForm.RefreshControls;
 var
   Layout: TLayout;
-  Pages: TTilePageArray;
-  Page: TTilePage;
-  Rows, Columns, Blank, LeftOut, Index: integer;
+  Index: integer;
 begin
   FRefreshing := True;
   try
     Layout := FDocument.Layout;
     FKindBox.ItemIndex := Ord(Layout.Output.Kind);
     FRollEdit.Value := Layout.Output.RollWidth;
-    FRollEdit.Enabled := Layout.Output.Kind = okLarge;
-    FPaperBox.Enabled := Layout.Output.Kind = okTiled;
-    FOverlapEdit.Enabled := Layout.Output.Kind = okTiled;
+    FRollEdit.Enabled := OutputSettingUsed(Layout.Output, osRollWidth);
+    FPaperBox.Enabled := OutputSettingUsed(Layout.Output, osPaper);
+    FOverlapEdit.Enabled := OutputSettingUsed(Layout.Output, osOverlap);
     FPaperBox.ItemIndex := FPaperBox.Items.Count - 1;
     for Index := 0 to High(PAPER_NAMES) do
       if PAPER_NAMES[Index] = Layout.Output.Paper then
         FPaperBox.ItemIndex := Index;
     FPaperWidthEdit.Value := Layout.Output.Tiles.PaperWidth;
     FPaperHeightEdit.Value := Layout.Output.Tiles.PaperHeight;
-    FPaperWidthEdit.Enabled := (Layout.Output.Kind = okTiled) and (FPaperBox.ItemIndex = High(PAPER_NAMES));
+    FPaperWidthEdit.Enabled := OutputSettingUsed(Layout.Output, osPaperSize);
     FPaperHeightEdit.Enabled := FPaperWidthEdit.Enabled;
     FMarksBox.ItemIndex := Ord(Layout.Output.Marks);
-    FMarksBox.Enabled := Layout.Output.Kind = okTiled;
+    FMarksBox.Enabled := OutputSettingUsed(Layout.Output, osMarks);
     FFillBox.ItemIndex := Ord(Layout.Output.Fill);
-    FFillBox.Enabled := Layout.Output.Kind <> okProjector;
+    FFillBox.Enabled := OutputSettingUsed(Layout.Output, osFill);
     RefreshProfiles;
     RefreshMaterials;
     FMaterialWidthEdit.Value := Layout.Output.MaterialWidth;
-    FMaterialWidthEdit.Enabled := Layout.Output.Kind = okMaterial;
+    FMaterialWidthEdit.Enabled := OutputSettingUsed(Layout.Output, osMaterialSize);
     FMaterialLengthEdit.Value := Layout.Output.MaterialLength;
-    FMaterialLengthEdit.Enabled := Layout.Output.Kind = okMaterial;
+    FMaterialLengthEdit.Enabled := OutputSettingUsed(Layout.Output, osMaterialSize);
     FAllowTurnsBox.Checked := Layout.Output.AllowTurns;
-    FAllowTurnsBox.Enabled := Layout.Output.Kind = okMaterial;
+    FAllowTurnsBox.Enabled := OutputSettingUsed(Layout.Output, osAllowTurns);
     RefreshPatternsTab;
     RefreshMaterialsTab;
     FMarginEdit.Value := Layout.Output.Tiles.Margin;
@@ -1476,35 +1469,19 @@ begin
     Caption := rsPublishTitle;
   RefreshProblems;
   RefreshTray;
-  Pages := Layout.Pages(Layout.PlacedPieces, Rows, Columns);
-  if Layout.Output.Kind <> okTiled then
-  begin
-    ShowStatus(Format(rsLargeSheet, [FormatFloat('0', OneSheetWidth(Layout, Pages[0].Area.MaxX)),
-      FormatFloat('0', LargeSheetLength(Layout, Pages[0].Area.MaxY))]));
-    if Layout.Output.Kind = okMaterial then
-      ShowStatus(Layout.MaterialUse);
-    Exit;
-  end;
-  Blank := 0;
-  LeftOut := 0;
-  for Page in Pages do
-    if Page.Blank then
-      Inc(Blank)
-    else if Page.Excluded then
-      Inc(LeftOut);
-  ShowStatus(Format(rsPages, [Length(Pages), Blank, LeftOut]));
+  ShowStatus(PreviewSummary(Layout));
 end;
 
 // A run of spin clicks is one undo step. A paper that leaves no room to
 // print is put back.
 procedure TPublishForm.SettingChange(Sender: TObject);
 var
-  Output, Before: TLayoutOutput;
+  Output: TLayoutOutput;
+  Reason: string;
 begin
   if FRefreshing or (FPaperBox.ItemIndex < 0) then
     Exit;
   Output := FDocument.Layout.Output;
-  Before := Output;
   Output.Kind := TOutputKind(FKindBox.ItemIndex);
   Output.RollWidth := FRollEdit.Value;
   Output.Paper := PAPER_NAMES[FPaperBox.ItemIndex];
@@ -1534,25 +1511,14 @@ begin
     Output.OutputProfile := '';
   Output.Tiles.Margin := FMarginEdit.Value;
   Output.Tiles.Overlap := FOverlapEdit.Value;
-  // Page names mean other sheets once the grid moves
-  if (Output.Paper <> Before.Paper) or (Output.Tiles.PaperWidth <> Before.Tiles.PaperWidth) or
-    (Output.Tiles.PaperHeight <> Before.Tiles.PaperHeight) or (Output.Tiles.Margin <> Before.Tiles.Margin) or (Output.Tiles.Overlap <> Before.Tiles.Overlap) or
-    (Output.Kind <> Before.Kind) then
-    Output.ExcludedPages := nil;
-  if not TilesAreUsable(Output.Tiles) or (Output.RollWidth <= 2 * Output.Tiles.Margin) or (Output.MaterialWidth <= 0) then
+  if not FDocument.ChangeOutput(Output, Reason) then
   begin
-    ShowStatus(rsLayoutNoPrintArea);
+    ShowStatus(Reason);
     // "400" passes through "4" on the way, so a typed size is left to finish
     if not FPaperWidthEdit.Focused and not FPaperHeightEdit.Focused then
       RefreshControls;
     Exit;
   end;
-  FDocument.BeginChange(rsChangeSettings);
-  FDocument.Layout.Output := Output;
-  // Choosing a material, or a material sheet, starts from that material's size
-  if (Output.Material <> Before.Material) or (Output.Kind <> Before.Kind) then
-    FDocument.Layout.TakeMaterialSize;
-  FDocument.EndChange('paper');
   FPreview.ZoomToFit;
 end;
 

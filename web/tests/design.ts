@@ -926,7 +926,8 @@ try {
   const stampFile = join(downloads, 'fold.svg');
   await writeFile(
     stampFile,
-    '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+    '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
       '<path d="M0 0 H20 V10 H0 Z"/></svg>',
   );
   const chooseStamp = async (path: string): Promise<void> => {

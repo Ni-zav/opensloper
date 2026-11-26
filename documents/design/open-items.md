@@ -15,6 +15,7 @@ Agreed, but not built.
 **General**
 
 - **Translation**, for the community release (see Translation in the overview).
+- **One source for the web apps' text** (#156): the web's strings served by the engine from the Pascal `resourcestring`s, so translation is done once. After the web Measurements app (#84) and 0.9.0.
 - **Release signing** (#17): macOS notarisation, Intel macOS builds and signed Windows programs.
 - **More tutorials** (#46): moving a dart, a tote bag, a leather card wallet.
 - **Help in the apps** (#32): F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Translated and versioned documentation wait for the community release.
@@ -27,6 +28,7 @@ Agreed, but not built.
 **Publish app**
 
 - **A window for output and machine profiles** (#57), which are edited in the settings file for now.
+- **`set_output` as the Output tab**: the layout server's `set_output` (the assistant and the API) should change the output through `TLayoutDocument.ChangeOutput`, as the desktop and web Output tabs do, so it also resets the pages left out and takes a material's size.
 - **True-shape material needed**: the estimate still packs bounding boxes; nesting needs its fold halves and mirrored pairs as shapes.
 - **Raising the publish window on Wayland** (#59), which needs an `xdg-activation` token Qt 5 cannot use.
 

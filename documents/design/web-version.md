@@ -314,6 +314,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - For the pattern chosen: its measurement file, Choose measurements…, Use the pattern's own, and its size.
   - Files come from the browser's file picker and are given to the engine by name, as Open gives them. A pattern added may name a measurement file the layout lacks; one chosen with it is found by name, else the engine says it is missing.
   - The edits are `TLayoutDocument`'s (`AddPattern`, `RemovePattern`, `SetMeasurements`, `SetSize`), which the desktop calls too.
+- The Materials tab (`publish/materialsTab.ts`), as the desktop's: a row for each material the patterns need, with its size, pieces and how much, then each material's notes and how the estimate is made. It only reads (`LayoutMaterialNeeds`).
 - The Info tab (`publish/infoTab.ts`), as the desktop's Information Block tab: Show, the fields it shows, On every page and the corner.
   - The fields are greyed while the block is hidden; the corner and every page while the output is not tiled (`OutputSettingUsed`).
   - A field shown anew prints last (`TitleFieldsWith`). Each change is `TLayoutDocument.ChangeTitle`, one undo step, which the desktop calls too.
@@ -354,6 +355,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_add_note`, `publish_delete_note` | Adds a sheet note below the pieces, or deletes one by its index; one undo step |
 | `publish_note` | A sheet note as typed, for the Notes tab |
 | `publish_set_note` | Changes a sheet note's text, size, lines, box, font, bold or italic; refuses a font name that cannot be used |
+| `publish_materials` | What each material the patterns need, as the Materials tab lists it |
 | `publish_title` | The information block: whether it shows, its fields, every field there is, its corner, every page, and whether the corner and every page apply |
 | `publish_set_title` | Shows or hides it or one field, or changes its corner or every page; one undo step |
 | `publish_output` | The Output tab's settings, which apply (`used`), and the papers, materials and output profiles to choose from |

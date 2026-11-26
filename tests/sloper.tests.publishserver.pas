@@ -78,6 +78,7 @@ type
     procedure TestSetNote;
     procedure TestSetNoteRefused;
     procedure TestDeleteNote;
+    procedure TestMaterials;
     procedure TestTitle;
     procedure TestSetTitle;
     procedure TestOutput;
@@ -714,6 +715,23 @@ begin
   AssertEquals('named as the desktop', rsLayoutDeleteNote, Answer.Strings['undo']);
   Call('publish_delete_note', TJSONObject.Create(['note', 0]));
   AssertEquals('none left', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestMaterials;
+var
+  Need: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_materials', TJSONObject.Create);
+  AssertTrue('a material', Answer.Arrays['needs'].Count > 0);
+  Need := Answer.Arrays['needs'].Objects[0];
+  AssertTrue('named', Need.Strings['material'] <> '');
+  AssertTrue('pieces cut from it', Need.Integers['copies'] > 0);
+  AssertTrue('how much', Need.Strings['needed'] <> '');
+  AssertTrue('its notes, as a list', Need.Find('notes').JSONType = jtArray);
+  Call('publish_remove_pattern', TJSONObject.Create(['source', 1]));
+  Call('publish_materials', TJSONObject.Create);
+  AssertEquals('nothing without patterns', 0, Answer.Arrays['needs'].Count);
 end;
 
 procedure TTestPublishServer.TestTitle;

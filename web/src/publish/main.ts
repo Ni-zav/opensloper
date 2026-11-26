@@ -17,6 +17,7 @@ import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { InfoTab } from './infoTab.ts';
+import { MaterialsTab } from './materialsTab.ts';
 import { NotesTab } from './notesTab.ts';
 import { OutputTab } from './outputTab.ts';
 import { PatternsTab } from './patternsTab.ts';
@@ -40,6 +41,7 @@ const ICONS = {
   exportDxf: 'file-vector',
   patternsTab: 'files',
   piecesTab: 'puzzle',
+  materialsTab: 'texture',
   infoTab: 'id-badge',
   notesTab: 'notes',
   outputTab: 'printer',
@@ -115,6 +117,7 @@ class PublishApp {
   private readonly side: SideTabs;
   private readonly patterns: PatternsTab;
   private readonly pieces: PiecesTab;
+  private readonly materials: MaterialsTab;
   private readonly info: InfoTab;
   private readonly notes: NotesTab;
   private readonly output: OutputTab;
@@ -166,6 +169,8 @@ class PublishApp {
       },
     });
     this.side.addSection('pieces', STRINGS.tabPieces, ICONS.piecesTab, this.pieces);
+    this.materials = new MaterialsTab(this.document, { failed: showFailure });
+    this.side.addSection('materials', STRINGS.tabMaterials, ICONS.materialsTab, this.materials);
     this.info = new InfoTab(this.document, { failed: showFailure });
     this.side.addSection('info', STRINGS.tabInfo, ICONS.infoTab, this.info);
     this.notes = new NotesTab(this.document, {

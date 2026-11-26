@@ -47,6 +47,9 @@ type
     procedure TestTextRefused;
     procedure TestImageAndClonesRefused;
     procedure TestNotSvg;
+    procedure TestPlainDoctype;
+    procedure TestDoctypeSubsetRefused;
+    procedure TestDoctypeBackstop;
     procedure TestEmptyRefused;
     procedure TestTransformsAndGroups;
     procedure TestRotation;
@@ -187,6 +190,38 @@ procedure TTestStamps.TestNotSvg;
 begin
   AssertEquals('another kind of XML', rsSvgNotSvg, Refusal('<html><body/></html>'));
   AssertTrue('not XML', Pos(Copy(rsSvgNotXml, 1, 20), Refusal('M 0 0 L 10 10')) = 1);
+end;
+
+procedure TTestStamps.TestPlainDoctype;
+const
+  SVG_RECTANGLE = '<svg xmlns="http://www.w3.org/2000/svg" ' + MM_SIZE + '><rect width="5" height="5"/></svg>';
+  SVG_11 = '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">';
+var
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+begin
+  Drawing := Read('<?xml version="1.0"?>' + #10 + '<!-- <!DOCTYPE svg> -->' + #10 + SVG_11 + SVG_RECTANGLE, Warnings);
+  AssertEquals('the drawing imports', 1, Length(Drawing.Paths));
+  Drawing := Read('<!DOCTYPE svg SYSTEM "urn:example:stamp[1]">' + SVG_RECTANGLE, Warnings);
+  AssertEquals('a quoted bracket is part of the identifier', 1, Length(Drawing.Paths));
+  Drawing := Read('<!DOCTYPE stamp:svg><stamp:svg xmlns:stamp="http://www.w3.org/2000/svg" ' + MM_SIZE +
+    '><stamp:rect width="5" height="5"/></stamp:svg>', Warnings);
+  AssertEquals('the SVG root can use a prefix', 1, Length(Drawing.Paths));
+end;
+
+procedure TTestStamps.TestDoctypeSubsetRefused;
+const
+  SVG_RECTANGLE = '<svg xmlns="http://www.w3.org/2000/svg" ' + MM_SIZE + '><rect width="5" height="5"/></svg>';
+begin
+  AssertEquals(rsSvgDoctypeSubset, Refusal('<!DOCTYPE svg []>' + SVG_RECTANGLE));
+end;
+
+procedure TTestStamps.TestDoctypeBackstop;
+const
+  SVG_RECTANGLE = '<svg xmlns="http://www.w3.org/2000/svg" ' + MM_SIZE + '><rect width="5" height="5"/></svg>';
+begin
+  AssertTrue('a second declaration is still refused',
+    Pos(Copy(rsSvgNotXml, 1, 20), Refusal('<!DOCTYPE svg><!DOCTYPE svg>' + SVG_RECTANGLE)) = 1);
 end;
 
 procedure TTestStamps.TestEmptyRefused;

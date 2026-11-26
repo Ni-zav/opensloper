@@ -46,6 +46,7 @@ function ImportSvgStampFile(const FileName: string; out Drawing: TStampDrawing; 
 
 resourcestring
   rsSvgNotXml = 'The file is not an SVG drawing: %s';
+  rsSvgDoctypeSubset = 'The drawing has a document type with an internal subset. Save it again without the document type';
   rsSvgNotSvg = 'The file is not an SVG drawing';
   rsSvgTooLarge = 'The file is too large for a stamp: at most %d MB';
   rsSvgText = 'The drawing has text, which a stamp cannot hold; convert the text to paths first (in Inkscape, Path ' +
@@ -65,7 +66,7 @@ resourcestring
 implementation
 
 uses
-  Classes, Math, DOM, XMLRead, Sloper.Core.Geometry, Sloper.Core.JSON;
+  Classes, Math, StrUtils, DOM, XMLRead, XMLUtils, Sloper.Core.Geometry, Sloper.Core.JSON;
 
 const
   SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -1153,6 +1154,104 @@ begin
   Result := True;
 end;
 
+// Ignore a plain SVG document type without handing its external ID to XMLRead.
+// Only inspect the prolog. Anything unrecognised is left for the parser, which
+// still has DOCTYPE processing disabled.
+function StripSvgDoctype(const SvgText: string; out Text, ErrorMessage: string): boolean;
+const
+  XML_SPACE = [#9, #10, #13, ' '];
+  UTF8_BOM = #$EF#$BB#$BF;
+var
+  Cursor, Start, NameStart, EndMarker: SizeInt;
+  Quote: char;
+
+  function Take(const Token: string): boolean;
+  begin
+    Result := Copy(SvgText, Cursor, Length(Token)) = Token;
+    if Result then
+      Inc(Cursor, Length(Token));
+  end;
+
+  function SkipSpace: boolean;
+  var
+    Before: SizeInt;
+  begin
+    Before := Cursor;
+    while (Cursor <= Length(SvgText)) and (SvgText[Cursor] in XML_SPACE) do
+      Inc(Cursor);
+    Result := Cursor > Before;
+  end;
+
+  function TakeLiteral: boolean;
+  begin
+    Result := False;
+    if (Cursor > Length(SvgText)) or not (SvgText[Cursor] in ['"', '''']) then
+      Exit;
+    Quote := SvgText[Cursor];
+    Inc(Cursor);
+    EndMarker := PosEx(Quote, SvgText, Cursor);
+    if EndMarker = 0 then
+      Exit;
+    Cursor := EndMarker + 1;
+    Result := True;
+  end;
+
+begin
+  Result := True;
+  Text := SvgText;
+  ErrorMessage := '';
+  Cursor := 1;
+  Take(UTF8_BOM);
+  repeat
+    SkipSpace;
+    if Take('<!--') then
+    begin
+      EndMarker := PosEx('-->', SvgText, Cursor);
+      if EndMarker = 0 then
+        Exit;
+      Cursor := EndMarker + 3;
+    end
+    else if Take('<?') then
+    begin
+      EndMarker := PosEx('?>', SvgText, Cursor);
+      if EndMarker = 0 then
+        Exit;
+      Cursor := EndMarker + 2;
+    end
+    else
+      Break;
+  until False;
+  Start := Cursor;
+  if not Take('<!DOCTYPE') or not SkipSpace then
+    Exit;
+  NameStart := Cursor;
+  while (Cursor <= Length(SvgText)) and not (SvgText[Cursor] in XML_SPACE + ['[', '>']) do
+    Inc(Cursor);
+  if not IsXmlName(UTF8Decode(Copy(SvgText, NameStart, Cursor - NameStart))) then
+    Exit;
+  if SkipSpace then
+  begin
+    if Take('SYSTEM') then
+    begin
+      if not SkipSpace or not TakeLiteral then
+        Exit;
+    end
+    else if Take('PUBLIC') then
+    begin
+      if not SkipSpace or not TakeLiteral or not SkipSpace or not TakeLiteral then
+        Exit;
+    end;
+    SkipSpace;
+  end;
+  if Take('[') then
+  begin
+    ErrorMessage := rsSvgDoctypeSubset;
+    Exit(False);
+  end;
+  if Take('>') then
+    Delete(Text, Start, Cursor - Start);
+end;
+
 function ImportSvgStamp(const SvgText: string; out Drawing: TStampDrawing; out Warnings: TStringArray; out ErrorMessage: string): boolean;
 var
   Parser: TDOMParser;
@@ -1161,6 +1260,7 @@ var
   Document: TXMLDocument;
   Reader: TSvgReader;
   SavedMask: TFPUExceptionMask;
+  Text: string;
 begin
   Result := False;
   Drawing := Default(TStampDrawing);
@@ -1171,6 +1271,8 @@ begin
     ErrorMessage := Format(rsSvgTooLarge, [MAX_SVG_BYTES div BYTES_PER_MB]);
     Exit;
   end;
+  if not StripSvgDoctype(SvgText, Text, ErrorMessage) then
+    Exit;
   Parser := nil;
   Source := nil;
   Stream := nil;
@@ -1182,7 +1284,9 @@ begin
     try
       Parser := TDOMParser.Create;
       Parser.Options.Namespaces := True;
-      Stream := TStringStream.Create(SvgText);
+      // A stamp needs shapes only. Keep DTD processing out of the importer.
+      Parser.Options.DisallowDoctype := True;
+      Stream := TStringStream.Create(Text);
       Source := TXMLInputSource.Create(Stream);
       Parser.Parse(Source, Document);
       Reader := TSvgReader.Create;

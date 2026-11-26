@@ -315,6 +315,8 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - The files the sources still need are looked for by their paths from the layout, or from the pattern a new layout was started for, in a folder the user has granted (`FileAccess.findBeside`), round after round, as a pattern found may name a measurement file. A folder the page may not read yet needs a click on Find them…, which asks for it. A layout started before its pattern's files were found is started again with them, so every piece is placed, as on the desktop.
   - Elsewhere Save downloads the layout file and counts it saved, and Open uploads.
   - The title marks a layout not saved, and leaving or opening another asks first.
+  - Work not saved is kept in the browser as the design page's is (`Autosave`): the layout's text and every file its sources were given (`publish_snapshot`), with the files it came from, so it still saves to them. Another tab offers it once the tab that kept it has closed; opened again it counts as not saved (`publish_mark_unsaved`). Each app's work is its own, as both share the site.
+- **Offline**: the page has a service worker and manifest of its own, as the design page has (`ui/serviceWorker.ts`, `ui/offline.ts`), with its own cache, and an Update button when a new build is ready.
   - Not yet as the desktop: a pattern or measurement file added in the Patterns tab is recorded by its name, beside the layout, where the desktop records its path from the layout; Save As into another folder keeps the paths the sources had.
   - Undo names the step it would take, as the desktop's menu does.
   - Print… (`publish/printDialog.ts`, as `Sloper.Publish.PrintDialog`) opens the PDF Export PDF writes in the browser's viewer, in a tab opened while the click counts, or downloads it, as the design page's Print… does (`deliverPdf`). The browser's print dialog chooses the printer, copies and pages, so this one says which to print first: the cover with the test square, then the rest. It is refused while a problem stops printing.
@@ -384,6 +386,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_turn`, `publish_flip`, `publish_unplace` | Turn 90°, Flip and Back to tray for a placed piece, by its placement index; each one undo step |
 | `publish_place_copy` | Places one copy from the tray, by its index there, in the rows below the others; refused when its piece cannot be placed |
 | `publish_save` | The layout file's text, counted as saved (`TLayoutDocument.SaveText`), to download |
+| `publish_snapshot`, `publish_mark_unsaved` | The layout's text and the files its sources were given, kept as work in progress; and counting work opened again as not saved |
 | `publish_text`, `publish_saved` | The layout file's text, to write to a file, and then that it was written (`TLayoutDocument.MarkSaved`): only that text counts as saved |
 | `publish_export` | The layout as PDF, SVG or DXF-AAMA, in Base64, refused as the desktop's export is (`LayoutBytes`) |
 

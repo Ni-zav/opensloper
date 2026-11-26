@@ -5,17 +5,17 @@ The web design app (issue #78), and the Publish app being built (issue
 Worker, under an editor in plain TypeScript. Files stay on the user's
 machine: the page opens and saves them as text, and sends nothing anywhere.
 
-| Folder          | What it is                                                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                            |
-| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                                       |
-| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels, and `LayoutDocument`, the open layout                                     |
-| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                                |
-| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units                         |
-| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                                    |
-| `src/publish/`  | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                                                  |
-| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts`, `files.ts`, `offline.ts` and `publish.ts` drive the built apps in headless Chromium, `browser.ts` serves them |
-| `bundle.ts`     | Bundles the pages with esbuild into `out/design`, `out/publish` and `engine/out/browser`                                                                            |
+| Folder          | What it is                                                                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                                                                    |
+| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                                                                                               |
+| `src/document/` | `PatternDocument`, the open pattern as the desktop's `TPatternDocument` is to its panels, and `LayoutDocument`, the open layout                                                                             |
+| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                                                                        |
+| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels and the properties panel, shortcuts and strings, named after their `src/ui` units                                                                 |
+| `src/design/`   | The design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                                                                            |
+| `src/publish/`  | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                                                                                          |
+| `tests/`        | Unit tests (`*.test.ts`, `node --test`); `design.ts`, `files.ts`, `offline.ts`, `publish.ts`, `publishFiles.ts` and `publishOffline.ts` drive the built apps in headless Chromium, `browser.ts` serves them |
+| `bundle.ts`     | Bundles the pages with esbuild into `out/design`, `out/publish` and `engine/out/browser`                                                                                                                    |
 
 So far the canvas draws the scene (pieces with their marks, notches and
 direction, edges, selected seams, notes and callouts, markers, points and
@@ -45,11 +45,16 @@ the tab that had it closes.
 A service worker keeps the app for offline use and installation, with an
 Update button when a new build is ready.
 
-The Publish app (`out/publish`) so far opens a layout with its patterns and
-measurement files, or patterns to start a layout, finding each file a layout
-names by its name among those chosen, previews its pages and pieces (zoom,
-pan, fit, click to select), places and packs pieces with undo and redo,
-downloads the layout, PDF, SVG and DXF, and shows the problems' count.
+The Publish app (`out/publish`) opens a layout with its patterns and
+measurement files, or patterns to start one, and previews its pages, pieces
+and notes. Pieces and notes are dragged, turned and placed from the tray, and
+pages left out. Its side panel has the desktop's tabs but Claude's: Patterns,
+Pieces, Materials, Information Block, Notes, Output and Problems. It prints
+through the browser and exports PDF, SVG and DXF-AAMA; Machine DXF stays a
+desktop export. The keys are the desktop's. With File System Access it saves
+in place and finds a layout's files in a granted folder. Work not yet saved
+is kept and offered back, and a service worker of its own keeps it for
+offline use.
 
 ## Setting up
 

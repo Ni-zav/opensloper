@@ -67,6 +67,9 @@ type
     // Counts Text as the layout saved, once the browser has written it; a
     // change made meanwhile leaves the layout modified
     procedure MarkSaved(const Text: string);
+    // Counts the layout as not saved, as work in progress opened again is;
+    // not an undo step
+    procedure MarkUnsaved;
     // Reads the pattern files again; not an undo step
     procedure Reload;
     // Call regularly: reads the sources again once a saved file has stopped
@@ -241,6 +244,12 @@ function TLayoutDocument.SaveText: string;
 begin
   Result := FLayout.SaveToText;
   MarkSaved(Result);
+end;
+
+procedure TLayoutDocument.MarkUnsaved;
+begin
+  FSavedText := '';
+  Changed;
 end;
 
 procedure TLayoutDocument.MarkSaved(const Text: string);

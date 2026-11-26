@@ -88,6 +88,7 @@ type
     procedure TestTogglePage;
     procedure TestSave;
     procedure TestSavedOnceWritten;
+    procedure TestSnapshotOpensAgain;
     procedure TestExport;
     procedure TestExportRefused;
     procedure TestTables;
@@ -875,6 +876,35 @@ begin
   AssertFalse('saved', Answer.Booleans['modified']);
   Call('publish_saved', TJSONObject.Create);
   AssertEquals('the text needed', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// Work in progress: the layout and its files, opened again as they were, not saved
+procedure TTestPublishServer.TestSnapshotOpensAgain;
+var
+  Snapshot: TJSONObject;
+  Placed: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_unplace', TJSONObject.Create(['placement', 0]));
+  Call('publish_state', TJSONObject.Create);
+  Placed := Answer.Integers['placed'];
+  Call('publish_snapshot', TJSONObject.Create);
+  Snapshot := TJSONObject(Answer.Clone);
+  try
+    AssertEquals('both files', 2, Snapshot.Arrays['files'].Count);
+    AssertEquals('sorted by path', PATTERN_FILE, Snapshot.Arrays['files'].Objects[0].Strings['path']);
+    Call('publish_open', TJSONObject.Create(['layout', Snapshot.Strings['layout'], 'files',
+      Snapshot.Arrays['files'].Clone]));
+  finally
+    FreeAndNil(Snapshot);
+  end;
+  AssertEquals('nothing missing', '', Missing);
+  AssertEquals('as it was', Placed, Answer.Integers['placed']);
+  AssertFalse('just opened', Answer.Booleans['modified']);
+  Call('publish_mark_unsaved', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('not saved', Answer.Booleans['modified']);
+  AssertFalse('not an undo step', Answer.Booleans['canUndo']);
 end;
 
 procedure TTestPublishServer.TestSave;

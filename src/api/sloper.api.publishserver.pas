@@ -62,6 +62,7 @@ type
     function DoNote(Params: TJSONObject): TJSONData;
     function DoSetNote(Params: TJSONObject): TJSONData;
     function DoMaterials: TJSONData;
+    function DoSnapshot: TJSONData;
     function DoTitle: TJSONData;
     function DoSetTitle(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
@@ -121,6 +122,11 @@ resourcestring
   rsPublishSaved = 'Counts the text publish_text gave as saved, once it is written. A change made since leaves the ' +
     'layout modified.';
   rsPublishSavedText = 'The text written, as publish_text gave it';
+  rsPublishSnapshot = 'The layout file''s text and every file its sources were given, to keep as work in progress ' +
+    'and open again with publish_open.';
+  rsPublishSnapshotReturns = '`layout`, the layout file''s text; `files`, each with its `path` from the layout and ' +
+    'its `text`';
+  rsPublishMarkUnsaved = 'Counts the layout as not saved, as work in progress opened again is; not an undo step.';
   rsPublishSave = 'The layout file''s text, to download, counted as saved.';
   rsPublishSaveReturns = '`text`, the layout file''s text';
   rsPublishExport = 'The layout written as PDF, SVG or DXF-AAMA, to download. The problems that block a PDF block ' +
@@ -330,6 +336,8 @@ begin
     AddApiMethod(Built, 'publish_text', rsPublishText, rsPublishSaveReturns, True);
     AddApiMethod(Built, 'publish_saved', rsPublishSaved, rsPublishDone);
     AddApiParam(Built, 'text', apText, True, rsPublishSavedText);
+    AddApiMethod(Built, 'publish_snapshot', rsPublishSnapshot, rsPublishSnapshotReturns, True);
+    AddApiMethod(Built, 'publish_mark_unsaved', rsPublishMarkUnsaved, rsPublishDone);
     AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
@@ -987,6 +995,18 @@ begin
   end;
 end;
 
+function TPublishApiServer.DoSnapshot: TJSONData;
+var
+  Files: TJSONArray;
+  Path, Text: string;
+begin
+  Files := TJSONArray.Create;
+  Result := TJSONObject.Create(['layout', FDocument.Layout.SaveToText, 'files', Files]);
+  for Path in FDocument.SourceFiles.Paths do
+    if FDocument.SourceFiles.Find(Path, Text) then
+      Files.Add(TJSONObject.Create(['path', Path, 'text', Text]));
+end;
+
 function TPublishApiServer.DoTitle: TJSONData;
 var
   Layout: TLayout;
@@ -1101,6 +1121,12 @@ begin
     'publish_saved':
     begin
       FDocument.MarkSaved(RequireString(Params, 'text'));
+      Result := TJSONObject.Create;
+    end;
+    'publish_snapshot': Result := DoSnapshot;
+    'publish_mark_unsaved':
+    begin
+      FDocument.MarkUnsaved;
       Result := TJSONObject.Create;
     end;
     'publish_save': Result := DoSave;

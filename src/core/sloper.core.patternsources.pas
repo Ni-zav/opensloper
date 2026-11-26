@@ -68,6 +68,8 @@ type
     // Adds the file, or replaces it
     procedure Add(const Path, Text: string);
     function Find(const Path: string; out Text: string): boolean;
+    // Every file given, by its path, sorted, as work in progress keeps them
+    function Paths: TStringArray;
     procedure Clear;
   end;
 
@@ -216,6 +218,16 @@ end;
 function TSourceFiles.Find(const Path: string; out Text: string): boolean;
 begin
   Result := FTexts.TryGetValue(NormalSourcePath(Path), Text);
+end;
+
+function TSourceFiles.Paths: TStringArray;
+var
+  Path: string;
+begin
+  Result := nil;
+  for Path in FTexts.Keys do
+    Insert(Path, Result, Length(Result));
+  specialize TArrayHelper<string>.Sort(Result);
 end;
 
 procedure TSourceFiles.Clear;

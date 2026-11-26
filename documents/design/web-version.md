@@ -307,7 +307,13 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
   - Undo names the step it would take, as the desktop's menu does.
   - Exports are downloads, refused while a problem stops printing. Machine DXF waits for machine profiles on the web.
-- **The side panel** (`SideTabs`) has the Pieces tab (`publish/piecesTab.ts`), as the desktop's:
+- **The side panel** (`SideTabs`) has the desktop's tabs in its order. The Patterns tab (`publish/patternsTab.ts`) comes first:
+  - The patterns in the layout, each captioned with its size once one is chosen, in red when it cannot be read.
+  - Add pattern… and Remove pattern. Choosing a pattern adds it with its copies in the tray, one undo step each, and says how many.
+  - For the pattern chosen: its measurement file, Choose measurements…, Use the pattern's own, and its size.
+  - Files come from the browser's file picker and are given to the engine by name, as Open gives them. A pattern added may name a measurement file the layout lacks; one chosen with it is found by name, else the engine says it is missing.
+  - The edits are `TLayoutDocument`'s (`AddPattern`, `RemovePattern`, `SetMeasurements`, `SetSize`), which the desktop calls too.
+- Then the Pieces tab (`publish/piecesTab.ts`), as the desktop's:
   - Selected Piece: Turn 90°, Flip and Back to tray, for the piece selected on the pages.
   - Arrange: Place new pieces and Pack pieces. Pack fits the view and says what it did in the status bar.
   - Tray: the copies waiting to be placed. One dragged onto the pages is placed centred where it is let go, kept on the sheet (`publish_drop_copy`). A double-click or Enter places one in the rows below the others. Either way it is selected. A copy whose piece has a problem in the pattern is greyed and cannot be placed.
@@ -331,6 +337,10 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_open` | Opens a layout from its text, or starts one for a pattern among the files, with the files given (`OpenText`, `NewForPattern`) |
 | `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
 | `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; `tray`: the copies waiting, each with its caption and whether it can be placed; and `summary`, the status bar's |
+| `publish_patterns` | The Patterns tab's list: each pattern's source id, caption, measurement file, whether the layout chose it, its size and sizes, and its problem |
+| `publish_add_pattern` | Adds a pattern by its path, with files for it to read; one undo step |
+| `publish_remove_pattern`, `publish_set_size` | Removes a pattern, or reads it at another size, by its source id; one undo step |
+| `publish_set_measurements` | Reads a pattern with another measurement file, given with it, or its own for an empty path; one undo step |
 | `publish_output` | The Output tab's settings, which apply (`used`), and the papers, materials and output profiles to choose from |
 | `publish_set_output` | Changes them, as the desktop's tab does (`ChangeOutput`); refused when nothing is left to print on |
 | `publish_toggle_page` | Leaves the page at a point out of the print, or puts it back; one undo step |

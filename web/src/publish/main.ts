@@ -17,6 +17,7 @@ import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { OutputTab } from './outputTab.ts';
+import { PatternsTab } from './patternsTab.ts';
 import { PiecesTab } from './piecesTab.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
@@ -35,6 +36,7 @@ const ICONS = {
   exportPdf: 'file-type-pdf',
   exportSvg: 'file-type-svg',
   exportDxf: 'file-vector',
+  patternsTab: 'files',
   piecesTab: 'puzzle',
   outputTab: 'printer',
   problemsTab: 'alert-triangle',
@@ -107,6 +109,7 @@ class PublishApp {
   private readonly document: LayoutDocument;
   private readonly preview: PreviewCanvas;
   private readonly side: SideTabs;
+  private readonly patterns: PatternsTab;
   private readonly pieces: PiecesTab;
   private readonly output: OutputTab;
   private readonly problems: ProblemsPanel;
@@ -125,6 +128,9 @@ class PublishApp {
       failed: showFailure,
     });
     this.side = new SideTabs(sideElement, window.matchMedia('(max-width: 640px)').matches);
+    // In the desktop's order: patterns in, pieces placed, then output
+    this.patterns = new PatternsTab(this.document, { message: showMessage, failed: showFailure });
+    this.side.addSection('patterns', STRINGS.tabPatterns, ICONS.patternsTab, this.patterns);
     this.pieces = new PiecesTab({
       turn: () => {
         this.run(this.editSelected('publish_turn'));

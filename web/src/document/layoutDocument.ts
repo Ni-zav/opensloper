@@ -186,8 +186,31 @@ export class LayoutDocument {
   // sources name from other folders are found among them by name too.
   async open(files: ReadonlyMap<string, string>, start: LayoutStart): Promise<void> {
     this.current = parseState(await this.engine.call('publish_open', { ...start, files: fileList(files) }));
-    // A pattern found may name a measurement file, needed in turn. Each path
-    // is given once, so a round always gives something new.
+    await this.giveMissing(files);
+    this.opened += 1;
+    this.changed();
+  }
+
+  // Adds a pattern among the files chosen, by name, with the others for it
+  // to read; how many copies went in the tray
+  async addPattern(files: ReadonlyMap<string, string>, name: string): Promise<number> {
+    const answer = await this.call('publish_add_pattern', { path: name, files: fileList(files) });
+    await this.giveMissing(files);
+    this.changed();
+    return numberField(answer, 'added') ?? 0;
+  }
+
+  // Reads a pattern, by its source id, with the measurement file of this
+  // name among the files chosen, or with its own for ''
+  async setMeasurements(source: number, files: ReadonlyMap<string, string>, name: string): Promise<void> {
+    await this.call('publish_set_measurements', { source, path: name, files: fileList(files) });
+    await this.giveMissing(files);
+    this.changed();
+  }
+
+  // A pattern found may name a measurement file, needed in turn. Each path
+  // is given once, so a round always gives something new.
+  private async giveMissing(files: ReadonlyMap<string, string>): Promise<void> {
     const given = new Set<string>();
     for (;;) {
       const found = this.current.missing.flatMap((path): [string, string][] => {
@@ -195,7 +218,7 @@ export class LayoutDocument {
         return text === undefined || given.has(path) ? [] : [[path, text]];
       });
       if (found.length === 0) {
-        break;
+        return;
       }
       for (const [path] of found) {
         given.add(path);
@@ -204,8 +227,6 @@ export class LayoutDocument {
       // oxlint-disable-next-line no-await-in-loop
       this.current = parseState(await this.engine.call('publish_add_files', { files: fileList(found) }));
     }
-    this.opened += 1;
-    this.changed();
   }
 
   private changed(): void {

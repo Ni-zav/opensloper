@@ -94,6 +94,15 @@ type
     function ChangeOutput(const Output: TLayoutOutput; out Reason: string): boolean;
     // Leaves the page with this caption out of the print, or puts it back
     procedure TogglePage(const Caption: string);
+    // The Patterns tab's edits, each one undo step. Paths are as the layout
+    // stores them (TLayout.StoredPath). AddPattern returns how many copies
+    // it put in the tray.
+    function AddPattern(const Path: string): integer;
+    procedure RemovePattern(Source: TPatternSource);
+    // The measurement file to use, '' for the one the pattern names; the
+    // size goes back to the file's first, as a size belongs to its file
+    procedure SetMeasurements(Source: TPatternSource; const MeasurementFile: string);
+    procedure SetSize(Source: TPatternSource; const Size: string);
     // The files' contents sources are read from, from now on, in place of
     // disk; undo and Reload read them again
     function SourceFiles: TSourceFiles;
@@ -116,6 +125,10 @@ resourcestring
   rsLayoutUnplacePiece = 'Unplace piece';
   rsLayoutPlaceOne = 'Place piece';
   rsLayoutChangePaper = 'Change paper';
+  rsLayoutAddPattern = 'Add pattern';
+  rsLayoutRemovePattern = 'Remove pattern';
+  rsLayoutChangeMeasurements = 'Change measurements';
+  rsLayoutChangeSize = 'Change size';
   rsLayoutTogglePage = 'Leave page out';
   rsLayoutCannotPlace = 'This piece has a problem in the pattern, so it cannot be placed yet';
 
@@ -382,6 +395,42 @@ begin
     Exit;
   BeginChange(rsLayoutTogglePage);
   FLayout.TogglePage(Caption);
+  EndChange;
+end;
+
+function TLayoutDocument.AddPattern(const Path: string): integer;
+var
+  Before: integer;
+begin
+  Before := Length(FLayout.Unplaced);
+  BeginChange(rsLayoutAddPattern);
+  FLayout.AddSource(Path, '', '');
+  FLayout.LoadSources;
+  EndChange;
+  Result := Length(FLayout.Unplaced) - Before;
+end;
+
+procedure TLayoutDocument.RemovePattern(Source: TPatternSource);
+begin
+  BeginChange(rsLayoutRemovePattern);
+  FLayout.RemoveSource(Source);
+  EndChange;
+end;
+
+procedure TLayoutDocument.SetMeasurements(Source: TPatternSource; const MeasurementFile: string);
+begin
+  BeginChange(rsLayoutChangeMeasurements);
+  Source.MeasurementFile := MeasurementFile;
+  Source.Size := '';
+  FLayout.LoadSources;
+  EndChange;
+end;
+
+procedure TLayoutDocument.SetSize(Source: TPatternSource; const Size: string);
+begin
+  BeginChange(rsLayoutChangeSize);
+  Source.Size := Size;
+  FLayout.LoadSources;
   EndChange;
 end;
 

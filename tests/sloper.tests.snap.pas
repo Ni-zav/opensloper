@@ -46,6 +46,9 @@ type
     procedure TestVertical;
     procedure TestAnchorComesFirst;
     procedure TestFree;
+    // A line's end in open space is an offset across and down from its start
+    procedure TestLineEndOffset;
+    procedure TestLineEndKeepsOtherSnaps;
     procedure TestSplitPartsDoNotCross;
     procedure TestDescriptions;
     procedure TestObjectKeys;
@@ -197,6 +200,38 @@ begin
   Result := Snap(200.04, 200);
   AssertTrue('free', Result.Kind = snFree);
   AssertMakes('free, rounded', Result, 'TFreePoint', 200, 200);
+end;
+
+procedure TTestSnap.TestLineEndOffset;
+var
+  Start, Finish: TSnap;
+  Added: TOffsetPoint;
+begin
+  Start := Snap(0.5, 0.5);
+  Finish := LineEndSnap(Snap(200.04, 230, Start.PointKey), Start);
+  AssertTrue('an offset', Finish.Kind = snOffset);
+  AssertEquals('from the start point', '1', Finish.PointKey);
+  AssertEquals(Format(rsSnapOffset, ['200', '230', 'A']), SnapDescription(FPattern, Finish));
+  AssertMakes('across and down', Finish, 'TOffsetPoint', 200, 230);
+  Added := TOffsetPoint(FPattern.Objects[FPattern.ObjectCount - 1]);
+  AssertEquals('from A', '1', Added.Base);
+  AssertTrue('across and down', Added.Mode = omCartesian);
+  // A start in open space is not a point yet
+  Start := Snap(300, 300);
+  Finish := LineEndSnap(Snap(350, 280), Start);
+  AssertTrue('an offset from the start to be made', Finish.Kind = snOffset);
+  AssertEquals('no point yet', '', Finish.PointKey);
+  AssertEquals(Format(rsSnapOffsetStart, ['50', '-20']), SnapDescription(FPattern, Finish));
+end;
+
+procedure TTestSnap.TestLineEndKeepsOtherSnaps;
+var
+  Start: TSnap;
+begin
+  Start := Snap(0.5, 0.5);
+  AssertTrue('a point', LineEndSnap(Snap(99, 1, '1'), Start).Kind = snPoint);
+  AssertTrue('an edge', LineEndSnap(Snap(70, -1.5, '1'), Start).Kind = snEdge);
+  AssertTrue('level with the start', LineEndSnap(Snap(-60, 0.8, '1'), Start).Kind = snHorizontal);
 end;
 
 procedure TTestSnap.TestSplitPartsDoNotCross;

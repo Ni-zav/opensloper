@@ -21,6 +21,8 @@ The editor runs in the browser, since sending every drag to the server would mak
 - **Editor methods.** Methods only a canvas needs are named `editor_`. They have their own table (`EditorMethods`) in `Sloper.API.EditorServer`, whose `TEditorApiServer` answers them on top of the Automation API. The engine and `opensloper-cli serve` both use it. The editor methods are not MCP tools: a mouse position means nothing to Claude, and its tool list stays short. Methods useful to both editors and automation, such as `open` with contents, go in the Automation API itself.
 - **In the module:** `src/core`, `src/document`, `src/editor`, `src/api` and the PDF, SVG and DXF writers. There is no LCL and no BGRABitmap, so `render` gives SVG only. PNG must be reached through something the module can leave out.
 - **Runs in a Web Worker**, so a slow evaluation never freezes the page.
+  A worker reply or request failure includes the request ID. A worker-level
+  error rejects every waiting call, and subsequent calls fail immediately.
 
 ### Shared editing logic
 
@@ -96,7 +98,7 @@ What needs the evaluated pattern goes behind the API: snapping, completion, the 
 | Method | Does |
 | --- | --- |
 | `editor_changes` | What changed since it last answered (see the proxy, below) |
-| `editor_snapshot`, `editor_mark_unsaved` | Work in progress (see Files and storage) |
+| `editor_snapshot`, `editor_save_complete`, `editor_mark_unsaved` | File writes and work in progress (see Files and storage) |
 
 **The Properties tab's rows.** `editor_properties` gives an object's rows as data. Each has its id, kind, caption and value, whether it can be changed now, and a number's range. The kinds are text, name, formula, choice, check, button, problem, number, long text, font and colour.
 
@@ -161,6 +163,7 @@ File watching is dropped on the web. File formats do not change.
 **Work in progress** is kept in browser storage, so a closed tab loses nothing. It never leaves the machine (`Autosave` in `ui/autosave.ts`).
 
 - A second after each change, while the pattern is not saved, `editor_snapshot` gives the pattern file's text, without counting it saved, and the measurement set's text.
+- When writing directly to a browser file, Save takes the same snapshot. After the write completes, `editor_save_complete` marks it saved only if the document still has that revision. A failed write leaves recovery in place.
 - Both are written to the page's private file system (OPFS) under the tab's own id. A record in IndexedDB keeps when, the file name and the handles of the files they came from. Where the page cannot write OPFS files (some browsers allow it only in workers), the texts go in the record.
 - Saving removes them.
 - Each tab holds a Web Lock while it is open, so work whose lock is free was left by a tab that closed. On starting, the app offers the newest such work in the status bar, to open again or discard, then the next.
@@ -211,7 +214,9 @@ The design app's page is built (`web/`, see its README). The TypeScript is one n
 - Export SVG downloads the draft as the canvas shows it, as the desktop's Export Draft SVG.
 - Print… (`PrintDialog`) asks for the paper: A4, A3 or Letter, starting at Letter where that is the usual paper. It makes the publish app's tiled print of a new layout of the pattern as it is open, unsaved edits included: the pages with their captions, overlaps and marks, and the cover with the test square, the reminder to print at 100% and the page map. Open to print shows it in the browser's PDF viewer, in a tab opened while the click counts (a blocked tab downloads it instead). Download PDF saves it. Placing pieces by hand, leaving pages out and other kinds of output are the publish app's. Printer calibration waits for preferences on the web, so it prints at exactly 100%.
 
-**The side panel's tabs** (`SideTabs`). A tab can sit at the foot of the column, and show a count on its icon.
+**SVG stamps.** The toolbar reads the chosen SVG file locally and passes it as text to `editor_import_stamp`. The engine uses the desktop importer and the same one-step placement edit. It centres the stamp on the selection or in the canvas, stores the paths in the pattern and returns any import warnings. Files over the importer's size limit are refused before reading.
+
+**The side panel's tabs** (`SideTabs`). A button above the tabs shows or hides the panel and reopens the last selected tab. The editor starts with the panel folded on narrow screens. A tab can sit at the foot of the column, and show a count on its icon.
 
 - **Lists.** Objects, Variables and Measurements are lists on the shared `ListPanel`: search, rows by key, and the selection kept and painted by the list. A hidden tab builds its rows only once it shows.
 - **Objects** follows the canvas selection, reveals what it selects, and zooms to it on a double-click.

@@ -61,7 +61,9 @@ type
     procedure TestCornerFollowsRadius;
     procedure TestCornerFollowsMovedPoint;
     procedure TestCornerRadiusTooBigIsInvalid;
-    procedure TestCornerRefusesCurve;
+    procedure TestCornerBetweenCurveAndLine;
+    procedure TestCornerBetweenTwoCurves;
+    procedure TestCurvedCornerRadiusTooLarge;
     procedure TestCornerRefusesEdgesNotMeeting;
     procedure TestCornerRefusesOneEdgeTwice;
     procedure TestCornerOnAPiece;
@@ -429,16 +431,58 @@ begin
   AssertTrue(Arc.State = esInvalid);
 end;
 
-procedure TTestAccessories.TestCornerRefusesCurve;
+procedure TTestAccessories.TestCornerBetweenCurveAndLine;
 var
-  V: string;
+  Vertex: string;
   Curve: TCurveObject;
+  Arc: TCornerArc;
+  Contact, Nearest: TVec2;
+  Position, Offset: double;
 begin
-  V := Pt('V', 100);
-  Curve := FPattern.AddCurve(Pt('A'), V, '30', '30', '150', '30', erOutline);
+  Vertex := Pt('V', 100);
+  Curve := FPattern.AddCurve(Pt('A'), Vertex, '30', '30', '150', '30', erOutline);
+  Arc := FPattern.AddRoundCorner(Curve.Key, Line(Vertex, Pt('B', 100, 100)).Key, '20');
+  AssertNotNull(FPattern.LastError, Arc);
   FPattern.Evaluate;
-  AssertTrue(not Assigned(FPattern.AddRoundCorner(Curve.Key, Line(V, Pt('B', 100, 100)).Key, '20')));
-  AssertEquals(Format(rsPatternCornerNotStraight, [Curve.Name]), FPattern.LastError);
+  AssertTrue(Arc.Message, Arc.State = esValid);
+  AssertTrue(Arc.TrimmedA.Message, Arc.TrimmedA.State = esValid);
+  AssertTrue(Arc.TrimmedB.Message, Arc.TrimmedB.State = esValid);
+  Contact := Arc.PointAtLength(0);
+  Nearest := Curve.Locate(Contact, Position, Offset);
+  AssertTrue('the arc touches the curve', PointsNear(Contact, Nearest));
+  AssertNear('the vertical line contact', 100, Arc.PointAtLength(Arc.Length).X, DEFAULT_TOLERANCE);
+  AssertNear('a tangent to the line', 0, Abs(Cos(Arc.EndDirection * Pi / 180)), DEFAULT_TOLERANCE);
+end;
+
+procedure TTestAccessories.TestCornerBetweenTwoCurves;
+var
+  Vertex: string;
+  First, Second: TCurveObject;
+  Arc: TCornerArc;
+begin
+  Vertex := Pt('V', 100);
+  First := FPattern.AddCurve(Vertex, Pt('A'), '180', '30', '0', '30', erOutline);
+  Second := FPattern.AddCurve(Pt('B', 120, 100), Vertex, '90', '30', '270', '30', erOutline);
+  Arc := FPattern.AddRoundCorner(First.Key, Second.Key, '20');
+  AssertNotNull(FPattern.LastError, Arc);
+  FPattern.Evaluate;
+  AssertTrue(Arc.Message, Arc.State = esValid);
+  AssertTrue(Arc.TrimmedA.Message, Arc.TrimmedA.State = esValid);
+  AssertTrue(Arc.TrimmedB.Message, Arc.TrimmedB.State = esValid);
+end;
+
+procedure TTestAccessories.TestCurvedCornerRadiusTooLarge;
+var
+  Vertex: string;
+  Curve: TCurveObject;
+  Arc: TCornerArc;
+begin
+  Vertex := Pt('V', 100);
+  Curve := FPattern.AddCurve(Pt('A'), Vertex, '30', '30', '150', '30', erOutline);
+  Arc := FPattern.AddRoundCorner(Curve.Key, Line(Vertex, Pt('B', 100, 100)).Key, '150');
+  AssertNotNull(FPattern.LastError, Arc);
+  FPattern.Evaluate;
+  AssertTrue('radius does not fit', Arc.State = esInvalid);
 end;
 
 procedure TTestAccessories.TestCornerRefusesEdgesNotMeeting;

@@ -15,33 +15,45 @@ export class EngineError extends Error {
   }
 }
 
+type Answer = Exclude<FromWorker, { kind: 'failed' }>;
+
+interface Pending {
+  resolve: (answer: Answer) => void;
+  reject: (reason: Error) => void;
+}
+
 export class Engine {
   private readonly worker: Worker;
-  private readonly waiting = new Map<number, (message: FromWorker) => void>();
+  private readonly waiting = new Map<number, Pending>();
   private nextId = 1;
-  private failure: ((reason: Error) => void) | undefined;
+  private failure: Error | undefined;
 
   private constructor(worker: Worker) {
     this.worker = worker;
     worker.addEventListener('message', (event: MessageEvent<FromWorker>) => {
       this.receive(event.data);
     });
+    worker.addEventListener('error', (event) => {
+      this.stop(new Error(event.message === '' ? 'The engine worker stopped' : event.message));
+    });
+    worker.addEventListener('messageerror', () => {
+      this.stop(new Error('Could not read an engine worker message'));
+    });
   }
 
   // Starts the worker at workerUrl and loads the module at wasmUrl into it
   static async start(workerUrl: URL, wasmUrl: URL): Promise<{ engine: Engine; loaded: Loaded }> {
     const engine = new Engine(new Worker(workerUrl, { type: 'module' }));
-    const loaded = await new Promise<Loaded>((resolve, reject) => {
-      engine.failure = reject;
-      engine.waiting.set(0, (message) => {
-        if (message.kind === 'loaded') {
-          resolve(message);
-        }
-      });
-      engine.send({ kind: 'load', url: wasmUrl.href });
-    });
-    engine.waiting.delete(0);
-    return { engine, loaded };
+    try {
+      const loaded = await engine.send({ kind: 'load', id: 0, url: wasmUrl.href });
+      if (loaded.kind !== 'loaded') {
+        throw new Error('The engine did not load');
+      }
+      return { engine, loaded };
+    } catch (error: unknown) {
+      engine.stop(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
   }
 
   // The method's result; an EngineError when the engine refuses it
@@ -52,10 +64,10 @@ export class Engine {
   // The same, with how long the engine took, as the worker measured it, in ms
   async callTimed(method: string, params: object = {}): Promise<{ result: JsonRecord; ms: number }> {
     const id = this.nextId++;
-    const message = await new Promise<FromWorker>((resolve, reject) => {
-      this.failure = reject;
-      this.waiting.set(id, resolve);
-      this.send({ kind: 'call', id, request: JSON.stringify({ jsonrpc: '2.0', id, method, params }) });
+    const message = await this.send({
+      kind: 'call',
+      id,
+      request: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
     });
     if (message.kind !== 'reply') {
       throw new Error(`no reply to ${method}`);
@@ -67,22 +79,39 @@ export class Engine {
     return { result: reply.result ?? {}, ms: reply.ms };
   }
 
-  private send(message: ToWorker): void {
-    this.worker.postMessage(message);
+  private async send(message: ToWorker): Promise<Answer> {
+    if (this.failure !== undefined) {
+      throw this.failure;
+    }
+    return new Promise<Answer>((resolve, reject) => {
+      this.waiting.set(message.id, { resolve, reject });
+      try {
+        this.worker.postMessage(message);
+      } catch (error: unknown) {
+        this.waiting.delete(message.id);
+        throw error;
+      }
+    });
   }
 
   private receive(message: FromWorker): void {
-    switch (message.kind) {
-      case 'loaded':
-        this.waiting.get(0)?.(message);
-        break;
-      case 'reply':
-        this.waiting.get(message.id)?.(message);
-        this.waiting.delete(message.id);
-        break;
-      case 'failed':
-        this.failure?.(new Error(message.message));
-        break;
+    const pending = this.waiting.get(message.id);
+    if (pending === undefined) return;
+    this.waiting.delete(message.id);
+    if (message.kind === 'failed') {
+      pending.reject(new Error(message.message));
+    } else {
+      pending.resolve(message);
     }
+  }
+
+  private stop(error: Error): void {
+    if (this.failure !== undefined) return;
+    this.failure = error;
+    this.worker.terminate();
+    for (const request of this.waiting.values()) {
+      request.reject(error);
+    }
+    this.waiting.clear();
   }
 }

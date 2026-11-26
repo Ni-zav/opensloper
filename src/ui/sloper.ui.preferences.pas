@@ -51,6 +51,18 @@ resourcestring
     'New patterns will start in it once patterns can have units other than millimetres.';
   rsPreferencesGrid = 'Grid Spacing';
   rsPreferencesGridNote = 'Each unit keeps its own spacing. Zoomed out too far to see the lines, the grid spaces them further apart, always on multiples of this spacing.';
+  rsPreferencesRoleStyles = 'Line Styles';
+  rsPreferencesRole = 'Role';
+  rsPreferencesRoleColor = 'Colour';
+  rsPreferencesRoleDash = 'Line pattern';
+  rsPreferencesRoleWidth = 'Width (px)';
+  rsPreferencesRoleDefault = 'Default';
+  rsPreferencesRoleSolid = 'Solid';
+  rsPreferencesRoleDashed = 'Dashed';
+  rsPreferencesRoleDotted = 'Dotted';
+  rsPreferencesRoleDashDot = 'Dash-dot';
+  rsPreferencesRoleReset = 'Reset this role';
+  rsPreferencesRoleNote = 'These styles apply to the Design canvas. A width of 0 uses the default.';
   rsPreferencesCalibrationX = 'Calibration across';
   rsPreferencesCalibrationY = 'Calibration down';
   rsPreferencesCalibration = 'Printer Calibration';
@@ -99,7 +111,8 @@ implementation
 
 uses
   SysUtils, Math, Forms, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls, Spin, ButtonPanel, Dialogs, Sloper.Core.Measurements,
-  Sloper.Core.Units, Sloper.UI.Spacing, Sloper.Assistant.Key, Sloper.Output.BlenderRun, Types;
+  Sloper.Core.Units, Sloper.Core.Draft, Sloper.Editor.PropertyText, Sloper.UI.Spacing, Sloper.UI.MaterialGrid,
+  Sloper.Assistant.Key, Sloper.Output.BlenderRun, Types;
 
 const
   DIALOG_WIDTH = 560;
@@ -115,6 +128,8 @@ const
   DRAPE_SPACING_INCREMENT = 1;
   DRAPE_FRAMES_INCREMENT = 10;
   UNIT_CAPTIONS: array[TMeasureUnit] of string = (rsPreferencesUnitMillimetre, rsPreferencesUnitCentimetre, rsPreferencesUnitInch);
+  DASH_CAPTIONS: array[TRoleDashStyle] of string = (rsPreferencesRoleDefault, rsPreferencesRoleSolid, rsPreferencesRoleDashed,
+    rsPreferencesRoleDotted, rsPreferencesRoleDashDot);
 
 type
   // Holds the controls while the dialog is open
@@ -123,6 +138,11 @@ type
     FPages: TPageControl;
     FUnitBox, FSquareBox: TComboBox;
     FGridEdits: array[TMeasureUnit] of TFloatSpinEdit;
+    FRoleBox, FRoleDashBox: TComboBox;
+    FRoleColorButton: TButton;
+    FRoleWidthEdit: TFloatSpinEdit;
+    FRole: TEdgeRole;
+    FRoleStyles: TRoleDisplayStyles;
     FCalibrationXEdit, FCalibrationYEdit, FMeasuredXEdit, FMeasuredYEdit: TFloatSpinEdit;
     FShadeBox: TCheckBox;
     FShareMeasurementsBox: TCheckBox;
@@ -146,6 +166,12 @@ type
     function NewSpin(MinValue, MaxValue, Increment: double; Decimals: integer): TFloatSpinEdit;
     procedure BuildGeneralTab;
     procedure BuildDesignTab;
+    procedure BuildRoleStylesGroup(Host: TScrollBox);
+    procedure ShowRoleStyle;
+    procedure StoreRoleStyle;
+    procedure RoleChange(Sender: TObject);
+    procedure RoleColorClick(Sender: TObject);
+    procedure RoleResetClick(Sender: TObject);
     procedure BuildGarmentGroup(Host: TScrollBox);
     procedure BuildClaudeGroup(Host: TScrollBox);
     procedure BuildPublishTab;
@@ -313,7 +339,85 @@ begin
     AddRow(Rows, UNIT_CAPTIONS[AUnit], FGridEdits[AUnit]);
   end;
   AddNote(Group, rsPreferencesGridNote);
+  BuildRoleStylesGroup(Host);
   BuildGarmentGroup(Host);
+end;
+
+procedure TPreferencesDialog.BuildRoleStylesGroup(Host: TScrollBox);
+var
+  Group: TGroupBox;
+  Rows: TPanel;
+  Role: TEdgeRole;
+  Dash: TRoleDashStyle;
+  ResetButton: TButton;
+begin
+  Group := AddGroup(Host, rsPreferencesRoleStyles);
+  Rows := AddRows(Group);
+  FRoleBox := TComboBox.Create(Self);
+  FRoleBox.Style := csDropDownList;
+  for Role := Low(TEdgeRole) to High(TEdgeRole) do
+    FRoleBox.Items.Add(RoleCaption(Role));
+  FRoleBox.OnChange := @RoleChange;
+  AddRow(Rows, rsPreferencesRole, FRoleBox);
+  FRoleColorButton := TButton.Create(Self);
+  FRoleColorButton.OnClick := @RoleColorClick;
+  AddRow(Rows, rsPreferencesRoleColor, FRoleColorButton);
+  FRoleDashBox := TComboBox.Create(Self);
+  FRoleDashBox.Style := csDropDownList;
+  for Dash := Low(TRoleDashStyle) to High(TRoleDashStyle) do
+    FRoleDashBox.Items.Add(DASH_CAPTIONS[Dash]);
+  AddRow(Rows, rsPreferencesRoleDash, FRoleDashBox);
+  FRoleWidthEdit := NewSpin(0, MAX_ROLE_WIDTH, 0.5, 1);
+  AddRow(Rows, rsPreferencesRoleWidth, FRoleWidthEdit);
+  ResetButton := TButton.Create(Self);
+  ResetButton.Caption := rsPreferencesRoleReset;
+  ResetButton.OnClick := @RoleResetClick;
+  AddRow(Rows, '', ResetButton);
+  AddNote(Group, rsPreferencesRoleNote);
+end;
+
+procedure TPreferencesDialog.ShowRoleStyle;
+begin
+  if FRoleStyles[FRole].Color = '' then
+    FRoleColorButton.Caption := rsPreferencesRoleDefault
+  else
+    FRoleColorButton.Caption := FRoleStyles[FRole].Color;
+  FRoleDashBox.ItemIndex := Ord(FRoleStyles[FRole].Dash);
+  FRoleWidthEdit.Value := FRoleStyles[FRole].Width;
+end;
+
+procedure TPreferencesDialog.StoreRoleStyle;
+begin
+  if FRoleDashBox.ItemIndex >= 0 then
+    FRoleStyles[FRole].Dash := TRoleDashStyle(FRoleDashBox.ItemIndex);
+  FRoleStyles[FRole].Width := FRoleWidthEdit.Value;
+end;
+
+procedure TPreferencesDialog.RoleChange(Sender: TObject);
+begin
+  if FRoleBox.ItemIndex < 0 then
+    Exit;
+  StoreRoleStyle;
+  FRole := TEdgeRole(FRoleBox.ItemIndex);
+  ShowRoleStyle;
+end;
+
+procedure TPreferencesDialog.RoleColorClick(Sender: TObject);
+var
+  ChosenColor: string;
+begin
+  ChosenColor := RoleDisplayColor(FRole, FRoleStyles[FRole]);
+  if ChooseMaterialColor(Self, ChosenColor) then
+  begin
+    FRoleStyles[FRole].Color := ChosenColor;
+    FRoleColorButton.Caption := ChosenColor;
+  end;
+end;
+
+procedure TPreferencesDialog.RoleResetClick(Sender: TObject);
+begin
+  FRoleStyles[FRole] := Default(TRoleDisplayStyle);
+  ShowRoleStyle;
 end;
 
 procedure TPreferencesDialog.BuildGarmentGroup(Host: TScrollBox);
@@ -515,6 +619,10 @@ begin
   FUnitBox.ItemIndex := Ord(Preferences.MeasureUnit);
   for AUnit := Low(TMeasureUnit) to High(TMeasureUnit) do
     FGridEdits[AUnit].Value := Preferences.GridSteps[AUnit];
+  FRole := Low(TEdgeRole);
+  FRoleBox.ItemIndex := Ord(FRole);
+  FRoleStyles := Preferences.RoleStyles;
+  ShowRoleStyle;
   FCalibrationXEdit.Value := Preferences.Calibration.X;
   FCalibrationYEdit.Value := Preferences.Calibration.Y;
   FShadeBox.Checked := Preferences.GarmentShading;
@@ -537,6 +645,8 @@ var
   AUnit: TMeasureUnit;
 begin
   Result := DefaultPreferences;
+  StoreRoleStyle;
+  Result.RoleStyles := FRoleStyles;
   if FUnitBox.ItemIndex >= 0 then
     Result.MeasureUnit := TMeasureUnit(FUnitBox.ItemIndex);
   for AUnit := Low(TMeasureUnit) to High(TMeasureUnit) do

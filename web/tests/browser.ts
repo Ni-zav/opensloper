@@ -1,11 +1,12 @@
 // What the browser tests share: the built app (out/design) served on a free
-// port, headless Chromium (CHROMIUM names it, /usr/bin/chromium by
-// default), and waiting for the body data the app sets for tests.
+// port, a headless browser (CHROMIUM overrides its path), and waiting
+// for the body data the app sets for tests.
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { extname, join, normalize, relative } from 'node:path';
-import { launch, type Browser, type Page } from 'puppeteer-core';
+import { launch, type Browser, type KeyInput, type Page } from 'puppeteer-core';
+import { isMac } from '../src/ui/shortcuts.ts';
 
 const ROOT = 'out/design';
 export const TIMEOUT_MS = 30000;
@@ -60,10 +61,25 @@ export async function serveApp(options: ServeOptions = {}): Promise<{ port: numb
 }
 
 export async function launchBrowser(): Promise<Browser> {
+  const executable =
+    process.platform === 'darwin'
+      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+      : '/usr/bin/chromium';
   return launch({
-    executablePath: process.env.CHROMIUM ?? '/usr/bin/chromium',
+    executablePath: process.env.CHROMIUM ?? executable,
     args: ['--no-sandbox', '--disable-gpu'],
   });
+}
+
+// Mod is Command on macOS and Control elsewhere, as the editor sees it.
+export async function pressWithMod(page: Page, key: KeyInput): Promise<void> {
+  const modifier = (await page.evaluate(isMac)) ? 'Meta' : 'Control';
+  await page.keyboard.down(modifier);
+  try {
+    await page.keyboard.press(key);
+  } finally {
+    await page.keyboard.up(modifier);
+  }
 }
 
 // Errors on the page and in its console, gathered for the end

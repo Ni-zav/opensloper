@@ -22,6 +22,11 @@ point's type afterwards.
 Each type's settings are listed in
 [Operations and objects](../reference/operations.md#points).
 
+The Properties tab shows what a selected point is placed from, after its
+name: an offset point's **From**, the edge a point lies **Along** and the
+end it is **Measured from**, and so on. These rows are for reading only; to
+place the point from something else, [change its type](#changing-a-points-type).
+
 ## Changing a point's type
 
 When a point was placed the wrong way, say a free point that should have been
@@ -38,6 +43,20 @@ pieces, notches and formulas go on as before.
 
 The menu item's hint says what to select for each type. The change is one
 undo step.
+
+### Dragging with the Point tool
+
+A free or offset point can be placed from another point by dragging:
+
+1. Choose the Point tool (++p++).
+2. Press on the point and drag. A blue line follows the pointer, and the
+   status bar says what the drop will do.
+3. Let go on another point to place it across and down from that point, or
+   in open space to make it a free point.
+
+It stays where it is, and the change is one undo step. Letting go on an
+edge, on the point itself or on a point that is placed from it does nothing,
+and the status bar says why. Press ++escape++ during the drag to drop it.
 
 ### Where the point ends up
 

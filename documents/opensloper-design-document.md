@@ -202,7 +202,7 @@ A dependency used by one optional feature is kept out of the core and the other 
 
 ## Testing
 
-FPCUnit with the console runner, in `tests/`, run by `opensloper-make.sh test` with heaptrc, so leaks fail too. CI (`.github/workflows/ci.yml`) runs it with the formatter and the standards check. The LCL-free core means most logic is tested without a UI.
+FPCUnit with the console runner, in `tests/`, run by `opensloper-make.sh test` with heaptrc, so leaks fail too. CI (`.github/workflows/ci.yml`) runs it with the formatter and the standards check. A pull request must also name the issue it is for in its title (`.github/workflows/pull-request.yml`, the Linked issue check). The LCL-free core means most logic is tested without a UI.
 
 **What is covered:** geometry (with a tolerance helper, never exact float equality), formulas, evaluation order and states, IDs never reused, every operation against hand-checked cases and failures, piece detection and allowance, markings, transforms, seams, notes, materials, units and conversion, copy and paste, measurement files and merges, undo restoring the exact earlier state, save → load → save giving identical JSON, tiling, packing, PDF, SVG and DXF bytes, the mesher and the drape export, and the CLI commands through `RunCli`. Tables that document the program (operations, file members, API methods, CLI options, shortcuts, icons) are held to the code, and committed reference pages and schemas must match what the program writes.
 
@@ -223,7 +223,7 @@ Pages use only common extensions, so another generator would mean rewriting the 
 
 **Generated where it can be**, so the code is the single source of truth: `opensloper-cli doc TOPIC` (`src/docs/`) writes the reference pages from the tables the code uses (`functions`, `operations`, `files` and the schemas, `shortcuts`, `icons`, `cli`, `api`) and the Python client. They are committed, so the site builds without a Pascal toolchain, and a test fails while one differs from what the program writes. Tutorial and example patterns live in `docs/examples/` with their measurements; tutorial pictures are drawn by `export-draft --labels --upto=NAME` from `docs/tutorials/images.list`, and tests check every example opens without problems.
 
-**Developer documentation** is made by PasDoc from the comments before each unit and declaration (`opensloper-make.sh devdocs` into `release/dev_docs`), with `documents/pasdoc-introduction.txt` as its first page. The comments stay in the plain `//` style of the coding standards, with no PasDoc tags. It is not published yet (see Open items).
+**Developer documentation** is made by PasDoc from the comments before each unit and declaration (`opensloper-make.sh devdocs` into `release/dev_docs`), with `documents/pasdoc-introduction.txt` as its first page. The comments stay in the plain `//` style of the coding standards, with no PasDoc tags. GitHub Pages publishes it from `development` at `/dev/pasdoc/`.
 
 `docs/` is the user documentation; `documents/` holds internal notes, including these design files.
 

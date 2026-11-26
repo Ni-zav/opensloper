@@ -136,7 +136,7 @@ function inkFor(item: SceneObject, normal: Rgba): Rgba {
   return item.state === 'valid' ? ink : { ...ink, alpha: FADED_ALPHA };
 }
 
-export type SnapKind = 'free' | 'point' | 'crossing' | 'edge' | 'horizontal' | 'vertical';
+export type SnapKind = 'free' | 'point' | 'crossing' | 'edge' | 'horizontal' | 'vertical' | 'offset';
 
 // What a two-click tool's second click would make, drawn from its first
 export type SnapPreview = 'line' | 'circle' | 'rectangle';
@@ -415,6 +415,7 @@ export class PatternPainter {
         context.rect(at.x - size + 1, at.y - size + 1, 2 * size - 2, 2 * size - 2);
         break;
       case 'free':
+      case 'offset':
         context.lineWidth = 1.5;
         context.moveTo(at.x - size, at.y);
         context.lineTo(at.x + size, at.y);

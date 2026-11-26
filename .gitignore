@@ -29,6 +29,9 @@ backup/
 /.zensical-build.toml
 /.zensical-offline.toml
 
+# The Python venv (docs, site, and Node through nodeenv); a link to one too
+/venv
+
 # Python bytecode
 __pycache__/
 *.pyc

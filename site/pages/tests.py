@@ -1,7 +1,12 @@
 """The site's pages, after import_opensloper (opensloper-make.sh site runs both)."""
+import subprocess
+import tempfile
+from pathlib import Path
+
 from django.test import SimpleTestCase
 
 from .context import version
+from .management.commands.import_opensloper import release_version
 
 
 class PagesTest(SimpleTestCase):
@@ -16,6 +21,25 @@ class PagesTest(SimpleTestCase):
 
     def test_imported_version(self):
         self.assertRegex(version(), r"^\d+\.\d+\.\d+")
+
+    def test_release_version_is_the_latest_tag(self):
+        # A bump on development after a release still offers the release
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder)
+
+            def git(*args):
+                subprocess.run(["git", "-C", folder, *args], check=True, capture_output=True)
+
+            git("init", "-q")
+            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "a")
+            self.assertIsNone(release_version(repo))
+            git("tag", "v0.8.0")
+            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "bump to 0.9.0")
+            self.assertEqual(release_version(repo), "0.8.0")
+
+    def test_release_version_without_git(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIsNone(release_version(Path(folder)))
 
     def test_app_needs_its_slash(self):
         page = self.client.get("/design")

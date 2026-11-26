@@ -70,7 +70,14 @@ type
 
   // Where a section's rows go, top to bottom: every section adds its rows for
   // one place before any section adds rows for the next
-  TSectionPlace = (spType, spName, spFields, spRows, spResult, spEnd);
+  TSectionPlace = (spType, spName, spInputs, spFields, spRows, spResult, spEnd);
+
+  // One of the objects a point is placed from, shown read only
+  TPointInput = record
+    Caption: string;
+    Key: string;
+  end;
+  TPointInputArray = array of TPointInput;
 
 const
   PROPERTY_ROW_TYPE = 'type';
@@ -117,6 +124,8 @@ const
   PROPERTY_ROW_NOTE_ANCHOR = 'noteAnchor';
   PROPERTY_ROW_NOTE_FREE = 'noteFree';
   PROPERTY_ROW_STAMP_SCALE = 'stampScale';
+  // Followed by the input's index in PointInputs
+  PROPERTY_ROW_INPUT = 'input';
   MAX_CUT_COUNT = 99;
   NOTE_SIZE_STEP = 1;
   STAMP_SCALE_STEP = 0.1;
@@ -151,6 +160,10 @@ function MarkerChoices: TStringArray;
 function RepeatEndsChoices: TStringArray;
 // Every row the object shows, in order, with its values
 function PropertyRows(Pattern: TPattern; Node: TEvalNode): TPropertyRowArray;
+// What a point is placed from, by its type: an offset's base, the edge a
+// point lies along and the end it is measured from, and so on; none for a
+// free point or anything else
+function PointInputs(Pattern: TPattern; Node: TEvalNode): TPointInputArray;
 // A formula field's caption with "Change" for its undo step
 function FieldEditName(const FieldName: string): string;
 
@@ -273,6 +286,19 @@ resourcestring
   rsPropFlip = 'Flip';
   rsPropFlipSeam = 'Flip seam';
   rsPropMadeBy = 'Made by';
+  rsPropInputFrom = 'From';
+  rsPropInputTo = 'To';
+  rsPropInputAlong = 'Along';
+  rsPropInputMeasuredFrom = 'Measured from';
+  rsPropInputFirstEdge = 'First edge';
+  rsPropInputSecondEdge = 'Second edge';
+  rsPropInputCentre = 'Centre';
+  rsPropInputFirstCentre = 'First centre';
+  rsPropInputSecondCentre = 'Second centre';
+  rsPropInputOnto = 'Onto';
+  rsPropInputCorner = 'Corner';
+  rsPropInputRepeat = 'Repeat';
+  rsPropInputCopyOf = 'Copy of';
   rsPropChangeType = 'Change edge type';
   rsPropEdit = 'Change %s';
   rsPropRename = 'Rename';
@@ -532,6 +558,77 @@ begin
 end;
 
 // Type, name and formula fields first, as TCommonSection
+function PointInputs(Pattern: TPattern; Node: TEvalNode): TPointInputArray;
+
+  procedure Add(const ACaption, AKey: string);
+  var
+    Input: TPointInput;
+  begin
+    Input.Caption := ACaption;
+    Input.Key := AKey;
+    Insert(Input, Result, Length(Result));
+  end;
+
+var
+  Edge: TEvalNode;
+begin
+  Result := nil;
+  if Node is TOffsetPoint then
+    Add(rsPropInputFrom, TOffsetPoint(Node).Base)
+  else if Node is TAlongEdgePoint then
+  begin
+    Add(rsPropInputAlong, TAlongEdgePoint(Node).Edge);
+    Edge := Pattern.FindNode(TAlongEdgePoint(Node).Edge);
+    if Edge is TEdgeObject then
+      if TAlongEdgePoint(Node).FromEnd then
+        Add(rsPropInputMeasuredFrom, TEdgeObject(Edge).EndKey)
+      else
+        Add(rsPropInputMeasuredFrom, TEdgeObject(Edge).StartKey);
+  end
+  else if Node is TBetweenPoint then
+  begin
+    Add(rsPropInputFrom, TBetweenPoint(Node).PointA);
+    Add(rsPropInputTo, TBetweenPoint(Node).PointB);
+  end
+  else if Node is TIntersectPoint then
+  begin
+    Add(rsPropInputFirstEdge, TIntersectPoint(Node).EdgeA);
+    Add(rsPropInputSecondEdge, TIntersectPoint(Node).EdgeB);
+  end
+  else if Node is TCircleEdgePoint then
+  begin
+    Add(rsPropInputCentre, TCircleEdgePoint(Node).Centre);
+    Add(rsPropInputOnto, TCircleEdgePoint(Node).Edge);
+  end
+  else if Node is TCircleCirclePoint then
+  begin
+    Add(rsPropInputFirstCentre, TCircleCirclePoint(Node).CentreA);
+    Add(rsPropInputSecondCentre, TCircleCirclePoint(Node).CentreB);
+  end
+  else if Node is TProjectPoint then
+  begin
+    Add(rsPropInputFrom, TProjectPoint(Node).Source);
+    Add(rsPropInputOnto, TProjectPoint(Node).Edge);
+  end
+  else if Node is TCornerPoint then
+    Add(rsPropInputCorner, TCornerPoint(Node).Arc)
+  else if Node is TRepeatPoint then
+    Add(rsPropInputRepeat, TRepeatPoint(Node).Source.Key)
+  else if Node is TPointCopy then
+    Add(rsPropInputCopyOf, TPointCopy(Node).Source);
+end;
+
+// The point's inputs, as read-only rows after its name
+procedure AddInputRows(var Builder: TRowBuilder; Pattern: TPattern; Node: TEvalNode);
+var
+  Inputs: TPointInputArray;
+  Index: integer;
+begin
+  Inputs := PointInputs(Pattern, Node);
+  for Index := 0 to High(Inputs) do
+    Builder.Add(PROPERTY_ROW_INPUT + IntToStr(Index), prkText, Inputs[Index].Caption, NameOf(Pattern, Inputs[Index].Key));
+end;
+
 procedure AddCommonRows(var Builder: TRowBuilder; Pattern: TPattern; Node: TEvalNode; Place: TSectionPlace);
 var
   Index: integer;
@@ -946,6 +1043,8 @@ begin
   for Place := Low(TSectionPlace) to High(TSectionPlace) do
   begin
     AddCommonRows(Builder, Pattern, Node, Place);
+    if Place = spInputs then
+      AddInputRows(Builder, Pattern, Node);
     if Node is TEdgeObject then
       AddEdgeRows(Builder, Pattern, TEdgeObject(Node), Place);
     if HasMarkerRows(Node) and (Place = spRows) then

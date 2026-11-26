@@ -10,10 +10,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { KeyInput, Page } from 'puppeteer-core';
+import type { Page } from 'puppeteer-core';
 import {
   bodyData,
   launchBrowser,
+  pressWithMod,
   serveApp,
   status,
   TIMEOUT_MS,
@@ -27,6 +28,7 @@ const PATTERN = 'patterns/skirt-pieces.sloper';
 const MEASUREMENTS = 'patterns/skirt-small.slm';
 // How long a page is given to offer work left over that it should not, in ms
 const IDLE_MS = 1000;
+const WRITE_FAILURE = 'Simulated pattern write failure';
 
 // The pickers, over OPFS: each takes the next path the test has queued in
 // window.testPicks ('' is the top folder)
@@ -115,18 +117,6 @@ async function clickToolbar(page: Page, hint: string): Promise<void> {
   await page.click(`#toolbar button[title="${hint}"]`);
 }
 
-async function pressWithControl(page: Page, key: KeyInput, shift = false): Promise<void> {
-  await page.keyboard.down('Control');
-  if (shift) {
-    await page.keyboard.down('Shift');
-  }
-  await page.keyboard.press(key);
-  if (shift) {
-    await page.keyboard.up('Shift');
-  }
-  await page.keyboard.up('Control');
-}
-
 // Adds a point near the canvas's top left with the Point tool
 async function addPoint(page: Page): Promise<void> {
   const canvas = await page.$('#canvas');
@@ -165,7 +155,26 @@ try {
   // A point added and saved in place with the shortcut
   await addPoint(page);
   assert.equal(await bodyData(page, 'modified'), 'true', 'modified');
-  await pressWithControl(page, 's');
+  await waitForData(page, 'workKept', 'true');
+  await page.evaluate((message) => {
+    const prototype = FileSystemFileHandle.prototype;
+    // Called with the original file handle below.
+    // oxlint-disable-next-line typescript/unbound-method
+    const createWritable = prototype.createWritable;
+    prototype.createWritable = async function (options) {
+      if (this.name === 'skirt-pieces.sloper') {
+        prototype.createWritable = createWritable;
+        throw new DOMException(message, 'QuotaExceededError');
+      }
+      return createWritable.call(this, options);
+    };
+  }, WRITE_FAILURE);
+  await pressWithMod(page, 's');
+  await waitForStatus(page, `Something went wrong: ${WRITE_FAILURE}`);
+  assert.equal(await bodyData(page, 'modified'), 'true', 'a failed write leaves the pattern dirty');
+  assert.equal(await bodyData(page, 'workKept'), 'true', 'a failed write keeps the recovery copy');
+  assert.equal(await readOpfs(page, PATTERN), pattern, 'a failed write leaves the original file alone');
+  await pressWithMod(page, 's');
   await waitForStatus(page, 'Saved skirt-pieces.sloper');
   assert.equal(await bodyData(page, 'modified'), 'false', 'saved');
   const savedPattern = await readOpfs(page, PATTERN);
@@ -193,7 +202,7 @@ try {
   await page.reload();
   await waitForData(page, 'ready', 'true');
   await queuePicks(page, PATTERN);
-  await pressWithControl(page, 'o');
+  await pressWithMod(page, 'o');
   await waitForStatus(page, 'Measurements from skirt-small.slm');
 
   // Save as puts it in another folder, which it then saves to
@@ -223,7 +232,7 @@ try {
   assert.equal(await other.title(), '• copy.sloper — OpenSloper', 'still to be saved');
   // Its file came back with it, so Save writes there, and the work kept goes
   const savedCopy = await readOpfs(other, 'copies/copy.sloper');
-  await pressWithControl(other, 's');
+  await pressWithMod(other, 's');
   await waitForStatus(other, 'Saved copy.sloper');
   assert.notEqual(await readOpfs(other, 'copies/copy.sloper'), savedCopy, 'saved to its own file');
   await waitForData(other, 'workKept', 'false');
@@ -245,7 +254,11 @@ try {
   assert.ok(!(await status(other)).startsWith('Unsaved work'), 'discarded');
 
   problems.push(...otherProblems);
-  assert.deepEqual(problems, [], 'no errors on the page');
+  assert.deepEqual(
+    problems.filter((problem) => !problem.includes(WRITE_FAILURE)),
+    [],
+    'no unexpected errors on the page',
+  );
   console.log(
     'Files: opened a pattern and found its measurements by granting the folder; saved the pattern and the set in place; ' +
       'found the set again after a reload; saved under another name; kept work in progress, offered it only once its ' +

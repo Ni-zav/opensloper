@@ -255,7 +255,7 @@ type
     // reason when an edge is not on the piece or the stretch has a gap.
     function PieceRun(Piece: TPieceObject; const EdgeIds: TStringArray; Inside: boolean; out Run: TRunEdgeArray;
       out Side: TOffsetSide): boolean;
-    // Rounds the corner where two straight edges meet. Each is split at the
+    // Rounds the corner where two edges meet. Each is split at the
     // arc's tangent point; the part beyond the corner stays, and the rest
     // becomes construction, as the sharp corner's guide.
     function AddRoundCorner(const EdgeAId, EdgeBId, Radius: string): TCornerArc;
@@ -594,7 +594,7 @@ resourcestring
   rsPatternPathRepeats = 'A curve path cannot use the same point twice in a row';
   rsPatternPathArrays = 'A curve path needs an angle and handle lengths for every point';
   rsPatternPieceTooShort = 'A piece needs at least two edges, or one that closes on itself';
-  rsPatternCornerNotStraight = 'Only corners between straight edges can be rounded, and %s is not straight';
+  rsPatternCornerNeedsEnds = '%s needs two distinct endpoints to round a corner';
   rsPatternCornerNotMeeting = '%s and %s do not meet at a point';
   rsPatternCornerSameEdge = 'A corner needs two different edges, and %s was given twice';
   rsPatternCornerOnFold = '%s is the fold of %s, and a fold has to stay one straight edge';
@@ -2080,8 +2080,8 @@ var
   var
     User: TEvalNode;
   begin
-    if not Edge.IsStraight then
-      Exit(SetError(Format(rsPatternCornerNotStraight, [Edge.DisplayName])));
+    if Edge.StartKey = Edge.EndKey then
+      Exit(SetError(Format(rsPatternCornerNeedsEnds, [Edge.DisplayName])));
     for User in UsersOf(Edge) do
       if (User is TPieceObject) and (TPieceObject(User).FoldEdgeKey = Edge.Key) then
         Exit(SetError(Format(rsPatternCornerOnFold, [Edge.DisplayName, User.DisplayName])));

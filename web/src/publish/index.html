@@ -96,12 +96,47 @@
         display: none;
       }
       /* A tab not open, whose display: flex would otherwise show it */
+      .materials[hidden],
       .info[hidden],
       .notes[hidden],
       .patterns[hidden],
       .pieces[hidden],
       .output[hidden] {
         display: none;
+      }
+      /* The Materials tab: a row for each material, then the notes */
+      .materials {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        overflow: auto;
+      }
+      .needs-table {
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .needs-table th,
+      .needs-table td {
+        padding: 3px 6px;
+        text-align: left;
+        border-bottom: 1px solid #eeece6;
+      }
+      .needs-table th {
+        font-weight: 600;
+        background: #f2f1ed;
+      }
+      .needs-caption {
+        margin-top: 6px;
+      }
+      .needs-notes {
+        padding: 4px 6px;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .needs-notes p {
+        margin: 0 0 6px;
       }
       /* The Info tab: the block's boxes, its fields indented under Show */
       .info {

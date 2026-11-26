@@ -255,6 +255,18 @@ export const STRINGS = {
   sourceSize: 'Size',
   noSet: 'None',
   sourceAdded: (count: number): string => `${String(count)} new copies in the tray`,
+  // The Materials tab, as the desktop's; its name is the design app's tab's
+  needMaterial: 'Material',
+  needSize: 'Size',
+  needCopies: 'Pieces',
+  needNeeded: 'Needed',
+  needNotes: 'Notes',
+  needNothing: 'No pieces',
+  needHow:
+    'Every piece of the patterns is counted with its cut count, whatever is placed on the sheet. Each lies with its ' +
+    'grainline along the material. A roll is cut folded in half lengthwise: pieces on a fold go on the fold, and a ' +
+    'mirrored pair is cut from both layers at once. A sheet is cut single layer. Pieces are packed by their bounding ' +
+    "boxes, 10 mm apart, so this is an estimate on the generous side. Sizes are set in the design app's Materials window.",
   // The Info tab, as the desktop's
   tabInfo: 'Information Block',
   showTitleBlock: 'Show',

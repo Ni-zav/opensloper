@@ -61,6 +61,7 @@ type
     function NoteParam(Params: TJSONObject): integer;
     function DoNote(Params: TJSONObject): TJSONData;
     function DoSetNote(Params: TJSONObject): TJSONData;
+    function DoMaterials: TJSONData;
     function DoTitle: TJSONData;
     function DoSetTitle(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
@@ -206,13 +207,18 @@ resourcestring
   rsPublishTitleCorner = 'bottomRight, bottomLeft or topRight';
   rsPublishTitleEveryPage = 'A copy on every tile as well as the cover';
   rsPublishTitleNeedsShown = 'Say whether the field is `shown`';
+  rsPublishMaterials = 'The Materials tab: how much of each material the layout''s patterns need, as the desktop''s ' +
+    'tab works it out.';
+  rsPublishMaterialsReturns = '`needs`, each with its `material`, `size` (the material''s, as the tab shows it), ' +
+    '`copies` (pieces cut from it), `needed` (how much, as the tab shows it) and `notes`';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
 implementation
 
 uses
-  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.Core.Note, Sloper.Core.Stamp, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Geometry,
+  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.Output.MaterialNeeded, Sloper.Core.Note, Sloper.Core.Stamp, Sloper.API.Rpc,
+  Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
   Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.LayoutExport, Sloper.API.Shapes,
   base64;
@@ -305,6 +311,7 @@ begin
     AddApiParam(Built, 'italic', apFlag, False, rsPublishNoteItalic);
     AddApiMethod(Built, 'publish_delete_note', rsPublishDeleteNote, rsPublishDone);
     AddApiParam(Built, 'note', apWhole, True, rsPublishNoteIndex);
+    AddApiMethod(Built, 'publish_materials', rsPublishMaterials, rsPublishMaterialsReturns, True);
     AddApiMethod(Built, 'publish_title', rsPublishTitle, rsPublishTitleReturns, True);
     AddApiMethod(Built, 'publish_set_title', rsPublishSetTitle, rsPublishTitleReturns);
     AddApiParam(Built, 'enabled', apFlag, False, rsPublishTitleEnabled);
@@ -950,6 +957,25 @@ begin
   Result := DoNote(Params);
 end;
 
+// As the desktop's Materials tab fills its grid and notes
+function TPublishApiServer.DoMaterials: TJSONData;
+var
+  Need: TMaterialNeed;
+  List, Notes: TJSONArray;
+  Note: string;
+begin
+  List := TJSONArray.Create;
+  Result := TJSONObject.Create(['needs', List]);
+  for Need in LayoutMaterialNeeds(FDocument.Layout) do
+  begin
+    Notes := TJSONArray.Create;
+    for Note in Need.Notes do
+      Notes.Add(Note);
+    List.Add(TJSONObject.Create(['material', Need.Name, 'size', MaterialNeedSize(Need), 'copies', Need.Copies, 'needed',
+      MaterialNeedText(Need), 'notes', Notes]));
+  end;
+end;
+
 function TPublishApiServer.DoTitle: TJSONData;
 var
   Layout: TLayout;
@@ -1056,6 +1082,7 @@ begin
       FDocument.DeleteNote(NoteParam(Params));
       Result := TJSONObject.Create;
     end;
+    'publish_materials': Result := DoMaterials;
     'publish_title': Result := DoTitle;
     'publish_set_title': Result := DoSetTitle(Params);
     'publish_save': Result := DoSave;

@@ -1,10 +1,12 @@
 // The web Publish app, as Sloper.Publish.MainForm: starts the engine and opens
 // a layout with its patterns and measurement files, or patterns to start a
-// layout, as the desktop's Open does. The title names the layout, and the
-// status bar has a message and the count of problems. Nothing leaves the
+// layout, as the desktop's Open does. The preview shows its pages and pieces;
+// the title names the layout, and the status bar has a message and the count
+// of problems. Nothing leaves the
 // machine: the files are read in the browser and given to the engine as text.
 import { LayoutDocument } from '../document/layoutDocument.ts';
 import { Engine } from '../engine/engine.ts';
+import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { STRINGS } from '../ui/strings.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
@@ -22,6 +24,7 @@ const toolbar = element('toolbar', HTMLElement);
 const message = element('message', HTMLElement);
 const problemCount = element('problem-count', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
+const previewElement = element('preview', HTMLCanvasElement);
 
 function showMessage(text: string): void {
   message.textContent = text;
@@ -52,15 +55,31 @@ function hasExtension(file: File, extension: string): boolean {
 
 class PublishApp {
   private readonly document: LayoutDocument;
+  private readonly preview: PreviewCanvas;
 
   constructor(engine: Engine) {
     this.document = new LayoutDocument(engine);
+    this.preview = new PreviewCanvas(previewElement, this.document, {
+      selectionChanged: (placement) => {
+        document.body.dataset.selected = String(placement);
+      },
+      failed: showFailure,
+    });
   }
 
   start(): void {
     toolbar.append(
       iconButton('folder-open', STRINGS.open, STRINGS.publishOpenHint, () => {
         openInput.click();
+      }),
+      iconButton('zoom-scan', STRINGS.fitPages, STRINGS.fitPagesHint, () => {
+        this.preview.zoomToFit();
+      }),
+      iconButton('zoom-in', STRINGS.zoomIn, STRINGS.zoomInHint, () => {
+        this.preview.zoomIn();
+      }),
+      iconButton('zoom-out', STRINGS.zoomOut, STRINGS.zoomOutHint, () => {
+        this.preview.zoomOut();
       }),
     );
     openInput.addEventListener('change', () => {

@@ -32,6 +32,9 @@ export interface LayoutState {
 // What to open: a layout file's text, or the pattern among the files to start one for
 export type LayoutStart = { layout: string } | { pattern: string };
 
+// Hears that the layout changed; generation grows when another is opened
+export type LayoutListener = (document: LayoutDocument) => void;
+
 const EMPTY: LayoutState = { name: '', placed: 0, unplaced: 0, problems: [], missing: [] };
 
 function parseState(answer: JsonRecord): LayoutState {
@@ -53,7 +56,9 @@ function fileList(files: Iterable<[path: string, text: string]>): { path: string
 
 export class LayoutDocument {
   private readonly engine: Engine;
+  private readonly listeners: LayoutListener[] = [];
   private current: LayoutState = EMPTY;
+  private opened = 0;
 
   // The layout file's name as the user chose it, or the one a new layout
   // would be saved as; '' before anything is open
@@ -65,6 +70,27 @@ export class LayoutDocument {
 
   get state(): Readonly<LayoutState> {
     return this.current;
+  }
+
+  // Grows when another layout is opened
+  get generation(): number {
+    return this.opened;
+  }
+
+  addListener(listener: LayoutListener): void {
+    this.listeners.push(listener);
+  }
+
+  removeListener(listener: LayoutListener): void {
+    const index = this.listeners.indexOf(listener);
+    if (index >= 0) {
+      this.listeners.splice(index, 1);
+    }
+  }
+
+  // A method that only reads the layout
+  async read(method: string, params: object = {}): Promise<JsonRecord> {
+    return this.engine.call(method, params);
   }
 
   // Opens the layout or starts one, with the files chosen, by name. Files the
@@ -88,6 +114,15 @@ export class LayoutDocument {
       // Each round needs the files the one before found
       // oxlint-disable-next-line no-await-in-loop
       this.current = parseState(await this.engine.call('publish_add_files', { files: fileList(found) }));
+    }
+    this.opened += 1;
+    this.changed();
+  }
+
+  private changed(): void {
+    // A copy, as a listener may remove itself
+    for (const listener of this.listeners.slice()) {
+      listener(this);
     }
   }
 }

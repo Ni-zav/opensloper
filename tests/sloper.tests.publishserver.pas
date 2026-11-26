@@ -50,6 +50,8 @@ type
     procedure TestBadFilesRefused;
     procedure TestBadLayoutRefused;
     procedure TestState;
+    procedure TestScene;
+    procedure TestPieceAt;
     procedure TestNotTools;
   end;
 
@@ -208,6 +210,49 @@ begin
   Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE]), 'pattern', PATTERN_FILE]));
   Call('publish_state', TJSONObject.Create);
   AssertEquals('as open left it', SET_FILE + ';', Missing);
+end;
+
+procedure TTestPublishServer.TestScene;
+var
+  Scene, Piece: TJSONObject;
+  Placed: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Placed := Answer.Integers['placed'];
+  Call('publish_scene', TJSONObject.Create);
+  Scene := Answer;
+  AssertTrue('tiled by default', Scene.Booleans['tiled']);
+  AssertTrue('with a cover', Scene.Find('cover').JSONType = jtObject);
+  AssertTrue('pages', Scene.Arrays['pages'].Count > 0);
+  AssertEquals('A1 first', 'A1', Scene.Arrays['pages'].Objects[0].Strings['caption']);
+  AssertEquals('every placed piece', Placed, Scene.Arrays['pieces'].Count);
+  Piece := Scene.Arrays['pieces'].Objects[0];
+  AssertEquals('the first placement', 0, Piece.Integers['placement']);
+  AssertTrue('an outline', Piece.Arrays['cutLine'].Count >= 6);
+  AssertEquals('as x, y pairs', 0, Piece.Arrays['cutLine'].Count mod 2);
+  AssertTrue('labelled', Piece.Find('label').JSONType = jtObject);
+  AssertTrue('a new layout''s information block', Scene.Arrays['titleBoxes'].Count > 0);
+  AssertTrue('its lines', Scene.Objects['title'].Arrays['lines'].Count > 0);
+end;
+
+procedure TTestPublishServer.TestPieceAt;
+var
+  Piece, Spot: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_scene', TJSONObject.Create);
+  Piece := Answer.Arrays['pieces'].Objects[1];
+  Spot := TJSONObject(Piece.Objects['label'].Clone);
+  try
+    Call('publish_at', Spot.Clone as TJSONObject);
+    AssertEquals('the piece under its label', 1, Answer.Integers['placement']);
+  finally
+    FreeAndNil(Spot);
+  end;
+  Call('publish_at', TJSONObject.Create(['x', -5000, 'y', -5000]));
+  AssertEquals('nothing there', -1, Answer.Integers['placement']);
+  Call('publish_at', TJSONObject.Create(['x', 10]));
+  AssertEquals('needs both', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 procedure TTestPublishServer.TestNotTools;

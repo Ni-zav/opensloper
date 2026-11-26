@@ -42,6 +42,8 @@ type
     function DoOpen(Params: TJSONObject): TJSONData;
     function DoAddFiles(Params: TJSONObject): TJSONData;
     function DoState: TJSONData;
+    function DoScene: TJSONData;
+    function DoAt(Params: TJSONObject): TJSONData;
   public
     constructor Create;
     destructor Destroy; override;
@@ -67,11 +69,24 @@ resourcestring
   rsPublishStateReturns = 'What layout_state gives, with `missing`: the paths, from the layout, of the files sources ' +
     'need and were not given';
   rsPublishNeedsSource = 'Give a layout, or the pattern to start one for';
+  rsPublishScene = 'What the preview shows, in layout mm with y down, as the desktop''s preview draws it.';
+  rsPublishSceneReturns = '`tiled`, true for tiled pages; `cover`, the tiled print''s cover (minX, minY, maxX, maxY) or ' +
+    'null; `pages`, each with its `caption`, its area and whether it is `blank` or `excluded`; `pieces`, each with ' +
+    'its `placement` index, `caption`, `fillColor` (empty when not filled), `cutLine` and `seamLine` (flat lists of ' +
+    'x, y), `marks` (flat segments), `lines` (each with flat `points` and `dashed`) and `label` (x, y), or null when ' +
+    'labels are left out; `titleBoxes`, the information block''s boxes; `title`, its `lines`, text `size`, ' +
+    '`lineHeight` and `padding` in mm';
+  rsPublishAt = 'The placed piece at a point of the layout, the smallest where they overlap.';
+  rsPublishAtReturns = '`placement`, the piece''s placement index, or -1 for none';
+  rsPublishX = 'Across, in layout mm';
+  rsPublishY = 'Down, in layout mm';
 
 implementation
 
 uses
-  StrUtils, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources;
+  StrUtils, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources, Sloper.Core.Geometry,
+  Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
+  Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.Preview, Sloper.API.Shapes;
 
 var
   Built: TApiMethodArray = nil;
@@ -91,6 +106,10 @@ begin
     AddApiParam(Built, 'files[].path', apText, True, rsPublishFilePath);
     AddApiParam(Built, 'files[].text', apText, True, rsPublishFileText);
     AddApiMethod(Built, 'publish_state', rsPublishState, rsPublishStateReturns, True);
+    AddApiMethod(Built, 'publish_scene', rsPublishScene, rsPublishSceneReturns, True);
+    AddApiMethod(Built, 'publish_at', rsPublishAt, rsPublishAtReturns, True);
+    AddApiParam(Built, 'x', apNumber, True, rsPublishX);
+    AddApiParam(Built, 'y', apNumber, True, rsPublishY);
   end;
   Result := Built;
 end;
@@ -193,12 +212,122 @@ begin
   end;
 end;
 
+function RectJSON(const Area: TRect2): TJSONObject;
+begin
+  Result := TJSONObject.Create(['minX', ReportFloat(Area.MinX), 'minY', ReportFloat(Area.MinY), 'maxX',
+    ReportFloat(Area.MaxX), 'maxY', ReportFloat(Area.MaxY)]);
+end;
+
+function PieceJSON(const Shape: TPlacedPiece): TJSONObject;
+var
+  Lines: TJSONArray;
+  Line: TPlacedLine;
+begin
+  Result := TJSONObject.Create(['placement', Shape.Placement, 'caption', Shape.Caption]);
+  if Shape.Look.Filled then
+    Result.Add('fillColor', MaterialColorText(Shape.Look.Color))
+  else
+    Result.Add('fillColor', '');
+  Result.Add('cutLine', LineToJSON(Shape.CutLine));
+  Result.Add('seamLine', LineToJSON(Shape.SeamLine));
+  Result.Add('marks', SegmentsToJSON(Shape.Marks));
+  Lines := TJSONArray.Create;
+  Result.Add('lines', Lines);
+  for Line in Shape.Lines do
+    Lines.Add(TJSONObject.Create(['points', LineToJSON(Line.Points), 'dashed', ROLE_DASHES[Line.Role][0] > 0]));
+  if Shape.ShowLabel then
+    Result.Add('label', TJSONObject.Create(['x', ReportFloat(Shape.LabelAt.X), 'y', ReportFloat(Shape.LabelAt.Y)]))
+  else
+    Result.Add('label', TJSONNull.Create);
+end;
+
+// As TPreviewCanvas.Refresh works it out and Paint draws it
+function TPublishApiServer.DoScene: TJSONData;
+var
+  Layout: TLayout;
+  Shapes: TPlacedPieceArray;
+  Pages: TTilePageArray;
+  Page: TTilePage;
+  Shape: TPlacedPiece;
+  Box: TRect2;
+  Values: TFieldValues;
+  Answer: TJSONObject;
+  List: TJSONArray;
+  Item: TJSONObject;
+  Rows, Columns: integer;
+  Tiled: boolean;
+  Text: string;
+begin
+  Layout := FDocument.Layout;
+  Shapes := Layout.PlacedPieces;
+  Pages := Layout.Pages(Shapes, Rows, Columns);
+  Values := Layout.FieldValues('', '');
+  Tiled := Layout.Output.Kind = okTiled;
+  Answer := TJSONObject.Create(['tiled', Tiled]);
+  try
+    if Tiled then
+      Answer.Add('cover', RectJSON(PreviewCover(Layout, Pages)))
+    else
+      Answer.Add('cover', TJSONNull.Create);
+    List := TJSONArray.Create;
+    Answer.Add('pages', List);
+    for Page in Pages do
+    begin
+      Item := RectJSON(Page.Area);
+      Item.Add('caption', Page.Caption);
+      Item.Add('blank', Page.Blank);
+      Item.Add('excluded', Page.Excluded);
+      List.Add(Item);
+    end;
+    List := TJSONArray.Create;
+    Answer.Add('pieces', List);
+    for Shape in Shapes do
+      List.Add(PieceJSON(Shape));
+    List := TJSONArray.Create;
+    Answer.Add('titleBoxes', List);
+    for Box in PreviewTitleBoxes(Layout, Pages, Values) do
+      List.Add(RectJSON(Box));
+    List := TJSONArray.Create;
+    for Text in Layout.TitleLines(Values) do
+      List.Add(Text);
+    Answer.Add('title', TJSONObject.Create(['lines', List, 'size', ReportFloat(TITLE_TEXT_SIZE * POINTS_TO_MM), 'lineHeight',
+      ReportFloat(LineHeight(TITLE_TEXT_SIZE)), 'padding', ReportFloat(TITLE_PADDING)]));
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
+function NumberParam(Params: TJSONObject; const AName: string): double;
+begin
+  Result := 0;
+  if not Assigned(Params) or not OptionalNumber(Params, AName, Result) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+end;
+
+function TPublishApiServer.DoAt(Params: TJSONObject): TJSONData;
+var
+  Shapes: TPlacedPieceArray;
+  At: TVec2;
+  Index: integer;
+begin
+  At := Vec2(NumberParam(Params, 'x'), NumberParam(Params, 'y'));
+  Shapes := FDocument.Layout.PlacedPieces;
+  Index := ShapeAt(Shapes, At);
+  if Index >= 0 then
+    Index := Shapes[Index].Placement;
+  Result := TJSONObject.Create(['placement', Index]);
+end;
+
 function TPublishApiServer.CallMethod(const Method: string; Params: TJSONObject): TJSONData;
 begin
   case Method of
     'publish_open': Result := DoOpen(Params);
     'publish_add_files': Result := DoAddFiles(Params);
     'publish_state': Result := DoState;
+    'publish_scene': Result := DoScene;
+    'publish_at': Result := DoAt(Params);
     else
       raise EApiError.Create(RPC_METHOD_NOT_FOUND, Format(rsApiNoMethod, [Method]));
   end;

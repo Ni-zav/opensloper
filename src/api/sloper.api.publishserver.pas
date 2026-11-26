@@ -28,7 +28,7 @@ unit Sloper.API.PublishServer;
 interface
 
 uses
-  SysUtils, fpjson, Sloper.API.Methods, Sloper.API.LayoutServer, Sloper.Output.LayoutDocument, Sloper.Output.Preview;
+  SysUtils, fpjson, Sloper.Core.PatternSources, Sloper.API.Methods, Sloper.API.LayoutServer, Sloper.Output.LayoutDocument, Sloper.Output.Preview;
 
 const
   PUBLISH_PREFIX = 'publish_';
@@ -50,6 +50,11 @@ type
     function DoDropCopy(Params: TJSONObject): TJSONData;
     function DoPieceEdit(const Method: string; Params: TJSONObject): TJSONData;
     function DoPlaceCopy(Params: TJSONObject): TJSONData;
+    function SourceParam(Params: TJSONObject): TPatternSource;
+    function DoPatterns: TJSONData;
+    function DoAddPattern(Params: TJSONObject): TJSONData;
+    function DoSetMeasurements(Params: TJSONObject): TJSONData;
+    function DoSetSize(Params: TJSONObject): TJSONData;
     function DoOutput: TJSONData;
     function DoSetOutput(Params: TJSONObject): TJSONData;
     function DoTogglePage(Params: TJSONObject): TJSONData;
@@ -117,6 +122,25 @@ resourcestring
   rsPublishTrayIndex = 'The copy''s index in publish_state''s `tray`';
   rsPublishPlaceCopyReturns = '`placed`, the new placement''s index';
   rsPublishNoCopy = 'There is no copy %d in the tray';
+  rsPublishPatterns = 'The Patterns tab: each pattern in the layout with its measurements and size.';
+  rsPublishPatternsReturns = '`patterns`, each with its source `id`, `caption` (its file, with the size once ' +
+    'one is chosen), `pattern` (its file''s name), `measurements` (the measurement file in use, empty for none), ' +
+    '`ownSet` (true when the layout chose the file rather than the pattern), `size`, `sizes` (its file''s) and ' +
+    '`problem`, empty when it is read';
+  rsPublishAddPattern = 'Adds a pattern to the layout, its copies waiting in the tray; one undo step. The files ' +
+    'given are kept for the sources to read, as publish_add_files gives them.';
+  rsPublishPatternPath = 'The pattern''s path from the layout, as among the files';
+  rsPublishAddPatternReturns = '`added`, how many copies went in the tray';
+  rsPublishRemovePattern = 'Takes a pattern out of the layout, with its placements; one undo step.';
+  rsPublishSourceId = 'The pattern''s source id, as publish_patterns gives it';
+  rsPublishSetMeasurements = 'Reads a pattern with another measurement file, at its first size; one undo step.';
+  rsPublishMeasurementPath = 'The measurement file''s path from the layout, as among the files; empty for the one ' +
+    'the pattern names';
+  rsPublishSetSize = 'Reads a pattern at another size of its measurement file; one undo step.';
+  rsPublishSize = 'One of the measurement file''s sizes';
+  rsPublishNoSource = 'The layout has no pattern %d';
+  rsPublishUnknownSize = 'The measurements have no size "%s"';
+  rsPublishPatternsDone = '`patterns`, as publish_patterns gives them';
   rsPublishOutput = 'The Output tab: the layout''s output settings, which of them apply to its kind of output, and ' +
     'the papers, materials and output profiles to choose from.';
   rsPublishOutputReturns = 'The settings (`kind`, `paper`, `paperWidth`, `paperHeight`, `margin`, `overlap`, ' +
@@ -150,7 +174,7 @@ resourcestring
 implementation
 
 uses
-  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.PatternSources, Sloper.Core.Geometry,
+  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
   Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.LayoutExport, Sloper.API.Shapes,
   base64;
@@ -193,6 +217,23 @@ begin
     AddApiParam(Built, 'placement', apWhole, True, rsPublishPlacement);
     AddApiMethod(Built, 'publish_place_copy', rsPublishPlaceCopy, rsPublishPlaceCopyReturns);
     AddApiParam(Built, 'index', apWhole, True, rsPublishTrayIndex);
+    AddApiMethod(Built, 'publish_patterns', rsPublishPatterns, rsPublishPatternsReturns, True);
+    AddApiMethod(Built, 'publish_add_pattern', rsPublishAddPattern, rsPublishAddPatternReturns);
+    AddApiParam(Built, 'path', apText, True, rsPublishPatternPath);
+    AddApiParam(Built, 'files', apList, False, rsPublishFiles);
+    AddApiParam(Built, 'files[].path', apText, True, rsPublishFilePath);
+    AddApiParam(Built, 'files[].text', apText, True, rsPublishFileText);
+    AddApiMethod(Built, 'publish_remove_pattern', rsPublishRemovePattern, rsPublishPatternsDone);
+    AddApiParam(Built, 'source', apWhole, True, rsPublishSourceId);
+    AddApiMethod(Built, 'publish_set_measurements', rsPublishSetMeasurements, rsPublishPatternsDone);
+    AddApiParam(Built, 'source', apWhole, True, rsPublishSourceId);
+    AddApiParam(Built, 'path', apText, True, rsPublishMeasurementPath);
+    AddApiParam(Built, 'files', apList, False, rsPublishFiles);
+    AddApiParam(Built, 'files[].path', apText, True, rsPublishFilePath);
+    AddApiParam(Built, 'files[].text', apText, True, rsPublishFileText);
+    AddApiMethod(Built, 'publish_set_size', rsPublishSetSize, rsPublishPatternsDone);
+    AddApiParam(Built, 'source', apWhole, True, rsPublishSourceId);
+    AddApiParam(Built, 'size', apText, True, rsPublishSize);
     AddApiMethod(Built, 'publish_output', rsPublishOutput, rsPublishOutputReturns, True);
     AddApiMethod(Built, 'publish_set_output', rsPublishSetOutput, rsPublishSetOutputReturns);
     AddApiParam(Built, 'kind', apChoice, False, rsPublishKind, string.Join(', ', KIND_NAMES));
@@ -512,6 +553,103 @@ begin
   Result := TJSONObject.Create(['placed', High(FDocument.Layout.Placements)]);
 end;
 
+function TPublishApiServer.SourceParam(Params: TJSONObject): TPatternSource;
+var
+  Id: integer;
+  Source: TPatternSource;
+begin
+  Id := IndexParam(Params, 'source');
+  for Source in FDocument.Layout.Sources do
+    if Source.Id = Id then
+      Exit(Source);
+  raise EApiError.Create(RPC_REFUSED, Format(rsPublishNoSource, [Id]));
+end;
+
+// As the desktop's Patterns tab lists them
+function TPublishApiServer.DoPatterns: TJSONData;
+var
+  Answer, Item: TJSONObject;
+  List, Sizes: TJSONArray;
+  Source: TPatternSource;
+  Caption, SizeName: string;
+  Index: integer;
+begin
+  Answer := TJSONObject.Create;
+  try
+    List := TJSONArray.Create;
+    Answer.Add('patterns', List);
+    for Source in FDocument.Layout.Sources do
+    begin
+      Caption := ExtractFileName(Source.PatternFile);
+      SizeName := '';
+      Sizes := TJSONArray.Create;
+      if Assigned(Source.Measurements) then
+      begin
+        SizeName := Source.Measurements.SizeName;
+        for Index := 0 to Source.Measurements.SizeCount - 1 do
+          Sizes.Add(Source.Measurements.Sizes[Index]);
+      end;
+      if SizeName <> '' then
+        Caption := Format(rsLayoutSetAndSize, [Caption, SizeName]);
+      Item := TJSONObject.Create(['id', Source.Id, 'caption', Caption, 'pattern', ExtractFileName(Source.PatternFile),
+        'measurements', ExtractFileName(SetDirSeparators(Source.MeasurementPath)), 'ownSet', Source.MeasurementFile <> '',
+        'size', SizeName, 'sizes', Sizes, 'problem', Source.LoadError]);
+      List.Add(Item);
+    end;
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
+end;
+
+function TPublishApiServer.DoAddPattern(Params: TJSONObject): TJSONData;
+var
+  Path: string;
+  Added: integer;
+begin
+  Path := RequireString(Params, 'path');
+  if Assigned(Params.Find('files')) then
+    AddFiles(Params);
+  Added := FDocument.AddPattern(Path);
+  Result := TJSONObject.Create(['added', Added]);
+end;
+
+function TPublishApiServer.DoSetMeasurements(Params: TJSONObject): TJSONData;
+var
+  Source: TPatternSource;
+  Path: string;
+begin
+  Source := SourceParam(Params);
+  if not Assigned(Params.Find('path')) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['path']));
+  Path := OptionalString(Params, 'path');
+  if Assigned(Params.Find('files')) then
+    AddFiles(Params);
+  FDocument.SetMeasurements(Source, Path);
+  Result := DoPatterns;
+end;
+
+// One of its file's sizes, so a typing slip is refused rather than read as a problem
+function TPublishApiServer.DoSetSize(Params: TJSONObject): TJSONData;
+var
+  Source: TPatternSource;
+  Size: string;
+  Index: integer;
+  Known: boolean;
+begin
+  Source := SourceParam(Params);
+  Size := RequireString(Params, 'size');
+  Known := False;
+  if Assigned(Source.Measurements) then
+    for Index := 0 to Source.Measurements.SizeCount - 1 do
+      Known := Known or (Source.Measurements.Sizes[Index] = Size);
+  if not Known then
+    raise EApiError.Create(RPC_REFUSED, Format(rsPublishUnknownSize, [Size]));
+  FDocument.SetSize(Source, Size);
+  Result := DoPatterns;
+end;
+
 const
   OUTPUT_SETTING_NAMES: array[TOutputSetting] of string = ('rollWidth', 'materialSize', 'allowTurns', 'paper',
     'paperSize', 'overlap', 'marks', 'fill');
@@ -678,6 +816,15 @@ begin
     'publish_drop_copy': Result := DoDropCopy(Params);
     'publish_turn', 'publish_flip', 'publish_unplace': Result := DoPieceEdit(Method, Params);
     'publish_place_copy': Result := DoPlaceCopy(Params);
+    'publish_patterns': Result := DoPatterns;
+    'publish_add_pattern': Result := DoAddPattern(Params);
+    'publish_remove_pattern':
+    begin
+      FDocument.RemovePattern(SourceParam(Params));
+      Result := DoPatterns;
+    end;
+    'publish_set_measurements': Result := DoSetMeasurements(Params);
+    'publish_set_size': Result := DoSetSize(Params);
     'publish_output': Result := DoOutput;
     'publish_set_output': Result := DoSetOutput(Params);
     'publish_toggle_page': Result := DoTogglePage(Params);

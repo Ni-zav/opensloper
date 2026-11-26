@@ -1,6 +1,8 @@
 // Drives the built Publish app in headless Chromium: a pattern opened without
 // its measurement file names the file it needs, then with it starts a layout
 // whose pages the preview draws and whose pieces a click selects. The
+// Patterns tab adds a pattern and removes it, and reads the pattern with a
+// size table at one of its sizes and then with its own measurements again. The
 // selected piece is turned, flipped and sent back to the tray, from which a
 // double-click places it again; a piece is dragged, and a copy dragged from
 // the tray onto the pages. The Output tab changes the paper, refuses a
@@ -18,6 +20,8 @@ import { bodyData, launchBrowser, serveApp, status, waitForData, waitForStatus, 
 
 const PATTERN = '../docs/examples/skirt-block/skirt-darts.sloper';
 const MEASUREMENTS = '../docs/examples/skirt-block/skirt.slm';
+const OTHER_PATTERN = '../docs/examples/skirt-block/skirt-hem.sloper';
+const SIZE_TABLE = '../docs/examples/measurements/size-table.slm';
 
 // A layout of the skirt as saved beside a folder of patterns, whose
 // measurement file the pattern names beside itself
@@ -48,12 +52,19 @@ async function command(page: Page, caption: string): Promise<void> {
   );
 }
 
+// Opens the side panel's tab whose content has this class, unless it shows:
+// clicking the open tab's icon folds the panel
+async function openTab(page: Page, key: string): Promise<void> {
+  if ((await page.$(`.${key}:not([hidden])`)) === null || (await page.$(`.side-page[hidden]`)) !== null) {
+    await page.click(`.side-column button[data-tab="${key}"]`);
+  }
+  await page.waitForSelector(`.${key}`, { visible: true });
+}
+
 // Clicks the Pieces tab's button with this caption, once it is enabled,
 // opening the tab first
 async function piecesButton(page: Page, caption: string): Promise<void> {
-  if ((await page.$('.pieces:not([hidden])')) === null) {
-    await page.click('.side-column button[data-tab="pieces"]');
-  }
+  await openTab(page, 'pieces');
   await page.waitForFunction(
     (text) => {
       const button = [...document.querySelectorAll('.pieces button')].find(
@@ -73,6 +84,24 @@ async function piecesButton(page: Page, caption: string): Promise<void> {
 // Waits for the status bar's message to hold the text anywhere
 async function waitForMessagePart(page: Page, part: string): Promise<void> {
   await page.waitForFunction((text) => document.querySelector('#message')?.textContent.includes(text), {}, part);
+}
+
+// Clicks the Patterns tab's button with this caption, once it is enabled
+async function patternsButton(page: Page, caption: string): Promise<void> {
+  await page.waitForFunction(
+    (text) => {
+      const button = [...document.querySelectorAll('.patterns button')].find(
+        (each) => each.textContent === text && each instanceof HTMLButtonElement && !each.disabled,
+      );
+      if (button instanceof HTMLButtonElement) {
+        button.click();
+        return true;
+      }
+      return false;
+    },
+    {},
+    caption,
+  );
 }
 
 // Waits for the toolbar's Undo to name this step
@@ -171,6 +200,34 @@ try {
   assert.equal(await page.title(), '• skirt-darts — OpenSloper Publish', 'not saved yet');
   assert.doesNotMatch(await status(page), /stop printing/u);
   await waitForPaper(page);
+  // The Patterns tab: each change one step, files chosen by the browser
+  await openTab(page, 'patterns');
+  await page.waitForFunction(() => document.querySelector('.patterns-list li')?.textContent === 'skirt-darts.sloper');
+  const addPicker = await page.$('.patterns input[type="file"][multiple]');
+  assert.ok(addPicker);
+  await addPicker.uploadFile(OTHER_PATTERN);
+  await waitForMessagePart(page, 'new copies in the tray');
+  await waitForUndo(page, 'Add pattern');
+  assert.equal((await page.$$('.patterns-list li')).length, 2);
+  await page.click('.patterns-list li[data-index="1"]');
+  await patternsButton(page, 'Remove pattern');
+  await waitForUndo(page, 'Remove pattern');
+  await page.waitForFunction(() => document.querySelectorAll('.patterns-list li').length === 1);
+  const setPicker = await page.$('.patterns input[type="file"]:not([multiple])');
+  assert.ok(setPicker);
+  await setPicker.uploadFile(SIZE_TABLE);
+  await waitForUndo(page, 'Change measurements');
+  await page.waitForSelector('.patterns select[name="size"]:enabled option[value="12"]');
+  assert.equal(await page.$eval('.patterns-set', (name) => name.textContent), 'size-table.slm');
+  await page.select('.patterns select[name="size"]', '12');
+  await waitForUndo(page, 'Change size');
+  await page.waitForFunction(
+    () => document.querySelector('.patterns-list li')?.textContent === 'skirt-darts.sloper, size 12',
+  );
+  await patternsButton(page, "Use the pattern's own");
+  await page.waitForFunction(() => document.querySelector('.patterns-set')?.textContent === 'skirt.slm');
+  await page.waitForFunction(() => document.querySelector('.patterns-list li')?.textContent === 'skirt-darts.sloper');
+
   const { placement: selected } = await selectSomePiece(page);
   // The selected piece turned, flipped and sent back to the tray, each one step
   await piecesButton(page, 'Turn 90°');
@@ -237,8 +294,7 @@ try {
   await waitForUndo(page, 'Pack pieces');
 
   // The Output tab: each change one step, as the desktop's
-  await page.click('.side-column button[data-tab="output"]');
-  await page.waitForSelector('.output', { visible: true });
+  await openTab(page, 'output');
   await page.waitForSelector('.output select[name="paper"] option[value="A3"]');
   await page.select('.output select[name="paper"]', 'A3');
   await waitForUndo(page, 'Change paper');
@@ -256,8 +312,9 @@ try {
   );
   await page.select('.output select[name="kind"]', 'large');
   await waitForStatus(page, 'One sheet');
-  assert.equal(await page.$eval('.output input[name="rollWidth"]', (control) => control.matches(':disabled')), false);
-  assert.equal(await page.$eval('.output select[name="paper"]', (control) => control.matches(':disabled')), true);
+  // The tab reads its settings again after the status changes
+  await page.waitForSelector('.output input[name="rollWidth"]:enabled');
+  await page.waitForSelector('.output select[name="paper"]:disabled');
   await page.select('.output select[name="kind"]', 'tiled');
   await waitForMessagePart(page, ', 0 left out');
   // A right-click leaves the page under it out, and again puts it back

@@ -70,6 +70,10 @@ type
     procedure TestUnplaceToTray;
     procedure TestPlaceCopy;
     procedure TestPieceEditRefused;
+    procedure TestPatterns;
+    procedure TestAddRemovePattern;
+    procedure TestAddPatternNeedsFile;
+    procedure TestMeasurementsAndSize;
     procedure TestOutput;
     procedure TestSetOutput;
     procedure TestSetOutputJoins;
@@ -523,6 +527,102 @@ begin
   AssertEquals('an empty tray', RPC_REFUSED, ErrorCode);
   Call('publish_state', TJSONObject.Create);
   AssertFalse('nothing changed', Answer.Booleans['canUndo']);
+end;
+
+const
+  OTHER_PATTERN = 'skirt-hem.sloper';
+  SIZE_TABLE = 'size-table.slm';
+
+// The example size table, from beside the skirt block's folder
+function SizeTableText: string;
+var
+  Reason: string;
+begin
+  if not ReadTextFile(ConcatPaths([ExtractFileDir(ExtractFileDir(ExpandFileName(ParamStr(0)))), 'docs', 'examples',
+    'measurements', SIZE_TABLE]), Result, Reason) then
+    raise Exception.Create(Reason);
+end;
+
+procedure TTestPublishServer.TestPatterns;
+var
+  Item: TJSONObject;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_patterns', TJSONObject.Create);
+  AssertEquals('one pattern', 1, Answer.Arrays['patterns'].Count);
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('its file', PATTERN_FILE, Item.Strings['pattern']);
+  AssertEquals('captioned by it', PATTERN_FILE, Item.Strings['caption']);
+  AssertEquals('the set it names', SET_FILE, Item.Strings['measurements']);
+  AssertFalse('the pattern''s own', Item.Booleans['ownSet']);
+  AssertEquals('no sizes', 0, Item.Arrays['sizes'].Count);
+  AssertEquals('read', '', Item.Strings['problem']);
+end;
+
+procedure TTestPublishServer.TestAddRemovePattern;
+var
+  Added, Id: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_pattern', TJSONObject.Create(['path', OTHER_PATTERN, 'files', Files([OTHER_PATTERN])]));
+  Added := Answer.Integers['added'];
+  AssertTrue('copies to place', Added > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('in the tray', Added, Answer.Arrays['tray'].Count);
+  AssertEquals('named as the desktop', rsLayoutAddPattern, Answer.Strings['undo']);
+  Call('publish_patterns', TJSONObject.Create);
+  AssertEquals('two patterns', 2, Answer.Arrays['patterns'].Count);
+  Id := Answer.Arrays['patterns'].Objects[1].Integers['id'];
+  Call('publish_remove_pattern', TJSONObject.Create(['source', Id]));
+  AssertEquals('one again', 1, Answer.Arrays['patterns'].Count);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('remove named', rsLayoutRemovePattern, Answer.Strings['undo']);
+  AssertEquals('its copies gone', 0, Answer.Arrays['tray'].Count);
+  Call('publish_remove_pattern', TJSONObject.Create(['source', Id]));
+  AssertEquals('gone already', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestAddPatternNeedsFile;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_add_pattern', TJSONObject.Create(['path', OTHER_PATTERN]));
+  AssertEquals('nothing yet', 0, Answer.Integers['added']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('asked for', OTHER_PATTERN + ';', Missing);
+  Call('publish_add_files', TJSONObject.Create(['files', Files([OTHER_PATTERN])]));
+  AssertEquals('found', '', Missing);
+  AssertTrue('its copies wait', Answer.Arrays['tray'].Count > 0);
+end;
+
+procedure TTestPublishServer.TestMeasurementsAndSize;
+var
+  Item: TJSONObject;
+  Table: TJSONArray;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Table := TJSONArray.Create;
+  Table.Add(TJSONObject.Create(['path', SIZE_TABLE, 'text', SizeTableText]));
+  Call('publish_set_measurements', TJSONObject.Create(['source', 1, 'path', SIZE_TABLE, 'files', Table]));
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('the table', SIZE_TABLE, Item.Strings['measurements']);
+  AssertTrue('chosen by the layout', Item.Booleans['ownSet']);
+  AssertEquals('its sizes', 5, Item.Arrays['sizes'].Count);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangeMeasurements, Answer.Strings['undo']);
+  Call('publish_set_size', TJSONObject.Create(['source', 1, 'size', '12']));
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('the size', '12', Item.Strings['size']);
+  AssertEquals('captioned with it', Format(rsLayoutSetAndSize, [PATTERN_FILE, '12']), Item.Strings['caption']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('size named', rsLayoutChangeSize, Answer.Strings['undo']);
+  Call('publish_set_size', TJSONObject.Create(['source', 1, 'size', 'XL']));
+  AssertEquals('no such size', RPC_REFUSED, ErrorCode);
+  Call('publish_set_measurements', TJSONObject.Create(['source', 1, 'path', '']));
+  Item := Answer.Arrays['patterns'].Objects[0];
+  AssertEquals('the pattern''s own again', SET_FILE, Item.Strings['measurements']);
+  AssertFalse('not chosen', Item.Booleans['ownSet']);
+  Call('publish_set_measurements', TJSONObject.Create(['source', 1]));
+  AssertEquals('path needed', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 procedure TTestPublishServer.TestOutput;

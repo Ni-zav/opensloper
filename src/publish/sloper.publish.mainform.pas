@@ -110,7 +110,6 @@ type
     procedure PatternSetClick(Sender: TObject);
     procedure SourceSelected(Sender: TObject);
     procedure SizeChange(Sender: TObject);
-    procedure ChangeSource(const Description, AMeasurementFile, ASize: string);
     procedure BuildSide;
     procedure TabsCollapsedChange(Sender: TObject);
     function AddSpin(const ACaption: string; AMax, AIncrement: double; Decimals: integer): TFloatSpinEdit;
@@ -253,10 +252,6 @@ resourcestring
   rsPatternSet = 'Use the pattern''s own';
   rsSourceSize = 'Size';
   rsNoSet = 'None';
-  rsAddPatternChange = 'Add pattern';
-  rsRemovePatternChange = 'Remove pattern';
-  rsSetChange = 'Change measurements';
-  rsSizeChange = 'Change size';
   rsSourceAdded = '%d new copies in the tray';
   rsFilterMeasurements = 'Measurements (*.slm)|*.slm';
   rsMarks = 'Alignment marks';
@@ -1106,7 +1101,7 @@ end;
 procedure TPublishForm.AddSourceClick(Sender: TObject);
 var
   Dialog: TOpenDialog;
-  Before: integer;
+  Added: integer;
 begin
   Dialog := TOpenDialog.Create(Self);
   try
@@ -1114,14 +1109,10 @@ begin
     Dialog.Options := Dialog.Options + [ofFileMustExist];
     if not Dialog.Execute then
       Exit;
-    Before := Length(FDocument.Layout.Unplaced);
-    FDocument.BeginChange(rsAddPatternChange);
-    FDocument.Layout.AddSource(FDocument.Layout.StoredPath(Dialog.FileName), '', '');
-    FDocument.Layout.LoadSources;
-    FDocument.EndChange;
+    Added := FDocument.AddPattern(FDocument.Layout.StoredPath(Dialog.FileName));
     FSourceBox.ItemIndex := FSourceBox.Items.Count - 1;
     SourceSelected(Self);
-    ShowStatus(Format(rsSourceAdded, [Length(FDocument.Layout.Unplaced) - Before]));
+    ShowStatus(Format(rsSourceAdded, [Added]));
   finally
     FreeAndNil(Dialog);
   end;
@@ -1132,23 +1123,7 @@ begin
   if not Assigned(CurrentSource) then
     Exit;
   FPreview.Selected := -1;
-  FDocument.BeginChange(rsRemovePatternChange);
-  FDocument.Layout.RemoveSource(CurrentSource);
-  FDocument.EndChange;
-end;
-
-procedure TPublishForm.ChangeSource(const Description, AMeasurementFile, ASize: string);
-var
-  Source: TPatternSource;
-begin
-  Source := CurrentSource;
-  if not Assigned(Source) then
-    Exit;
-  FDocument.BeginChange(Description);
-  Source.MeasurementFile := AMeasurementFile;
-  Source.Size := ASize;
-  FDocument.Layout.LoadSources;
-  FDocument.EndChange;
+  FDocument.RemovePattern(CurrentSource);
 end;
 
 // A size belongs to its file, so a new file starts on its first
@@ -1160,8 +1135,8 @@ begin
   try
     Dialog.Filter := rsFilterMeasurements;
     Dialog.Options := Dialog.Options + [ofFileMustExist];
-    if Dialog.Execute then
-      ChangeSource(rsSetChange, FDocument.Layout.StoredPath(Dialog.FileName), '');
+    if Dialog.Execute and Assigned(CurrentSource) then
+      FDocument.SetMeasurements(CurrentSource, FDocument.Layout.StoredPath(Dialog.FileName));
   finally
     FreeAndNil(Dialog);
   end;
@@ -1169,14 +1144,15 @@ end;
 
 procedure TPublishForm.PatternSetClick(Sender: TObject);
 begin
-  ChangeSource(rsSetChange, '', '');
+  if Assigned(CurrentSource) then
+    FDocument.SetMeasurements(CurrentSource, '');
 end;
 
 procedure TPublishForm.SizeChange(Sender: TObject);
 begin
   if FRefreshing or not Assigned(CurrentSource) or (FSizeBox.ItemIndex < 0) then
     Exit;
-  ChangeSource(rsSizeChange, CurrentSource.MeasurementFile, FSizeBox.Text);
+  FDocument.SetSize(CurrentSource, FSizeBox.Text);
 end;
 
 procedure TPublishForm.BuildPiecesTab;

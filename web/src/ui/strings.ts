@@ -244,6 +244,17 @@ export const STRINGS = {
   exportDxf: 'Export DXF',
   exportDxfHint: 'Download the layout as DXF-AAMA, for pattern software',
   downloaded: (name: string): string => `Downloaded ${name}`,
+  // The Patterns tab, as the desktop's
+  tabPatterns: 'Patterns',
+  patternsGroup: 'Patterns in This Layout',
+  addPattern: 'Add pattern…',
+  removePattern: 'Remove pattern',
+  sourceSet: 'Measurements',
+  chooseSet: 'Choose measurements…',
+  patternSet: "Use the pattern's own",
+  sourceSize: 'Size',
+  noSet: 'None',
+  sourceAdded: (count: number): string => `${String(count)} new copies in the tray`,
   // The Output tab, as the desktop's
   tabOutput: 'Output',
   outputGroup: 'Output',

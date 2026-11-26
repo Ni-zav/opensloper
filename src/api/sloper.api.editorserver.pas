@@ -561,7 +561,6 @@ const
     'allowTurns', 'fabric');
   SUGGESTION_KIND_NAMES: array[TSuggestionKind] of string = ('none', 'length', 'angle', 'ratio');
   ICON_PLACE_NAMES: array[TIconPlace] of string = ('toolbar', 'tools', 'sideTabs', 'menu', 'properties');
-  SHORTCUT_KIND_NAMES: array[TShortcutKind] of string = ('command', 'fixed', 'mouse');
   DOCUMENT_CHANGE_NAMES: array[TDocumentChange] of string = ('pattern', 'objectsReplaced', 'measurements', 'history', 'file',
     'view');
 
@@ -2298,14 +2297,6 @@ begin
     NotePreviewText(Document.Pattern, RequireString(Params, 'text')))]);
 end;
 
-// An enumeration's value as the API names it: without its prefix, starting
-// in lower case, as kcToolPoint gives toolPoint
-function EnumName(Info: PTypeInfo; Value, PrefixLength: integer): string;
-begin
-  Result := Copy(GetEnumName(Info, Value), PrefixLength + 1, MaxInt);
-  if Result <> '' then
-    Result[1] := LowerCase(Result[1]);
-end;
 
 function ToolsToJSON: TJSONArray;
 var
@@ -2332,24 +2323,6 @@ begin
         ICON_PLACE_NAMES[Command.Place], 'menu', Command.Menu, 'keys', Command.Keys, 'description', Command.Description]));
 end;
 
-function ShortcutsToJSON: TJSONArray;
-const
-  // kc and sg
-  PREFIX_LENGTH = 2;
-var
-  Command: TKeyCommand;
-  Info: TShortcutInfo;
-begin
-  Result := TJSONArray.Create;
-  for Command := Low(TKeyCommand) to High(TKeyCommand) do
-  begin
-    Info := ShortcutInfo(Command);
-    if saDesign in Info.Apps then
-      Result.Add(TJSONObject.Create(['command', EnumName(TypeInfo(TKeyCommand), Ord(Command), PREFIX_LENGTH), 'keys', Info.Keys,
-        'kind', SHORTCUT_KIND_NAMES[Info.Kind], 'group', EnumName(TypeInfo(TShortcutGroup), Ord(Info.Group), PREFIX_LENGTH),
-        'description', Info.Description]));
-  end;
-end;
 
 procedure TEditorApiServer.AfterConstruction;
 begin
@@ -2904,7 +2877,7 @@ begin
     'editor_drag_to': Result := DoDragTo(Params);
     'editor_drag_end': Result := DoDragEnd(False);
     'editor_drag_cancel': Result := DoDragEnd(True);
-    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON,
+    'editor_tables': Result := TJSONObject.Create(['tools', ToolsToJSON, 'commands', CommandsToJSON, 'shortcuts', ShortcutsToJSON(saDesign),
         'roles', RolesToJSON, 'pointTypes', PointTypesToJSON]);
     else
       if StartsStr(PUBLISH_PREFIX, Method) then

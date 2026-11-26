@@ -1,7 +1,7 @@
 // Keys as the engine's tables write them, parsed as Sloper.Core.Shortcuts' ParseShortcut does
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseShortcut } from '../src/ui/shortcuts.ts';
+import { parseShortcut, shortcutText } from '../src/ui/shortcuts.ts';
 
 void test('a letter', () => {
   assert.deepEqual(parseShortcut('P'), { key: 'P', mod: false, ctrl: false, shift: false, alt: false });
@@ -23,4 +23,13 @@ void test('what is not one key press', () => {
   assert.equal(parseShortcut('Mod'), undefined);
   assert.equal(parseShortcut('A+B'), undefined);
   assert.equal(parseShortcut(''), undefined);
+});
+
+void test('keys as people read them', () => {
+  assert.equal(shortcutText('Mod+Shift+Z', false), 'Ctrl+Shift+Z');
+  assert.equal(shortcutText('Mod+Shift+Z', true), 'Cmd+Shift+Z');
+  assert.equal(shortcutText('Mod+Plus', false), 'Ctrl++');
+  assert.equal(shortcutText('Mod+Minus', false), 'Ctrl+-');
+  assert.equal(shortcutText('Z', false), 'Z');
+  assert.equal(shortcutText('', false), '');
 });

@@ -297,7 +297,13 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 - The engine says which files the sources still need, by their paths from the layout. The chosen files have names only, so each is matched by name and given. A pattern found may name a measurement file, which is looked for in turn.
 - The title names the layout. The status bar has a message and the problems' count, as on the desktop, with how many stop printing. After each change the message sums up the pages, blank and left out, or the one sheet's size, or the material used (`PreviewSummary`), unless a command says what it did.
 - **The preview** (`PreviewCanvas` in `ui/previewCanvas.ts`, as `Sloper.Publish.PreviewCanvas`) is drawn with Canvas2D from `publish_scene`: the cover, the pages (blank ones grey, left-out ones crossed), the pieces with their tint, seam line, marks, lines and label, and the information block's boxes, with its text once it is large enough to read.
-- Fit Pages, Zoom In and Zoom Out are on the toolbar. The wheel zooms about the pointer and the middle button pans. A new layout is fitted.
+- Fit Pages, Zoom In, Zoom Out and Zoom Area are on the toolbar. The wheel zooms about the pointer, and the middle button or Space with a drag pans. A new layout is fitted.
+  - Zoom Area zooms to a box dragged, in on a click, out on a Shift+click; pieces cannot be pressed while it is on. Escape or its key turns it off.
+- **Keys** come from the engine's tables (`publish_tables`, the desktop's `saPublish` shortcuts), as the design page's do:
+  - The toolbar's commands (Open, Save, Save As, Export PDF, Undo, Redo, the zooms and Zoom Area) click their button, so a disabled one does nothing. Each button's hint names its keys, with Mod as Ctrl, or Cmd on macOS (`shortcutText`).
+  - A field being typed in keeps its own Undo, Redo and letters.
+  - Away from fields, as the desktop's preview takes them: Delete or Backspace sends the selected piece back to the tray or deletes the selected note; Escape lets go of a drag, a box, Zoom Area or the selection, the first there is.
+  - Print waits for step 11; Reload has nothing to read again on the web.
 - A press selects the piece under it, outlined in blue, as `publish_press` finds it. Dragging moves it, one undo step:
   - The engine moves it (`publish_drag`), on the desktop's 0.5 mm grid, and the scene is read again after each move. Only the newest move waits to be sent.
   - Letting go ends the step (`publish_release`). A drag the browser takes away puts the piece back (`publish_cancel`).
@@ -345,6 +351,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 
 | Method | Does |
 | --- | --- |
+| `publish_tables` | The Publish app's shortcuts, as `editor_tables` gives the design app's |
 | `publish_open` | Opens a layout from its text, or starts one for a pattern among the files, with the files given (`OpenText`, `NewForPattern`) |
 | `publish_add_files` | Gives more files, and reads the sources again. Not an undo step |
 | `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given; `tray`: the copies waiting, each with its caption and whether it can be placed; and `summary`, the status bar's |

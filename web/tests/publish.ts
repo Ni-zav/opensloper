@@ -12,7 +12,9 @@
 // tab lists what the patterns need. The Info tab hides the date from the
 // information block and shows it again, moves the block to the top right,
 // and hides the block and shows it again. The layout is packed, undone and redone,
-// saved and exported, and the saved file opens again. A layout whose sources
+// saved and exported, and the saved file opens again. The engine's keys
+// undo and redo, select nothing, send a piece back to the tray and turn
+// Zoom Area on to zoom to a box. A layout whose sources
 // sit in other folders finds its files by name, lists what stops it printing
 // in the Problems tab, and its waiting pieces are placed.
 import assert from 'node:assert/strict';
@@ -167,7 +169,8 @@ async function selectionMiddle(page: Page): Promise<{ x: number; y: number }> {
 
 // Waits for the toolbar's Undo to name this step
 async function waitForUndo(page: Page, step: string): Promise<void> {
-  await page.waitForSelector(`#toolbar button[title="Undo ${step}"]:enabled`);
+  // The hint ends with the keys, as Undo Pack pieces (Ctrl+Z)
+  await page.waitForSelector(`#toolbar button[title^="Undo ${step} ("]:enabled`);
 }
 
 // A downloaded file's contents, once the browser has written it
@@ -353,6 +356,44 @@ try {
   await waitForUndo(page, 'Place piece');
   await command(page, 'Redo');
   await waitForUndo(page, 'Pack pieces');
+
+  // The keys, from the engine's tables: the hints name them
+  assert.match(await page.$eval('#toolbar button[title^="Undo"]', (button) => button.title), /\(Ctrl\+Z\)$/u);
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForUndo(page, 'Place piece');
+  await page.keyboard.down('Control');
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Shift');
+  await page.keyboard.up('Control');
+  await waitForUndo(page, 'Pack pieces');
+  // Escape lets go of the selection; Delete sends a piece back to the tray
+  await selectSomePiece(page);
+  await page.keyboard.press('Escape');
+  await waitForData(page, 'selected', '-1');
+  await selectSomePiece(page);
+  await page.keyboard.press('Delete');
+  await waitForUndo(page, 'Unplace piece');
+  // Undone by its keys, so the pages are as they were
+  await page.keyboard.down('Control');
+  await page.keyboard.press('z');
+  await page.keyboard.up('Control');
+  await waitForUndo(page, 'Pack pieces');
+  // Z turns Zoom Area on; a box dragged zooms to it, and Escape turns it off
+  await page.keyboard.press('z');
+  await page.waitForSelector('#toolbar button.chosen[title^="Drag a box"]');
+  await waitForStatus(page, 'Zoom Area:');
+  const previewBox = await (await page.$('#preview'))?.boundingBox();
+  assert.ok(previewBox);
+  await page.mouse.move(previewBox.x + previewBox.width / 3, previewBox.y + previewBox.height / 3);
+  await page.mouse.down();
+  await page.mouse.move(previewBox.x + previewBox.width / 2, previewBox.y + previewBox.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#toolbar button[title^="Drag a box"]:not(.chosen)');
+  await command(page, 'Fit Pages');
 
   // The Output tab: each change one step, as the desktop's
   await openTab(page, 'output');

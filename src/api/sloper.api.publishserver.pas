@@ -211,13 +211,15 @@ resourcestring
     'tab works it out.';
   rsPublishMaterialsReturns = '`needs`, each with its `material`, `size` (the material''s, as the tab shows it), ' +
     '`copies` (pieces cut from it), `needed` (how much, as the tab shows it) and `notes`';
+  rsPublishTables = 'The Publish app''s tables: its shortcuts, as the desktop''s keyboard reference lists them.';
+  rsPublishTablesReturns = '`shortcuts`, each with its `command`, `keys` (as Mod+Z), `kind`, `group` and `description`';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
 implementation
 
 uses
-  StrUtils, Math, Sloper.Core.OutputProfiles, Sloper.Output.MaterialNeeded, Sloper.Core.Note, Sloper.Core.Stamp, Sloper.API.Rpc,
+  StrUtils, Math, Sloper.Core.Shortcuts, Sloper.Core.OutputProfiles, Sloper.Output.MaterialNeeded, Sloper.Core.Note, Sloper.Core.Stamp, Sloper.API.Rpc,
   Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Geometry,
   Sloper.Core.Draft, Sloper.Core.Materials, Sloper.Core.TextFields, Sloper.Core.PatternCheck, Sloper.Output.Layout,
   Sloper.Output.Tiling, Sloper.Output.TitleBlock, Sloper.Output.LayoutExport, Sloper.API.Shapes,
@@ -239,6 +241,7 @@ var
 begin
   if Length(Built) = 0 then
   begin
+    AddApiMethod(Built, 'publish_tables', rsPublishTables, rsPublishTablesReturns, True);
     AddApiMethod(Built, 'publish_open', rsPublishOpen, rsPublishStateReturns);
     AddApiParam(Built, 'files', apList, True, rsPublishFiles);
     AddApiParam(Built, 'files[].path', apText, True, rsPublishFilePath);
@@ -1043,6 +1046,7 @@ begin
     if Method = PUBLISH_PREFIX + Command then
       Exit(FLayoutServer.CallMethod(Command, Params));
   case Method of
+    'publish_tables': Result := TJSONObject.Create(['shortcuts', ShortcutsToJSON(saPublish)]);
     'publish_open': Result := DoOpen(Params);
     'publish_add_files': Result := DoAddFiles(Params);
     'publish_state': Result := DoState;

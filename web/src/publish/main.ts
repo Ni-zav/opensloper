@@ -10,11 +10,12 @@
 import { LayoutDocument } from '../document/layoutDocument.ts';
 import type { Vec2 } from '../editor/view.ts';
 import { Engine } from '../engine/engine.ts';
-import { booleanField, numberField, stringField } from '../engine/replies.ts';
+import { booleanField, numberField, recordsField, stringField } from '../engine/replies.ts';
 import { downloadBlob, downloadText } from '../ui/download.ts';
 import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
+import { matchesShortcut, parseShortcut, shortcutText } from '../ui/shortcuts.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { InfoTab } from './infoTab.ts';
 import { MaterialsTab } from './materialsTab.ts';
@@ -36,6 +37,7 @@ const ICONS = {
   zoomIn: 'zoom-in',
   zoomOut: 'zoom-out',
   fit: 'zoom-scan',
+  zoomArea: 'zoom-in-area',
   exportPdf: 'file-type-pdf',
   exportSvg: 'file-type-svg',
   exportDxf: 'file-vector',
@@ -58,6 +60,34 @@ const EXPORTS = [
   { format: 'svg', extension: '.svg', type: 'image/svg+xml' },
   { format: 'dxf', extension: '.dxf', type: 'application/dxf' },
 ] as const;
+
+// The toolbar's buttons that keys work, by the engine's names for the
+// commands (publish_tables); the keys click the button, so they do nothing
+// while it is disabled. Save As downloads, as Save does.
+const KEY_BUTTONS: [command: string, button: string][] = [
+  ['open', 'open'],
+  ['save', 'save'],
+  ['saveAs', 'save'],
+  ['exportPDF', 'exportPdf'],
+  ['undo', 'undo'],
+  ['redo', 'redo'],
+  ['zoomIn', 'zoomIn'],
+  ['zoomOut', 'zoomOut'],
+  ['fit', 'fit'],
+  ['toolZoom', 'zoomArea'],
+];
+// Commands left to a field being typed in, which has its own
+const FIELD_COMMANDS = new Set(['undo', 'redo', 'toolZoom']);
+
+// Whether keys go to what has the focus: a field, a list or a choice
+function typingIn(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
   const found = document.getElementById(id);
@@ -124,7 +154,11 @@ class PublishApp {
   private readonly problems: ProblemsPanel;
   private readonly buttons = new Map<string, HTMLButtonElement>();
 
-  constructor(engine: Engine) {
+  // Each command's keys, as Mod+Z, from the engine's tables
+  private readonly shortcuts: ReadonlyMap<string, string>;
+
+  constructor(engine: Engine, shortcuts: ReadonlyMap<string, string>) {
+    this.shortcuts = shortcuts;
     this.document = new LayoutDocument(engine);
     this.preview = new PreviewCanvas(previewElement, this.document, {
       selectionChanged: (placement) => {
@@ -132,6 +166,12 @@ class PublishApp {
         this.showPieces();
       },
       // A note picked on the pages opens its details, as on the desktop
+      zoomAreaChanged: (on) => {
+        const button = this.buttons.get('zoomArea');
+        button?.classList.toggle('chosen', on);
+        button?.setAttribute('aria-pressed', String(on));
+        showMessage(on ? STRINGS.zoomAreaStatus : this.document.state.summary);
+      },
       noteChanged: (note) => {
         document.body.dataset.note = String(note);
         this.notes.choose(note);
@@ -212,9 +252,17 @@ class PublishApp {
     this.side.addSection('problems', STRINGS.tabProblems, ICONS.problemsTab, this.problems, true);
   }
 
-  // A toolbar button, kept by name to enable and disable
+  // A command's hint with its keys, when it has some
+  private hint(text: string, command: string): string {
+    const keys = this.shortcuts.get(command) ?? '';
+    return keys === '' ? text : STRINGS.withShortcut(text, shortcutText(keys));
+  }
+
+  // A toolbar button, kept by name to enable and disable; its hint names the
+  // keys of the command it is for
   private button(name: keyof typeof ICONS, caption: string, hint: string, action: () => void): HTMLButtonElement {
-    const made = iconButton(ICONS[name], caption, hint, action);
+    const command = KEY_BUTTONS.find(([, button]) => button === name)?.[0] ?? '';
+    const made = iconButton(ICONS[name], caption, this.hint(hint, command), action);
     this.buttons.set(name, made);
     return made;
   }
@@ -247,6 +295,9 @@ class PublishApp {
       this.button('fit', STRINGS.fitPages, STRINGS.fitPagesHint, () => {
         this.preview.zoomToFit();
       }),
+      this.button('zoomArea', STRINGS.zoomArea, STRINGS.zoomAreaHint, () => {
+        this.preview.zoomArea = !this.preview.zoomArea;
+      }),
       divider(),
       this.button('exportPdf', STRINGS.exportPdf, STRINGS.exportPdfHint, () => {
         this.run(this.export(0));
@@ -261,6 +312,17 @@ class PublishApp {
     openInput.addEventListener('change', () => {
       this.run(this.openFiles([...(openInput.files ?? [])]));
       openInput.value = '';
+    });
+    window.addEventListener('keydown', (event) => {
+      this.keyDown(event);
+    });
+    window.addEventListener('keyup', (event) => {
+      if (event.key === ' ') {
+        this.preview.panKeyDown = false;
+      }
+    });
+    window.addEventListener('blur', () => {
+      this.preview.panKeyDown = false;
     });
     problemCount.addEventListener('click', () => {
       if (this.problems.count > 0) {
@@ -449,6 +511,7 @@ class PublishApp {
       save: open,
       undo: state.canUndo,
       redo: state.canRedo,
+      zoomArea: open,
       exportPdf: open && !blocked,
       exportSvg: open && !blocked,
       exportDxf: open && !blocked,
@@ -462,7 +525,48 @@ class PublishApp {
     this.output.setExportsEnabled(open && !blocked);
     const undo = this.buttons.get('undo');
     if (undo !== undefined) {
-      undo.title = state.canUndo ? STRINGS.undoStep(state.undo) : STRINGS.undoHint;
+      undo.title = this.hint(state.canUndo ? STRINGS.undoStep(state.undo) : STRINGS.undoHint, 'undo');
+    }
+  }
+
+  // Whether the key press is the command's, as the engine's tables give it
+  private matches(event: KeyboardEvent, command: string): boolean {
+    const shortcut = parseShortcut(this.shortcuts.get(command) ?? '');
+    return shortcut !== undefined && matchesShortcut(event, shortcut);
+  }
+
+  // The toolbar's keys work from anywhere but a field's own; the preview's
+  // keys (Delete, Escape, Space) only away from fields, as the desktop's
+  // work while the preview has the focus
+  private keyDown(event: KeyboardEvent): void {
+    // A modal dialog takes the keys it wants itself, and the window none
+    if (document.querySelector('dialog[open]') !== null) {
+      return;
+    }
+    const typing = typingIn(event.target);
+    const found = KEY_BUTTONS.find(
+      ([command]) => this.matches(event, command) && !(typing && FIELD_COMMANDS.has(command)),
+    );
+    if (found !== undefined) {
+      event.preventDefault();
+      const button = this.buttons.get(found[1]);
+      if (button !== undefined && !button.disabled) {
+        button.click();
+      }
+      return;
+    }
+    if (typing) {
+      return;
+    }
+    if (this.matches(event, 'removePiece') || event.key === 'Backspace') {
+      event.preventDefault();
+      this.preview.removeSelected();
+    } else if (this.matches(event, 'clearSelection')) {
+      this.preview.escape();
+    } else if (event.key === ' ') {
+      // Space with a drag pans, so it does not scroll the page
+      event.preventDefault();
+      this.preview.panKeyDown = true;
     }
   }
 }
@@ -473,7 +577,14 @@ async function main(): Promise<void> {
     new URL('./worker.js', import.meta.url),
     new URL('./engine_lib.wasm', import.meta.url),
   );
-  new PublishApp(engine).start();
+  const tables = await engine.call('publish_tables');
+  const shortcuts = new Map(
+    recordsField(tables, 'shortcuts').map((record): [string, string] => [
+      stringField(record, 'command') ?? '',
+      stringField(record, 'keys') ?? '',
+    ]),
+  );
+  new PublishApp(engine, shortcuts).start();
   showMessage('');
   document.body.dataset.ready = 'true';
 }

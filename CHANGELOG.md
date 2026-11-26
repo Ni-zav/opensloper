@@ -38,6 +38,10 @@ Changed, Fixed and Removed under each version.
   heads, so an arrow along an outline, such as from an offset point to the
   point it starts from, shows over the line. A piece's direction chevrons
   grow to match, on the desktop and the web (#145).
+- Importing an SVG stamp never reads a document type's external files or
+  expands its entities. A plain document type, as Illustrator writes, is
+  ignored; one with an internal subset, or one that cannot be read, is
+  refused with a message saying to save the drawing again without it (#90).
 
 ### Fixed
 

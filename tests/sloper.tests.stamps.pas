@@ -50,6 +50,7 @@ type
     procedure TestPlainDoctype;
     procedure TestDoctypeSubsetRefused;
     procedure TestDoctypeBackstop;
+    procedure TestDoctypeUnreadable;
     procedure TestEmptyRefused;
     procedure TestTransformsAndGroups;
     procedure TestRotation;
@@ -222,6 +223,18 @@ const
 begin
   AssertTrue('a second declaration is still refused',
     Pos(Copy(rsSvgNotXml, 1, 20), Refusal('<!DOCTYPE svg><!DOCTYPE svg>' + SVG_RECTANGLE)) = 1);
+end;
+
+// A declaration the importer cannot read says how to fix the file, rather
+// than giving the parser's own words
+procedure TTestStamps.TestDoctypeUnreadable;
+const
+  SVG_RECTANGLE = '<svg xmlns="http://www.w3.org/2000/svg" ' + MM_SIZE + '><rect width="5" height="5"/></svg>';
+begin
+  AssertEquals('lower case, as in HTML', rsSvgDoctypeUnread, Refusal('<!doctype svg>' + SVG_RECTANGLE));
+  AssertEquals('a literal left open', rsSvgDoctypeUnread, Refusal('<!DOCTYPE svg SYSTEM "abc>' + SVG_RECTANGLE));
+  AssertEquals('PUBLIC without its system ID', rsSvgDoctypeUnread, Refusal('<!DOCTYPE svg PUBLIC "x">' + SVG_RECTANGLE));
+  AssertEquals('no name', rsSvgDoctypeUnread, Refusal('<!DOCTYPE>' + SVG_RECTANGLE));
 end;
 
 procedure TTestStamps.TestEmptyRefused;

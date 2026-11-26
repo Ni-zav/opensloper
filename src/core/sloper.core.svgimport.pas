@@ -47,6 +47,7 @@ function ImportSvgStampFile(const FileName: string; out Drawing: TStampDrawing; 
 resourcestring
   rsSvgNotXml = 'The file is not an SVG drawing: %s';
   rsSvgDoctypeSubset = 'The drawing has a document type with an internal subset. Save it again without the document type';
+  rsSvgDoctypeUnread = 'The drawing''s document type could not be read. Save it again without the document type';
   rsSvgNotSvg = 'The file is not an SVG drawing';
   rsSvgTooLarge = 'The file is too large for a stamp: at most %d MB';
   rsSvgText = 'The drawing has text, which a stamp cannot hold; convert the text to paths first (in Inkscape, Path ' +
@@ -1155,15 +1156,17 @@ begin
 end;
 
 // Ignore a plain SVG document type without handing its external ID to XMLRead.
-// Only inspect the prolog. Anything unrecognised is left for the parser, which
-// still has DOCTYPE processing disabled.
+// Only inspect the prolog. A declaration with an internal subset, or one that
+// cannot be read, is refused with a message saying how to fix the file;
+// anything else is left for the parser, which still has DOCTYPE processing
+// disabled.
 function StripSvgDoctype(const SvgText: string; out Text, ErrorMessage: string): boolean;
 const
   XML_SPACE = [#9, #10, #13, ' '];
   UTF8_BOM = #$EF#$BB#$BF;
+  DOCTYPE_START = '<!DOCTYPE';
 var
   Cursor, Start, NameStart, EndMarker: SizeInt;
-  Quote: char;
 
   function Take(const Token: string): boolean;
   begin
@@ -1183,6 +1186,8 @@ var
   end;
 
   function TakeLiteral: boolean;
+  var
+    Quote: char;
   begin
     Result := False;
     if (Cursor > Length(SvgText)) or not (SvgText[Cursor] in ['"', '''']) then
@@ -1194,6 +1199,12 @@ var
       Exit;
     Cursor := EndMarker + 1;
     Result := True;
+  end;
+
+  function Unreadable: boolean;
+  begin
+    ErrorMessage := rsSvgDoctypeUnread;
+    Result := False;
   end;
 
 begin
@@ -1222,24 +1233,27 @@ begin
       Break;
   until False;
   Start := Cursor;
-  if not Take('<!DOCTYPE') or not SkipSpace then
+  // In any case, as HTML writes it; XML only allows capitals
+  if not SameText(Copy(SvgText, Cursor, Length(DOCTYPE_START)), DOCTYPE_START) then
     Exit;
+  if not Take(DOCTYPE_START) or not SkipSpace then
+    Exit(Unreadable);
   NameStart := Cursor;
   while (Cursor <= Length(SvgText)) and not (SvgText[Cursor] in XML_SPACE + ['[', '>']) do
     Inc(Cursor);
   if not IsXmlName(UTF8Decode(Copy(SvgText, NameStart, Cursor - NameStart))) then
-    Exit;
+    Exit(Unreadable);
   if SkipSpace then
   begin
     if Take('SYSTEM') then
     begin
       if not SkipSpace or not TakeLiteral then
-        Exit;
+        Exit(Unreadable);
     end
     else if Take('PUBLIC') then
     begin
       if not SkipSpace or not TakeLiteral or not SkipSpace or not TakeLiteral then
-        Exit;
+        Exit(Unreadable);
     end;
     SkipSpace;
   end;
@@ -1248,8 +1262,9 @@ begin
     ErrorMessage := rsSvgDoctypeSubset;
     Exit(False);
   end;
-  if Take('>') then
-    Delete(Text, Start, Cursor - Start);
+  if not Take('>') then
+    Exit(Unreadable);
+  Delete(Text, Start, Cursor - Start);
 end;
 
 function ImportSvgStamp(const SvgText: string; out Drawing: TStampDrawing; out Warnings: TStringArray; out ErrorMessage: string): boolean;

@@ -41,6 +41,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- A new, empty publish window no longer lists "Nothing is placed" as a
+  problem; printing and exporting an empty layout are still refused (#152).
 - In the web Design app, a drag or click right after an undo no longer fails
   with "There is no object or variable with ID …" when the undo took away a
   selected object (#133).

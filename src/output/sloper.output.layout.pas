@@ -1636,6 +1636,9 @@ begin
   for Problem in Problems do
     if Problem.Blocking then
       Result := Result + LineEnding + '  ' + Problem.Text;
+  // Problems leaves this out while there are no patterns
+  if (FSources.Items.Count = 0) and (Length(Placements) = 0) then
+    Result := Result + LineEnding + '  ' + rsLayoutNothingPlaced;
   if Result <> '' then
     Result := rsLayoutRefused + Result;
 end;
@@ -1924,8 +1927,10 @@ begin
   for Source in FSources.Items do
     if Assigned(Source.Pattern) and (Source.LoadError = '') and not HasPieces(Source) then
       Add(Format(rsLayoutNoPieces, [ExtractFileName(Source.PatternFile)]), False);
-  // A source that failed already says why; this is for a sheet that would print blank
-  if AllRead and ((Length(Placements) = 0) or ((Output.Material <> '') and (Length(Shapes) = 0))) then
+  // A source that failed already says why; this is for a sheet that would
+  // print blank. A layout with no patterns yet, as a new window starts, is not
+  // a problem to list, though Refusal still refuses it (#152).
+  if AllRead and (FSources.Items.Count > 0) and ((Length(Placements) = 0) or ((Output.Material <> '') and (Length(Shapes) = 0))) then
     Add(rsLayoutNothingPlaced, True);
   if AllRead and (Output.Material <> '') and not MaterialExists then
     Add(Format(rsLayoutNoMaterial, [Output.Material]), False);

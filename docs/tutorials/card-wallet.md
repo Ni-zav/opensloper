@@ -46,23 +46,33 @@ else, click Import… in the Variables tab and choose it. These are added:
 The piece is drafted flat: the back at the top, then the fold, then the front
 below it, its open edge at the bottom.
 
-1. With the Point tool (++p++), click to make **A**, the back's top left, and
-   set X and Y to `0`.
-2. Click level with A, about 100 mm to its right, for **B**. Click the wand
-   button, **f**, at the right of its Length and choose `#width`.
-3. Click below A for **C**, the front's open edge, Length
-   `#back_height + #front_height`. Click below B for **D**, with the same
-   Length.
+Draw it in one go with the Line tool (++l++). Each click makes a point and
+carries the line on from it:
 
-With the Line tool (++l++), draw A to B, B to D, D to C and C to A.
+1. Click in open space for **A**, the back's top left.
+2. Click level with A, about 100 mm to its right, for **B**.
+3. Click below B, about 135 mm down, for **C**: the front's open edge.
+4. Click left of C, level with it and below A, for **D**.
+5. Click A to close the outline.
+
+With the Select tool (++s++), click each point and set it in the properties.
+Click the wand button, **f**, at the right of a field to choose a variable or
+a formula:
+
+| Point | X and Y, or Length |
+| --- | --- |
+| A | X `0`, Y `0` |
+| B | `#width` |
+| C | `#back_height + #front_height` |
+| D | `#width` |
 
 The back's top corners are rounded, so they wear well:
 
-1. Select `Line_C_A` and `Line_A_B` and choose Tools → Edge → Round Corner.
+1. Select `Line_D_A` and `Line_A_B` and choose Tools → Edge → Round Corner.
    An arc, `Corner_A`, replaces the corner, with points **E** and **F** where
    it meets the edges, which are cut back to them. Set its Radius to
    `#corner`.
-2. Do the same at B with `Line_F_B` and `Line_B_D`, which makes `Corner_B`
+2. Do the same at B with `Line_F_B` and `Line_B_C`, which makes `Corner_B`
    and points **G** and **H**, Radius `#corner`.
 
 The sharp corners stay behind as construction lines, as guides.
@@ -72,9 +82,9 @@ The sharp corners stay behind as construction lines, as guides.
 ## 3. The fold
 
 The fold runs across where the front ends when it is folded up. With the
-Point tool, click on `Line_C_E`, the left side below the corner, nearer C,
-for **I**: open the wand beside its Distance or ratio and choose
-`#front_height`. Click on `Line_H_D` nearer D for **J**, Distance or ratio
+Point tool (++p++), click on `Line_D_E`, the left side below the corner,
+nearer D, for **I**: open the wand beside its Distance or ratio and choose
+`#front_height`. Click on `Line_H_C` nearer C for **J**, Distance or ratio
 `#front_height`. Then choose Tools → Draw As → Fold, draw I to J, and go back
 to Outline.
 
@@ -84,12 +94,12 @@ The notch is a dip in the front's open edge, so a thumb can push the cards up.
 The edge is split either side of it, and a curve takes the middle part's
 place.
 
-1. Click on `Line_D_C` nearer D for **K**, and nearer C for **L**, each with
+1. Click on `Line_C_D` nearer C for **K**, and nearer D for **L**, each with
    Distance or ratio `#width / 2 - #thumb`.
-2. Select `Line_D_C` and K, and choose Tools → Edge → Split Edge. The edge is
-   now `Line_D_K` and `Line_K_C`.
-3. Select `Line_K_C` and L, and split it again, into `Line_K_L` and
-   `Line_L_C`.
+2. Select `Line_C_D` and K, and choose Tools → Edge → Split Edge. The edge is
+   now `Line_C_K` and `Line_K_D`.
+3. Select `Line_K_D` and L, and split it again, into `Line_K_L` and
+   `Line_L_D`.
 4. Select `Line_K_L` and set its Role to Construction: the curve replaces it.
 5. With the Curve tool (++c++), draw a curve from K to L, and set its handles:
 

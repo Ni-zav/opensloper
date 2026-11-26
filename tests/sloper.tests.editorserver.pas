@@ -25,7 +25,8 @@ unit Sloper.Tests.EditorServer;
 interface
 
 uses
-  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer, Sloper.API.Rpc;
+  SysUtils, fpcunit, testregistry, fpjson, Sloper.Tests.TestCase, Sloper.API.EditorServer, Sloper.API.Rpc,
+  Sloper.Core.Draft, Sloper.Editor.ToolEdits;
 
 type
   TTestEditorServer = class(TOSTestCase)
@@ -56,7 +57,14 @@ type
     procedure TestAddPointOnExistingPoint;
     procedure TestLineTool;
     procedure TestLineTooShortIgnored;
+    // Lines drawn in open space hang together: each end is offset from the line's start
+    procedure TestLineToolChainsOffsets;
     procedure TestCurveToolCarriesOn;
+    // The Point tool's drag from a point: onto another point it is offset
+    // from that one, in open space it is free, where it is, as one step
+    procedure TestRebasePoint;
+    // Drags it refuses, saying why, or ignores
+    procedure TestRebaseRefused;
     procedure TestShapeTools;
     // A region with a piece already selects it
     procedure TestPieceTool;
@@ -68,6 +76,7 @@ type
     procedure TestLabelKeys;
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
+    procedure TestImportStamp;
     // The Delete key: refused with the reason while something uses an object
     procedure TestDeleteSelection;
     procedure TestConvertPoint;
@@ -139,6 +148,7 @@ type
     procedure TestNotePreview;
     // Work in progress: the pattern and its set as text, still counted unsaved
     procedure TestSnapshot;
+    procedure TestSaveComplete;
     // A pattern opened again from work in progress counts as not saved
     procedure TestMarkUnsaved;
     // The Features tab's forms: starting values, the selection, and values that follow a change
@@ -153,6 +163,8 @@ type
     procedure TestPrint;
     // The Properties tab's rows for a point, an edge, several objects and none
     procedure TestProperties;
+    // What a point is placed from, read only, after its name
+    procedure TestPointInputRows;
     // Its edits, each one undo step, refused with the reason
     procedure TestPropertyEdits;
     // A piece's rows: cut, fold, own allowance, grainline, material and fill
@@ -446,6 +458,120 @@ begin
   Call('editor_tool_click', '{"tool": "line", "x": 10, "y": 10, "radius": 2, "start": {"x": 10, "y": 10.01, "radius": 2}}');
   AssertFalse('nothing', Answer.Booleans['done']);
   AssertEquals('and nothing said', '', Answer.Strings['message']);
+end;
+
+procedure TTestEditorServer.TestLineToolChainsOffsets;
+var
+  First, Second: integer;
+
+// The offset point with this ID, across and down from its base
+  function OffsetOf(Id: integer): TOffsetPoint;
+  begin
+    Result := TOffsetPoint(FServer.Document.Pattern.FindNode(IntToStr(Id)));
+    AssertTrue('an offset point', Result is TOffsetPoint);
+    AssertTrue('across and down', Result.Mode = omCartesian);
+  end;
+
+begin
+  Call('editor_tool_click', '{"tool": "line", "x": 40, "y": 70, "radius": 2, "start": {"x": 0, "y": 0, "radius": 2}}');
+  AssertTrue('made', Answer.Booleans['done']);
+  Call('editor_scene');
+  AssertEquals('both ends made', 2, Answer.Arrays['points'].Count);
+  First := Answer.Arrays['points'].Objects[0].Integers['id'];
+  Second := Answer.Arrays['points'].Objects[1].Integers['id'];
+  Call('get_object', '{"id": ' + IntToStr(First) + '}');
+  AssertEquals('the first point is free', 'freePoint', Answer.Strings['type']);
+  AssertEquals('the end from the start', IntToStr(First), OffsetOf(Second).Base);
+  Call('get_object', '{"id": ' + IntToStr(Second) + '}');
+  AssertNear('across', 40, Answer.Floats['x'], TOLERANCE);
+  AssertNear('down', 70, Answer.Floats['y'], TOLERANCE);
+  // What the next click would make, then making it from the end
+  Call('editor_tool_snap', '{"tool": "line", "x": 90, "y": 75, "radius": 2, "start": {"x": 40, "y": 70, "radius": 2}}');
+  AssertEquals('offset', 'offset', Answer.Strings['kind']);
+  AssertTrue('says so', Pos('across', Answer.Strings['description']) > 0);
+  Call('editor_tool_click', '{"tool": "line", "x": 90, "y": 75, "radius": 2, "start": {"x": 40, "y": 70, "radius": 2}}');
+  Call('editor_scene');
+  AssertEquals('from the last end', IntToStr(Second), OffsetOf(Answer.Arrays['points'].Objects[2].Integers['id']).Base);
+  // Closing on the first point makes no point
+  Call('editor_tool_click', '{"tool": "line", "x": 0.5, "y": 0.5, "radius": 2, "start": {"x": 90, "y": 75, "radius": 2}}');
+  AssertTrue('closed', Answer.Booleans['done']);
+  Call('editor_scene');
+  AssertEquals('three points', 3, Answer.Arrays['points'].Count);
+  AssertEquals('three lines', 3, Answer.Arrays['edges'].Count);
+end;
+
+procedure TTestEditorServer.TestRebasePoint;
+var
+  Point: TDraftObject;
+begin
+  AddSquare;
+  Call('add_variable', '{"name": "size", "formula": "20"}');
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "10", ' +
+    '"dy": "#size"}');
+  Call('editor_rebase_snap', '{"from": {"x": 10, "y": 20.5, "radius": 2}, "x": 99.5, "y": 0.5, "radius": 2}');
+  AssertEquals('onto a point', 'point', Answer.Strings['kind']);
+  AssertEquals('says what it will do', Format(rsToolRebaseOffset, ['P', 'B']), Answer.Strings['description']);
+  AssertNear('drawn from the point', 20, Answer.Objects['from'].Floats['y'], TOLERANCE);
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20.5, "radius": 2}, "x": 99.5, "y": 0.5, "radius": 2}');
+  AssertTrue('done', Answer.Booleans['done']);
+  AssertTrue('its formula became a number', Pos('numbers', Answer.Strings['message']) > 0);
+  Point := FServer.Document.Pattern.FindObject('P');
+  AssertTrue('an offset', (Point is TOffsetPoint) and (TOffsetPoint(Point).Mode = omCartesian));
+  AssertEquals('from B', IntToStr(IdOf('B')), TOffsetPoint(Point).Base);
+  Call('get_object', '{"name": "P"}');
+  AssertNear('where it was', 10, Answer.Floats['x'], TOLERANCE);
+  AssertNear('where it was', 20, Answer.Floats['y'], TOLERANCE);
+  Call('editor_changes');
+  AssertEquals('one step', 'Change point type', Answer.Strings['undo']);
+  Call('undo');
+  Answer;
+  AssertEquals('undone', IntToStr(IdOf('A')), TOffsetPoint(FServer.Document.Pattern.FindObject('P')).Base);
+  // Dropped in open space it is free
+  Call('editor_rebase_snap', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertEquals(Format(rsToolRebaseFree, ['P']), Answer.Strings['description']);
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertTrue('freed', Answer.Booleans['done']);
+  AssertTrue('a free point', FServer.Document.Pattern.FindObject('P') is TFreePoint);
+  Call('get_object', '{"name": "P"}');
+  AssertNear('still there', 20, Answer.Floats['y'], TOLERANCE);
+end;
+
+procedure TTestEditorServer.TestRebaseRefused;
+begin
+  AddSquare;
+  Call('add_variable', '{"name": "size", "formula": "20"}');
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "10", ' +
+    '"dy": "#size"}');
+  Call('add_point', '{"type": "offsetPoint", "name": "R", "base": "P", "mode": "cartesian", "dx": "5", "dy": "5"}');
+  Call('add_point', '{"type": "alongEdgePoint", "name": "Q", "edge": "Line_A_B", "from": "start", "mode": "length", ' +
+    '"value": "50"}');
+  Answer;
+  // Onto an edge
+  Call('editor_rebase_snap', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 30, "y": 100.5, "radius": 2}');
+  AssertEquals(Format(rsToolRebaseOnPoint, ['P']), Answer.Strings['description']);
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 30, "y": 100.5, "radius": 2}');
+  AssertFalse('not on an edge', Answer.Booleans['done']);
+  AssertEquals('says why', Format(rsToolRebaseOnPoint, ['P']), Answer.Strings['message']);
+  // Back onto itself: nothing, quietly
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 10.5, "y": 20, "radius": 2}');
+  AssertFalse('nothing', Answer.Booleans['done']);
+  AssertEquals('nothing said', '', Answer.Strings['message']);
+  // Onto a point placed from it
+  Call('editor_rebase_point', '{"from": {"x": 10, "y": 20, "radius": 2}, "x": 15, "y": 25, "radius": 2}');
+  AssertFalse('no loop', Answer.Booleans['done']);
+  AssertTrue('says why', Answer.Strings['message'] <> '');
+  // Only free and offset points
+  Call('editor_rebase_snap', '{"from": {"x": 50, "y": 0, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertEquals(Format(rsToolRebaseNotFreeOrOffset, ['Q']), Answer.Strings['description']);
+  Call('editor_rebase_point', '{"from": {"x": 50, "y": 0, "radius": 2}, "x": 300, "y": 300, "radius": 2}');
+  AssertFalse('not along an edge', Answer.Booleans['done']);
+  // From open space there is nothing to drag
+  Call('editor_rebase_snap', '{"from": {"x": 300, "y": 300, "radius": 2}, "x": 0, "y": 0, "radius": 2}');
+  AssertTrue('no point', Answer.Nulls['from']);
+  Call('editor_rebase_point', '{"from": {"x": 300, "y": 300, "radius": 2}, "x": 0, "y": 0, "radius": 2}');
+  AssertFalse('nothing', Answer.Booleans['done']);
+  Call('editor_changes');
+  AssertEquals('no step made', 'Add alongEdgePoint', Answer.Strings['undo']);
 end;
 
 procedure TTestEditorServer.TestCurveToolCarriesOn;
@@ -780,6 +906,35 @@ begin
   AssertTrue('made', Answer.Booleans['done']);
   Call('editor_changes');
   AssertEquals('one step', 'Add seam', Answer.Strings['undo']);
+end;
+
+procedure TTestEditorServer.TestImportStamp;
+const
+  STAMP_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+    '<path d="M0 0 H20 V10 H0 Z"/></svg>';
+var
+  Note: TJSONObject;
+  Params: string;
+begin
+  AddSquare;
+  Params := '{"svg": "' + StringToJSONString(STAMP_SVG) + '", "fileName": "Fold.svg", "selection": [' +
+    IntToStr(IdOf('A')) + '], "x": 300, "y": 250}';
+  Call('editor_import_stamp', Params);
+  AssertTrue('imported', Answer.Booleans['done']);
+  AssertEquals('selects the stamp', 1, Answer.Arrays['select'].Count);
+  AssertEquals('the dimensions are in millimetres', 0, Answer.Arrays['warnings'].Count);
+  Call('editor_scene');
+  Note := Answer.Arrays['notes'].Objects[0];
+  AssertEquals('hangs from the selected point', 'point', Note.Strings['anchor']);
+  AssertEquals('drawn as paths', 1, Note.Arrays['stamp'].Count);
+  AssertNear('left of the anchor', -10, Note.Arrays['box'].Floats[0], TOLERANCE);
+  AssertNear('right of the anchor', 10, Note.Arrays['box'].Floats[2], TOLERANCE);
+  Call('undo');
+  Answer;
+  Call('editor_scene');
+  AssertEquals('one undo removes the stamp', 0, Answer.Arrays['notes'].Count);
+  Call('editor_import_stamp', '{"svg": "not SVG", "fileName": "Bad.svg", "x": 0, "y": 0}');
+  AssertEquals('a bad file is refused', RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestEditorServer.TestSeamInScene;
@@ -1521,6 +1676,58 @@ begin
   AssertEquals('nothing', 'Nothing selected', Answer.Strings['title']);
 end;
 
+procedure TTestEditorServer.TestPointInputRows;
+
+// The input rows of the named point, as "caption: text" separated by "; "
+  function Inputs(const AName: string): string;
+  var
+    Rows: TJSONArray;
+    Index: integer;
+  begin
+    Call('editor_properties', '{"selection": ["' + AName + '"]}');
+    Rows := Answer.Arrays['rows'];
+    Result := '';
+    for Index := 0 to Rows.Count - 1 do
+      if Copy(Rows.Objects[Index].Strings['id'], 1, 5) = 'input' then
+      begin
+        AssertEquals('read only', 'text', Rows.Objects[Index].Strings['kind']);
+        if Result <> '' then
+          Result := Result + '; ';
+        Result := Result + Rows.Objects[Index].Strings['caption'] + ': ' + Rows.Objects[Index].Strings['text'];
+      end;
+  end;
+
+var
+  Rows: TJSONArray;
+  Ids: string;
+  Index: integer;
+begin
+  AddSquare;
+  Call('add_point', '{"type": "offsetPoint", "name": "P", "base": "A", "mode": "cartesian", "dx": "10", "dy": "20"}');
+  Call('add_point', '{"type": "alongEdgePoint", "name": "Q", "edge": "Line_A_B", "from": "end", "mode": "length", ' +
+    '"value": "30"}');
+  Call('add_point', '{"type": "betweenPoint", "name": "R", "a": "A", "b": "C", "mode": "ratio", "value": "0.5"}');
+  Call('add_point', '{"type": "intersectPoint", "name": "S", "edgeA": "Line_A_B", "edgeB": "Line_B_C"}');
+  Call('add_point', '{"type": "projectPoint", "name": "T", "point": "A", "edge": "Line_B_C", ' +
+    '"direction": "perpendicular"}');
+  AssertEquals('an offset', 'From: A', Inputs('P'));
+  AssertEquals('along an edge', 'Along: Line_A_B; Measured from: B', Inputs('Q'));
+  AssertEquals('between', 'From: A; To: C', Inputs('R'));
+  AssertEquals('a crossing', 'First edge: Line_A_B; Second edge: Line_B_C', Inputs('S'));
+  AssertEquals('a projection', 'From: A; Onto: Line_B_C', Inputs('T'));
+  AssertEquals('a free point has none', '', Inputs('A'));
+  // After the name, before the formulas
+  Call('editor_properties', '{"selection": ["P"]}');
+  Rows := Answer.Arrays['rows'];
+  Ids := '';
+  for Index := 0 to Rows.Count - 1 do
+    Ids := Ids + Rows.Objects[Index].Strings['id'] + ' ';
+  AssertEquals('in order', 'type name locked input0 dx dy marker markedOn result problem ', Ids);
+  // Names follow a rename
+  Call('rename', '{"name": "A", "newName": "Start"}');
+  AssertEquals('renamed', 'From: Start', Inputs('P'));
+end;
+
 procedure TTestEditorServer.TestPropertyEdits;
 var
   IdA, IdEdge: string;
@@ -1884,6 +2091,26 @@ begin
   AssertEquals('the measurement file it names', 'block.slm', Answer.Strings['measurementsFile']);
   Call('get_object', '{"name": "Spot"}');
   AssertEquals('the point kept', 'Spot', Answer.Strings['name']);
+end;
+
+procedure TTestEditorServer.TestSaveComplete;
+var
+  Revision: string;
+begin
+  AddSquare;
+  Call('editor_snapshot');
+  AssertTrue('snapshot leaves the pattern dirty', Answer.Booleans['modified']);
+  Revision := IntToStr(Answer.Integers['revision']);
+  Call('add_point', '{"type": "freePoint", "name": "Later", "x": 0, "y": 0}');
+  Answer;
+  Call('editor_save_complete', '{"revision": ' + Revision + '}');
+  AssertTrue('a newer edit stays dirty', Answer.Booleans['modified']);
+  Call('editor_snapshot');
+  Revision := IntToStr(Answer.Integers['revision']);
+  Call('editor_save_complete', '{"revision": ' + Revision + '}');
+  AssertFalse('a write of the current snapshot marks it saved', Answer.Booleans['modified']);
+  Call('editor_changes');
+  AssertFalse('the editor sees the change', Answer.Booleans['modified']);
 end;
 
 procedure TTestEditorServer.TestMarkUnsaved;

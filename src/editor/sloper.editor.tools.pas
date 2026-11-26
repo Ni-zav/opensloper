@@ -62,7 +62,7 @@ resourcestring
   rsToolZoom = 'Zoom';
   rsToolZoomHint = 'Zoom: drag a box to zoom to it, click to zoom in, Shift+click to zoom out';
   rsToolPoint = 'Point';
-  rsToolPointHint = 'Point: click to add a point where it snaps';
+  rsToolPointHint = 'Point: click to add a point where it snaps; drag from a point to place it from another, or into open space to free it';
   rsToolLine = 'Line';
   rsToolLineHint = 'Line: click the start, then the end; Escape stops';
   rsToolCurve = 'Curve';

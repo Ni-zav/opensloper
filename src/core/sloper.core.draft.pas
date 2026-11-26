@@ -523,7 +523,7 @@ type
     property EndLimit: string read FEndLimit;
   end;
 
-  // The arc that rounds the corner where two straight edges meet at Vertex,
+  // The arc that rounds the corner where two edges meet at Vertex,
   // running from its tangent point on EdgeA to the one on EdgeB
   TCornerArc = class(TRoundEdge)
   private
@@ -660,6 +660,7 @@ resourcestring
   rsDraftOffsetEndMisses = 'The offset''s end does not reach %s';
   rsDraftOffsetLimitsCross = 'The offset''s ends, limited by %s and %s, pass each other';
   rsDraftCornerStraight = 'The edges do not make a corner to round';
+  rsDraftCornerNoTangent = 'No rounding arc of this radius is tangent to both edges';
   rsDraftCornerTooBig = 'This radius is too big for the edges at this corner';
   rsDraftNoFoot = 'No perpendicular from %s meets %s';
   rsDraftNoProjection = 'A line from %s at %s° does not meet %s';
@@ -2664,18 +2665,150 @@ begin
   Result := 'Corner';
 end;
 
+// A point and its unit tangent, taken in the direction away from the corner.
+procedure CornerEdgeSample(Edge: TEdgeObject; FromStart: boolean; Position: double; out At, Tangent: TVec2);
+var
+  Index: integer;
+  Segment: TEdgeSegment;
+  Remaining, SegmentSize, Param: double;
+begin
+  Remaining := Position;
+  if not FromStart then
+    Remaining := Edge.Length - Position;
+  for Index := 0 to High(Edge.Segments) do
+  begin
+    Segment := Edge.Segments[Index];
+    SegmentSize := SegmentLength(Segment);
+    if (Remaining <= SegmentSize) or (Index = High(Edge.Segments)) then
+    begin
+      if Segment.Kind = skLine then
+      begin
+        At := Segment.Line.PointAtLength(Remaining);
+        Tangent := (Segment.Line.P2 - Segment.Line.P1).Normalized;
+      end
+      else
+      begin
+        Param := Segment.Curve.ParamAtLength(Remaining);
+        At := Segment.Curve.PointAt(Param);
+        Tangent := Segment.Curve.TangentAt(Param).Normalized;
+      end;
+      if not FromStart then
+        Tangent := -Tangent;
+      Exit;
+    end;
+    Remaining := Remaining - SegmentSize;
+  end;
+  At := Vec2(0, 0);
+  Tangent := At;
+end;
+
+// Intersect the two inward offsets. A point on each offset is the centre of
+// a circle of Radius tangent to its edge at that position.
+function FindCurvedCorner(First, Second: TEdgeObject; const Vertex: string; Side, Radius, Reach: double;
+  out Centre, TangentA, TangentB: TVec2): boolean;
+const
+  SOLVE_TOLERANCE = 0.00001;
+  DERIVATIVE_SPAN = 0.01;
+  MIN_DETERMINANT = 1e-8;
+  MAX_ITERATIONS = 24;
+  MAX_BACKTRACKS = 12;
+var
+  FromStartA, FromStartB: boolean;
+  LengthA, LengthB, PosA, PosB, NextA, NextB, Determinant, StepA, StepB, Factor, Error: double;
+  Iteration, Backtrack: integer;
+  OffsetA, OffsetB, Difference, DerivativeA, DerivativeB, Ignored: TVec2;
+
+  function OffsetAt(Edge: TEdgeObject; FromStart: boolean; Position, Sign: double; out At: TVec2): TVec2;
+  var
+    Tangent: TVec2;
+  begin
+    CornerEdgeSample(Edge, FromStart, Position, At, Tangent);
+    Result := At + Vec2(-Tangent.Y, Tangent.X) * (Sign * Radius);
+  end;
+
+  function Derivative(Edge: TEdgeObject; FromStart: boolean; Position, Total, Sign: double): TVec2;
+  var
+    Before, After: double;
+    PointBefore, PointAfter: TVec2;
+  begin
+    Before := Max(0, Position - DERIVATIVE_SPAN);
+    After := Min(Total, Position + DERIVATIVE_SPAN);
+    PointBefore := OffsetAt(Edge, FromStart, Before, Sign, Ignored);
+    PointAfter := OffsetAt(Edge, FromStart, After, Sign, Ignored);
+    Result := (PointAfter - PointBefore) * (1 / (After - Before));
+  end;
+
+begin
+  Result := False;
+  FromStartA := First.StartKey = Vertex;
+  FromStartB := Second.StartKey = Vertex;
+  LengthA := First.Length;
+  LengthB := Second.Length;
+  if (LengthA <= 2 * DEFAULT_TOLERANCE) or (LengthB <= 2 * DEFAULT_TOLERANCE) then
+    Exit;
+  PosA := EnsureRange(Reach, DEFAULT_TOLERANCE, LengthA - DEFAULT_TOLERANCE);
+  PosB := EnsureRange(Reach, DEFAULT_TOLERANCE, LengthB - DEFAULT_TOLERANCE);
+  for Iteration := 1 to MAX_ITERATIONS do
+  begin
+    OffsetA := OffsetAt(First, FromStartA, PosA, Side, TangentA);
+    OffsetB := OffsetAt(Second, FromStartB, PosB, -Side, TangentB);
+    Difference := OffsetB - OffsetA;
+    Error := Difference.Length;
+    if Error <= SOLVE_TOLERANCE then
+    begin
+      Centre := (OffsetA + OffsetB) * 0.5;
+      Exit((PosA > DEFAULT_TOLERANCE) and (PosA < LengthA - DEFAULT_TOLERANCE) and
+        (PosB > DEFAULT_TOLERANCE) and (PosB < LengthB - DEFAULT_TOLERANCE) and
+        (Abs(Distance(Centre, TangentA) - Radius) <= SOLVE_TOLERANCE) and
+        (Abs(Distance(Centre, TangentB) - Radius) <= SOLVE_TOLERANCE));
+    end;
+
+    DerivativeA := Derivative(First, FromStartA, PosA, LengthA, Side);
+    DerivativeB := -Derivative(Second, FromStartB, PosB, LengthB, -Side);
+    Determinant := Cross(DerivativeA, DerivativeB);
+    if Abs(Determinant) < MIN_DETERMINANT then
+      Exit;
+    StepA := Cross(Difference, DerivativeB) / Determinant;
+    StepB := Cross(DerivativeA, Difference) / Determinant;
+    Factor := 1;
+    for Backtrack := 1 to MAX_BACKTRACKS do
+    begin
+      NextA := PosA + Factor * StepA;
+      NextB := PosB + Factor * StepB;
+      if (NextA > DEFAULT_TOLERANCE) and (NextA < LengthA - DEFAULT_TOLERANCE) and
+        (NextB > DEFAULT_TOLERANCE) and (NextB < LengthB - DEFAULT_TOLERANCE) and
+        (Distance(OffsetAt(First, FromStartA, NextA, Side, Ignored),
+        OffsetAt(Second, FromStartB, NextB, -Side, Ignored)) < Error) then
+        Break;
+      Factor := Factor / 2;
+    end;
+    if Factor < 1 / (1 shl (MAX_BACKTRACKS - 1)) then
+      Exit;
+    PosA := NextA;
+    PosB := NextB;
+  end;
+end;
+
 function TCornerArc.Compute(Context: TEvalContext): TEvalState;
 var
   First, Second: TEdgeObject;
   Corner, Along1, Along2, TangentA, TangentB, Middle: TVec2;
   Radius, Half, Reach, Sweep: double;
+  Straight: boolean;
 
   function AwayFromCorner(Edge: TEdgeObject): TVec2;
   begin
-    Result := Edge.PointAtLength(Edge.Length) - Corner;
-    if Distance(Edge.PointAtLength(0), Corner) > Result.Length then
-      Result := Edge.PointAtLength(0) - Corner;
-    Result := Result.Normalized;
+    if Straight then
+    begin
+      Result := Edge.PointAtLength(Edge.Length) - Corner;
+      if Distance(Edge.PointAtLength(0), Corner) > Result.Length then
+        Result := Edge.PointAtLength(0) - Corner;
+      Result := Result.Normalized;
+    end
+    else if Edge.StartKey = Vertex then
+      Result := PolarPoint(Vec2(0, 0), 1, Edge.StartDirection)
+    else
+      Result := PolarPoint(Vec2(0, 0), 1, Edge.EndDirection + 180);
   end;
 
 begin
@@ -2691,18 +2824,25 @@ begin
     Exit(esError);
   if Radius <= 0 then
     Exit(Fail(esInvalid, rsDraftRadiusNotPositive));
+  Straight := First.IsStraight and Second.IsStraight;
   Along1 := AwayFromCorner(First);
   Along2 := AwayFromCorner(Second);
   Half := ArcCos(EnsureRange(Dot(Along1, Along2), -1, 1)) / 2;
   if (RadToDeg(Half) < SMALLEST_CORNER_TURN) or (RadToDeg(Half) > 90 - SMALLEST_CORNER_TURN) then
     Exit(Fail(esInvalid, rsDraftCornerStraight));
   Reach := Radius / Tan(Half);
-  if (Reach >= First.Length) or (Reach >= Second.Length) then
-    Exit(Fail(esInvalid, rsDraftCornerTooBig));
-  TangentA := Corner + Along1 * Reach;
-  TangentB := Corner + Along2 * Reach;
-  Middle := Along1 + Along2;
-  Middle := Corner + Middle * (Radius / Sin(Half) / Middle.Length);
+  if Straight then
+  begin
+    if (Reach >= First.Length) or (Reach >= Second.Length) then
+      Exit(Fail(esInvalid, rsDraftCornerTooBig));
+    TangentA := Corner + Along1 * Reach;
+    TangentB := Corner + Along2 * Reach;
+    Middle := Along1 + Along2;
+    Middle := Corner + Middle * (Radius / Sin(Half) / Middle.Length);
+  end
+  else if not FindCurvedCorner(First, Second, Vertex, Sign(Cross(Along1, Along2)), Radius, Reach,
+    Middle, TangentA, TangentB) then
+    Exit(Fail(esInvalid, rsDraftCornerNoTangent));
   Sweep := NormalizeAngle(AngleBetween(Middle, TangentB) - AngleBetween(Middle, TangentA));
   if Sweep > 180 then
     Sweep := Sweep - 360;

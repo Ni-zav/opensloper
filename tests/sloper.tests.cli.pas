@@ -508,11 +508,11 @@ var
 begin
   Path := SizedToteBag(150, 140);
   Svg := InFolder('upto.svg');
-  for UpTo in ['Line_P_N', 'Move', 'Top_t1'] do
+  for UpTo in ['Line_Q_N', 'Move', 'Top_t1'] do
   begin
     AssertEquals(UpTo + ': ' + FErr, 0, Run(['export-draft', Path, '-o', Svg, '--labels', '--upto=' + UpTo]));
-    AssertTrue(UpTo + ': the body drawn', Pos('>Line_F_A<', ReadWholeFile(Svg)) > 0);
-    AssertEquals(UpTo + ': the lining drawn only from the transform', UpTo <> 'Line_P_N', Pos('>Line_F_A_t1<', ReadWholeFile(Svg)) > 0);
+    AssertTrue(UpTo + ': the body drawn', Pos('>Line_H_A<', ReadWholeFile(Svg)) > 0);
+    AssertEquals(UpTo + ': the lining drawn only from the transform', UpTo <> 'Line_Q_N', Pos('>Line_H_A_t1<', ReadWholeFile(Svg)) > 0);
     AssertEquals(UpTo + ': nothing after it', 0, Pos('>Pocket_top<', ReadWholeFile(Svg)));
   end;
 end;

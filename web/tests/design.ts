@@ -1,21 +1,22 @@
 // Drives the built design app (out/design, from npm run build) in headless
 // Chromium as a user would: adds a point to the empty pattern it starts with
 // and checks it stays where it was clicked, opens a regression pattern with its measurements,
-// checks the canvas drew it and its rulers, hides and shows them, adds a point with the Point tool, drags it with
-// the Select tool and undoes, edits it in the Properties tab, then uses each
+// checks the canvas drew it and its rulers, hides and shows them, adds a point with the Point tool, drags from
+// another with the Point tool to make it free, drags it with the Select tool and undoes, edits it in the Properties tab, then uses each
 // drawing tool and drags a curve's handle, a note and a callout's tip. It edits a measurement and saves the
 // set, whose download it reads, and tries the test size. Serves the app itself on a free port. Node runs
-// this TypeScript as it is; CHROMIUM names the browser, /usr/bin/chromium by
-// default, and SCREENSHOT, a file name without .png, keeps a picture of the end. It opens and saves
+// this TypeScript as it is. CHROMIUM overrides the browser path, and SCREENSHOT,
+// a file name without .png, keeps a picture of the end. It opens and saves
 // through uploads and downloads, as where the browser has no File System Access.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { KeyInput, Page } from 'puppeteer-core';
+import type { Page } from 'puppeteer-core';
 import {
   bodyData,
   launchBrowser,
+  pressWithMod,
   serveApp,
   status,
   TIMEOUT_MS,
@@ -130,6 +131,36 @@ const browser = await launchBrowser();
 // Where the page's downloads go, removed at the end
 const downloads = await mkdtemp(join(tmpdir(), 'opensloper-design-'));
 try {
+  const phone = await browser.newPage();
+  await phone.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await phone.goto(`http://127.0.0.1:${String(port)}/`);
+  await waitForData(phone, 'ready', 'true');
+  const canvasWidth = async (): Promise<number> =>
+    phone.$eval('#canvas', (canvas) => canvas.getBoundingClientRect().width);
+  const foldedWidth = await canvasWidth();
+  assert.ok(foldedWidth > 200, 'the canvas has room when the phone opens the editor');
+  const toggle = '.side-rail > button';
+  assert.equal(await phone.$eval(toggle, (button) => button.getAttribute('aria-expanded')), 'false');
+  await phone.tap(toggle);
+  assert.equal(await phone.$eval(toggle, (button) => button.getAttribute('aria-expanded')), 'true');
+  assert.equal(
+    await phone.$eval('.side-column [data-tab="properties"]', (tab) => tab.getAttribute('aria-selected')),
+    'true',
+  );
+  const openWidth = await canvasWidth();
+  assert.ok(openWidth > 0 && openWidth < foldedWidth, 'the open panel still leaves room for the canvas');
+  await phone.click('.side-column [data-tab="objects"]');
+  await phone.focus(toggle);
+  await phone.keyboard.press('Space');
+  assert.equal(await canvasWidth(), foldedWidth, 'hiding the panel gives the canvas its room back');
+  await phone.keyboard.press('Enter');
+  assert.equal(
+    await phone.$eval('.side-column [data-tab="objects"]', (tab) => tab.getAttribute('aria-selected')),
+    'true',
+  );
+  assert.equal(await canvasWidth(), openWidth, 'the toggle opens the last selected tab again');
+  await phone.close();
+
   // Copy and Paste use the clipboard, which a user's browser would offer
   await browser
     .defaultBrowserContext()
@@ -159,7 +190,13 @@ try {
     const original = Worker.prototype.postMessage;
     Object.defineProperty(Worker.prototype, 'postMessage', {
       value: function (this: Worker, ...args: unknown[]): unknown {
-        if (JSON.stringify(args[0]).includes('editor_scene')) {
+        const request = JSON.stringify(args[0]);
+        if (request.includes('editor_drag_to')) {
+          document.body.dataset.dragMoved = 'true';
+        } else if (request.includes('editor_drag_cancel')) {
+          document.body.dataset.dragCancelled = 'true';
+        }
+        if (request.includes('editor_scene')) {
           document.body.dataset.sceneCalls = String(Number(document.body.dataset.sceneCalls ?? '0') + 1);
         }
         return Reflect.apply(original, this, args);
@@ -179,9 +216,19 @@ try {
   await page.waitForFunction(() => new Promise((resolve) => requestAnimationFrame(() => resolve(true))));
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.ok(await inkedNear(page, 60, 60), 'the first point is drawn where it was clicked');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await page.keyboard.press('s');
+  const touchPoint = { x: Math.round(emptyCanvas.x + 60), y: Math.round(emptyCanvas.y + 60) };
+  const draggedPoint = { x: touchPoint.x + DRAG_PIXELS, y: touchPoint.y + DRAG_PIXELS };
+  await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint] });
+  await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [draggedPoint] });
+  await waitForData(page, 'dragMoved', 'true');
+  await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  await waitForData(page, 'dragCancelled', 'true');
+  await page.waitForSelector('button[title="Undo Add point"]:enabled', { timeout: TIMEOUT_MS });
+  await clickAt(page, emptyCanvas, 150, 150);
+  assert.equal(await bodyData(page, 'undo'), 'Add point', 'a later click does not commit the cancelled drag');
+  assert.ok(await inkedNear(page, 60, 60), 'the cancelled drag put the point back');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', '');
   await page.keyboard.press('s');
 
@@ -209,9 +256,7 @@ try {
   });
   assert.equal(dialogs.length, dialogsBeforeImport + 1, 'a refused import says so in a dialog');
   assert.equal(await bodyData(page, 'undo'), 'Import variables', 'a refused import changes nothing');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', '');
 
   const input = await page.$('input#open-input');
@@ -235,9 +280,7 @@ try {
     page.$eval('.ruler-top', (ruler) => ruler.getBoundingClientRect().height > 0);
   assert.equal(await page.$eval('.ruler-corner', (corner) => corner.textContent), 'mm', 'the rulers count in mm');
   assert.ok(await rulersShown(), 'the rulers show');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('r');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'r');
   assert.ok(!(await rulersShown()), 'the Rulers key hides them');
   await page.click('#toolbar button[title^="Show or hide the rulers"]');
   assert.ok(await rulersShown(), 'the Rulers button shows them');
@@ -369,6 +412,33 @@ try {
   const added = await bodyData(page, 'selection');
   assert.ok(added !== '', 'the new point is selected');
 
+  // Dragging from a point with the Point tool places it from where it is
+  // dropped: here, in open space, it is made free, as one step
+  const second = { x: at.x + 60, y: at.y };
+  await page.mouse.move(second.x, second.y);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await page.mouse.click(second.x, second.y);
+  await page.waitForFunction(
+    (first) => !['', first].includes(document.body.dataset.selection ?? ''),
+    { timeout: TIMEOUT_MS },
+    added,
+  );
+  const lined = await bodyData(page, 'selection');
+  await page.mouse.move(second.x, second.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 4; step++) {
+    // oxlint-disable-next-line no-await-in-loop
+    await page.mouse.move(second.x + 10 * step, second.y + 15 * step);
+  }
+  await page.mouse.up();
+  await waitForData(page, 'undo', 'Change point type');
+  assert.equal(await bodyData(page, 'selection'), lined, 'the dragged point is selected');
+  assert.ok((await status(page)).toLowerCase().includes('free point'), 'made free');
+  await pressWithMod(page, 'z');
+  await waitForData(page, 'undo', 'Add point');
+  await pressWithMod(page, 'z');
+  await page.waitForSelector('#toolbar button[title="Redo Add point"]', { timeout: TIMEOUT_MS });
+
   await page.keyboard.press('s');
   await page.mouse.move(at.x, at.y);
   await page.mouse.down();
@@ -380,9 +450,7 @@ try {
   await waitForData(page, 'undo', 'Move point');
   assert.equal(await bodyData(page, 'selection'), added, 'the dragged point stays selected');
 
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add point');
 
   // The Delete key deletes what is selected, as one undo step, and so does
@@ -393,9 +461,7 @@ try {
   await waitForData(page, 'undo', 'Delete');
   await waitForData(page, 'selection', '');
   assert.ok(await isDisabled(page, deleteButton), 'nothing selected, nothing to delete');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add point');
   await page.mouse.click(at.x, at.y);
   await waitForData(page, 'selection', added);
@@ -403,9 +469,7 @@ try {
   await page.click(deleteButton);
   await waitForData(page, 'undo', 'Delete');
   await waitForData(page, 'selection', '');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add point');
   await page.mouse.click(at.x, at.y);
   await waitForData(page, 'selection', added);
@@ -427,12 +491,7 @@ try {
 
   // Copy puts the point's fragment on the clipboard; Paste, the button or the
   // paste key, makes a selected copy of it, and Cut copies and deletes, each one undo step
-  const pressWithControl = async (key: KeyInput): Promise<void> => {
-    await page.keyboard.down('Control');
-    await page.keyboard.press(key);
-    await page.keyboard.up('Control');
-  };
-  await pressWithControl('c');
+  await pressWithMod(page, 'c');
   await waitForStatus(page, 'Copied');
   const fragment = await page.evaluate(async () => navigator.clipboard.readText());
   assert.ok(fragment.length > 0, 'the fragment is on the clipboard');
@@ -440,7 +499,7 @@ try {
   await waitForData(page, 'undo', 'Paste');
   const copy = await bodyData(page, 'selection');
   assert.ok(copy !== '' && copy !== added, 'the copy is selected');
-  await pressWithControl('x');
+  await pressWithMod(page, 'x');
   await waitForData(page, 'undo', 'Cut');
   await waitForData(page, 'selection', '');
   // As the paste key gives it
@@ -453,7 +512,7 @@ try {
   assert.equal(await bodyData(page, 'undo'), 'Paste', 'pasted from the paste key');
   for (const step of ['Cut', 'Paste', 'Add point']) {
     // oxlint-disable-next-line no-await-in-loop
-    await pressWithControl('z');
+    await pressWithMod(page, 'z');
     // oxlint-disable-next-line no-await-in-loop
     await waitForData(page, 'undo', step);
   }
@@ -602,9 +661,7 @@ try {
   await waitForData(page, 'undo', 'Add note');
   await page.waitForSelector('textarea.note-editor', { timeout: TIMEOUT_MS });
   await page.keyboard.type('Cut 2 on fold');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('Enter');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'Enter');
   await waitForData(page, 'undo', 'Change note');
   assert.equal(await page.$('textarea.note-editor'), null, 'the text field closed');
 
@@ -641,12 +698,11 @@ try {
   await page.keyboard.type('Cut 2 on fold WWWWWWWWWWWWWWWW');
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.ok((await inkedPixels(page)) > inkBefore, 'the text typed shows on the canvas');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('a');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'a');
   await page.keyboard.type('Cut 2');
   await page.keyboard.press('Enter');
   await page.keyboard.type('on fold');
+  // This Properties field uses Ctrl+Enter on every platform.
   await page.keyboard.down('Control');
   await page.keyboard.press('Enter');
   await page.keyboard.up('Control');
@@ -731,9 +787,7 @@ try {
   await page.waitForSelector('#material-width:not(.refused)', { timeout: TIMEOUT_MS });
   assert.ok(await page.$('.materials-dialog[open]'), 'Escape put the field back, leaving the dialog open');
   await page.focus('.materials-dialog .material-grid');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', 'Add material');
   await page.click('.materials-left .list-buttons button:last-child');
   await waitForData(page, 'undo', 'Delete material');
@@ -842,9 +896,7 @@ try {
   await page.click('.feature-apply');
   await waitForData(page, 'undo', 'Insert Hem');
   assert.equal(await status(page), 'Hem added along Line_C_J', 'said so');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForData(page, 'undo', undoBefore);
 
   // Every example listed is on the site, and one opens with the measurement file it names beside it
@@ -870,6 +922,32 @@ try {
     ['The pattern has changes not saved. Drop them?'],
     'asked before dropping the changes',
   );
+
+  const stampFile = join(downloads, 'fold.svg');
+  await writeFile(
+    stampFile,
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10">' +
+      '<path d="M0 0 H20 V10 H0 Z"/></svg>',
+  );
+  const chooseStamp = async (path: string): Promise<void> => {
+    const [chooser] = await Promise.all([
+      page.waitForFileChooser(),
+      page.click('#toolbar button[title="Import SVG Stamp…"]'),
+    ]);
+    await chooser.accept([path]);
+  };
+  await chooseStamp(stampFile);
+  await waitForStatus(page, 'Added the stamp fold.svg');
+  await waitForData(page, 'undo', 'Add stamp');
+  assert.ok((await bodyData(page, 'selection')) !== '', 'the stamp is selected');
+  await page.click('#toolbar button[title="Undo Add stamp"]');
+  await waitForData(page, 'undo', '');
+  await waitForData(page, 'selection', '');
+  const largeStamp = join(downloads, 'large.svg');
+  await writeFile(largeStamp, Buffer.alloc(8 * 1024 * 1024 + 1));
+  await chooseStamp(largeStamp);
+  await waitForStatus(page, 'The file is too large for a stamp');
+  assert.equal(await bodyData(page, 'undo'), '', 'an oversized file adds no step');
 
   // SCREENSHOT names a PNG file to keep what the canvas shows at the end
   if ((process.env.SCREENSHOT ?? '') !== '') {

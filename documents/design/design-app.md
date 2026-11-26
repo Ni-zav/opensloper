@@ -59,6 +59,8 @@ A small recursive-descent parser of our own (`Sloper.Core.Formula`, on `Sloper.C
 
 Nine point operations and the edge types cover bodice, skirt and trouser blocks; circles, arcs, rounded corners and offset edges were added for accessories. Many of Valentina's ~30 tools become special cases once formulas read properties such as `{4}.angle`. Every operation, its members and properties are on the generated Operations and objects page, from `Sloper.Core.OperationInfo`, which tests hold to the code.
 
+**Round Corner** keeps the closed-form construction for two straight edges. When a curve is involved, the engine starts with the corner's end tangents and searches for an intersection of the two inward offsets at the requested radius. Contact must be within both edges. The arc splits the edges at those contacts and the existing piece, seam and notch handling takes over.
+
 **Conventions:**
 
 - Geometry in mm, formula numbers in the pattern unit.
@@ -93,11 +95,26 @@ A pattern is one drafting area, drawn in pattern order with pieces under edges a
 
 ## Drafting experience
 
+**What a point is placed from** (issue #116) shows in the Properties tab after its name, as read-only rows: an offset's base, the edge a point lies along and the end it is measured from, a between point's two points, a crossing's edges, a compass step's centre and edge, a projection's point and edge, a corner end's arc, a repeat point's repeat and a copy's source. `PointInputs` in `Sloper.Editor.PropertyRows` lists them for both editors.
+
+**Re-pointing with the Point tool** (issue #115). A drag from a free or offset point with the Point tool places it from where it is dropped, through `ConvertPointSelection`, so it stays put and is one undo step.
+
+- On another point it becomes an offset across and down from that point; in open space, a free point. Formulas it had become numbers, as with Change To.
+- An edge, a crossing, the point itself, other point types, and a point placed from the dragged one are refused or ignored, with the reason in the status bar.
+- `RebasePointStep` and `RebaseDescription` in `Sloper.Editor.ToolEdits` decide it for both editors: the desktop canvas's `cmToolDrag` mode hands the drag to the tool (`Holds`, `Release`); the web canvas's `toolDragging` mode does the same (`dragStart`, `dragMove`, `dragEnd`) through `editor_rebase_snap` and `editor_rebase_point`. A press that moves without starting on a point stays a click, as before.
+
 **Changing a point's type** (issue #81, `TPattern.ConvertPoint` in `Sloper.Core.TypeChange`). Snapping still decides the type when a point is made; changing it afterwards is a correction, offered only where the design allows it. A point can become a free point, an offset (across and down from a point), a point along an edge, between two points, a crossing of two edges, a compass step onto an edge, two compass steps or a projection onto an edge, reading the inputs `POINT_CONVERSION_INPUTS` gives. It keeps its ID, name, marker and users, so nothing that reads it changes. Its numbers are plain, worked out from where it is now, so it stays put: lengths from the nearer end or the first point, as the Point tool measures, radii from the centres, a projection square to the edge when the point is the foot of the perpendicular and otherwise at the angle it lies at. Where the new type puts it on an edge, line, circle or crossing it moves to the nearest such place (a crossing beyond an edge's end only when nearer), and is refused beyond `MAX_CONVERT_MOVE` (10 mm). Formulas it had are replaced, so the formula suggestions can turn the numbers back into formulas. Refused for a repeat's points, copies and a rounded corner's ends, which belong to what made them; for inputs that read the point; and for the type and inputs it already has. In the apps the point is the first selected and the inputs the other selected points and edges, in selection order: Tools → Points → Change To on the desktop, the *Change point to…* box on the web toolbar (`editor_convert_point`, the types from `editor_tables`), both through `ConvertPointSelection` in `Sloper.Editor.SelectionEdits`, one undo step whose status message says how far the point moved, that its formulas became numbers, and, for a free point while a size table is used, that it stays put in every size. The Automation API's `convert_point` names the type as the pattern file does and takes the inputs as `from`.
 
 The canvas feels like Inkscape, but every point records how it was placed relative to others. Inkscape itself was rejected as the drawing tool: it stores absolute coordinates.
 
 **Snap-inferred operations.** The snap target decides the operation recorded: a point level with A at 250 mm becomes an offset from A with `250` ready to change to `@waist/4`; a crossing becomes an intersection; empty space a free point. This is construction-based, not constraint-based like FreeCAD's Sketcher, so no solver is needed. Snapping (`Sloper.Editor.Snap`) looks within 8 pixels, in order: a point, a crossing, a place on an edge, a spot level with or square to a point, else a free point. The status bar says what a click will make.
+
+**Drafting with the Line and Curve tools** (issue #114). A whole outline can be drawn with the Line or Curve tool alone, without placing points first.
+
+- The first click in open space makes a free point.
+- A later click in open space makes an offset point across and down from the line's start, the point before (`LineEndSnap`, snap kind `offset`). The chain hangs together: moving the first point moves the outline.
+- Clicks on a point, crossing or edge, or level with or square to the start, snap as above; level and square ones stay offsets by length and angle.
+- Each point reads the one before, so changing an offset moves every point after it, and a point in the middle cannot be deleted while the next reads it. Changing which point an offset is from is issue #115.
 
 **Canvas** (`Sloper.UI.Canvas`, with the LCL-free `Sloper.Editor.View`, `Sloper.Editor.Scene`, `Sloper.UI.CanvasInput`, `Sloper.Core.Drag`):
 
@@ -211,6 +228,8 @@ Internal markings (placement, stitch and fold lines, holes, buttons) are drawn l
 | Edge finish | How far edge paint, burnishing or binding runs | Dotted |
 
 Roles are a fixed list, like KiCad's technical layers, so output settings can rely on them. On screen each marking role has its own colour, clear of red and orange, which mean problems; on paper they are black (`ROLE_DASHES`). For machines fold is a score line and cut is cut; DXF-AAMA writes markings on layer 8. Where lines coincide the higher role draws on top (`ROLE_PRIORITIES`). Tools → Draw As, shown on the command bar, chooses the role of lines drawn next.
+
+Preferences → Design → Line Styles sets the screen colour, line pattern and width for each role. The Design canvas and Lines tab use these settings.
 
 ### Point markers
 

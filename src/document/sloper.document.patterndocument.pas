@@ -158,6 +158,8 @@ type
     // The same contents without counting them saved, as the web editor keeps
     // work in progress in the browser
     function SnapshotText: string;
+    // Counts the current contents as saved once the caller has written them
+    procedure MarkSaved;
     // Counts the pattern as not saved, as after work in progress is restored
     procedure MarkUnsaved;
     // Makes the set in FileName current, or none for ''. Not an undo step,
@@ -590,9 +592,13 @@ end;
 
 function TPatternDocument.SaveToText: string;
 begin
+  Result := SnapshotText;
+  MarkSaved;
+end;
+
+procedure TPatternDocument.MarkSaved;
+begin
   RequireNoChange;
-  FPattern.MeasurementFile := MeasurementFileFor(FFileName);
-  Result := SavePatternToText(FPattern);
   FSavedCount := FUndo.Count;
   FMeasurementsChanged := False;
   Notify([dcFile]);

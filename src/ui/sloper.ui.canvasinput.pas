@@ -33,7 +33,9 @@ uses
 type
   // cmRefused: a drag was refused; the reason stays up until the button is released
   // cmBoxing: dragging a selection box from empty canvas or a piece
-  TCanvasMode = (cmIdle, cmPressed, cmPanning, cmDragging, cmRefused, cmBoxing);
+  // cmToolDrag: a drawing tool's own drag, such as the Point tool's from a
+  // point; the tool has the moves and the release
+  TCanvasMode = (cmIdle, cmPressed, cmPanning, cmDragging, cmRefused, cmBoxing, cmToolDrag);
   TCanvasButton = (cbLeft, cbMiddle, cbRight, cbOther);
   // paTool: the press goes to the tool, which may start a gesture by setting Mode
   TPressAction = (paIgnore, paPan, paTool);

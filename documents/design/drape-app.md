@@ -1,6 +1,6 @@
 # Drape app
 
-Part of the [OpenSloper design](../opensloper-design-document.md). `opensloper-drape` places pattern pieces round a body in 3D and drapes them in Blender's cloth simulation. The user pages (Drape) describe it as used.
+Part of the [OpenSloper design](../opensloper-design-document.md). `opensloper-drape` places pattern pieces round a body in 3D and drapes them in Blender's cloth simulation. The user pages (Drape) describe it as used. It serves sewists checking fit before cutting, and game, film and animation artists who need garments for characters. What those artists still need is in [Open items](open-items.md).
 
 **A separate app.** The design app stays a 2D drafting app, and a garment is often made from several patterns, so placing pieces in 3D is a fourth app, not a tab of the design app. Like the publish app it imports one or more patterns, each with a measurement set and size, keeps in step with their saved files and owns its own file; nothing is written back to a pattern, so no 3D data is stored in one. The Garment tab is the quick flat look at one pattern; the drape app is for fit and drape.
 

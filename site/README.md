@@ -22,7 +22,9 @@ Server). Its own packages are pinned in `requirements.txt`.
 `site` installs Django into the repository's `venv`, then runs
 `manage.py import_opensloper`, which copies the logo, app icons, tutorial
 drawings and version from the checkout, and `web/out/design`, into
-`imported/`. Run it again after any of those change. While developing,
+`imported/`. The version is the latest release, the newest `v*` tag in the
+checkout's history, so a version bump on `development` does not show until
+its release is tagged; without git it is `APP_VERSION`. Run it again after any of those change. While developing,
 Django serves the app and the static files; in production Apache does.
 
 The screenshots in `pages/static/pages/images/` are 1280x800 WebP:

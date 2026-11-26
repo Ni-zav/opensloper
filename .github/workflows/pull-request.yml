@@ -1,0 +1,41 @@
+# Checks that a pull request is for an issue: its title names one, as
+# "Fix the hem allowance (#123)", and that number is an issue of this
+# repository, not a pull request. Every change starts from an issue (see
+# CONTRIBUTING.md). Runs again when the title is edited, so a fixed title
+# passes without a new push.
+name: Pull request
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  issues: read
+  pull-requests: read
+
+jobs:
+  linked-issue:
+    name: Linked issue
+    runs-on: ubuntu-24.04
+    steps:
+      # The title comes in through the environment, never into the script itself
+      - name: The title names an issue
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          numbers=$(printf '%s\n' "$TITLE" | grep -oE '#[0-9]+' | tr -d '#' || true)
+          if [ -z "$numbers" ]; then
+            echo "::error::Name the issue this pull request is for at the end of its title, such as \"Fix the hem allowance (#123)\". Open an issue first if there is none."
+            exit 1
+          fi
+          for number in $numbers; do
+            kind=$(gh api "repos/$REPO/issues/$number" --jq 'if .pull_request then "pull request" else "issue" end' 2>/dev/null || true)
+            if [ "$kind" = issue ]; then
+              echo "For issue #$number"
+              exit 0
+            fi
+          done
+          echo "::error::The title names $(printf '#%s ' $numbers)but none of them is an issue of this repository. Name the issue this pull request is for."
+          exit 1

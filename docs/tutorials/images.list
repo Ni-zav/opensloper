@@ -12,12 +12,12 @@ bodice-3-armhole.svg examples/bodice-block/bodice-block.sloper Line_D_E
 bodice-4-dart.svg examples/bodice-block/bodice-block.sloper Line_M_E
 bodice-5-front.svg examples/bodice-block/bodice-block.sloper Line_AB_U
 bodice-6-pieces.svg examples/bodice-block/bodice-block.sloper -
-tote-1-body.svg examples/tote-bag/tote-bag.sloper Line_F_A
-tote-2-marks.svg examples/tote-bag/tote-bag.sloper Line_P_N
-tote-3-lining.svg examples/tote-bag/tote-bag.sloper Line_F_A_t1
+tote-1-body.svg examples/tote-bag/tote-bag.sloper Line_H_A
+tote-2-marks.svg examples/tote-bag/tote-bag.sloper Line_Q_N
+tote-3-lining.svg examples/tote-bag/tote-bag.sloper Line_H_A_t1
 tote-4-pocket.svg examples/tote-bag/tote-bag.sloper Line_AD_AE
 tote-5-pieces.svg examples/tote-bag/tote-bag.sloper -
-wallet-1-outline.svg examples/card-wallet/card-wallet.sloper Line_H_D
+wallet-1-outline.svg examples/card-wallet/card-wallet.sloper Line_H_C
 wallet-2-notch.svg examples/card-wallet/card-wallet.sloper Curve_K_L
 wallet-3-sleeve.svg examples/card-wallet/card-wallet.sloper -
 zip-1-pieces.svg examples/skirt-block/skirt-zip.sloper -

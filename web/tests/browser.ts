@@ -121,6 +121,20 @@ export async function waitForData(page: Page, name: string, value: string): Prom
   }
 }
 
+// Clicks the first element the selector finds. A list built again while the
+// click is on its way replaces the element under it, so then the selector
+// finds the new one and it is clicked again.
+export async function clickReplaced(page: Page, selector: string, triesLeft = 5): Promise<void> {
+  try {
+    await page.click(selector);
+  } catch (error: unknown) {
+    if (triesLeft <= 1 || !(error instanceof Error) || !error.message.includes('detached')) {
+      throw error;
+    }
+    await clickReplaced(page, selector, triesLeft - 1);
+  }
+}
+
 // Waits for the status bar to start with the text
 export async function waitForStatus(page: Page, start: string): Promise<void> {
   try {

@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
 import {
   bodyData,
+  clickReplaced,
   launchBrowser,
   pressWithMod,
   serveApp,
@@ -296,7 +297,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
   const allRows = await shownRows();
   const firstKey = await page.$eval('.list-panel:not([hidden]) tbody tr', (row) => (row as HTMLElement).dataset.key);
-  await page.click('.list-panel:not([hidden]) tbody tr');
+  await clickReplaced(page, '.list-panel:not([hidden]) tbody tr');
   await waitForData(page, 'selection', firstKey ?? '');
   await page.type('.list-panel:not([hidden]) input[type=search]', 'curve');
   await page.waitForFunction(
@@ -876,7 +877,7 @@ try {
     },
     { timeout: TIMEOUT_MS },
   );
-  await page.click('.list-panel:not([hidden]) tbody tr');
+  await clickReplaced(page, '.list-panel:not([hidden]) tbody tr');
   await page.waitForFunction(() => document.body.dataset.selection !== '', { timeout: TIMEOUT_MS });
   await page.click('.side-column [data-tab="features"]');
   await page.waitForSelector('.feature-kinds option', { timeout: TIMEOUT_MS });

@@ -95,6 +95,67 @@
       #open-input {
         display: none;
       }
+      /* The Pieces tab: groups of buttons over the tray, which takes the rest */
+      .pieces {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        gap: 6px;
+        padding: 6px;
+      }
+      .pieces-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0;
+        padding: 4px 6px 6px;
+        border: 1px solid #d8d6cf;
+      }
+      .pieces-group button {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      .pieces-tray {
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+        flex-wrap: nowrap;
+      }
+      .tray-list {
+        flex: 1;
+        min-height: 4em;
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+        background: #fff;
+        border: 1px solid #c8c5bc;
+      }
+      .tray-list li {
+        padding: 3px 6px;
+        border-bottom: 1px solid #eeece6;
+        cursor: default;
+        user-select: none;
+      }
+      .tray-list li:hover {
+        background: #f2f1ed;
+      }
+      .tray-list li.chosen {
+        color: #fff;
+        background: #2574d6;
+      }
+      /* A copy whose piece has a problem in the pattern */
+      .tray-list li.cannot-place {
+        color: #8a8f96;
+      }
+      .tray-list li.chosen.cannot-place {
+        color: #e8eef6;
+      }
+      .tray-list li.tray-note {
+        color: #5d636b;
+        border-bottom: none;
+      }
     </style>
   </head>
   <body>

@@ -1,10 +1,11 @@
 // Drives the built Publish app in headless Chromium: a pattern opened without
 // its measurement file names the file it needs, then with it starts a layout
-// whose pages the preview draws and whose pieces a click selects. The layout
-// is packed, undone and redone, saved and exported, and the saved file opens
-// again. A layout whose sources sit in other folders finds its files by name,
-// lists what stops it printing in the Problems tab, and its waiting pieces
-// are placed.
+// whose pages the preview draws and whose pieces a click selects. The
+// selected piece is turned, flipped and sent back to the tray, from which a
+// double-click places it again. The layout is packed, undone and redone,
+// saved and exported, and the saved file opens again. A layout whose sources
+// sit in other folders finds its files by name, lists what stops it printing
+// in the Problems tab, and its waiting pieces are placed.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -42,6 +43,33 @@ async function command(page: Page, caption: string): Promise<void> {
     {},
     caption,
   );
+}
+
+// Clicks the Pieces tab's button with this caption, once it is enabled,
+// opening the tab first
+async function piecesButton(page: Page, caption: string): Promise<void> {
+  if ((await page.$('.pieces:not([hidden])')) === null) {
+    await page.click('.side-column button[data-tab="pieces"]');
+  }
+  await page.waitForFunction(
+    (text) => {
+      const button = [...document.querySelectorAll('.pieces button')].find(
+        (each) => each.textContent === text && each instanceof HTMLButtonElement && !each.disabled,
+      );
+      if (button instanceof HTMLButtonElement) {
+        button.click();
+        return true;
+      }
+      return false;
+    },
+    {},
+    caption,
+  );
+}
+
+// Waits for the toolbar's Undo to name this step
+async function waitForUndo(page: Page, step: string): Promise<void> {
+  await page.waitForSelector(`#toolbar button[title="Undo ${step}"]:enabled`);
 }
 
 // A downloaded file's contents, once the browser has written it
@@ -129,6 +157,21 @@ try {
   assert.doesNotMatch(await status(page), /stop printing/u);
   await waitForPaper(page);
   const selected = await selectSomePiece(page);
+  // The selected piece turned, flipped and sent back to the tray, each one step
+  await piecesButton(page, 'Turn 90°');
+  await waitForUndo(page, 'Turn piece');
+  await piecesButton(page, 'Flip');
+  await waitForUndo(page, 'Flip piece');
+  await piecesButton(page, 'Back to tray');
+  await waitForUndo(page, 'Unplace piece');
+  await waitForData(page, 'selected', '-1');
+  // A double-click in the tray places it again, selected
+  const waiting = await page.waitForSelector('.tray-list li[data-index="0"]', { visible: true });
+  assert.ok(waiting);
+  await waiting.click({ count: 2 });
+  await waitForUndo(page, 'Place piece');
+  await page.waitForFunction(() => Number(document.body.dataset.selected ?? '-1') >= 0);
+  await page.waitForFunction(() => document.querySelector('.tray-list li')?.textContent === 'Every piece is placed');
   // A click on the desk's corner selects nothing
   const box = await (await page.$('#preview'))?.boundingBox();
   assert.ok(box);
@@ -140,13 +183,13 @@ try {
   await command(page, 'Fit Pages');
 
   // Pack, undone and redone, each one step
-  await command(page, 'Pack pieces');
+  await piecesButton(page, 'Pack pieces');
   await waitForStatus(page, 'Packed');
-  await page.waitForSelector('#toolbar button[title="Undo Pack pieces"]:enabled');
+  await waitForUndo(page, 'Pack pieces');
   await command(page, 'Undo');
-  await page.waitForSelector('#toolbar button[title="Take back the last change"]:disabled');
+  await waitForUndo(page, 'Place piece');
   await command(page, 'Redo');
-  await page.waitForSelector('#toolbar button[title="Undo Pack pieces"]:enabled');
+  await waitForUndo(page, 'Pack pieces');
 
   // Saved as a download, counted saved; then exported
   await command(page, 'Save');
@@ -176,7 +219,9 @@ try {
   await page.click('#problem-count');
   await page.waitForSelector('.problems-list li.blocking', { visible: true });
   assert.match(await page.$eval('.side-title', (title) => title.textContent), /^Problems \(\d+\)$/u);
-  await command(page, 'Place new pieces');
+  // Its tray lists them until they are placed
+  assert.ok((await page.$$('.tray-list li[data-index]')).length > 0);
+  await piecesButton(page, 'Place new pieces');
   await waitForStatus(page, 'Placed');
   assert.doesNotMatch(await status(page), /stop printing/u);
 

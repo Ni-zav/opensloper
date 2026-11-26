@@ -126,7 +126,6 @@ type
 resourcestring
   rsPreviewMove = 'Move piece';
   rsPreviewTogglePage = 'Leave page out';
-  rsPreviewRemove = 'Unplace piece';
   rsPreviewMoveNote = 'Move note';
   rsPreviewDeleteNote = 'Delete note';
   rsPreviewCover = 'Cover';
@@ -289,9 +288,7 @@ begin
   if Index < 0 then
     Exit;
   SetSelected(-1);
-  FDocument.BeginChange(rsPreviewRemove);
-  FDocument.Layout.RemovePlacement(Index);
-  FDocument.EndChange;
+  FDocument.UnplacePiece(Index);
 end;
 
 procedure TPreviewCanvas.SetSelectedNote(Value: integer);

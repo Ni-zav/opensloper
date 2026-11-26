@@ -44,6 +44,8 @@ type
     function DoState: TJSONData;
     function DoScene: TJSONData;
     function DoAt(Params: TJSONObject): TJSONData;
+    function DoPieceEdit(const Method: string; Params: TJSONObject): TJSONData;
+    function DoPlaceCopy(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
     function DoExport(Params: TJSONObject): TJSONData;
   public
@@ -69,7 +71,8 @@ resourcestring
   rsPublishAddFiles = 'Gives more files, as those named in `missing`, and reads the sources again. Not an undo step.';
   rsPublishState = 'The layout, as layout_state gives it, with the files still needed.';
   rsPublishStateReturns = 'What layout_state gives, with `missing`: the paths, from the layout, of the files sources ' +
-    'need and were not given';
+    'need and were not given; and `tray`: the copies waiting to be placed, each with its `caption` and whether it ' +
+    '`canPlace`';
   rsPublishNeedsSource = 'Give a layout, or the pattern to start one for';
   rsPublishScene = 'What the preview shows, in layout mm with y down, as the desktop''s preview draws it.';
   rsPublishSceneReturns = '`tiled`, true for tiled pages; `cover`, the tiled print''s cover (minX, minY, maxX, maxY) or ' +
@@ -88,6 +91,16 @@ resourcestring
     'these too.';
   rsPublishExportFormat = 'pdf, svg or dxf';
   rsPublishExportReturns = '`base64`, the file''s bytes';
+  rsPublishTurn = 'Turns a placed piece a quarter turn anticlockwise, as the Pieces tab''s Turn 90°; one undo step.';
+  rsPublishFlip = 'Flips a placed piece over, as the Pieces tab''s Flip; one undo step.';
+  rsPublishUnplace = 'Takes a placed piece off the pages, back to the tray; one undo step.';
+  rsPublishPlacement = 'The piece''s placement index, as publish_at gives it';
+  rsPublishPieceReturns = '`placement`, the piece''s index';
+  rsPublishPlaceCopy = 'Places one copy waiting in the tray, in the rows below the others; one undo step. Refused when ' +
+    'its piece has a problem in the pattern.';
+  rsPublishTrayIndex = 'The copy''s index in publish_state''s `tray`';
+  rsPublishPlaceCopyReturns = '`placed`, the new placement''s index';
+  rsPublishNoCopy = 'There is no copy %d in the tray';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
@@ -129,6 +142,14 @@ begin
     for Index := 0 to High(LAYOUT_COMMANDS) do
       AddApiMethod(Built, PUBLISH_PREFIX + LAYOUT_COMMANDS[Index], Format(rsPublishLayoutMethod, [LAYOUT_COMMANDS[Index]]),
         Format(rsPublishLayoutReturns, [LAYOUT_COMMANDS[Index]]));
+    AddApiMethod(Built, 'publish_turn', rsPublishTurn, rsPublishPieceReturns);
+    AddApiParam(Built, 'placement', apWhole, True, rsPublishPlacement);
+    AddApiMethod(Built, 'publish_flip', rsPublishFlip, rsPublishPieceReturns);
+    AddApiParam(Built, 'placement', apWhole, True, rsPublishPlacement);
+    AddApiMethod(Built, 'publish_unplace', rsPublishUnplace, rsPublishPieceReturns);
+    AddApiParam(Built, 'placement', apWhole, True, rsPublishPlacement);
+    AddApiMethod(Built, 'publish_place_copy', rsPublishPlaceCopy, rsPublishPlaceCopyReturns);
+    AddApiParam(Built, 'index', apWhole, True, rsPublishTrayIndex);
     AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
@@ -222,8 +243,9 @@ end;
 function TPublishApiServer.DoState: TJSONData;
 var
   Answer: TJSONObject;
-  Missing: TJSONArray;
+  Missing, Tray: TJSONArray;
   Path: string;
+  Waiting: TUnplacedCopy;
 begin
   Answer := TJSONObject(FLayoutServer.CallMethod('layout_state', nil));
   try
@@ -235,6 +257,10 @@ begin
     Answer.Add('missing', Missing);
     for Path in MissingFiles(FDocument) do
       Missing.Add(Path);
+    Tray := TJSONArray.Create;
+    Answer.Add('tray', Tray);
+    for Waiting in FDocument.Layout.Unplaced do
+      Tray.Add(TJSONObject.Create(['caption', Waiting.Caption, 'canPlace', Waiting.CanPlace]));
     Result := Answer;
   except
     FreeAndNil(Answer);
@@ -336,6 +362,17 @@ begin
     raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
 end;
 
+// A list index, refused when it is not a whole number
+function IndexParam(Params: TJSONObject; const AName: string): integer;
+var
+  Value: double;
+begin
+  Value := NumberParam(Params, AName);
+  if (Frac(Value) <> 0) or (Value < 0) or (Value > MaxInt) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [AName]));
+  Result := Trunc(Value);
+end;
+
 function TPublishApiServer.DoAt(Params: TJSONObject): TJSONData;
 var
   Shapes: TPlacedPieceArray;
@@ -348,6 +385,36 @@ begin
   if Index >= 0 then
     Index := Shapes[Index].Placement;
   Result := TJSONObject.Create(['placement', Index]);
+end;
+
+// Turn, Flip and Back to tray, for the selected piece
+function TPublishApiServer.DoPieceEdit(const Method: string; Params: TJSONObject): TJSONData;
+var
+  Index: integer;
+begin
+  Index := IndexParam(Params, 'placement');
+  if Index > High(FDocument.Layout.Placements) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsLayoutNoPiece, [Index]));
+  case Method of
+    'publish_turn': FDocument.TurnPiece(Index);
+    'publish_flip': FDocument.FlipPiece(Index);
+    'publish_unplace': FDocument.UnplacePiece(Index);
+  end;
+  Result := TJSONObject.Create(['placement', Index]);
+end;
+
+function TPublishApiServer.DoPlaceCopy(Params: TJSONObject): TJSONData;
+var
+  Tray: TUnplacedCopyArray;
+  Index: integer;
+begin
+  Index := IndexParam(Params, 'index');
+  Tray := FDocument.Layout.Unplaced;
+  if Index > High(Tray) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsPublishNoCopy, [Index]));
+  if not FDocument.PlaceCopy(Tray[Index]) then
+    raise EApiError.Create(RPC_REFUSED, rsLayoutCannotPlace);
+  Result := TJSONObject.Create(['placed', High(FDocument.Layout.Placements)]);
 end;
 
 function TPublishApiServer.DoSave: TJSONData;
@@ -378,6 +445,8 @@ begin
     'publish_state': Result := DoState;
     'publish_scene': Result := DoScene;
     'publish_at': Result := DoAt(Params);
+    'publish_turn', 'publish_flip', 'publish_unplace': Result := DoPieceEdit(Method, Params);
+    'publish_place_copy': Result := DoPlaceCopy(Params);
     'publish_save': Result := DoSave;
     'publish_export': Result := DoExport(Params);
     else

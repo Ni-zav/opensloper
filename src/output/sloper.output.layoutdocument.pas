@@ -77,6 +77,15 @@ type
     procedure LiveUpdate;
     procedure Undo;
     procedure Redo;
+    // The edits the publish window and the web page both make to one placed
+    // piece, by its placement index, each one undo step
+    procedure TurnPiece(Index: integer);
+    procedure FlipPiece(Index: integer);
+    // Back to the tray
+    procedure UnplacePiece(Index: integer);
+    // Places one copy from the tray in the rows below the others; False, and
+    // nothing changed, when its piece cannot be placed
+    function PlaceCopy(const Item: TUnplacedCopy): boolean;
     // The files' contents sources are read from, from now on, in place of
     // disk; undo and Reload read them again
     function SourceFiles: TSourceFiles;
@@ -92,6 +101,13 @@ type
     // assistant learned about the one before is known to be stale
     property Generation: integer read FGeneration;
   end;
+
+resourcestring
+  rsLayoutTurnPiece = 'Turn piece';
+  rsLayoutFlipPiece = 'Flip piece';
+  rsLayoutUnplacePiece = 'Unplace piece';
+  rsLayoutPlaceOne = 'Place piece';
+  rsLayoutCannotPlace = 'This piece has a problem in the pattern, so it cannot be placed yet';
 
 implementation
 
@@ -292,6 +308,43 @@ procedure TLayoutDocument.Redo;
 begin
   if CanRedo then
     Restore(FHistory.Redo(FLayout.SaveToText));
+end;
+
+procedure TLayoutDocument.TurnPiece(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Placements)) then
+    Exit;
+  BeginChange(rsLayoutTurnPiece);
+  FLayout.Placements[Index].Rotation := (FLayout.Placements[Index].Rotation + 90) mod 360;
+  EndChange;
+end;
+
+procedure TLayoutDocument.FlipPiece(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Placements)) then
+    Exit;
+  BeginChange(rsLayoutFlipPiece);
+  FLayout.Placements[Index].Flipped := not FLayout.Placements[Index].Flipped;
+  EndChange;
+end;
+
+procedure TLayoutDocument.UnplacePiece(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Placements)) then
+    Exit;
+  BeginChange(rsLayoutUnplacePiece);
+  FLayout.RemovePlacement(Index);
+  EndChange;
+end;
+
+function TLayoutDocument.PlaceCopy(const Item: TUnplacedCopy): boolean;
+begin
+  Result := Item.CanPlace;
+  if not Result then
+    Exit;
+  BeginChange(rsLayoutPlaceOne);
+  FLayout.PlaceCopies([Item]);
+  EndChange;
 end;
 
 end.

@@ -1,9 +1,12 @@
 // The publish preview, as Sloper.Publish.PreviewCanvas: the pages with the
 // pieces on them, drawn with Canvas2D from what publish_scene gives. Blank
-// pages are greyed out, and pages left out crossed. The wheel zooms about
+// pages are greyed out, and pages left out crossed. Sheet notes and the
+// pattern notes printing with the pieces are drawn over the pieces, as the
+// desktop's DrawNotes draws them, each sheet note in a dotted frame. The wheel zooms about
 // the pointer and the middle button pans. A right-click leaves the page under
 // it out of the print, or puts it back. A press selects the piece under
-// it, which publish_press finds and holds, and dragging moves it, one undo
+// it, or the sheet note, which lies over pieces, as publish_press finds and
+// holds it, and dragging moves it, one undo
 // step: the engine moves it (publish_drag), so it lands on the desktop's
 // grid, and the scene is read again after each move, the newest only. A copy
 // dragged from the tray is dropped where it is let go. A new layout is fitted
@@ -19,6 +22,7 @@ import {
   stringsField,
   type JsonRecord,
 } from '../engine/replies.ts';
+import { parseNote, type SceneNote } from '../editor/scene.ts';
 import { type Rect2, type Vec2, ViewTransform, ZOOM_STEP } from '../editor/view.ts';
 import { LatestOnly } from './latestOnly.ts';
 import { STRINGS } from './strings.ts';
@@ -51,6 +55,9 @@ interface Scene {
   cover: Rect2 | undefined;
   pages: ScenePage[];
   pieces: ScenePiece[];
+  // The sheet notes, by their index, and the pattern notes printing with pieces
+  notes: SceneNote[];
+  pieceNotes: SceneNote[];
   titleBoxes: Rect2[];
   titleLines: string[];
   // The information block's text, in mm
@@ -62,6 +69,8 @@ interface Scene {
 export interface PreviewCanvasEvents {
   // A piece was chosen by its placement index, or -1 for none
   selectionChanged(placement: number): void;
+  // A sheet note was chosen by its index, or -1 for none
+  noteChanged(note: number): void;
   // A copy from the tray, by its index there, let go at a point of the layout
   dropCopy(index: number, at: Vec2): void;
   failed(error: unknown): void;
@@ -74,6 +83,8 @@ const EMPTY_SCENE: Scene = {
   cover: undefined,
   pages: [],
   pieces: [],
+  notes: [],
+  pieceNotes: [],
   titleBoxes: [],
   titleLines: [],
   titleSize: 0,
@@ -98,6 +109,18 @@ const SELECTED = 'rgb(37, 116, 214)';
 // How strongly a piece's material tints it
 const TINT_ALPHA = 50 / 255;
 const DASH = [6, 4];
+
+// As the desktop's DrawNotes: the frame's gap round a note, in pixels, and
+// text smaller than this many pixels drawn as a tint
+const NOTE_FRAME_GAP = 2;
+const MIN_NOTE_HEIGHT = 6;
+const SMALL_TEXT_ALPHA = 60 / 255;
+const POINTS_TO_MM = 25.4 / 72;
+const LEADER_DOT_RADIUS = 0.8;
+const NOTE_DOTS = [1, 2];
+const DEFAULT_NOTE_FONT = 'system-ui, sans-serif';
+// A stamp's thinnest stroke, in pixels
+const MIN_STAMP_STROKE_PIXELS = 0.5;
 
 const LEFT_BUTTON = 0;
 const MIDDLE_BUTTON = 1;
@@ -143,6 +166,8 @@ function parseScene(answer: JsonRecord): Scene {
       excluded: booleanField(page, 'excluded') ?? false,
     })),
     pieces: recordsField(answer, 'pieces').map(parsePiece),
+    notes: recordsField(answer, 'notes').map(parseNote),
+    pieceNotes: recordsField(answer, 'pieceNotes').map(parseNote),
     titleBoxes: (Array.isArray(answer.titleBoxes) ? answer.titleBoxes : []).flatMap((box) => parseRect(box) ?? []),
     titleLines: stringsField(title, 'lines') ?? [],
     titleSize: numberField(title, 'size') ?? 0,
@@ -194,6 +219,7 @@ export class PreviewCanvas {
   private generation = -1;
   private needsFit = true;
   private selectedPlacement = -1;
+  private selectedNoteIndex = -1;
   private mode: 'idle' | 'pressed' | 'dragging' | 'panning' = 'idle';
   private pointerId: number | undefined;
   private pressAt: Vec2 = { x: 0, y: 0 };
@@ -254,13 +280,33 @@ export class PreviewCanvas {
     return this.selectedPlacement;
   }
 
+  // Choosing a piece lets go of a note, as on the desktop
   set selected(placement: number) {
     if (placement === this.selectedPlacement) {
       return;
     }
     this.selectedPlacement = placement;
+    if (placement >= 0) {
+      this.selectedNote = -1;
+    }
     this.repaint();
     this.events.selectionChanged(placement);
+  }
+
+  get selectedNote(): number {
+    return this.selectedNoteIndex;
+  }
+
+  set selectedNote(note: number) {
+    if (note === this.selectedNoteIndex) {
+      return;
+    }
+    this.selectedNoteIndex = note;
+    if (note >= 0) {
+      this.selected = -1;
+    }
+    this.repaint();
+    this.events.noteChanged(note);
   }
 
   // Picks up the layout after any change
@@ -297,10 +343,14 @@ export class PreviewCanvas {
       this.generation = generation;
       this.needsFit = true;
       this.selected = -1;
+      this.selectedNote = -1;
     }
     this.scene = scene;
     if (!scene.pieces.some((piece) => piece.placement === this.selectedPlacement)) {
       this.selected = -1;
+    }
+    if (this.selectedNoteIndex >= scene.notes.length) {
+      this.selectedNote = -1;
     }
     this.repaint();
   }
@@ -416,15 +466,20 @@ export class PreviewCanvas {
     this.repaint();
   };
 
-  // Selects the piece pressed, as the desktop does on the button going
-  // down; true when the engine holds one to drag. Sheet notes are not drawn
-  // here yet, so one pressed is not dragged.
+  // Selects the note or piece pressed, as the desktop does on the button
+  // going down; true when the engine holds one to drag
   private async press(at: Vec2): Promise<boolean> {
     const layoutAt = this.view.toModel(at);
     const answer = await this.document.live('publish_press', { x: layoutAt.x, y: layoutAt.y });
     const placement = numberField(answer, 'placement') ?? -1;
-    this.selected = placement;
-    return placement >= 0;
+    const note = numberField(answer, 'note') ?? -1;
+    if (note >= 0) {
+      this.selectedNote = note;
+    } else {
+      this.selectedNote = -1;
+      this.selected = placement;
+    }
+    return placement >= 0 || note >= 0;
   }
 
   // Moves what the press holds, and shows it moved
@@ -468,8 +523,108 @@ export class PreviewCanvas {
     for (const piece of this.scene.pieces) {
       this.drawPiece(context, piece);
     }
+    for (const note of this.scene.pieceNotes) {
+      this.drawNote(context, note, PIECE, false);
+    }
+    this.scene.notes.forEach((note, index) => {
+      this.drawNote(context, note, index === this.selectedNoteIndex ? SELECTED : PIECE, true);
+    });
     // Over the pieces, as it clears what is under it in a tile's corner
     this.drawTitleBoxes(context);
+  }
+
+  // As the desktop's DrawNote: a sheet note's frame, on screen only so it can
+  // be found; its leader; its white box; then its drawing, or its text in its
+  // size and font, a tint when too small to read
+  private drawNote(context: CanvasRenderingContext2D, note: SceneNote, ink: string, framed: boolean): void {
+    const frame = this.screenRect(note.frame);
+    context.setLineDash([]);
+    if (framed) {
+      context.strokeStyle = ink;
+      context.lineWidth = 1;
+      context.setLineDash(ink === SELECTED ? [] : NOTE_DOTS);
+      context.strokeRect(
+        frame.x - NOTE_FRAME_GAP,
+        frame.y - NOTE_FRAME_GAP,
+        frame.width + 2 * NOTE_FRAME_GAP,
+        frame.height + 2 * NOTE_FRAME_GAP,
+      );
+      context.setLineDash([]);
+    }
+    if (note.leader !== 'none' && note.leaderStrokes.length >= 4) {
+      context.strokeStyle = ink;
+      context.lineWidth = 1;
+      context.beginPath();
+      for (let index = 0; index + 3 < note.leaderStrokes.length; index += 4) {
+        const first = this.view.toScreen({ x: note.leaderStrokes[index] ?? 0, y: note.leaderStrokes[index + 1] ?? 0 });
+        const last = this.view.toScreen({
+          x: note.leaderStrokes[index + 2] ?? 0,
+          y: note.leaderStrokes[index + 3] ?? 0,
+        });
+        context.moveTo(first.x, first.y);
+        context.lineTo(last.x, last.y);
+      }
+      context.stroke();
+      if (note.leader === 'dot') {
+        const spot = this.view.toScreen(note.anchorAt);
+        context.fillStyle = ink;
+        context.beginPath();
+        context.arc(spot.x, spot.y, LEADER_DOT_RADIUS * this.view.scale + 0.5, 0, 2 * Math.PI);
+        context.fill();
+      }
+    }
+    if (note.boxed) {
+      context.fillStyle = PAPER;
+      context.fillRect(frame.x, frame.y, frame.width, frame.height);
+    }
+    if (note.stamp.length > 0) {
+      this.drawStamp(context, note);
+      return;
+    }
+    const box = this.screenRect(note.box);
+    const emPixels = note.size * POINTS_TO_MM * this.view.scale;
+    if (emPixels < MIN_NOTE_HEIGHT) {
+      context.globalAlpha = SMALL_TEXT_ALPHA;
+      context.fillStyle = ink;
+      context.fillRect(box.x, box.y, box.width, box.height);
+      context.globalAlpha = 1;
+      return;
+    }
+    const family = note.font === '' ? DEFAULT_NOTE_FONT : `"${note.font}", ${DEFAULT_NOTE_FONT}`;
+    context.font = `${note.italic ? 'italic ' : ''}${note.bold ? 'bold ' : ''}${String(emPixels)}px ${family}`;
+    context.fillStyle = ink;
+    context.textBaseline = 'top';
+    note.lines.forEach((line, index) => {
+      const width = context.measureText(line).width;
+      let left = box.x;
+      if (note.align === 'centre') {
+        left += (box.width - width) / 2;
+      } else if (note.align === 'right') {
+        left += box.width - width;
+      }
+      context.fillText(line, left, box.y + index * note.lineHeight * this.view.scale);
+    });
+  }
+
+  // Its paths in layout mm, so the canvas scales them as the view does
+  private drawStamp(context: CanvasRenderingContext2D, note: SceneNote): void {
+    context.save();
+    context.transform(this.view.scale, 0, 0, this.view.scale, this.view.originX, this.view.originY);
+    for (const path of note.stamp) {
+      const shape = new Path2D(path.d);
+      if (path.fill !== 'none') {
+        context.fillStyle = path.fill;
+        // The canvas's fill of a path, which the rule takes for Array.prototype.fill
+        // oxlint-disable-next-line unicorn/no-array-fill-with-reference-type
+        context.fill(shape, path.evenOdd ? 'evenodd' : 'nonzero');
+      }
+      if (path.stroke !== 'none') {
+        context.strokeStyle = path.stroke;
+        context.lineWidth = Math.max(path.strokeWidth, MIN_STAMP_STROKE_PIXELS / this.view.scale);
+        context.stroke(shape);
+      }
+    }
+    context.restore();
   }
 
   private screenRect(area: Rect2): { x: number; y: number; width: number; height: number } {

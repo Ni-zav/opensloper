@@ -128,7 +128,6 @@ type
   end;
 
 resourcestring
-  rsPreviewDeleteNote = 'Delete note';
   rsPreviewCover = 'Cover';
   rsPreviewZoomAreaHint = 'Zoom Area: drag a box to zoom to it, click to zoom in, Shift+click to zoom out';
 
@@ -281,9 +280,7 @@ begin
   begin
     Index := FSelectedNote;
     SetSelectedNote(-1);
-    FDocument.BeginChange(rsPreviewDeleteNote);
-    FDocument.Layout.RemoveNote(Index);
-    FDocument.EndChange;
+    FDocument.DeleteNote(Index);
     Exit;
   end;
   Index := FSelected;

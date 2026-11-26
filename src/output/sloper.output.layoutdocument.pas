@@ -103,6 +103,12 @@ type
     // size goes back to the file's first, as a size belongs to its file
     procedure SetMeasurements(Source: TPatternSource; const MeasurementFile: string);
     procedure SetSize(Source: TPatternSource; const Size: string);
+    // The Notes tab's edits, each one undo step. A new note goes at the left,
+    // below the pieces; its index.
+    function AddNote: integer;
+    // Changes within a second to the same note join one step, as typing
+    procedure ChangeNote(Index: integer; const Note: TSheetNote);
+    procedure DeleteNote(Index: integer);
     // The files' contents sources are read from, from now on, in place of
     // disk; undo and Reload read them again
     function SourceFiles: TSourceFiles;
@@ -126,6 +132,10 @@ resourcestring
   rsLayoutPlaceOne = 'Place piece';
   rsLayoutChangePaper = 'Change paper';
   rsLayoutAddPattern = 'Add pattern';
+  rsLayoutAddNote = 'Add note';
+  rsLayoutNewNote = 'New note';
+  rsLayoutChangeNote = 'Change note';
+  rsLayoutDeleteNote = 'Delete note';
   rsLayoutRemovePattern = 'Remove pattern';
   rsLayoutChangeMeasurements = 'Change measurements';
   rsLayoutChangeSize = 'Change size';
@@ -135,7 +145,12 @@ resourcestring
 implementation
 
 uses
-  Sloper.Output.Tiling;
+  Math, Sloper.Output.Tiling;
+
+const
+  // A new note's text size, in points, and its gap below the pieces, in mm
+  NEW_NOTE_SIZE = 12;
+  NEW_NOTE_GAP = 10;
 
 constructor TLayoutDocument.Create;
 begin
@@ -431,6 +446,37 @@ begin
   BeginChange(rsLayoutChangeSize);
   Source.Size := Size;
   FLayout.LoadSources;
+  EndChange;
+end;
+
+function TLayoutDocument.AddNote: integer;
+var
+  Lowest: double;
+  Shape: TPlacedPiece;
+begin
+  Lowest := 0;
+  for Shape in FLayout.PlacedPieces do
+    Lowest := Max(Lowest, Shape.Bounds.MaxY + NEW_NOTE_GAP);
+  BeginChange(rsLayoutAddNote);
+  Result := FLayout.AddNote(rsLayoutNewNote, 0, Lowest, NEW_NOTE_SIZE);
+  EndChange;
+end;
+
+procedure TLayoutDocument.ChangeNote(Index: integer; const Note: TSheetNote);
+begin
+  if (Index < 0) or (Index > High(FLayout.Notes)) then
+    Exit;
+  BeginChange(rsLayoutChangeNote);
+  FLayout.Notes[Index] := Note;
+  EndChange('note:' + IntToStr(Index));
+end;
+
+procedure TLayoutDocument.DeleteNote(Index: integer);
+begin
+  if (Index < 0) or (Index > High(FLayout.Notes)) then
+    Exit;
+  BeginChange(rsLayoutDeleteNote);
+  FLayout.RemoveNote(Index);
   EndChange;
 end;
 

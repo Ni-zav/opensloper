@@ -109,6 +109,8 @@ type
     // Changes within a second to the same note join one step, as typing
     procedure ChangeNote(Index: integer; const Note: TSheetNote);
     procedure DeleteNote(Index: integer);
+    // The Info tab's information block, one undo step
+    procedure ChangeTitle(const Title: TTitleBlock);
     // The files' contents sources are read from, from now on, in place of
     // disk; undo and Reload read them again
     function SourceFiles: TSourceFiles;
@@ -133,6 +135,7 @@ resourcestring
   rsLayoutChangePaper = 'Change paper';
   rsLayoutAddPattern = 'Add pattern';
   rsLayoutAddNote = 'Add note';
+  rsLayoutChangeTitleBlock = 'Change title block';
   rsLayoutNewNote = 'New note';
   rsLayoutChangeNote = 'Change note';
   rsLayoutDeleteNote = 'Delete note';
@@ -477,6 +480,13 @@ begin
     Exit;
   BeginChange(rsLayoutDeleteNote);
   FLayout.RemoveNote(Index);
+  EndChange;
+end;
+
+procedure TLayoutDocument.ChangeTitle(const Title: TTitleBlock);
+begin
+  BeginChange(rsLayoutChangeTitleBlock);
+  FLayout.Title := Title;
   EndChange;
 end;
 

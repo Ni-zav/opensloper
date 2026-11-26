@@ -78,6 +78,8 @@ type
     procedure TestSetNote;
     procedure TestSetNoteRefused;
     procedure TestDeleteNote;
+    procedure TestTitle;
+    procedure TestSetTitle;
     procedure TestOutput;
     procedure TestSetOutput;
     procedure TestSetOutputJoins;
@@ -94,7 +96,7 @@ implementation
 uses
   base64, Sloper.API.Rpc, Sloper.API.MCP, Sloper.API.Methods, Sloper.API.PublishServer, Sloper.Core.JSON,
   Sloper.API.LayoutServer, Sloper.Output.Layout, Sloper.Output.LayoutDocument, Sloper.Output.Preview,
-  Sloper.Core.Geometry, Math;
+  Sloper.Core.Geometry, Sloper.Core.TextFields, Math;
 
 const
   PATTERN_FILE = 'skirt-darts.sloper';
@@ -712,6 +714,44 @@ begin
   AssertEquals('named as the desktop', rsLayoutDeleteNote, Answer.Strings['undo']);
   Call('publish_delete_note', TJSONObject.Create(['note', 0]));
   AssertEquals('none left', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestTitle;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_title', TJSONObject.Create);
+  AssertTrue('a new layout shows one', Answer.Booleans['enabled']);
+  AssertTrue('with fields', Answer.Arrays['fields'].Count > 0);
+  AssertEquals('every field offered', Length(TITLE_FIELDS), Answer.Arrays['available'].Count);
+  AssertTrue('tiles place it', Answer.Booleans['placeUsed']);
+  Call('publish_set_output', TJSONObject.Create(['kind', 'large']));
+  Call('publish_title', TJSONObject.Create);
+  AssertFalse('one sheet does not', Answer.Booleans['placeUsed']);
+end;
+
+procedure TTestPublishServer.TestSetTitle;
+var
+  Count: integer;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_title', TJSONObject.Create);
+  Count := Answer.Arrays['fields'].Count;
+  Call('publish_set_title', TJSONObject.Create(['field', FIELD_DATE, 'shown', False]));
+  Call('publish_set_title', TJSONObject.Create(['field', FIELD_DATE, 'shown', True]));
+  AssertEquals('as many', Count, Answer.Arrays['fields'].Count);
+  AssertEquals('shown anew prints last', FIELD_DATE, Answer.Arrays['fields'].Strings[Count - 1]);
+  Call('publish_set_title', TJSONObject.Create(['corner', 'topRight', 'everyPage', True, 'enabled', False]));
+  AssertEquals('the corner', 'topRight', Answer.Strings['corner']);
+  AssertTrue('every page', Answer.Booleans['everyPage']);
+  AssertFalse('hidden', Answer.Booleans['enabled']);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('named as the desktop', rsLayoutChangeTitleBlock, Answer.Strings['undo']);
+  Call('publish_scene', TJSONObject.Create);
+  AssertEquals('no block drawn', 0, Answer.Arrays['titleBoxes'].Count);
+  Call('publish_set_title', TJSONObject.Create(['field', 'weather', 'shown', True]));
+  AssertEquals('no such field', RPC_INVALID_PARAMS, ErrorCode);
+  Call('publish_set_title', TJSONObject.Create(['field', FIELD_DATE]));
+  AssertEquals('shown or not', RPC_INVALID_PARAMS, ErrorCode);
 end;
 
 procedure TTestPublishServer.TestOutput;

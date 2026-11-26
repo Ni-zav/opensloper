@@ -61,6 +61,8 @@ type
     function NoteParam(Params: TJSONObject): integer;
     function DoNote(Params: TJSONObject): TJSONData;
     function DoSetNote(Params: TJSONObject): TJSONData;
+    function DoTitle: TJSONData;
+    function DoSetTitle(Params: TJSONObject): TJSONData;
     function DoSave: TJSONData;
     function DoExport(Params: TJSONObject): TJSONData;
   public
@@ -152,8 +154,8 @@ resourcestring
     'the papers, materials and output profiles to choose from.';
   rsPublishOutputReturns = 'The settings (`kind`, `paper`, `paperWidth`, `paperHeight`, `margin`, `overlap`, ' +
     '`rollWidth`, `materialWidth`, `materialLength`, `allowTurns`, `material`, `marks`, `fill`, `outputProfile`); ' +
-    '`used`, whether each of `rollWidth`, `materialSize`, `allowTurns`, `paper`, `paperSize`, `overlap`, `marks` and ' +
-    '`fill` applies; and the lists `papers`, `materials` and `outputProfiles`';
+    '`used`, whether each of `rollWidth`, `materialSize`, `allowTurns`, `paper`, `paperSize`, `overlap`, `marks`, ' +
+    '`fill` and `titlePlace` (the information block''s corner and every page) applies; and the lists `papers`, `materials` and `outputProfiles`';
   rsPublishSetOutput = 'Changes the Output tab''s settings, as the desktop''s tab does: one undo step, joining changes ' +
     'within a second. Pages left out are forgotten once the page grid moves. Refused when nothing would be left to ' +
     'print on.';
@@ -193,6 +195,17 @@ resourcestring
   rsPublishDeleteNote = 'Deletes a sheet note; one undo step.';
   rsPublishNoNote = 'There is no sheet note %d';
   rsPublishBadNoteSize = 'A note''s size is from 1 to %d points';
+  rsPublishTitle = 'The Info tab: the information block, whether it shows, its fields in the order they print, its ' +
+    'corner and whether it is on every page.';
+  rsPublishTitleReturns = '`enabled`, `fields` (those shown, in print order), `available` (every field, in the ' +
+    'tab''s order), `corner`, `everyPage`, and `placeUsed`, whether the corner and every page apply to the output';
+  rsPublishSetTitle = 'Changes the information block, as the desktop''s Info tab does; one undo step.';
+  rsPublishTitleEnabled = 'Whether it shows';
+  rsPublishTitleField = 'A field to show or hide; shown anew, it prints last';
+  rsPublishTitleShown = 'Whether the field shows';
+  rsPublishTitleCorner = 'bottomRight, bottomLeft or topRight';
+  rsPublishTitleEveryPage = 'A copy on every tile as well as the cover';
+  rsPublishTitleNeedsShown = 'Say whether the field is `shown`';
   rsPublishX = 'Across, in layout mm';
   rsPublishY = 'Down, in layout mm';
 
@@ -292,6 +305,13 @@ begin
     AddApiParam(Built, 'italic', apFlag, False, rsPublishNoteItalic);
     AddApiMethod(Built, 'publish_delete_note', rsPublishDeleteNote, rsPublishDone);
     AddApiParam(Built, 'note', apWhole, True, rsPublishNoteIndex);
+    AddApiMethod(Built, 'publish_title', rsPublishTitle, rsPublishTitleReturns, True);
+    AddApiMethod(Built, 'publish_set_title', rsPublishSetTitle, rsPublishTitleReturns);
+    AddApiParam(Built, 'enabled', apFlag, False, rsPublishTitleEnabled);
+    AddApiParam(Built, 'field', apChoice, False, rsPublishTitleField, string.Join(', ', TITLE_FIELDS));
+    AddApiParam(Built, 'shown', apFlag, False, rsPublishTitleShown);
+    AddApiParam(Built, 'corner', apChoice, False, rsPublishTitleCorner, string.Join(', ', CORNER_NAMES));
+    AddApiParam(Built, 'everyPage', apFlag, False, rsPublishTitleEveryPage);
     AddApiMethod(Built, 'publish_save', rsPublishSave, rsPublishSaveReturns);
     AddApiMethod(Built, 'publish_export', rsPublishExport, rsPublishExportReturns, True);
     AddApiParam(Built, 'format', apChoice, True, rsPublishExportFormat, string.Join(', ', WEB_EXPORT_NAMES));
@@ -755,7 +775,7 @@ end;
 
 const
   OUTPUT_SETTING_NAMES: array[TOutputSetting] of string = ('rollWidth', 'materialSize', 'allowTurns', 'paper',
-    'paperSize', 'overlap', 'marks', 'fill');
+    'paperSize', 'overlap', 'marks', 'fill', 'titlePlace');
 
 function TPublishApiServer.DoOutput: TJSONData;
 var
@@ -930,6 +950,50 @@ begin
   Result := DoNote(Params);
 end;
 
+function TPublishApiServer.DoTitle: TJSONData;
+var
+  Layout: TLayout;
+  Shown, Available: TJSONArray;
+  Field: string;
+begin
+  Layout := FDocument.Layout;
+  Shown := TJSONArray.Create;
+  for Field in Layout.Title.Fields do
+    Shown.Add(Field);
+  Available := TJSONArray.Create;
+  for Field in TITLE_FIELDS do
+    Available.Add(Field);
+  Result := TJSONObject.Create(['enabled', Layout.Title.Enabled, 'fields', Shown, 'available', Available, 'corner',
+    CORNER_NAMES[Layout.Title.Corner], 'everyPage', Layout.Title.EveryPage, 'placeUsed',
+    OutputSettingUsed(Layout.Output, osTitlePlace)]);
+end;
+
+// As the desktop's Info tab: a field shown anew prints last, the others
+// keeping their order
+function TPublishApiServer.DoSetTitle(Params: TJSONObject): TJSONData;
+var
+  Title: TTitleBlock;
+begin
+  if not Assigned(Params) then
+    Exit(DoTitle);
+  Title := FDocument.Layout.Title;
+  if Assigned(Params.Find('enabled')) then
+    Title.Enabled := BooleanParam(Params, 'enabled');
+  if Assigned(Params.Find('field')) then
+  begin
+    if not Assigned(Params.Find('shown')) then
+      raise EApiError.Create(RPC_INVALID_PARAMS, rsPublishTitleNeedsShown);
+    Title.Fields := TitleFieldsWith(Title.Fields, TITLE_FIELDS[ChoiceParam(Params, 'field', TITLE_FIELDS)],
+      BooleanParam(Params, 'shown'));
+  end;
+  if Assigned(Params.Find('corner')) then
+    Title.Corner := TTitleCorner(ChoiceParam(Params, 'corner', CORNER_NAMES));
+  if Assigned(Params.Find('everyPage')) then
+    Title.EveryPage := BooleanParam(Params, 'everyPage');
+  FDocument.ChangeTitle(Title);
+  Result := DoTitle;
+end;
+
 function TPublishApiServer.DoSave: TJSONData;
 begin
   Result := TJSONObject.Create(['text', FDocument.SaveText]);
@@ -992,6 +1056,8 @@ begin
       FDocument.DeleteNote(NoteParam(Params));
       Result := TJSONObject.Create;
     end;
+    'publish_title': Result := DoTitle;
+    'publish_set_title': Result := DoSetTitle(Params);
     'publish_save': Result := DoSave;
     'publish_export': Result := DoExport(Params);
     else

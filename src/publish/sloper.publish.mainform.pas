@@ -296,7 +296,6 @@ resourcestring
   rsAddNote = 'Add note';
   rsDeleteNote = 'Delete note';
   rsNoteHelp = 'Fields: {pattern.name} {measurements.name} {size} {date} {page} {pages} {cutlist} {materials} {materialneeded}';
-  rsChangeTitle = 'Change title block';
   rsNoProblems = 'No problems';
   rsProblemCount = 'Problems: %d';
   // With how many of them stop printing and exporting
@@ -345,9 +344,6 @@ const
   SIDE_WIDTH = 340;
   MAX_NOTE_SIZE = 200;
   NOTE_MEMO_HEIGHT = 110;
-  // In the order of FFieldBoxes
-  TITLE_FIELDS: array[0..6] of string = (FIELD_PATTERN_NAME, FIELD_MEASUREMENTS_NAME, FIELD_LAYOUT_NAME, FIELD_DATE, FIELD_CUT_LIST, FIELD_MATERIALS,
-    FIELD_MATERIAL_NEEDED);
   SIDE_ROW_STEP = 100;
   // The status bar's panels: the problems count, then messages
   PANEL_PROBLEMS = 0;
@@ -362,6 +358,7 @@ const
   PATTERN_EXTENSION = '.sloper';
   PATTERN_LIST_HEIGHT = 120;
   MAX_PAPER_SIDE = 2000;
+  // In the order of TITLE_FIELDS and FFieldBoxes
   NOTE_FIELD_CAPTIONS: array[0..6] of string = (rsFieldPattern, rsFieldMeasurements, rsFieldLayout, rsFieldDate, rsFieldCutList, rsFieldMaterials,
     rsFieldMaterialNeeded);
   MODIFIED_MARK: array[boolean] of string = ('', '*');
@@ -688,9 +685,9 @@ begin
   Layout := FDocument.Layout;
   FTitleBox.Checked := Layout.Title.Enabled;
   FEveryPageBox.Checked := Layout.Title.EveryPage;
-  FEveryPageBox.Enabled := Layout.Output.Kind = okTiled;
+  FEveryPageBox.Enabled := OutputSettingUsed(Layout.Output, osTitlePlace);
   FCornerBox.ItemIndex := Ord(Layout.Title.Corner);
-  FCornerBox.Enabled := Layout.Output.Kind = okTiled;
+  FCornerBox.Enabled := OutputSettingUsed(Layout.Output, osTitlePlace);
   for Index := 0 to High(FFieldBoxes) do
   begin
     Shown := False;
@@ -738,9 +735,7 @@ begin
   Title.Corner := TTitleCorner(FCornerBox.ItemIndex);
   for Index := 0 to High(FFieldBoxes) do
     Title.Fields := TitleFieldsWith(Title.Fields, TITLE_FIELDS[Index], FFieldBoxes[Index].Checked);
-  FDocument.BeginChange(rsChangeTitle);
-  FDocument.Layout.Title := Title;
-  FDocument.EndChange;
+  FDocument.ChangeTitle(Title);
 end;
 
 // Typing merges into one undo step, as long as it keeps going. A font name

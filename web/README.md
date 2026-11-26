@@ -64,9 +64,12 @@ cd web && npm ci
 
 ```
 ./opensloper-make.sh web       # the engine, then npm run build: check, unit tests, bundle
-(cd web && npm run test:browser) # the app in headless Chromium (CHROMIUM names the browser; SCREENSHOT=name keeps name.png)
+(cd web && npm run test:browser) # the app in a headless browser (SCREENSHOT=name keeps name.png)
 python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design  # from the repository's root
 ```
+
+The browser tests use `/usr/bin/chromium` on Linux and Google Chrome in
+`/Applications` on macOS. Set `CHROMIUM` to use a different browser executable.
 
 The app is then at `http://127.0.0.1:8766/`; a module worker does not load
 from `file://`. Its service worker answers from the build it

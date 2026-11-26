@@ -31,14 +31,16 @@ uses
   SysUtils, Sloper.Core.Geometry, Sloper.Core.Draft, Sloper.Core.Pattern, Sloper.Core.Note;
 
 type
-  // snHorizontal and snVertical: level with or square to a point
-  TSnapKind = (snFree, snPoint, snCrossing, snEdge, snHorizontal, snVertical);
+  // snHorizontal and snVertical: level with or square to a point; snOffset:
+  // across and down from a line's start (LineEndSnap)
+  TSnapKind = (snFree, snPoint, snCrossing, snEdge, snHorizontal, snVertical, snOffset);
 
   TSnap = record
     Kind: TSnapKind;
     // Where the point goes, in mm
     Position: TVec2;
-    // snPoint: the point; snHorizontal, snVertical: the point it lines up with
+    // snPoint: the point; snHorizontal, snVertical: the point it lines up
+    // with; snOffset: the start it is offset from, '' while that is not made
     PointKey: string;
     // snEdge: the edge; snCrossing: the two edges, in pattern order
     EdgeKey, OtherEdgeKey: string;
@@ -50,15 +52,22 @@ type
     Distance: double;
     // snHorizontal, snVertical: direction from the point, 0, 90, 180 or 270
     Angle: double;
+    // snOffset: where the start is, in mm
+    Base: TVec2;
   end;
 
 // The snap for a click at At, looking Radius mm around it. AnchorKey, when
 // given, is the point a line starts from: lining up with it comes first.
 function FindSnap(Pattern: TPattern; const At: TVec2; Radius: double; const AnchorKey: string = ''): TSnap;
+// Where a line's or curve's end snaps, Start being where it starts: open
+// space becomes an offset across and down from Start, so an outline drawn
+// with the tool hangs together, each point from the one before. Other snaps
+// are kept.
+function LineEndSnap(const Snap, Start: TSnap): TSnap;
 // What a click would make, in words
 function SnapDescription(Pattern: TPattern; const Snap: TSnap): string;
 // Adds the point the snap describes, with an automatic name, and returns its
-// key; for snPoint returns the existing point. '' when refused, with the
+// key; for snPoint returns the existing point. snOffset needs its PointKey. '' when refused, with the
 // reason in Pattern.LastError.
 function PointFromSnap(Pattern: TPattern; const Snap: TSnap): string;
 // The existing objects the snap works from, whose labels help while drawing
@@ -112,6 +121,8 @@ resourcestring
   rsSnapLeft = 'New point %s left of %s';
   rsSnapUp = 'New point %s above %s';
   rsSnapDown = 'New point %s below %s';
+  rsSnapOffset = 'New point %s across and %s down from %s';
+  rsSnapOffsetStart = 'New point %s across and %s down from the start';
 
 implementation
 
@@ -322,6 +333,18 @@ begin
   end;
 end;
 
+function LineEndSnap(const Snap, Start: TSnap): TSnap;
+begin
+  Result := Snap;
+  if Snap.Kind <> snFree then
+    Exit;
+  Result.Kind := snOffset;
+  Result.Base := Start.Position;
+  Result.PointKey := '';
+  if Start.Kind = snPoint then
+    Result.PointKey := Start.PointKey;
+end;
+
 function NameOf(Pattern: TPattern; const Key: string): string;
 var
   Node: TEvalNode;
@@ -362,6 +385,13 @@ begin
         Result := Format(rsSnapUp, [ShownLength(Pattern, Snap.Distance), NameOf(Pattern, Snap.PointKey)])
       else
         Result := Format(rsSnapDown, [ShownLength(Pattern, Snap.Distance), NameOf(Pattern, Snap.PointKey)]);
+    snOffset:
+      if Snap.PointKey = '' then
+        Result := Format(rsSnapOffsetStart, [LengthText(Pattern, Snap.Position.X - Snap.Base.X),
+          LengthText(Pattern, Snap.Position.Y - Snap.Base.Y)])
+      else
+        Result := Format(rsSnapOffset, [LengthText(Pattern, Snap.Position.X - Snap.Base.X),
+          LengthText(Pattern, Snap.Position.Y - Snap.Base.Y), NameOf(Pattern, Snap.PointKey)]);
     else
       Result := Format(rsSnapFree, [LengthText(Pattern, Snap.Position.X), LengthText(Pattern, Snap.Position.Y)]);
   end;
@@ -381,6 +411,9 @@ begin
     snHorizontal, snVertical:
       Added := Pattern.AddOffsetPoint('', Pattern.UsePoint(Snap.PointKey), omPolar, LengthText(Pattern, Snap.Distance),
         RoundedText(Snap.Angle, 0));
+    snOffset:
+      Added := Pattern.AddOffsetPoint('', Pattern.UsePoint(Snap.PointKey), omCartesian,
+        LengthText(Pattern, Snap.Position.X - Snap.Base.X), LengthText(Pattern, Snap.Position.Y - Snap.Base.Y));
     else
       Added := Pattern.AddFreePoint('', LengthText(Pattern, Snap.Position.X), LengthText(Pattern, Snap.Position.Y));
   end;

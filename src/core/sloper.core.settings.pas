@@ -55,6 +55,17 @@ type
   // In each unit's own numbers, so 0.125 in stays an eighth of an inch
   TGridSteps = array[TMeasureUnit] of double;
 
+  TRoleDashStyle = (rdsDefault, rdsSolid, rdsDash, rdsDot, rdsDashDot);
+
+  TRoleDisplayStyle = record
+    Color: string;
+    Dash: TRoleDashStyle;
+    Width: double;
+  end;
+
+  // Screen overrides. An empty colour and zero width keep the role's defaults.
+  TRoleDisplayStyles = array[TEdgeRole] of TRoleDisplayStyle;
+
   // What the user sets in Preferences
   TPreferences = record
     // For new patterns, the measurements app and the drafting app's rulers,
@@ -62,6 +73,7 @@ type
     MeasureUnit: TMeasureUnit;
     // The drafting canvas grid's spacing for each unit
     GridSteps: TGridSteps;
+    RoleStyles: TRoleDisplayStyles;
     Calibration: TCalibration;
     // How the Garment tab lights its pieces (see Garment view in the design):
     // whether they are shaded, where the light comes from (degrees, 135 is
@@ -85,6 +97,7 @@ const
   DEFAULT_GRID_STEPS: TGridSteps = (5, 0.5, 0.125);
   // The largest grid spacing, in mm, so a mistyped one can't hide the grid
   MAX_GRID_STEP = 1000;
+  MAX_ROLE_WIDTH = 8;
   // Calibration factors further off than this are typing mistakes
   MIN_CALIBRATION = 0.5;
   MAX_CALIBRATION = 2;
@@ -139,6 +152,8 @@ type
   end;
 
 function DefaultPreferences: TPreferences;
+function RoleDisplayColor(Role: TEdgeRole; const Style: TRoleDisplayStyle): string;
+function RoleDisplayWidth(Role: TEdgeRole; const Style: TRoleDisplayStyle): double;
 function NoCalibration: TCalibration;
 function CalibrationIsUsable(const Calibration: TCalibration): boolean;
 function GridStepIsUsable(Step: double; AUnit: TMeasureUnit): boolean;
@@ -189,11 +204,13 @@ uses
 const
   SETTINGS_FORMAT = 'opensloper-settings';
   SETTINGS_VERSION = 1;
+  DASH_STYLE_NAMES: array[TRoleDashStyle] of string = ('default', 'solid', 'dash', 'dot', 'dashDot');
 
 function DefaultPreferences: TPreferences;
 begin
   Result.MeasureUnit := muMillimetre;
   Result.GridSteps := DEFAULT_GRID_STEPS;
+  Result.RoleStyles := Default(TRoleDisplayStyles);
   Result.Calibration := NoCalibration;
   Result.GarmentShading := True;
   Result.GarmentLightAngle := DEFAULT_GARMENT_LIGHT_ANGLE;
@@ -202,6 +219,30 @@ begin
   Result.BlenderProgram := '';
   Result.DrapeSpacing := DEFAULT_DRAPE_SPACING;
   Result.DrapeFrames := DEFAULT_DRAPE_FRAMES;
+end;
+
+function RoleDisplayColor(Role: TEdgeRole; const Style: TRoleDisplayStyle): string;
+begin
+  if Style.Color <> '' then
+    Exit(Style.Color);
+  case Role of
+    erConstruction: Result := '#808691';
+    erOutline: Result := '#222428';
+    else
+      Result := ROLE_COLORS[Role];
+  end;
+end;
+
+function RoleDisplayWidth(Role: TEdgeRole; const Style: TRoleDisplayStyle): double;
+begin
+  if Style.Width > 0 then
+    Exit(Style.Width);
+  case Role of
+    erConstruction: Result := 1;
+    erOutline: Result := 2;
+    else
+      Result := 1.5;
+  end;
 end;
 
 function NoCalibration: TCalibration;
@@ -355,9 +396,59 @@ begin
     Calibration := Loaded;
 end;
 
+function RoleStylesToJSON(const Styles: TRoleDisplayStyles): TJSONObject;
+var
+  Role: TEdgeRole;
+  Style: TRoleDisplayStyle;
+  Item: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  for Role := Low(TEdgeRole) to High(TEdgeRole) do
+  begin
+    Style := Styles[Role];
+    if (Style.Color = '') and (Style.Dash = rdsDefault) and (Style.Width = 0) then
+      Continue;
+    Item := TJSONObject.Create;
+    Result.Add(EDGE_ROLE_NAMES[Role], Item);
+    if Style.Color <> '' then
+      Item.Add('color', Style.Color);
+    if Style.Dash <> rdsDefault then
+      Item.Add('dash', DASH_STYLE_NAMES[Style.Dash]);
+    if Style.Width > 0 then
+      Item.Add('width', JSONFloat(Style.Width));
+  end;
+end;
+
+function RoleStylesFromJSON(Data: TJSONData): TRoleDisplayStyles;
+var
+  Role: TEdgeRole;
+  Dash: TRoleDashStyle;
+  Item: TJSONData;
+  Value: string;
+  Width: double;
+begin
+  Result := Default(TRoleDisplayStyles);
+  if not (Data is TJSONObject) then
+    Exit;
+  for Role := Low(TEdgeRole) to High(TEdgeRole) do
+  begin
+    Item := TJSONObject(Data).Find(EDGE_ROLE_NAMES[Role]);
+    if not (Item is TJSONObject) then
+      Continue;
+    if GetJSONString(TJSONObject(Item), 'color', Value) and IsHexColor(Value) then
+      Result[Role].Color := Value;
+    if GetJSONString(TJSONObject(Item), 'dash', Value) then
+      for Dash := Low(TRoleDashStyle) to High(TRoleDashStyle) do
+        if Value = DASH_STYLE_NAMES[Dash] then
+          Result[Role].Dash := Dash;
+    if GetJSONNumber(TJSONObject(Item), 'width', Width) and (Width > 0) and (Width <= MAX_ROLE_WIDTH) then
+      Result[Role].Width := Width;
+  end;
+end;
+
 function TAppSettings.SaveToText: string;
 var
-  Obj: TJSONObject;
+  Obj, Styles: TJSONObject;
 begin
   Obj := TJSONObject.Create;
   try
@@ -380,6 +471,11 @@ begin
       Obj.Add('materialDialogSplit', MaterialDialogSplit);
     Obj.Add('measureUnit', MEASURE_UNIT_NAMES[Preferences.MeasureUnit]);
     Obj.Add('gridSteps', GridStepsToJSON(Preferences.GridSteps));
+    Styles := RoleStylesToJSON(Preferences.RoleStyles);
+    if Styles.Count > 0 then
+      Obj.Add('roleStyles', Styles)
+    else
+      FreeAndNil(Styles);
     Obj.Add('calibrationX', JSONFloat(Preferences.Calibration.X));
     Obj.Add('calibrationY', JSONFloat(Preferences.Calibration.Y));
     Obj.Add('garmentShading', Preferences.GarmentShading);
@@ -456,6 +552,7 @@ begin
         if TextValue = MEASURE_UNIT_NAMES[AUnit] then
           Preferences.MeasureUnit := AUnit;
     ReadGridSteps(Obj, Preferences.GridSteps);
+    Preferences.RoleStyles := RoleStylesFromJSON(Obj.Find('roleStyles'));
     ReadCalibration(Obj, Preferences.Calibration);
     if GetJSONBoolean(Obj, 'garmentShading', Shown) then
       Preferences.GarmentShading := Shown;

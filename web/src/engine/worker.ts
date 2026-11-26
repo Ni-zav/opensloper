@@ -79,6 +79,7 @@ async function load(url: string): Promise<void> {
   wasi.initialize({ exports: { memory: engine.memory, _initialize: engine.initialize } });
   post({
     kind: 'loaded',
+    id: 0,
     fetchMs: compileStart - fetchStart,
     compileMs: initStart - compileStart,
     initMs: performance.now() - initStart,
@@ -92,14 +93,19 @@ function call(request: string): string {
   }
   const text = encoder.encode(request);
   const pointer = engine.alloc(text.length);
-  new Uint8Array(engine.memory.buffer).set(text, pointer);
-  const reply = engine.handle(pointer, text.length);
-  engine.free(pointer);
-  // Memory may have grown during the call, so the buffer is taken afresh
-  const length = new DataView(engine.memory.buffer).getUint32(reply, true);
-  const result = decoder.decode(new Uint8Array(engine.memory.buffer, reply + 4, length));
-  engine.free(reply);
-  return result;
+  try {
+    new Uint8Array(engine.memory.buffer).set(text, pointer);
+    const reply = engine.handle(pointer, text.length);
+    try {
+      // Memory may have grown during the call, so the buffer is taken afresh
+      const length = new DataView(engine.memory.buffer).getUint32(reply, true);
+      return decoder.decode(new Uint8Array(engine.memory.buffer, reply + 4, length));
+    } finally {
+      engine.free(reply);
+    }
+  } finally {
+    engine.free(pointer);
+  }
 }
 
 async function receive(message: ToWorker): Promise<void> {
@@ -118,6 +124,6 @@ async function receive(message: ToWorker): Promise<void> {
 
 self.addEventListener('message', (event: MessageEvent<ToWorker>) => {
   receive(event.data).catch((error: unknown) => {
-    post({ kind: 'failed', message: String(error) });
+    post({ kind: 'failed', id: event.data.id, message: String(error) });
   });
 });

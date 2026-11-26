@@ -15,6 +15,7 @@ that decides what kind of point a click makes. In order:
 | Where two edges cross | A point at the crossing | Intersection of edges |
 | An edge | A point on it, measured from its nearer end | Point along an edge |
 | Level with a point, or straight above or below it | A point that distance from it | Offset point |
+| Nothing, while drawing a line or curve | A point across and down from where it starts | Offset point |
 | Nothing | A point where you click | Free point |
 
 A marker shows the kind of snap, a dotted guide shows the point it lines up
@@ -28,12 +29,26 @@ instead of drawing it again.
 
 ## Lines and curves
 
-Lines and curves take two clicks, and drawing carries on from the end. With
+Lines and curves take two clicks, and drawing carries on from the end. So
+you can draft a whole outline with the Line or Curve tool alone:
+
+- The first click in open space makes a free point.
+- Each later click in open space makes a point across and down from the
+  point before, such as *New point 120 across and 80 down from B*.
+- Moving the first point moves the whole outline, and an across or down
+  length can become a formula, such as `@waist / 4`.
+- Click the first point again to close the outline.
+
+With
 the Curve tool, hold ++shift++ as you click to carry the last curve on through
 the point instead, as one smooth [curve path](shaping.md#curve-paths). New
 edges are outlines; choose another kind first in Tools → Draw As, or change an
 edge's role in its properties. Outlines are what pieces are made of;
 construction lines are thin, grey and dashed, and are only guides.
+
+In desktop Design, open **Preferences → Design → Line Styles** to choose a
+colour, line pattern and width for each role. **Reset this role** restores
+its defaults. The Lines tab shows the same styles.
 
 A new curve starts straight. Select it to see its handles, and drag a handle's
 end to shape it, or type its angles and lengths in the properties. Tools →

@@ -40,6 +40,7 @@ type
     FPendingPath: string;
     // What the document has said changed since editor_changes last answered
     FChanges: TDocumentChanges;
+    FSaveRevision: integer;
     // The point, note or curve being dragged, and the one field a point's drag
     // changes, or '' for all it can; '' when no drag is open
     FDragKey, FDragField: string;
@@ -77,6 +78,7 @@ type
     procedure DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
     function DoChanges: TJSONData;
     function DoSnapshot: TJSONData;
+    function DoSaveComplete(Params: TJSONObject): TJSONData;
     function DoMarkUnsaved: TJSONData;
     // The snap for the call's place, radius and anchor
     function CallSnap(Params: TJSONObject): TSnap;
@@ -96,6 +98,11 @@ type
     function SnapOf(Group: TJSONObject; const AnchorKey: string): TSnap;
     function DoToolSnap(Params: TJSONObject): TJSONData;
     function DoToolClick(Params: TJSONObject): TJSONData;
+    // The point the Point tool's drag starts from, or '' when it starts on none
+    function RebaseFrom(Params: TJSONObject): string;
+    function DoRebaseSnap(Params: TJSONObject): TJSONData;
+    function DoRebasePoint(Params: TJSONObject): TJSONData;
+    function DoImportStamp(Params: TJSONObject): TJSONData;
     function KeysParam(Params: TJSONObject; const AName: string): TStringArray;
     function DoLabelKeys(Params: TJSONObject): TJSONData;
     function DoSeamPick(Params: TJSONObject): TJSONData;
@@ -242,7 +249,16 @@ resourcestring
   rsEditorStart = 'The tool''s first click, for line, curve, circle and rectangle: a group of `x`, `y` and `radius` ' +
     'as the click gave them. A line or curve lines up with its start first, once that is a point.';
   rsEditorToolSnapReturns = 'As editor_snap gives it, with `start`, where the first click snapped (`kind`, `x`, `y`), ' +
-    'and `startObjects`, what it works from, when given';
+    'and `startObjects`, what it works from, when given. A line''s or curve''s end in open space is `offset`, across ' +
+    'and down from the start';
+  rsEditorRebaseSnap = 'Where the Point tool''s drag from a point would drop, and what the drop would do: onto ' +
+    'another point, place the dragged one across and down from it; in open space, make it free.';
+  rsEditorRebaseFrom = 'Where the drag started: a group of `x`, `y` and `radius`, which must be on a point';
+  rsEditorRebaseSnapReturns = 'As editor_snap gives it, with `from`, the dragged point (`id`, `x`, `y`), or null ' +
+    'when the drag did not start on a point';
+  rsEditorRebasePoint = 'Drops the Point tool''s drag from a point: onto another point the dragged one is placed ' +
+    'across and down from it, in open space it is made free, staying where it is, as one undo step. Only free and ' +
+    'offset points; a drop on an edge is refused, and one back on the point does nothing.';
   rsEditorToolClick = 'Does what a click of a canvas tool does, as one undo step: point adds the point it snaps to; ' +
     'line and curve take a first click, then make the edge with its points, carrying on from its end; circle and ' +
     'rectangle take a first click, then make the shape; piece makes a piece of the closed outline round the place; ' +
@@ -439,6 +455,11 @@ resourcestring
     'canvas shows it while the text is typed in the Properties tab; nothing changes.';
   rsEditorNotePreviewTarget = 'The note, by ID or name';
   rsEditorNotePreviewText = 'The text as typed, with names, and draft values in [ ] worked out';
+  rsEditorImportStamp = 'Imports an SVG stamp at true size, centred on the selected object or at the place given.';
+  rsEditorStampSVG = 'The SVG drawing as text';
+  rsEditorStampFileName = 'The drawing file name, used to name the stamp';
+  rsEditorStampPlace = 'The centre of a free stamp, in mm';
+  rsEditorStampReturns = '`done`, `select` and `message` as for other edits; `warnings` about differences from the SVG';
   rsEditorNotePreviewReturns = '`note`, as one of editor_scene''s `notes`';
   rsEditorSuggestItemValue = 'Its value, as editor_suggest gives it';
   rsEditorSuggestPreviewReturns = '`position`, where the point would go (`x`, `y`), or null when the field does ' +
@@ -453,7 +474,12 @@ resourcestring
     'text. Refused while a drag is open.';
   rsEditorSnapshotReturns = '`text`, the pattern file''s contents; `measurementsText`, the set''s file as given ' +
     'with `use_measurements` and changed since, or null when the set is read from disk or there is none; ' +
-    '`measurementsFile`, where the pattern records the set; `modified`';
+    '`measurementsFile`, where the pattern records the set; `modified`; `generation`, as in editor_changes; ' +
+    '`revision`, to confirm a successful write';
+  rsEditorSaveComplete = 'Counts a snapshot as saved after the browser has written it, if the pattern is still ' +
+    'at that revision and no edit is in progress.';
+  rsEditorSaveCompleteRevision = 'The revision returned by editor_snapshot';
+  rsEditorSaveCompleteReturns = '`modified`, whether the current pattern still has unsaved changes';
   rsEditorMarkUnsaved = 'Counts the pattern as not saved, as after its work in progress is opened again; not an ' +
     'undo step.';
   rsEditorMarkUnsavedReturns = '`modified`, true';
@@ -508,7 +534,7 @@ uses
   Sloper.Core.Note, Sloper.Core.Stamp, Sloper.Core.Seam, Sloper.Core.Settings, Sloper.Core.Measurements, Sloper.Editor.PropertyRows,
   Sloper.Editor.FeatureForms, Sloper.Editor.MaterialList, Sloper.Core.Units, base64, Sloper.Core.PatternSources, Sloper.Core.Fragment, Sloper.Core.VariableImport,
   Sloper.Output.DraftSVG, Sloper.Output.Layout, Sloper.Output.LayoutPDF, Sloper.Core.TypeChange, Sloper.Output.GarmentSVG,
-  Sloper.Editor.Garment, Sloper.Core.Variables;
+  Sloper.Editor.Garment, Sloper.Core.Variables, Sloper.Core.SvgImport;
 
 const
   // How finely curves are flattened when the call does not say, in mm
@@ -518,7 +544,7 @@ const
   // The tools whose clicks snap, and every tool editor_tool_click takes
   SNAP_TOOL_NAMES: array[0..6] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'text', 'callout');
   CLICK_TOOL_NAMES: array[0..8] of string = ('point', 'line', 'curve', 'circle', 'rectangle', 'piece', 'notch', 'text', 'callout');
-  SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical');
+  SNAP_KIND_NAMES: array[TSnapKind] of string = ('free', 'point', 'crossing', 'edge', 'horizontal', 'vertical', 'offset');
   // The Variables tab's columns that can be edited, as TVariableColumn without the value
   VARIABLE_COLUMN_NAMES: array[0..2] of string = ('name', 'formula', 'description');
   VARIABLE_COLUMNS: array[0..2] of TVariableColumn = (vcName, vcFormula, vcDescription);
@@ -606,6 +632,16 @@ begin
     AddApiParam(Built, 'start', apGroup, False, rsEditorStart);
     AddApiParam(Built, 'extend', apReference, False, rsEditorExtend);
     AddApiParam(Built, 'role', apChoice, False, rsEditorRole, string.Join(', ', EDGE_ROLE_NAMES));
+    AddApiMethod(Built, 'editor_rebase_snap', rsEditorRebaseSnap, rsEditorRebaseSnapReturns, True);
+    AddApiParam(Built, 'from', apGroup, True, rsEditorRebaseFrom);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorX);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorY);
+    AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
+    AddApiMethod(Built, 'editor_rebase_point', rsEditorRebasePoint, rsEditorToolClickReturns);
+    AddApiParam(Built, 'from', apGroup, True, rsEditorRebaseFrom);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorX);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorY);
+    AddApiParam(Built, 'radius', apNumber, True, rsEditorRadius);
     AddApiMethod(Built, 'editor_label_keys', rsEditorLabelKeys, rsEditorLabelKeysReturns, True);
     AddApiParam(Built, 'mode', apChoice, False, rsEditorLabelMode, string.Join(', ', LABEL_MODE_NAMES));
     AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
@@ -701,6 +737,12 @@ begin
     AddApiParam(Built, 'values', apList, True, rsEditorFeatureValues);
     AddApiParam(Built, 'values[].id', apText, True, rsEditorFeatureValueId);
     AddApiParam(Built, 'values[].text', apText, True, rsEditorFeatureValueText);
+    AddApiMethod(Built, 'editor_import_stamp', rsEditorImportStamp, rsEditorStampReturns);
+    AddApiParam(Built, 'svg', apText, True, rsEditorStampSVG);
+    AddApiParam(Built, 'fileName', apText, True, rsEditorStampFileName);
+    AddApiParam(Built, 'selection', apReferences, False, rsEditorSelection);
+    AddApiParam(Built, 'x', apNumber, True, rsEditorStampPlace);
+    AddApiParam(Built, 'y', apNumber, True, rsEditorStampPlace);
     AddApiMethod(Built, 'editor_note_preview', rsEditorNotePreview, rsEditorNotePreviewReturns, True);
     AddApiParam(Built, 'id', apTarget, True, rsEditorNotePreviewTarget);
     AddApiParam(Built, 'text', apText, True, rsEditorNotePreviewText);
@@ -713,6 +755,8 @@ begin
     AddApiMethod(Built, 'editor_tables', rsEditorTables, rsEditorTablesReturns, True);
     AddApiMethod(Built, 'editor_changes', rsEditorChanges, rsEditorChangesReturns, True);
     AddApiMethod(Built, 'editor_snapshot', rsEditorSnapshot, rsEditorSnapshotReturns, True);
+    AddApiMethod(Built, 'editor_save_complete', rsEditorSaveComplete, rsEditorSaveCompleteReturns);
+    AddApiParam(Built, 'revision', apNumber, True, rsEditorSaveCompleteRevision);
     AddApiMethod(Built, 'editor_mark_unsaved', rsEditorMarkUnsaved, rsEditorMarkUnsavedReturns);
     AddApiMethod(Built, 'editor_drag_begin', rsEditorDragBegin, rsEditorDragBeginReturns);
     AddApiParam(Built, 'id', apTarget, True, rsEditorDragTarget);
@@ -1421,7 +1465,7 @@ begin
   if Assigned(Group) then
     Start := SnapOf(Group, '');
   if Assigned(Group) and ((ToolName = 'line') or (ToolName = 'curve')) then
-    Snap := SnapOf(Params, StartAnchor(Start))
+    Snap := LineEndSnap(SnapOf(Params, StartAnchor(Start)), Start)
   else
     Snap := SnapOf(Params, '');
   if Assigned(Group) and ((ToolName = 'circle') or (ToolName = 'rectangle')) then
@@ -1445,6 +1489,46 @@ begin
   Result := Answer;
 end;
 
+function TEditorApiServer.RebaseFrom(Params: TJSONObject): string;
+var
+  Group: TJSONData;
+  From: TSnap;
+begin
+  Group := Params.Find('from');
+  if not (Group is TJSONObject) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['from']));
+  From := SnapOf(TJSONObject(Group), '');
+  Result := '';
+  if From.Kind = snPoint then
+    Result := From.PointKey;
+end;
+
+function TEditorApiServer.DoRebaseSnap(Params: TJSONObject): TJSONData;
+var
+  PointKey: string;
+  Drop: TSnap;
+  Answer: TJSONObject;
+  Point: TPointObject;
+begin
+  PointKey := RebaseFrom(Params);
+  Drop := SnapOf(Params, '');
+  Answer := SnapToJSON(Drop);
+  if PointKey = '' then
+  begin
+    Answer.Add('description', '');
+    Answer.Add('from', TJSONNull.Create);
+  end
+  else
+  begin
+    Answer.Add('description', RebaseDescription(Document.Pattern, PointKey, Drop));
+    Point := TPointObject(Document.Pattern.FindNode(PointKey));
+    Answer.Add('from', TJSONObject.Create(['id', KeyToJSON(PointKey), 'x', ReportFloat(Point.Position.X), 'y',
+      ReportFloat(Point.Position.Y)]));
+  end;
+  Answer.Add('objects', KeysToJSON(SnapObjectKeys(Drop)));
+  Result := Answer;
+end;
+
 function EditToJSON(const Edit: TSelectionEdit): TJSONObject;
 begin
   Result := TJSONObject.Create(['done', Edit.Done, 'message', Edit.Message]);
@@ -1452,6 +1536,18 @@ begin
     Result.Add('select', KeysToJSON(Edit.Selection))
   else
     Result.Add('select', TJSONNull.Create);
+end;
+
+function TEditorApiServer.DoRebasePoint(Params: TJSONObject): TJSONData;
+var
+  PointKey: string;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  PointKey := RebaseFrom(Params);
+  if PointKey = '' then
+    Exit(EditToJSON(Default(TSelectionEdit)));
+  Result := EditToJSON(RebasePointStep(Document, PointKey, SnapOf(Params, '')));
 end;
 
 function TEditorApiServer.DoToolClick(Params: TJSONObject): TJSONData;
@@ -2297,6 +2393,8 @@ end;
 procedure TEditorApiServer.DocumentChanged(ADocument: TPatternDocument; Changes: TDocumentChanges);
 begin
   FChanges := FChanges + Changes;
+  if Changes - [dcView] <> [] then
+    Inc(FSaveRevision);
   // A drag changes only the field's own object, which no candidate reads
   if (Changes * [dcPattern, dcObjectsReplaced, dcMeasurements] <> []) and not ADocument.ChangeOpen then
     FreeAndNil(FGrade);
@@ -2322,12 +2420,19 @@ begin
   if Document.ChangeOpen then
     raise EApiError.Create(RPC_REFUSED, rsApiBusy);
   Answer := TJSONObject.Create(['text', Document.SnapshotText, 'measurementsFile', Document.Pattern.MeasurementFile,
-    'modified', Document.Modified]);
+    'modified', Document.Modified, 'generation', Document.Generation, 'revision', FSaveRevision]);
   if Document.MeasurementsInMemory then
     Answer.Add('measurementsText', Document.MeasurementText)
   else
     Answer.Add('measurementsText', TJSONNull.Create);
   Result := Answer;
+end;
+
+function TEditorApiServer.DoSaveComplete(Params: TJSONObject): TJSONData;
+begin
+  if (RequireWhole(Params, 'revision') = FSaveRevision) and not Document.ChangeOpen then
+    Document.MarkSaved;
+  Result := TJSONObject.Create(['modified', Document.Modified]);
 end;
 
 function TEditorApiServer.DoMarkUnsaved: TJSONData;
@@ -2668,6 +2773,31 @@ begin
   Result := EditToJSON(AddSeamFromSides(Document, SideA, SideB));
 end;
 
+function TEditorApiServer.DoImportStamp(Params: TJSONObject): TJSONData;
+var
+  Drawing: TStampDrawing;
+  Warnings: TStringArray;
+  Reason, StampName, Warning: string;
+  Centre: TVec2;
+  Selection: TStringArray;
+  Answer: TJSONObject;
+  WarningItems: TJSONArray;
+begin
+  if Document.ChangeOpen then
+    raise EApiError.Create(RPC_REFUSED, rsEditorBusy);
+  Centre := PlaceOf(Params);
+  Selection := KeysParam(Params, 'selection');
+  StampName := ChangeFileExt(ExtractFileName(RequireString(Params, 'fileName')), '');
+  if not ImportSvgStamp(RequireString(Params, 'svg'), Drawing, Warnings, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Answer := EditToJSON(AddStampStep(Document, Drawing, StampName, Selection, Centre));
+  WarningItems := TJSONArray.Create;
+  for Warning in Warnings do
+    WarningItems.Add(Warning);
+  Answer.Add('warnings', WarningItems);
+  Result := Answer;
+end;
+
 function TEditorApiServer.DoDelete(Params: TJSONObject): TJSONData;
 var
   Selection: TStringArray;
@@ -2751,6 +2881,9 @@ begin
     'editor_list_click': Result := DoListClick(Params);
     'editor_tool_snap': Result := DoToolSnap(Params);
     'editor_tool_click': Result := DoToolClick(Params);
+    'editor_rebase_snap': Result := DoRebaseSnap(Params);
+    'editor_rebase_point': Result := DoRebasePoint(Params);
+    'editor_import_stamp': Result := DoImportStamp(Params);
     'editor_label_keys': Result := DoLabelKeys(Params);
     'editor_seam_pick': Result := DoSeamPick(Params);
     'editor_seam_make': Result := DoSeamMake(Params);
@@ -2787,6 +2920,7 @@ begin
     'editor_feature_apply': Result := DoFeatureApply(Params);
     'editor_changes': Result := DoChanges;
     'editor_snapshot': Result := DoSnapshot;
+    'editor_save_complete': Result := DoSaveComplete(Params);
     'editor_mark_unsaved': Result := DoMarkUnsaved;
     'editor_drag_begin': Result := DoDragBegin(Params);
     'editor_drag_to': Result := DoDragTo(Params);

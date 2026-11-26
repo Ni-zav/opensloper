@@ -364,6 +364,15 @@ type
     procedure QueuedChangeDue(Change, Data: integer); override;
   end;
 
+  // What a point is placed from, read only, after its name (PointInputs)
+  TInputSection = class(TPropertySection)
+  private
+    FTexts: array of TGridLabel;
+  public
+    procedure Build(Node: TEvalNode; Place: TSectionPlace); override;
+    procedure Refresh(Node: TEvalNode); override;
+  end;
+
   // What a repeat runs between or along, and whether it includes the ends
   TRepeatSection = class(TPropertySection)
   private
@@ -719,6 +728,8 @@ end;
 procedure TPropertiesPanel.AddSections(Node: TEvalNode);
 begin
   FSections.Add(TCommonSection.Create(Self));
+  if Length(PointInputs(Document.Pattern, Node)) > 0 then
+    FSections.Add(TInputSection.Create(Self));
   if Node is TEdgeObject then
     FSections.Add(TEdgeSection.Create(Self));
   // A repeat's points share the repeat's marker
@@ -1840,6 +1851,37 @@ begin
 end;
 
 { TRepeatSection }
+
+{ TInputSection }
+
+procedure TInputSection.Build(Node: TEvalNode; Place: TSectionPlace);
+var
+  Input: TPointInput;
+begin
+  if Place <> spInputs then
+    Exit;
+  FTexts := nil;
+  for Input in PointInputs(Panel.Document.Pattern, Node) do
+    Insert(Panel.AddTextRow(Input.Caption, ''), FTexts, Length(FTexts));
+end;
+
+// The names, which follow a rename
+procedure TInputSection.Refresh(Node: TEvalNode);
+var
+  Inputs: TPointInputArray;
+  Found: TEvalNode;
+  Index: integer;
+begin
+  Inputs := PointInputs(Panel.Document.Pattern, Node);
+  for Index := 0 to Min(High(Inputs), High(FTexts)) do
+  begin
+    Found := Panel.Document.Pattern.FindNode(Inputs[Index].Key);
+    if Assigned(Found) then
+      FTexts[Index].Caption := Found.DisplayName
+    else
+      FTexts[Index].Caption := Inputs[Index].Key;
+  end;
+end;
 
 procedure TRepeatSection.Build(Node: TEvalNode; Place: TSectionPlace);
 

@@ -516,7 +516,8 @@ jobs:
     name: Publish the docs
     needs: publish
     permissions:
-      contents: read
+      # write: the deploy makes a commit to deploy under (docs.yml)
+      contents: write
       pages: write
       id-token: write
     uses: ./.github/workflows/docs.yml

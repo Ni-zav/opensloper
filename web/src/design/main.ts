@@ -7,7 +7,7 @@
 // and downloaded.
 import { PatternDocument } from '../document/patternDocument.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
-import { booleanField, idsField, numberField, stringField } from '../engine/replies.ts';
+import { booleanField, idsField, numberField, stringField, stringsField } from '../engine/replies.ts';
 import { parseTables, type Tables } from '../editor/scene.ts';
 import { LABEL_MODES, PatternCanvas, SELECT_TOOL, type LabelMode } from '../ui/canvas.ts';
 import type { ListPanelEvents } from '../ui/listPanel.ts';
@@ -36,6 +36,7 @@ const ICONS = {
   save: 'device-floppy',
   saveAs: 'file-pencil',
   exportDraft: 'file-type-svg',
+  importStamp: 'file-import',
   print: 'printer',
   undo: 'arrow-back-up',
   redo: 'arrow-forward-up',
@@ -72,6 +73,10 @@ const toolsBar = element('tools', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
 const measurementsInput = element('measurements-input', HTMLInputElement);
 const importInput = element('import-input', HTMLInputElement);
+const stampInput = element('stamp-input', HTMLInputElement);
+
+// As MAX_SVG_BYTES in the Pascal importer. Check before reading the file.
+const MAX_SVG_BYTES = 8 * 1024 * 1024;
 
 function showMessage(text: string): void {
   status.textContent = text;
@@ -162,6 +167,7 @@ class DesignApp {
   private readonly files = FileAccess.create();
   private patternHandle: FileSystemFileHandle | undefined;
   private measurementsHandle: FileSystemFileHandle | undefined;
+  private saving = false;
   // Unsaved work kept in the browser, and offered back once the tab that left it has closed
   private readonly autosave: Autosave;
 
@@ -243,7 +249,7 @@ class DesignApp {
         this.canvas.showNoteText(id, text);
       },
     });
-    const side = new SideTabs(element('side', HTMLElement));
+    const side = new SideTabs(element('side', HTMLElement), window.matchMedia('(max-width: 640px)').matches);
     this.side = side;
     this.variables = new VariablesPanel(this.document, {
       ...this.listEvents(),
@@ -369,6 +375,9 @@ class DesignApp {
         this.run(this.pasteFromButton());
       }),
       this.deleteButton,
+      iconButton(ICONS.importStamp, STRINGS.importStamp, STRINGS.importStamp, () => {
+        stampInput.click();
+      }),
       iconButton(ICONS.exportDraft, STRINGS.exportDraft, STRINGS.exportDraftHint, () => {
         this.run(this.exportDraft());
       }),
@@ -401,6 +410,13 @@ class DesignApp {
         this.run(this.importVariablesFrom(file));
       }
       importInput.value = '';
+    });
+    stampInput.addEventListener('change', () => {
+      const file = stampInput.files?.[0];
+      if (file !== undefined) {
+        this.run(this.importStamp(file));
+      }
+      stampInput.value = '';
     });
     measurementsInput.addEventListener('change', () => {
       const file = measurementsInput.files?.[0];
@@ -679,6 +695,27 @@ class DesignApp {
     }
     if (booleanField(answer, 'done') !== true || booleanField(answer, 'warning') === true) {
       window.alert(message);
+    }
+  }
+
+  private async importStamp(file: File): Promise<void> {
+    if (file.size > MAX_SVG_BYTES) {
+      showMessage(STRINGS.stampTooLarge(MAX_SVG_BYTES / (1024 * 1024)));
+      return;
+    }
+    const generation = this.document.state.generation;
+    const svg = await file.text();
+    if (this.document.state.generation !== generation) {
+      return;
+    }
+    const answer = await this.canvas.importStamp(svg, file.name);
+    if (answer === undefined || booleanField(answer, 'done') !== true) {
+      return;
+    }
+    showMessage(STRINGS.stampAdded(file.name));
+    const warnings = stringsField(answer, 'warnings') ?? [];
+    if (warnings.length > 0) {
+      window.alert(STRINGS.stampWarnings(warnings));
     }
   }
 
@@ -992,25 +1029,48 @@ class DesignApp {
       downloadText(name, stringField(answer, 'text') ?? '');
       return;
     }
-    // Leave to write is asked while the click still counts, before the engine is
-    let handle = saveAs ? undefined : this.patternHandle;
-    if (handle !== undefined && !(await files.mayWrite(handle))) {
-      showMessage(STRINGS.writeRefused(handle.name));
+    if (this.saving) {
       return;
     }
-    handle ??= await files.chooseSave(name, 'pattern', this.patternHandle ?? this.measurementsHandle);
-    if (handle === undefined) {
-      return;
+    this.saving = true;
+    const generation = this.document.state.generation;
+    try {
+      // Leave to write is asked while the click still counts, before the engine is
+      let handle = saveAs ? undefined : this.patternHandle;
+      if (handle !== undefined && !(await files.mayWrite(handle))) {
+        showMessage(STRINGS.writeRefused(handle.name));
+        return;
+      }
+      handle ??= await files.chooseSave(name, 'pattern', this.patternHandle ?? this.measurementsHandle);
+      if (handle === undefined || this.document.state.generation !== generation) {
+        return;
+      }
+      const snapshot = await this.document.read('editor_snapshot');
+      const text = stringField(snapshot, 'text');
+      const revision = numberField(snapshot, 'revision');
+      if (text === undefined || revision === undefined) {
+        throw new Error('Missing pattern snapshot');
+      }
+      if (numberField(snapshot, 'generation') !== generation) {
+        return;
+      }
+      if (!(await files.write(handle, text))) {
+        showMessage(STRINGS.writeRefused(handle.name));
+        return;
+      }
+      await this.document.call('editor_save_complete', { revision });
+      if (this.document.state.generation === generation) {
+        this.patternHandle = handle;
+        this.document.fileName = handle.name;
+        this.updateState();
+        if (this.document.state.modified) {
+          void this.autosave.flush();
+        }
+        showMessage(STRINGS.saved(handle.name));
+      }
+    } finally {
+      this.saving = false;
     }
-    const answer = await this.document.call('save', { text: true });
-    if (!(await files.write(handle, stringField(answer, 'text') ?? ''))) {
-      showMessage(STRINGS.writeRefused(handle.name));
-      return;
-    }
-    this.patternHandle = handle;
-    this.document.fileName = handle.name;
-    this.updateState();
-    showMessage(STRINGS.saved(handle.name));
   }
 
   // Open, Save, Save as and Measurements work from anywhere, a field being

@@ -55,6 +55,8 @@ type
     procedure TestSavingPreferencesLeavesUnreadableFile;
     procedure TestCorrectedCalibration;
     procedure TestRolePresetsRoundTrip;
+    procedure TestRoleStylesRoundTrip;
+    procedure TestInvalidRoleStylesKeepDefaults;
     procedure TestRolePresetsPassOverOddEntries;
     procedure TestSavingPresetsKeepsTheRest;
     procedure TestPutRolePresetReplacesByName;
@@ -425,6 +427,44 @@ begin
   finally
     FreeAndNil(Loaded);
   end;
+end;
+
+procedure TTestSettings.TestRoleStylesRoundTrip;
+var
+  Other: TAppSettings;
+  Style: TRoleDisplayStyle;
+  Err: string;
+begin
+  FSettings.Preferences.RoleStyles[erFold].Color := '#123456';
+  FSettings.Preferences.RoleStyles[erFold].Dash := rdsDot;
+  FSettings.Preferences.RoleStyles[erFold].Width := 3.5;
+  Other := TAppSettings.Create;
+  try
+    AssertTrue(Err, Other.LoadFromText(FSettings.SaveToText, Err));
+    Style := Other.Preferences.RoleStyles[erFold];
+    AssertEquals('colour', '#123456', RoleDisplayColor(erFold, Style));
+    AssertTrue('dash', Style.Dash = rdsDot);
+    AssertNear('width', 3.5, RoleDisplayWidth(erFold, Style));
+    Style := Other.Preferences.RoleStyles[erOutline];
+    AssertEquals('default outline colour', '#222428', RoleDisplayColor(erOutline, Style));
+    AssertNear('default outline width', 2, RoleDisplayWidth(erOutline, Style));
+  finally
+    FreeAndNil(Other);
+  end;
+end;
+
+procedure TTestSettings.TestInvalidRoleStylesKeepDefaults;
+var
+  Err: string;
+  Style: TRoleDisplayStyle;
+begin
+  AssertTrue(Err, FSettings.LoadFromText('{"format":"opensloper-settings","version":1,"roleStyles":{' +
+    '"fold":{"color":"blue","dash":"unknown","width":99},"stitch":{"dash":"solid"}}}', Err));
+  Style := FSettings.Preferences.RoleStyles[erFold];
+  AssertEquals('invalid colour ignored', '', Style.Color);
+  AssertTrue('invalid dash ignored', Style.Dash = rdsDefault);
+  AssertNear('invalid width ignored', 0, Style.Width);
+  AssertTrue('another role still loads', FSettings.Preferences.RoleStyles[erStitch].Dash = rdsSolid);
 end;
 
 procedure TTestSettings.TestRolePresetsPassOverOddEntries;

@@ -25,11 +25,19 @@ import type { SnapKind, SnapMarker, SnapPreview } from './patternPainter.ts';
 // Screen pixels around the pointer that a tool snaps to or picks from, as SNAP_RADIUS
 export const SNAP_RADIUS = 8;
 
-export const SNAP_KINDS: readonly SnapKind[] = ['free', 'point', 'crossing', 'edge', 'horizontal', 'vertical'];
+export const SNAP_KINDS: readonly SnapKind[] = [
+  'free',
+  'point',
+  'crossing',
+  'edge',
+  'horizontal',
+  'vertical',
+  'offset',
+];
 
 // What a tool needs of the canvas
 export interface CanvasToolHost {
-  readonly document: PatternDocument;
+  readonly document: Pick<PatternDocument, 'read' | 'call'>;
   readonly view: ViewTransform;
   // The role of the edges the drawing tools make
   readonly drawRole: string;
@@ -73,6 +81,16 @@ export abstract class CanvasToolHandler {
 
   // The pointer moved over the canvas, no button held
   move(_at: Vec2): void {}
+
+  // A press at pressAt moved far enough to be a drag: true when the tool takes
+  // it, and then has dragMove and dragEnd instead of a click
+  dragStart(_pressAt: Vec2): boolean {
+    return false;
+  }
+
+  dragMove(_at: Vec2): void {}
+
+  dragEnd(_at: Vec2): void {}
 
   // Escape or a right click: true when the tool had something to drop
   cancel(): boolean {
@@ -139,6 +157,10 @@ export class SnapTool extends CanvasToolHandler {
   // The curve the last click made, which Shift+click carries on
   private lastCurve = '';
   private lastAt: Vec2 | undefined;
+  // Where the Point tool's drag was pressed; a drag from a point places it
+  // from another (editor_rebase_point)
+  private dragFrom: ToolPlace | undefined;
+  private readonly dragSnaps: LatestOnly<Vec2>;
 
   constructor(host: CanvasToolHost, name: string) {
     super(host, name);
@@ -148,6 +170,76 @@ export class SnapTool extends CanvasToolHandler {
         this.report(error);
       },
     );
+    this.dragSnaps = new LatestOnly(
+      async (at) => this.updateDragSnap(at),
+      (error) => {
+        this.report(error);
+      },
+    );
+  }
+
+  override dragStart(pressAt: Vec2): boolean {
+    if (this.name !== 'point') {
+      return false;
+    }
+    this.snaps.clear();
+    this.dragFrom = this.place(pressAt);
+    return true;
+  }
+
+  override dragMove(at: Vec2): void {
+    this.lastAt = at;
+    this.dragSnaps.push(at);
+  }
+
+  override dragEnd(at: Vec2): void {
+    this.finishDrag(at).catch((error: unknown) => {
+      this.report(error);
+    });
+  }
+
+  // A drag from a point re-points it; one from anywhere else is the click it was before
+  private async finishDrag(at: Vec2): Promise<void> {
+    const from = this.dragFrom;
+    this.dragSnaps.clear();
+    await this.dragSnaps.idle();
+    this.dragFrom = undefined;
+    if (from === undefined) {
+      return;
+    }
+    // Asked again, as the release may come before any preview's answer
+    const drop = await this.host.document.read('editor_rebase_snap', { from, ...this.place(at) });
+    if (!isRecord(drop.from)) {
+      await this.commit(at, false);
+      return;
+    }
+    const answer = await this.host.document.call('editor_rebase_point', { from, ...this.place(at) });
+    if (answer.select !== null) {
+      this.host.select(idsField(answer, 'select'));
+    }
+    // What it did stays up until the pointer moves
+    this.host.showSnap(undefined);
+    this.host.showToolObjects([]);
+    this.host.showMessage(stringField(answer, 'message') ?? '');
+  }
+
+  private async updateDragSnap(at: Vec2): Promise<void> {
+    if (this.dragFrom === undefined) {
+      return;
+    }
+    const answer = await this.host.document.read('editor_rebase_snap', { from: this.dragFrom, ...this.place(at) });
+    const from = answer.from;
+    if (!isRecord(from)) {
+      return;
+    }
+    this.host.showSnap({
+      kind: SNAP_KINDS.find((each) => each === stringField(answer, 'kind')) ?? 'free',
+      at: { x: numberField(answer, 'x') ?? 0, y: numberField(answer, 'y') ?? 0 },
+      preview: { kind: 'line', from: { x: numberField(from, 'x') ?? 0, y: numberField(from, 'y') ?? 0 } },
+    });
+    this.host.showMessage(stringField(answer, 'description') ?? '');
+    const dragged = idField(from, 'id');
+    this.host.showToolObjects([...(dragged === undefined ? [] : [dragged]), ...idsField(answer, 'objects')]);
   }
 
   override move(at: Vec2): void {
@@ -168,6 +260,13 @@ export class SnapTool extends CanvasToolHandler {
   }
 
   override cancel(): boolean {
+    if (this.dragFrom !== undefined) {
+      this.dragFrom = undefined;
+      this.dragSnaps.clear();
+      this.host.showSnap(undefined);
+      this.host.showMessage('');
+      return true;
+    }
     if (this.start === undefined) {
       return false;
     }
@@ -278,15 +377,29 @@ export class SeamTool extends CanvasToolHandler {
   private onB = false;
   // Each step waits for the one before, so Enter makes the seam with every
   // edge clicked before it, however fast
-  private steps: Promise<void> = Promise.resolve();
+  private steps: Promise<void> | undefined;
+  private generation = 0;
 
-  private queue(step: () => Promise<void>): void {
-    this.steps = this.steps.then(step).catch((error: unknown) => {
-      this.report(error);
-    });
+  private queue(step: (generation: number) => Promise<void>): void {
+    const generation = this.generation;
+    const pending = (this.steps ?? Promise.resolve())
+      .then(() => (generation === this.generation ? step(generation) : undefined))
+      .catch((error: unknown) => {
+        if (generation === this.generation) {
+          this.report(error);
+        }
+      })
+      .finally(() => {
+        if (this.steps === pending) {
+          this.steps = undefined;
+        }
+      });
+    this.steps = pending;
   }
 
   override reset(): void {
+    this.generation++;
+    this.steps = undefined;
     this.sideA = [];
     this.sideB = [];
     this.onB = false;
@@ -294,7 +407,7 @@ export class SeamTool extends CanvasToolHandler {
   }
 
   override cancel(): boolean {
-    const picking = this.sideA.length > 0 || this.sideB.length > 0 || this.onB;
+    const picking = this.steps !== undefined || this.sideA.length > 0 || this.sideB.length > 0 || this.onB;
     if (picking) {
       this.reset();
     }
@@ -303,20 +416,20 @@ export class SeamTool extends CanvasToolHandler {
 
   override click(at: Vec2): void {
     const place = this.place(at);
-    this.queue(async () => this.pick(place));
+    this.queue(async (generation) => this.pick(place, generation));
   }
 
   override keyDown(event: KeyboardEvent): boolean {
     if (event.key === 'Tab') {
       const onB = !event.shiftKey;
-      this.queue(async () => {
+      this.queue(async (generation) => {
         this.onB = onB;
-        await this.pick({});
+        await this.pick({}, generation);
       });
       return true;
     }
     if (event.key === 'Enter') {
-      this.queue(async () => this.make());
+      this.queue(async (generation) => this.make(generation));
       return true;
     }
     return false;
@@ -325,18 +438,21 @@ export class SeamTool extends CanvasToolHandler {
   // Undo may have taken away a piece or edge picked
   override sceneChanged(): void {
     if (this.sideA.length > 0 || this.sideB.length > 0) {
-      this.queue(async () => this.pick({}));
+      this.queue(async (generation) => this.pick({}, generation));
     }
   }
 
   // Without a place, only the sides as they are, and the progress
-  private async pick(place: object): Promise<void> {
+  private async pick(place: object, generation: number): Promise<void> {
     const answer = await this.host.document.read('editor_seam_pick', {
       ...place,
       sideA: this.sideA,
       sideB: this.sideB,
       onB: this.onB,
     });
+    if (generation !== this.generation) {
+      return;
+    }
     this.sideA = recordsField(answer, 'sideA');
     this.sideB = recordsField(answer, 'sideB');
     const lines = isRecord(answer.lines) ? answer.lines : {};
@@ -344,8 +460,11 @@ export class SeamTool extends CanvasToolHandler {
     this.host.showMessage(stringField(answer, 'message') ?? '');
   }
 
-  private async make(): Promise<void> {
+  private async make(generation: number): Promise<void> {
     const answer = await this.host.document.call('editor_seam_make', { sideA: this.sideA, sideB: this.sideB });
+    if (generation !== this.generation) {
+      return;
+    }
     if (booleanField(answer, 'done') === true) {
       this.reset();
     }

@@ -11,7 +11,7 @@ The layout follows [Keep a Changelog](https://keepachangelog.com): Added,
 Changed, Fixed and Removed under each version.
 
 
-## 0.8.0
+## 0.9.0
 
 ### Added
 
@@ -19,6 +19,21 @@ Changed, Fixed and Removed under each version.
   in the browser, including personal sets and size tables. It includes the
   measurement catalogue and checks for measurements a pattern needs (#84).
 
+## 0.8.0
+
+### Added
+
+- The Properties tab shows what a point is placed from, after its name, for
+  reading only: an offset point's base, the edge a point lies along and the
+  end it is measured from, and so on (#116).
+- A free or offset point can be placed from another point by dragging it
+  with the Point tool: dropped on a point it is offset across and down from
+  that point, and dropped in open space it becomes free, staying where it is
+  (#115).
+- Round Corner can fit an arc between a line and a curve or between two
+  curves that share an endpoint (#54).
+- Design Preferences can override the canvas colour, line pattern and width
+  for each role, with a reset to restore that role's defaults (#56).
 - A point's type can be changed in place, when it was placed the wrong
   way: select it, then what it is to be placed from, and choose the type
   in Tools → Points → Change To, or the *Change point to…* box in the web
@@ -29,6 +44,9 @@ Changed, Fixed and Removed under each version.
   and the status bar says how far; formulas it had become plain numbers,
   which the formula suggestions can turn back into formulas.
   `convert_point` does the same in the Automation API (#81).
+- The web editor imports SVG stamps at their original size. A stamp can
+  hang from a selected point, edge or piece, or sit in the middle of the
+  view. The drawing is saved in the pattern (#89).
 - The web version's side panel has a Garment tab, as the desktop's: the
   pieces as sewn, darts closed and folds opened, shaded, of one material
   or all. Zoom with the wheel, drag to pan, double-click to fit, or follow
@@ -56,6 +74,14 @@ Changed, Fixed and Removed under each version.
 
 ### Changed
 
+- The Line and Curve tools draft a whole outline on their own (#114). After
+  the first click, a click in open space makes a point across and down from
+  the point before, not a free point, so the outline moves with its first
+  point and each length can become a formula.
+- The tote bag and card wallet tutorials draw their outlines with the Line
+  tool alone, then set each point's length, and the tote bag ties its
+  pocket to the body by dragging a point with the Point tool (#122). The
+  finished patterns are the same; some points take other letters.
 - The skirt and bodice block tutorials are simpler. Points take the names
   the app gives them, A, B, C and so on, in the order the steps make them,
   so you no longer name each one; most lines and curves keep their
@@ -68,6 +94,16 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- The web Design app starts with its side panel folded on narrow screens.
+  The side panel button shows or hides it and remembers the selected tab (#91).
+- Cancelling or leaving the web Seam tool clears pending edge picks (#97).
+- An interrupted touch drag in the web editor rolls back without moving
+  the object on the next click (#96).
+- A failed file write in the web editor keeps the pattern dirty and preserves
+  its recovery copy (#95).
+- The web engine reports a worker call failure to the request that caused
+  it. If the worker stops, pending requests report the failure instead of
+  leaving controls waiting indefinitely.
 - `opensloper-cli export-draft --upto` stopping before a transform, or at
   it, no longer fails on the transform's copies: they are left out or kept
   with it (#94).

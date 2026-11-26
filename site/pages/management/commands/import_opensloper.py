@@ -1,9 +1,12 @@
 """Copies what the site shows from an OpenSloper checkout into imported/:
 the logo, app icons and tutorial drawings as template snippets to inline,
-the favicon, the release version, and the built web apps (web/out/design and web/out/measurements,
-from ./opensloper-make.sh web). Run it again after any of those change."""
+the favicon, the release version (the latest v* tag in the checkout's
+history, else APP_VERSION when there is no git), and the built Design and
+Measurements web apps (from ./opensloper-make.sh web). Run it again after
+any of those change."""
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 from django.conf import settings
@@ -29,6 +32,22 @@ APPS = {
     "design": "web/out/design",
     "measurements": "web/out/measurements",
 }
+
+
+def release_version(repo):
+    """The latest release in the checkout's history, from its v* tags, so the
+    site offers the release its Download button leads to even after a version
+    bump on the development branch; None without git or tags."""
+    try:
+        tag = subprocess.run(
+            ["git", "-C", str(repo), "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return tag[1:] or None
 
 
 def inline(svg, label):
@@ -64,6 +83,7 @@ class Command(BaseCommand):
         found = re.search(r"APP_VERSION\s*=\s*'([^']+)'", version_file.read_text(encoding="utf-8"))
         if found is None:
             raise CommandError(f"no APP_VERSION in {version_file}")
+        version = release_version(repo) or found.group(1)
         for name, build in APPS.items():
             if not (repo / build / "index.html").is_file():
                 raise CommandError(f"{repo / build} is not built: run ./opensloper-make.sh web in the checkout")
@@ -75,11 +95,11 @@ class Command(BaseCommand):
             svg = (repo / path).read_text(encoding="utf-8")
             (snippets / f"{name}.svg").write_text(inline(svg, label), encoding="utf-8")
         shutil.copy(repo / "resources/opensloper-icon.svg", out / "favicon.svg")
-        (out / "version.txt").write_text(found.group(1) + "\n", encoding="utf-8")
+        (out / "version.txt").write_text(version + "\n", encoding="utf-8")
         for name, build in APPS.items():
             # Replaced whole, so files a new build dropped go too
             target = settings.APPS_DIR / name
             if target.exists():
                 shutil.rmtree(target)
             shutil.copytree(repo / build, target)
-        self.stdout.write(f"Imported {found.group(1)} from {repo} into {out}")
+        self.stdout.write(f"Imported {version} from {repo} into {out}")

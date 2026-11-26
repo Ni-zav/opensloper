@@ -593,6 +593,8 @@ begin
   FVertRuler.MeasureUnit := AUnit;
   FRulerCorner.MeasureUnit := AUnit;
   FCanvas.SetGrid(FPreferences.GridSteps[AUnit], AUnit);
+  FCanvas.SetRoleStyles(FPreferences.RoleStyles);
+  FRoles.SetStyles(FPreferences.RoleStyles);
   FGarment.Light := GarmentLightOf(FPreferences);
   FAssistant.SharesMeasurements := FPreferences.AssistantMeasurements;
   FAutomation.SharesMeasurements := FPreferences.AssistantMeasurements;

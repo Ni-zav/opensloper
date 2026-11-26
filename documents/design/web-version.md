@@ -250,6 +250,9 @@ The design app's page is built (`web/`, see its README). The TypeScript is one n
   - Export… downloads the SVG at true size, or a PNG of the width asked for. The browser draws the PNG from the SVG, so its shading is the SVG's gradients rather than the desktop PNG's.
   - Light and shading strength are the defaults until the web has preferences.
 - **Problems** (`ProblemsPanel` in `ui/problemsPanel.ts`) is at the foot of the column, as in every desktop app. Its title and icon count the problems, and it follows every change while hidden, for the count.
+  - As `Sloper.UI.ProblemsPanel`, it knows nothing of documents and is shared by every app's page. Each app fills it with problems keyed by what they are about, and is told which key is chosen, pointed at or double-clicked. Those that stop printing are red.
+  - The design page fills it from `editor_problems`, keying each by its object, variable or measurement.
+  - The side panel's and the Problems tab's styles are in `ui/sidePanel.css`, which each page links.
   - Choosing a problem, by a click or Up and Down, selects its object on the canvas and brings it into view.
   - For a variable or measurement it opens that tab at its row (`chooseKeys`, which scrolls the row into view once it is listed).
   - Pointing at a problem highlights its object on the canvas. A double-click zooms to it.
@@ -301,6 +304,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - Undo names the step it would take, as the desktop's menu does.
   - Exports are downloads, refused while a problem stops printing. Machine DXF waits for machine profiles on the web.
   - Place new pieces and Pack pieces sit on the toolbar until the web has the Pieces tab. Pack fits the view and says what it did in the status bar, as on the desktop.
+- **The side panel** (`SideTabs`) has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
 - The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.
 
 **Its methods** are named `publish_`, in their own table (`PublishMethods` in `Sloper.API.PublishServer`). The editor server passes them to a `TPublishApiServer`, which holds the layout document, so both pages use one engine module. They are not MCP tools.

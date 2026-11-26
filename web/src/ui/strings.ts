@@ -336,8 +336,16 @@ export const STRINGS = {
   outputProfileAll: 'Everything',
   materialLimit: 'Material',
   materialAll: 'All materials',
-  // Print joins it once the web can print
-  exportGroup: 'Export',
+  exportGroup: 'Print and Export',
+  // The Publish app's Print…, as the desktop's
+  layoutPrintHint: 'Print the layout at full size from the browser',
+  layoutPrintAbout:
+    'It prints at 100%, never scaled to fit: choose 100% or actual size in the print dialog, never fit to page. ' +
+    'Measure the test square before you cut anything.',
+  layoutPrintPages: (pages: number): string =>
+    `${String(pages)} pages. Page 1 is the cover with the test square: print it first and measure the square, ` +
+    `then pages 2 to ${String(pages)}, choosing them in the print dialog.`,
+  layoutPrintOneSheet: 'The one sheet, for a large format printer, a projector or a cutting machine.',
   // The Pieces tab, as the desktop's
   tabPieces: 'Pieces',
   selectedPiece: 'Selected Piece',

@@ -5,7 +5,8 @@
 // (fill, output profile, material). The engine says which settings apply to
 // the kind of output (publish_output), and makes each change as the
 // desktop's tab does (publish_set_output), refusing one that leaves nothing
-// to print on. The machine profile waits for machine profiles on the web.
+// to print on. The machine profile is left out: it is only for Machine DXF,
+// which stays a desktop export.
 import { EngineError } from '../engine/engine.ts';
 import { booleanField, isRecord, numberField, stringField, stringsField, type JsonRecord } from '../engine/replies.ts';
 import type { LayoutDocument } from '../document/layoutDocument.ts';
@@ -18,6 +19,7 @@ export interface OutputTabEvents {
   changed(): void;
   message(text: string): void;
   export(format: number): void;
+  print(): void;
   failed(error: unknown): void;
 }
 
@@ -144,6 +146,14 @@ export class OutputTab implements SideTabContent {
       this.choice('material', STRINGS.materialLimit),
     );
     const exports = group(STRINGS.exportGroup);
+    const print = document.createElement('button');
+    print.type = 'button';
+    print.textContent = STRINGS.print;
+    print.addEventListener('click', () => {
+      events.print();
+    });
+    this.exportButtons.push(print);
+    exports.append(print);
     for (const [index, caption] of [STRINGS.exportPdf, STRINGS.exportSvg, STRINGS.exportDxf].entries()) {
       const button = document.createElement('button');
       button.type = 'button';
@@ -170,7 +180,7 @@ export class OutputTab implements SideTabContent {
     this.document.removeListener(this.listener);
   }
 
-  // Exports are refused while a problem stops printing, as on the toolbar
+  // Print and the exports are refused while a problem stops printing, as on the toolbar
   setExportsEnabled(enabled: boolean): void {
     for (const button of this.exportButtons) {
       button.disabled = !enabled;

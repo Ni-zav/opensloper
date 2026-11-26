@@ -12,7 +12,7 @@
 // tab lists what the patterns need. The Info tab hides the date from the
 // information block and shows it again, moves the block to the top right,
 // and hides the block and shows it again. The layout is packed, undone and redone,
-// saved and exported, and the saved file opens again. The engine's keys
+// saved, exported and printed, and the saved file opens again. The engine's keys
 // undo and redo, select nothing, send a piece back to the tray and turn
 // Zoom Area on to zoom to a box. A layout whose sources
 // sit in other folders finds its files by name, lists what stops it printing
@@ -514,6 +514,20 @@ try {
   assert.match((await download(downloads, 'skirt-darts.svg')).toString(), /<svg/u);
   await command(page, 'Export DXF');
   assert.match((await download(downloads, 'skirt-darts.dxf')).toString(), /SECTION/u);
+  // Print…, on its keys: the PDF opens in a tab of its own for the browser's
+  // viewer, which chooses the pages, so the dialog says to print the cover first
+  await page.keyboard.down('Control');
+  await page.keyboard.press('p');
+  await page.keyboard.up('Control');
+  await page.waitForSelector('.print-dialog[open]');
+  assert.match(await page.$eval('.print-pages', (pages) => pages.textContent), /^\d+ pages\. Page 1 is the cover/u);
+  const viewer = browser.waitForTarget((target) => target.url().startsWith('blob:'));
+  await page.click('.print-buttons button:nth-child(1)');
+  await (await (await viewer).page())?.close();
+  await page.bringToFront();
+  await waitForStatus(page, 'The PDF opened in a new tab');
+  await page.click('.print-buttons button:nth-child(3)');
+  await page.waitForFunction(() => document.querySelector('.print-dialog[open]') === null);
 
   // The saved layout opens again as it was
   await input.uploadFile(join(downloads, 'skirt-darts.slayout'), PATTERN, MEASUREMENTS);

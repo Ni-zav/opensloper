@@ -310,10 +310,13 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - The press, the drag and the drop are `TPreviewDrag` (`Sloper.Output.Preview`), which the desktop's preview uses too.
 - Sheet notes are drawn over the pieces, each in a dotted frame, as the desktop's `DrawNotes`: the leader, the white box, then the drawing or the text in its size and font, a tint when too small to read. The pattern notes printing with the pieces are drawn too, without a frame. The engine gives each in the design editor's scene shape (`SceneNote`).
   - A press on a note chooses it, outlined in blue, and opens the Notes tab. It lies over pieces, so it is found first. Dragging moves it, one undo step, as a piece.
-- **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, then Export PDF, SVG and DXF.
+- **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, Zoom Area, then Print…, Export PDF, SVG and DXF.
   - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
   - Undo names the step it would take, as the desktop's menu does.
-  - Exports are downloads, refused while a problem stops printing. Machine DXF waits for machine profiles on the web.
+  - Print… (`publish/printDialog.ts`, as `Sloper.Publish.PrintDialog`) opens the PDF Export PDF writes in the browser's viewer, in a tab opened while the click counts, or downloads it, as the design page's Print… does (`deliverPdf`). The browser's print dialog chooses the printer, copies and pages, so this one says which to print first: the cover with the test square, then the rest. It is refused while a problem stops printing.
+  - Printer calibration waits for preferences on the web, so it prints at exactly 100%.
+  - Exports are downloads, refused while a problem stops printing.
+  - Machine DXF, for cutting machines, is the desktop's only, with the machine profiles it needs. The web stops at PDF, SVG and DXF-AAMA.
 - **The side panel** (`SideTabs`) has the desktop's tabs in its order. The Patterns tab (`publish/patternsTab.ts`) comes first:
   - The patterns in the layout, each captioned with its size once one is chosen, in red when it cannot be read.
   - Add pattern… and Remove pattern. Choosing a pattern adds it with its copies in the tray, one undo step each, and says how many.
@@ -342,7 +345,7 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
   - Export: PDF, SVG and DXF, as on the toolbar. Print joins them once the web can print.
   - Settings that do not apply to the kind of output are greyed (`OutputSettingUsed`). A number is sent once typed or stepped.
   - Each change is `TLayoutDocument.ChangeOutput`, as the desktop's: changes within a second join one undo step; pages left out are forgotten once the page grid moves; a new material or kind takes its material's size. A change leaving nothing to print on is refused, said in the status bar and put back.
-  - The machine profile waits for machine profiles on the web.
+  - The machine profile is left out: it is only for Machine DXF, which the web does not offer.
 - A right-click on a page leaves it out of the print, or puts it back (`TLayoutDocument.TogglePage`), whatever is on it.
 - The side panel has the Problems tab at its foot, filled from `publish_state`'s problems, the blocking ones red. Clicking the status bar's count opens it. Choosing a problem about a placement selects that piece, as on the desktop.
 - The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.

@@ -1,7 +1,8 @@
 // The web Publish app, as Sloper.Publish.MainForm: starts the engine and opens
 // a layout with its patterns and measurement files, or patterns to start a
 // layout, as the desktop's Open does. The preview shows its pages and pieces;
-// the toolbar saves, undoes and exports, each file a download. The side
+// the toolbar saves, undoes, prints (the PDF in the browser's viewer) and
+// exports, each file a download; Machine DXF stays a desktop export. The side
 // panel has the Pieces tab, which turns, flips and unplaces the selected
 // piece, places and packs, and holds the tray, and the Problems tab at its
 // foot. The title names the layout, and the status bar has a message and the
@@ -22,6 +23,7 @@ import { MaterialsTab } from './materialsTab.ts';
 import { NotesTab } from './notesTab.ts';
 import { OutputTab } from './outputTab.ts';
 import { PatternsTab } from './patternsTab.ts';
+import { PrintDialog } from './printDialog.ts';
 import { PiecesTab } from './piecesTab.ts';
 
 const LAYOUT_EXTENSION = '.slayout';
@@ -38,6 +40,7 @@ const ICONS = {
   zoomOut: 'zoom-out',
   fit: 'zoom-scan',
   zoomArea: 'zoom-in-area',
+  print: 'printer',
   exportPdf: 'file-type-pdf',
   exportSvg: 'file-type-svg',
   exportDxf: 'file-vector',
@@ -68,6 +71,7 @@ const KEY_BUTTONS: [command: string, button: string][] = [
   ['open', 'open'],
   ['save', 'save'],
   ['saveAs', 'save'],
+  ['print', 'print'],
   ['exportPDF', 'exportPdf'],
   ['undo', 'undo'],
   ['redo', 'redo'],
@@ -151,6 +155,7 @@ class PublishApp {
   private readonly info: InfoTab;
   private readonly notes: NotesTab;
   private readonly output: OutputTab;
+  private readonly printDialog: PrintDialog;
   private readonly problems: ProblemsPanel;
   private readonly buttons = new Map<string, HTMLButtonElement>();
 
@@ -233,6 +238,14 @@ class PublishApp {
       export: (format) => {
         this.run(this.export(format));
       },
+      print: () => {
+        this.printDialog.open();
+      },
+      failed: showFailure,
+    });
+    this.printDialog = new PrintDialog(this.document, {
+      baseName: () => this.baseName(),
+      message: showMessage,
       failed: showFailure,
     });
     // Last of the tabs, as on the desktop, where it sits just above Problems
@@ -299,6 +312,9 @@ class PublishApp {
         this.preview.zoomArea = !this.preview.zoomArea;
       }),
       divider(),
+      this.button('print', STRINGS.print, STRINGS.layoutPrintHint, () => {
+        this.printDialog.open();
+      }),
       this.button('exportPdf', STRINGS.exportPdf, STRINGS.exportPdfHint, () => {
         this.run(this.export(0));
       }),
@@ -512,6 +528,7 @@ class PublishApp {
       undo: state.canUndo,
       redo: state.canRedo,
       zoomArea: open,
+      print: open && !blocked,
       exportPdf: open && !blocked,
       exportSvg: open && !blocked,
       exportDxf: open && !blocked,

@@ -19,6 +19,27 @@ Agreed, but not built.
 - **More tutorials** (#46): moving a dart, a tote bag, a leather card wallet.
 - **Help in the apps** (#32): F1 and the Help menu open the page for the current tool or dialog through a table of help IDs. Translated and versioned documentation wait for the community release.
 
+**Web Measurements app** (#84)
+
+At `/measurements/`, built in small pull requests as the web Publish app was, each one usable.
+
+- **As the desktop's** `Sloper.Measurements.MainForm`, one window: Name and Notes above a table with a column per size, beside the catalogue and the body figure. The web modules are named after it and its units.
+- **Editing stays in Pascal**: `TMeasurementDocument` behind `measurements_` methods in their own table, reached through `TEditorApiServer`, so the three pages share one engine module.
+- **Shared parts**: the list grid, `STRINGS`, the engine's shortcut tables, `FileAccess`, `Autosave` and the service worker.
+- **#111 is the reference** for the document from text, the pattern check and the catalogue figure, and is credited where its ideas are used.
+
+1. **Open**: `TMeasurementDocument.OpenText`, the page with its toolbar and status bar, `measurements_open` and `measurements_state`, and the set shown read only.
+2. **The table**: values edited in the list grid, rows added, deleted and moved, names and descriptions; Undo and Redo.
+3. **Size tables**: a column per size, sizes added, renamed, deleted and moved.
+4. **Name and Notes**: the fields above the table, each change one undo step.
+5. **The catalogue**, beside the table: Add From the Catalogue, its groups and search, and the body figure showing where each measurement is taken.
+6. **Check Against Pattern**: a pattern given as a file, and the measurements it needs that the set lacks.
+7. **Files**: Save in place and Save As with File System Access, else downloads; autosave; offline use and installing; the keys from the engine.
+8. **Import and Export** of Seamly2D and Valentina files.
+9. **The site**: linked from the home page, the footer and the sitemap, with a CHANGELOG entry and a section in the user guide.
+
+Then #156 moves the three web apps' text to the Pascal `resourcestring`s.
+
 **Design app**
 
 - **Transforms** (#49): a live ghost while dragging, and snapping to existing angles.

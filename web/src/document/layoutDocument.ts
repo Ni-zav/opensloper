@@ -3,7 +3,7 @@
 // layout is opened with the files its sources read, given as text. The engine
 // says which files it still needs by their paths from the layout; the files
 // the user chose have only their names, so each is matched by name.
-import type { Engine } from '../engine/engine.ts';
+import { EngineError, type Engine } from '../engine/engine.ts';
 import {
   booleanField,
   numberField,
@@ -27,6 +27,12 @@ export interface LayoutState {
   problems: LayoutProblem[];
   // The files the sources need and were not given, by their paths from the layout
   missing: string[];
+  canUndo: boolean;
+  canRedo: boolean;
+  // The name of the step undo would take
+  undo: string;
+  // Changed since it was opened or saved
+  modified: boolean;
 }
 
 // What to open: a layout file's text, or the pattern among the files to start one for
@@ -35,7 +41,17 @@ export type LayoutStart = { layout: string } | { pattern: string };
 // Hears that the layout changed; generation grows when another is opened
 export type LayoutListener = (document: LayoutDocument) => void;
 
-const EMPTY: LayoutState = { name: '', placed: 0, unplaced: 0, problems: [], missing: [] };
+const EMPTY: LayoutState = {
+  name: '',
+  placed: 0,
+  unplaced: 0,
+  problems: [],
+  missing: [],
+  canUndo: false,
+  canRedo: false,
+  undo: '',
+  modified: false,
+};
 
 function parseState(answer: JsonRecord): LayoutState {
   return {
@@ -47,6 +63,10 @@ function parseState(answer: JsonRecord): LayoutState {
       blocking: booleanField(problem, 'blocking') ?? false,
     })),
     missing: stringsField(answer, 'missing') ?? [],
+    canUndo: booleanField(answer, 'canUndo') ?? false,
+    canRedo: booleanField(answer, 'canRedo') ?? false,
+    undo: stringField(answer, 'undo') ?? '',
+    modified: booleanField(answer, 'modified') ?? false,
   };
 }
 
@@ -91,6 +111,41 @@ export class LayoutDocument {
   // A method that only reads the layout
   async read(method: string, params: object = {}): Promise<JsonRecord> {
     return this.engine.call(method, params);
+  }
+
+  // A method that may change the layout; the listeners hear of it whether it
+  // succeeded or was refused
+  async call(method: string, params: object = {}): Promise<JsonRecord> {
+    try {
+      return await this.engine.call(method, params);
+    } finally {
+      this.current = parseState(await this.engine.call('publish_state'));
+      this.changed();
+    }
+  }
+
+  async undo(): Promise<void> {
+    await this.ignoreRefusal(this.call('publish_undo'));
+  }
+
+  async redo(): Promise<void> {
+    await this.ignoreRefusal(this.call('publish_redo'));
+  }
+
+  // The layout file's text, to download, counted as saved
+  async save(): Promise<string> {
+    return stringField(await this.call('publish_save'), 'text') ?? '';
+  }
+
+  // Nothing to undo or redo is no error to the user
+  private async ignoreRefusal(pending: Promise<JsonRecord>): Promise<void> {
+    try {
+      await pending;
+    } catch (error: unknown) {
+      if (!(error instanceof EngineError)) {
+        throw error;
+      }
+    }
   }
 
   // Opens the layout or starts one, with the files chosen, by name. Files the

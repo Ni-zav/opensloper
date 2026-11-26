@@ -61,6 +61,9 @@ type
     // it, Reload reads it.
     function OpenText(const Text: string; out ErrorMessage: string): boolean;
     function Save(const FileName: string; out ErrorMessage: string): boolean;
+    // The layout's text, as Save writes it, counted as saved: the browser
+    // downloads it, so no file is written here
+    function SaveText: string;
     // Reads the pattern files again; not an undo step
     procedure Reload;
     // Call regularly: reads the sources again once a saved file has stopped
@@ -169,6 +172,14 @@ begin
     FHistory.EndMerging;
     Changed;
   end;
+end;
+
+function TLayoutDocument.SaveText: string;
+begin
+  Result := FLayout.SaveToText;
+  FSavedText := Result;
+  FHistory.EndMerging;
+  Changed;
 end;
 
 procedure TLayoutDocument.Reload;

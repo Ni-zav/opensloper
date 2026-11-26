@@ -296,6 +296,11 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 - **The preview** (`PreviewCanvas` in `ui/previewCanvas.ts`, as `Sloper.Publish.PreviewCanvas`) is drawn with Canvas2D from `publish_scene`: the cover, the pages (blank ones grey, left-out ones crossed), the pieces with their tint, seam line, marks, lines and label, and the information block's boxes, with its text once it is large enough to read.
 - Fit Pages, Zoom In and Zoom Out are on the toolbar. The wheel zooms about the pointer and the middle button pans. A new layout is fitted.
 - A click selects the piece under it, outlined in blue, as `publish_at` finds it.
+- **The toolbar** has the desktop's commands in its order: Open, Save, Undo, Redo, Zoom In, Zoom Out, Fit Pages, then Export PDF, SVG and DXF.
+  - Save downloads the layout file and counts it saved. The title marks a layout not saved, and leaving or opening another asks first.
+  - Undo names the step it would take, as the desktop's menu does.
+  - Exports are downloads, refused while a problem stops printing. Machine DXF waits for machine profiles on the web.
+  - Place new pieces and Pack pieces sit on the toolbar until the web has the Pieces tab. Pack fits the view and says what it did in the status bar, as on the desktop.
 - The view is `ViewTransform` (`editor/view.ts`), as the design canvas's. The desktop's preview has its own copy (`TPreviewView`), which zooms in only to 20 px per mm.
 
 **Its methods** are named `publish_`, in their own table (`PublishMethods` in `Sloper.API.PublishServer`). The editor server passes them to a `TPublishApiServer`, which holds the layout document, so both pages use one engine module. They are not MCP tools.
@@ -307,8 +312,11 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 | `publish_state` | `layout_state`'s answer, with `missing`: the files the sources need and were not given |
 | `publish_scene` | What the preview draws, worked out as the desktop's preview does (`PlacedPieces`, `Pages`, `PreviewCover`, `PreviewTitleBoxes`) |
 | `publish_at` | The placed piece at a point (`ShapeAt`), the smallest where they overlap |
+| `publish_undo`, `publish_redo`, `publish_place_pieces`, `publish_pack` | The layout methods of the same names (`Sloper.API.LayoutServer`), each one undo step |
+| `publish_save` | The layout file's text, counted as saved (`TLayoutDocument.SaveText`) |
+| `publish_export` | The layout as PDF, SVG or DXF-AAMA, in Base64, refused as the desktop's export is (`LayoutBytes`) |
 
-The replies of the first three are `publish_state`'s.
+The replies of the first three are `publish_state`'s, which also gives the undo state and whether the layout is modified. `LayoutDocument` asks for it after every change and tells its listeners.
 
 ## Server
 

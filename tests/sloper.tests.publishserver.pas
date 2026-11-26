@@ -52,13 +52,19 @@ type
     procedure TestState;
     procedure TestScene;
     procedure TestPieceAt;
+    procedure TestPackUndoRedo;
+    procedure TestPlaceWaiting;
+    procedure TestSave;
+    procedure TestExport;
+    procedure TestExportRefused;
     procedure TestNotTools;
   end;
 
 implementation
 
 uses
-  Sloper.API.Rpc, Sloper.API.MCP, Sloper.API.Methods, Sloper.API.PublishServer, Sloper.Core.JSON, Sloper.Output.Layout;
+  base64, Sloper.API.Rpc, Sloper.API.MCP, Sloper.API.Methods, Sloper.API.PublishServer, Sloper.Core.JSON,
+  Sloper.API.LayoutServer, Sloper.Output.Layout;
 
 const
   PATTERN_FILE = 'skirt-darts.sloper';
@@ -253,6 +259,89 @@ begin
   AssertEquals('nothing there', -1, Answer.Integers['placement']);
   Call('publish_at', TJSONObject.Create(['x', 10]));
   AssertEquals('needs both', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// The skirt's layout text, its pieces waiting in the tray
+function WaitingLayout: string;
+var
+  Layout: TLayout;
+begin
+  Layout := TLayout.Create;
+  try
+    Layout.Name := 'Skirt';
+    Layout.AddSource(PATTERN_FILE, '', '');
+    Result := Layout.SaveToText;
+  finally
+    FreeAndNil(Layout);
+  end;
+end;
+
+procedure TTestPublishServer.TestPackUndoRedo;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  AssertFalse('nothing to undo', Answer.Booleans['canUndo']);
+  Call('publish_pack', TJSONObject.Create);
+  AssertTrue('packed', Answer.Booleans['done']);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('one step', Answer.Booleans['canUndo']);
+  AssertEquals('named', rsLayoutChangePack, Answer.Strings['undo']);
+  Call('publish_undo', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('undone', Answer.Booleans['canUndo']);
+  AssertTrue('to redo', Answer.Booleans['canRedo']);
+  Call('publish_redo', TJSONObject.Create);
+  Call('publish_state', TJSONObject.Create);
+  AssertTrue('redone', Answer.Booleans['canUndo']);
+  Call('publish_redo', TJSONObject.Create);
+  AssertEquals('nothing to redo', RPC_REFUSED, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestPlaceWaiting;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  AssertTrue('waiting', Answer.Integers['unplaced'] > 0);
+  Call('publish_place_pieces', TJSONObject.Create);
+  AssertTrue('placed some', Answer.Integers['placed'] > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertEquals('none waiting', 0, Answer.Integers['unplaced']);
+  AssertTrue('changed', Answer.Booleans['modified']);
+end;
+
+procedure TTestPublishServer.TestSave;
+var
+  Text: string;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  AssertTrue('a new layout is not saved', Answer.Booleans['modified']);
+  Call('publish_save', TJSONObject.Create);
+  Text := Answer.Strings['text'];
+  AssertTrue(Text, Pos('"placements"', Text) > 0);
+  Call('publish_state', TJSONObject.Create);
+  AssertFalse('saved', Answer.Booleans['modified']);
+  // It opens again as it was
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', Text]));
+  AssertFalse('as saved', Answer.Booleans['modified']);
+  AssertTrue('its pieces placed', Answer.Integers['placed'] > 0);
+end;
+
+procedure TTestPublishServer.TestExport;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'pattern', PATTERN_FILE]));
+  Call('publish_export', TJSONObject.Create(['format', 'pdf']));
+  AssertEquals('a PDF', '%PDF-', Copy(DecodeStringBase64(Answer.Strings['base64']), 1, 5));
+  Call('publish_export', TJSONObject.Create(['format', 'svg']));
+  AssertTrue('an SVG', Pos('<svg', DecodeStringBase64(Answer.Strings['base64'])) > 0);
+  Call('publish_export', TJSONObject.Create(['format', 'dxf']));
+  AssertTrue('a DXF', Pos('SECTION', DecodeStringBase64(Answer.Strings['base64'])) > 0);
+  Call('publish_export', TJSONObject.Create(['format', 'machine-dxf']));
+  AssertEquals('not on the web yet', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+procedure TTestPublishServer.TestExportRefused;
+begin
+  Call('publish_open', TJSONObject.Create(['files', Files([PATTERN_FILE, SET_FILE]), 'layout', WaitingLayout]));
+  Call('publish_export', TJSONObject.Create(['format', 'pdf']));
+  AssertEquals('nothing placed', RPC_REFUSED, ErrorCode);
 end;
 
 procedure TTestPublishServer.TestNotTools;

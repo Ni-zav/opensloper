@@ -225,6 +225,8 @@ Pages use only common extensions, so another generator would mean rewriting the 
 
 **Developer documentation** is made by PasDoc from the comments before each unit and declaration (`opensloper-make.sh devdocs` into `release/dev_docs`), with `documents/pasdoc-introduction.txt` as its first page. The comments stay in the plain `//` style of the coding standards, with no PasDoc tags. GitHub Pages publishes it from `development` at `/dev/pasdoc/`.
 
+The guide's **Development** page (`docs/development.md`) says how to get the code, build it and run the tests, and links to the guide, its `/dev/` version, the PasDoc reference, the design and `CONTRIBUTING.md`. The README's Documentation section links the same.
+
 `docs/` is the user documentation; `documents/` holds internal notes, including these design files.
 
 ## Translation

@@ -48,7 +48,6 @@ Then #156 moves the three web apps' text to the Pascal `resourcestring`s.
 
 **Publish app**
 
-- **A window for output and machine profiles** (#57), which are edited in the settings file for now.
 - **`set_output` as the Output tab**: the layout server's `set_output` (the assistant and the API) should change the output through `TLayoutDocument.ChangeOutput`, as the desktop and web Output tabs do, so it also resets the pages left out and takes a material's size.
 - **True-shape material needed**: the estimate still packs bounding boxes; nesting needs its fold halves and mirrored pairs as shapes.
 - **Raising the publish window on Wayland** (#59), which needs an `xdg-activation` token Qt 5 cannot use.

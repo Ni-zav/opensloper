@@ -40,6 +40,8 @@ type
   // points and edges alone. A repeat's points, a rounded corner's ends and
   // copies belong to what made them.
   TPointConversion = (pcFree, pcOffset, pcAlongEdge, pcBetween, pcIntersect, pcCircleEdge, pcCircleCircle, pcProject);
+  TPointMeasureMode = (pmKeep, pmLength, pmRatio);
+  TPointMeasureEnd = (peKeep, peStart, peEnd);
 
   // What AddTransform needs. Sources are expanded: an edge brings its ends.
   TTransformSpec = record
@@ -420,7 +422,8 @@ type
     // Changes a point's operation, its numbers worked out so it stays where it
     // is (see Sloper.Core.TypeChange.ConvertPoint); Mode is an offset's
     function ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
-      Mode: TOffsetMode = omCartesian): TPointObject;
+      Mode: TOffsetMode = omCartesian; Measure: TPointMeasureMode = pmKeep;
+      Origin: TPointMeasureEnd = peKeep): TPointObject;
     // An edge changed between line and curve in place: its ID, role and place
     // stay, so pieces, seams and formulas that use it go on using it, and a
     // name the user gave it is kept. An arc becomes a line between two new
@@ -3743,9 +3746,9 @@ begin
 end;
 
 function TPattern.ConvertPoint(Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
-  Mode: TOffsetMode): TPointObject;
+  Mode: TOffsetMode; Measure: TPointMeasureMode; Origin: TPointMeasureEnd): TPointObject;
 begin
-  Result := Sloper.Core.TypeChange.ConvertPoint(Self, Point, Conversion, Inputs, Mode);
+  Result := Sloper.Core.TypeChange.ConvertPoint(Self, Point, Conversion, Inputs, Mode, Measure, Origin);
 end;
 
 function TPattern.MergePoints(const Keys: array of string): TPointObject;

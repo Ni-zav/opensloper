@@ -111,6 +111,14 @@ A pattern is one drafting area, drawn in pattern order with pieces under edges a
 - One undo step, *Change offset*. Undo brings the formulas back.
 - The API's `convert_point` takes `mode` (`polar` or `cartesian`, the default) for `offsetPoint`; the same mode from the same base is refused as already so.
 
+**How a point along an edge or between points is measured** (issues #158 and #159). The Properties tab's *Measure by* row (`measureMode`) switches a point along an edge or between points between a length (`amLength`) and a ratio (`amRatio`). A point along an edge has a *Measured from* row too (`measureEnd`), a choice of the edge's start and end, each named by its point.
+- It is `ConvertPoint` to the same type and inputs, with `TPointMeasureMode` and `TPointMeasureEnd`, so the point keeps its ID, name and users, and stays put.
+- The new number comes from the formula's value, not from locating the point again, so a point on a self-crossing edge stays on the same stretch (`ReplanAlong`).
+- It is a plain number: a length rounded as a drag rounds it, in the pattern's unit, or a ratio to four places (`RATIO_DECIMALS`). The other end gives the rest of the edge, or 1 − the ratio.
+- A ratio needs a length above zero, and a point between points must lie between them.
+- One undo step, *Change point measurement*. Undo brings the formula back.
+- The API's `convert_point` takes `mode` (`length` or `ratio`) for `alongEdgePoint` and `betweenPoint`, and `end` (`start` or `end`) for `alongEdgePoint`. The same mode and end are refused as already so.
+
 The canvas feels like Inkscape, but every point records how it was placed relative to others. Inkscape itself was rejected as the drawing tool: it stores absolute coordinates.
 
 **Snap-inferred operations.** The snap target decides the operation recorded: a point level with A at 250 mm becomes an offset from A with `250` ready to change to `@waist/4`; a crossing becomes an intersection; empty space a free point. This is construction-based, not constraint-based like FreeCAD's Sketcher, so no solver is needed. Snapping (`Sloper.Editor.Snap`) looks within 8 pixels, in order: a point, a crossing, a place on an edge, a spot level with or square to a point, else a free point. The status bar says what a click will make.

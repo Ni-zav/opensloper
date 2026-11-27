@@ -285,7 +285,9 @@ resourcestring
   rsApiConvertPointFrom = 'What it is placed from, in order: offsetPoint a point; alongEdgePoint an edge; ' +
     'betweenPoint two points; intersectPoint two edges; circleEdgePoint the centre and an edge; ' +
     'circleCirclePoint the two centres; projectPoint the point and the edge. None for freePoint';
+  rsApiConvertPointEnd = 'For alongEdgePoint: the start or end to measure from';
   rsApiConvertPointMode = 'For offsetPoint: polar, a length and angle, or cartesian, across and down (the default). ' +
+    'For alongEdgePoint or betweenPoint: length or ratio. ' +
     'An offset point can change mode from the same base';
   rsApiMergePoints = 'Merges two or more points into one, which every edge and formula then uses.';
   rsApiMergeReturns = 'The point kept';
@@ -699,7 +701,8 @@ begin
   Target;
   P('type', apChoice, True, rsApiConvertPointType, string.Join(', ', POINT_CONVERSION_TYPES));
   P('from', apReferences, False, rsApiConvertPointFrom);
-  P('mode', apChoice, False, rsApiConvertPointMode, 'polar, cartesian');
+  P('mode', apChoice, False, rsApiConvertPointMode, 'polar, cartesian, length, ratio');
+  P('end', apChoice, False, rsApiConvertPointEnd, 'start, end');
   Method('merge_points', agDrafting, rsApiMergePoints, rsApiMergeReturns);
   P('points', apReferences, True, rsApiArrangePoints);
   Method('break_point', agDrafting, rsApiBreakPoint, rsApiBreakReturns);

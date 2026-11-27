@@ -2650,6 +2650,8 @@ var
   Inputs: TStringArray;
   Converted: TPointObject;
   Mode: TOffsetMode;
+  Measure: TPointMeasureMode;
+  Origin: TPointMeasureEnd;
 begin
   Target := FindTarget(Params);
   if not (Target is TPointObject) then
@@ -2659,11 +2661,20 @@ begin
   // Read before the change opens, as a bad type, mode or reference raises
   Conversion := TPointConversion(ChoiceParam(Params, 'type', POINT_CONVERSION_TYPES));
   Mode := omCartesian;
-  if Assigned(Params.Find('mode')) then
+  Measure := pmKeep;
+  if Conversion in [pcAlongEdge, pcBetween] then
+  begin
+    if Assigned(Params.Find('mode')) then
+      Measure := Succ(TPointMeasureMode(ChoiceParam(Params, 'mode', ['length', 'ratio'])));
+  end
+  else if Assigned(Params.Find('mode')) then
     Mode := TOffsetMode(ChoiceParam(Params, 'mode', ['polar', 'cartesian']));
+  Origin := peKeep;
+  if Assigned(Params.Find('end')) then
+    Origin := Succ(TPointMeasureEnd(ChoiceParam(Params, 'end', ['start', 'end'])));
   Inputs := ReferenceList(Params, 'from');
   BeginChange(rsApiConvertPoint);
-  Converted := FDocument.Pattern.ConvertPoint(TPointObject(Target), Conversion, Inputs, Mode);
+  Converted := FDocument.Pattern.ConvertPoint(TPointObject(Target), Conversion, Inputs, Mode, Measure, Origin);
   if not Assigned(Converted) then
     RefuseChange;
   Result := AddedNode(Converted);

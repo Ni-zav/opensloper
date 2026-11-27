@@ -105,3 +105,13 @@ The status bar says why. A change is refused:
 
 With the Automation API, `convert_point` makes the same change; see
 [Automation API](../reference/api.md).
+
+### Changing how a point is measured
+
+For a point along an edge or between two points, use **Measure by** in
+Properties to switch between a length and a ratio. For a point along an
+edge, **Measured from** switches the end. The point stays in place.
+
+- Its formula becomes the equivalent number: a length rounded to 0.1 mm,
+  0.1 cm or 0.01 in, or a ratio to four places.
+- Undo restores the formula.

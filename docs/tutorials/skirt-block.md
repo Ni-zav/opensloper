@@ -73,8 +73,8 @@ the waist at the top, the hip line and the hem.
    Length: a list opens of formulas close to that length. Choose
    `@waist_to_hip` and B moves to exactly 200 mm below A.
 
-    If `@waist_to_hip` is not in the list, the click was more than 5 mm off.
-    Drag B up or down while the list is open, and it follows. See
+    If `@waist_to_hip` is missing from the list, keep the wand open and drag
+    B closer to 200 mm below A. The suggestions update as you drag. See
     [Formula suggestions](../design/formulas.md#formula-suggestions).
 
 3. Click further below A, about 600 mm down, for **C**, the hem at centre

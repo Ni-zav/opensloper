@@ -418,11 +418,15 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
   - The current cell keeps its column when the columns change, while that column can still be edited. Its owner hears when it moves to another column (`columnChanged`).
   - The grid's styles are in `ui/listPanel.css`, which the design page links too.
 - **Show in**, over the table at its end as on the desktop, chooses mm, cm or inches. The engine formats the values in it (`FormatMeasure`), so they read as the desktop shows them. It starts at mm and is not kept yet.
-- **The side panel** is on the right, as on the desktop, beside Name and Notes, the bar and the table. **Add From the Catalogue** is at its foot (`CatalogueBrowser` in `measurements/catalogueBrowser.ts`).
+- **The side panel** is on the right, as on the desktop, beside Name and Notes, the bar and the table. The body figure fills it over **Add From the Catalogue**, which is at its foot (`CatalogueBrowser` in `measurements/catalogueBrowser.ts`).
   - A group, a search, and the catalogue's measurements the set does not have yet, as the desktop lists them.
   - Under the list, the details of the measurement chosen in it, else of the table's row: its name, description, how to take it, and its typical range in the unit shown.
   - **Add to the file**, a double-click or Enter adds the one chosen at the end, with its key and description. Its row is chosen at its value, ready to type, and the list's choice is cleared.
   - A value outside its typical range is kept, as on the desktop. The status bar says so and its cell is tinted, but not on the chosen row.
+  - **The body figure** (`BodyFigure` in `measurements/bodyFigure.ts`) shows where the set's measurements are taken, on front, back and side outlines, as the desktop's.
+    - The engine draws it as SVG at the panel's size (`Sloper.Output.BodyFigureSVG`), and the page shows it as an image. The outlines are the desktop's curve, BGRABitmap's crossing spline worked out in Pascal, so the Wasm needs no BGRABitmap.
+    - The measurement whose details show is highlighted on it; the table's row under the pointer is highlighted over that.
+    - The pointer on a measurement's line shows its details, and a click chooses its row at its value. The engine says which line a point is on (`measurements_figure_at`).
   - The page fetches `measurement-catalogue.json`, which the build copies beside it, and gives it to the engine. Without it the table still works, and the status bar says why.
 - `MeasurementDocument` (`document/measurementDocument.ts`) is the proxy of the engine's set, as `LayoutDocument` is of the layout.
 
@@ -444,6 +448,8 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
 | `measurements_catalogue_list` | The catalogue's measurements the set lacks, by `group` and `search` (`TCatalogue.Search`), each with `key` and `name` |
 | `measurements_catalogue_entry` | An entry's name, description, how to take it and typical range in the unit; `found` false when there is none |
 | `measurements_add_known` | A catalogue measurement at the end, with its key and description (`AddKnown`). A key the set has, or one not in the catalogue, is refused |
+| `measurements_figure` | The body figure as SVG, `width` by `height` pixels, with the set's measurements and the `highlight` |
+| `measurements_figure_at` | The set's measurement whose line is within a few pixels of `x`, `y` on a figure of that size, else empty |
 | `measurements_undo`, `measurements_redo` | The document's Undo and Redo; refused when there is nothing to take |
 
 Every one takes `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Every one answers with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none), `outside` (for each value, whether it is outside its catalogue entry's typical range) and `description`; `measurements_set` adds the `warning` for such a value; and with `modified`, `canUndo`, `canRedo` and `undo`, the step Undo would take. Each edit is one undo step of the document's own history.

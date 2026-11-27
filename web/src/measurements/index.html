@@ -134,18 +134,35 @@
         display: flex;
         min-height: 0;
       }
-      /* The side panel, as the desktop's: Add From the Catalogue at its foot */
+      /* The side panel, as the desktop's: the body figure over Add From the
+         Catalogue */
       #side {
         display: flex;
         flex-direction: column;
-        justify-content: flex-end;
+        gap: 6px;
         min-height: 0;
         padding: 6px 8px 6px 0;
+      }
+      .body-figure {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid #d8d6cf;
+        background: #fff;
+      }
+      .body-figure img {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .body-figure.over-measurement {
+        cursor: pointer;
       }
       .catalogue {
         display: flex;
         flex-direction: column;
         gap: 6px;
+        flex: none;
         height: 410px;
         min-height: 0;
         margin: 0;

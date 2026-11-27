@@ -25,12 +25,22 @@ unit Sloper.API.MeasurementsServer;
 interface
 
 uses
-  fpjson, Sloper.API.Methods, Sloper.Core.Units, Sloper.Document.MeasurementDocument;
+  fpjson, Sloper.API.Methods, Sloper.Core.Catalogue, Sloper.Core.Units, Sloper.Document.MeasurementDocument;
 
 type
   TMeasurementsApiServer = class
   private
     FDocument: TMeasurementDocument;
+    // The measurement catalogue, as the page supplies it; empty until then
+    FCatalogue: TCatalogue;
+    // The warning for a value outside its catalogue entry's typical range,
+    // as the desktop's status bar gives it; '' inside it or with no entry
+    function RangeWarning(Index, Size: integer; AUnit: TMeasureUnit): string;
+    // A catalogue that cannot be read is refused, and the one loaded stays
+    function DoCatalogue(const Text: string): TJSONObject;
+    function DoCatalogueList(Params: TJSONObject): TJSONObject;
+    function DoCatalogueEntry(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
+    function DoAddKnown(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
     // The set as its file holds it, and as the table shows it in AUnit
     function State(AUnit: TMeasureUnit): TJSONObject;
     // The measurement with the key given, refused when there is none
@@ -65,8 +75,8 @@ resourcestring
   rsMeasurementsSet = 'A cell of the table as typed: a key renames the measurement, a value is a number in ' +
     '`unit`, or blank to clear it in a size table, and a description is kept as typed; one undo step. A refused ' +
     'edit answers `done` false with the `reason`';
-  rsMeasurementsSetReturns = '`done`, `reason`, the measurement''s `key` afterwards, and the state, as ' +
-    'measurements_state';
+  rsMeasurementsSetReturns = '`done`, `reason`, the measurement''s `key` afterwards, `warning` for a value ' +
+    'outside its catalogue entry''s typical range (else empty), and the state, as measurements_state';
   rsMeasurementsKey = 'The measurement, by its key';
   rsMeasurementsColumn = 'Which cell: key, value or description';
   rsMeasurementsSize = 'For a value, the size by its index; 0 in a set without sizes';
@@ -91,12 +101,32 @@ resourcestring
   rsMeasurementsMoveSize = 'Moves a size to another column; one undo step';
   rsMeasurementsSizeIndex = 'The size, by its index from 0';
   rsMeasurementsSizePlace = 'Its index afterwards, from 0';
+  rsMeasurementsCatalogue = 'Loads the measurement catalogue, which the page supplies as text; the table works ' +
+    'without it. One that cannot be read is refused, and the one loaded stays';
+  rsMeasurementsCatalogueText = 'The contents of measurement-catalogue.json';
+  rsMeasurementsCatalogueReturns = '`count`, the number of measurements it describes';
+  rsMeasurementsCatalogueList = 'The catalogue''s measurements that the set does not have yet, as the desktop''s ' +
+    'Add From the Catalogue lists them';
+  rsMeasurementsGroup = 'Only this group: heights, circumferences, widths, arm, leg, crotch, head, hand or foot; ' +
+    'empty for all';
+  rsMeasurementsSearch = 'Only those whose key, name or description has this text';
+  rsMeasurementsCatalogueListReturns = '`entries`, each with `key` and `name`';
+  rsMeasurementsCatalogueEntry = 'A catalogue entry, for the panel under the list';
+  rsMeasurementsCatalogueKey = 'The entry, by its key';
+  rsMeasurementsCatalogueEntryReturns = '`found`, and when found `key`, `name`, `description`, `howTo`, and ' +
+    '`rangeMin` and `rangeMax`, its typical range as text in the unit';
+  rsMeasurementsAddKnown = 'Adds a catalogue measurement at the end, with its key and description; one undo step. ' +
+    'A key the set has is refused';
+  rsMeasurementsAddKnownReturns = 'Its `key`, and the state, as measurements_state';
+  rsMeasurementsNoEntry = 'The catalogue has no measurement %s';
+  rsMeasurementsOutsideRange = '@%s is outside the usual %s to %s %s; it is kept, in case that is right';
   rsMeasurementsNoKey = 'There is no measurement @%s';
   rsMeasurementsNothingToUndo = 'There is nothing to undo';
   rsMeasurementsNothingToRedo = 'There is nothing to redo';
   rsMeasurementsStateReturns = 'The current `set`, as in a .slm file, and the table as the page shows it: `unit`, ' +
     '`sizes` (none for a set without sizes) and `rows`, each with `key`, `values` (one for each size, or the one ' +
-    'value, as text in the unit, empty where there is none) and `description`; `modified`, `canUndo`, `canRedo` ' +
+    'value, as text in the unit, empty where there is none), `outside` (for each value, true when it is outside ' +
+    'its catalogue entry''s typical range) and `description`; `modified`, `canUndo`, `canRedo` ' +
     'and `undo`, the name of the step Undo would take';
 
 function MeasurementsMethods: TApiMethodArray;
@@ -142,6 +172,19 @@ begin
   AddApiParam(Result, 'size', apNumber, True, rsMeasurementsSizeIndex);
   AddApiParam(Result, 'index', apNumber, True, rsMeasurementsSizePlace);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_catalogue', rsMeasurementsCatalogue, rsMeasurementsCatalogueReturns);
+  AddApiParam(Result, 'text', apText, True, rsMeasurementsCatalogueText);
+  AddApiMethod(Result, 'measurements_catalogue_list', rsMeasurementsCatalogueList, rsMeasurementsCatalogueListReturns,
+    True);
+  AddApiParam(Result, 'group', apText, False, rsMeasurementsGroup);
+  AddApiParam(Result, 'search', apText, False, rsMeasurementsSearch);
+  AddApiMethod(Result, 'measurements_catalogue_entry', rsMeasurementsCatalogueEntry,
+    rsMeasurementsCatalogueEntryReturns, True);
+  AddApiParam(Result, 'key', apText, True, rsMeasurementsCatalogueKey);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_add_known', rsMeasurementsAddKnown, rsMeasurementsAddKnownReturns);
+  AddApiParam(Result, 'key', apText, True, rsMeasurementsCatalogueKey);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_undo', rsMeasurementsUndo, rsMeasurementsEditReturns);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_redo', rsMeasurementsRedo, rsMeasurementsEditReturns);
@@ -160,10 +203,12 @@ constructor TMeasurementsApiServer.Create;
 begin
   inherited Create;
   FDocument := TMeasurementDocument.Create;
+  FCatalogue := TCatalogue.Create;
 end;
 
 destructor TMeasurementsApiServer.Destroy;
 begin
+  FreeAndNil(FCatalogue);
   FreeAndNil(FDocument);
   inherited Destroy;
 end;
@@ -173,7 +218,8 @@ end;
 function TMeasurementsApiServer.State(AUnit: TMeasureUnit): TJSONObject;
 var
   Snapshot, Answer, Row: TJSONObject;
-  Sizes, Rows, Values: TJSONArray;
+  Sizes, Rows, Values, Outside: TJSONArray;
+  Entry: TCatalogueEntry;
   Table: TMeasurementSet;
   Index, Size: integer;
   Reason: string;
@@ -192,12 +238,21 @@ begin
     for Index := 0 to Table.Count - 1 do
     begin
       Values := TJSONArray.Create;
+      Outside := TJSONArray.Create;
+      Entry := FCatalogue.Find(Table[Index].Key);
       for Size := 0 to Max(Table.SizeCount, 1) - 1 do
         if Table[Index].HasValueFor(Size) then
-          Values.Add(FormatMeasure(Table[Index].ValueFor(Size), AUnit))
+        begin
+          Values.Add(FormatMeasure(Table[Index].ValueFor(Size), AUnit));
+          Outside.Add(Assigned(Entry) and not Entry.InRange(Table[Index].ValueFor(Size)));
+        end
         else
+        begin
           Values.Add('');
-      Row := TJSONObject.Create(['key', Table[Index].Key, 'values', Values, 'description', Table[Index].Description]);
+          Outside.Add(False);
+        end;
+      Row := TJSONObject.Create(['key', Table[Index].Key, 'values', Values, 'outside', Outside, 'description',
+        Table[Index].Description]);
       Rows.Add(Row);
     end;
     Answer.Add('modified', FDocument.Modified);
@@ -254,6 +309,10 @@ begin
   Result.Add('done', Done);
   Result.Add('reason', Reason);
   Result.Add('key', FDocument.Measurements[Index].Key);
+  if Done and (ChoiceParam(Params, 'column', ['key', 'value', 'description']) = 1) then
+    Result.Add('warning', RangeWarning(Index, Size, AUnit))
+  else
+    Result.Add('warning', '');
 end;
 
 function TMeasurementsApiServer.DoAdd(AUnit: TMeasureUnit): TJSONObject;
@@ -277,6 +336,79 @@ begin
   Result := (Round(Place) >= 0) and (Round(Place) < FDocument.Measurements.Count);
   if Result and (Round(Place) <> Index) then
     FDocument.MoveMeasurement(Index, Round(Place));
+end;
+
+function TMeasurementsApiServer.RangeWarning(Index, Size: integer; AUnit: TMeasureUnit): string;
+var
+  Entry: TCatalogueEntry;
+  Measurement: TMeasurement;
+begin
+  Result := '';
+  Measurement := FDocument.Measurements[Index];
+  Entry := FCatalogue.Find(Measurement.Key);
+  if Assigned(Entry) and Measurement.HasValueFor(Size) and not Entry.InRange(Measurement.ValueFor(Size)) then
+    Result := Format(rsMeasurementsOutsideRange, [Entry.Key, FormatMeasure(Entry.RangeMin, AUnit),
+      FormatMeasure(Entry.RangeMax, AUnit), MEASURE_UNIT_NAMES[AUnit]]);
+end;
+
+function TMeasurementsApiServer.DoCatalogue(const Text: string): TJSONObject;
+var
+  Loaded: TCatalogue;
+  Reason: string;
+begin
+  Loaded := TCatalogue.Create;
+  if not Loaded.LoadFromText(Text, Reason) then
+  begin
+    FreeAndNil(Loaded);
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  end;
+  FreeAndNil(FCatalogue);
+  FCatalogue := Loaded;
+  Result := TJSONObject.Create(['count', FCatalogue.Count]);
+end;
+
+// Only what the set does not have yet, since a set keeps what a person needs
+function TMeasurementsApiServer.DoCatalogueList(Params: TJSONObject): TJSONObject;
+var
+  Group, Search: string;
+  Entries: TJSONArray;
+  Entry: TCatalogueEntry;
+begin
+  Group := OptionalString(Params, 'group');
+  Search := OptionalString(Params, 'search');
+  Entries := TJSONArray.Create;
+  Result := TJSONObject.Create(['entries', Entries]);
+  for Entry in FCatalogue.Search(Group, Search) do
+    if not Assigned(FDocument.Measurements.Find(Entry.Key)) then
+      Entries.Add(TJSONObject.Create(['key', Entry.Key, 'name', Entry.Name]));
+end;
+
+function TMeasurementsApiServer.DoCatalogueEntry(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
+var
+  Entry: TCatalogueEntry;
+begin
+  Entry := FCatalogue.Find(RequireString(Params, 'key'));
+  if not Assigned(Entry) then
+    Exit(TJSONObject.Create(['found', False]));
+  Result := TJSONObject.Create(['found', True, 'key', Entry.Key, 'name', Entry.Name, 'description',
+    Entry.Description, 'howTo', Entry.HowTo, 'rangeMin', FormatMeasure(Entry.RangeMin, AUnit), 'rangeMax',
+    FormatMeasure(Entry.RangeMax, AUnit), 'unit', MEASURE_UNIT_NAMES[AUnit]]);
+end;
+
+// As the desktop's Add to the file: the entry's key and description
+function TMeasurementsApiServer.DoAddKnown(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
+var
+  Key, Reason: string;
+  Entry: TCatalogueEntry;
+begin
+  Key := RequireString(Params, 'key');
+  Entry := FCatalogue.Find(Key);
+  if not Assigned(Entry) then
+    raise EApiError.Create(RPC_REFUSED, Format(rsMeasurementsNoEntry, [Key]));
+  if not FDocument.AddKnown(Entry.Key, Entry.Description, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Result := State(AUnit);
+  Result.Add('key', Entry.Key);
 end;
 
 function TMeasurementsApiServer.SizeIndex(Params: TJSONObject; const Name: string): integer;
@@ -330,6 +462,10 @@ begin
       if not FDocument.OpenText(RequireString(Params, 'text'), Reason) then
         raise EApiError.Create(RPC_REFUSED, Reason);
     'measurements_state': ;
+    'measurements_catalogue': Exit(DoCatalogue(RequireString(Params, 'text')));
+    'measurements_catalogue_list': Exit(DoCatalogueList(Params));
+    'measurements_catalogue_entry': Exit(DoCatalogueEntry(Params, AUnit));
+    'measurements_add_known': Exit(DoAddKnown(Params, AUnit));
     'measurements_set': Exit(DoSet(Params, AUnit));
     'measurements_add': Exit(DoAdd(AUnit));
     'measurements_delete': FDocument.DeleteMeasurement(KeyIndex(Params));

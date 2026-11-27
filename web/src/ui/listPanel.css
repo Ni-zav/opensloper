@@ -70,6 +70,10 @@
   outline: 2px solid #0f4f9e;
   outline-offset: -2px;
 }
+/* A warning only, as a value outside its typical range: the value is kept */
+.list-grid td.warned {
+  background: #ffe6b8;
+}
 .list-grid td.refused {
   color: #d13438;
   background: #ffd8d8;

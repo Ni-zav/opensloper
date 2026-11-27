@@ -143,6 +143,8 @@ await copyFile('src/measurements/index.html', join(MEASUREMENTS, 'index.html'));
 await copyFile('src/ui/listPanel.css', join(MEASUREMENTS, 'listPanel.css'));
 await copyFile(ENGINE, join(MEASUREMENTS, 'engine_lib.wasm'));
 await cp('../data/icons', join(MEASUREMENTS, 'icons'), { recursive: true });
+// The catalogue the page gives the engine, beside it, as Ni-zav's #111 served it
+await copyFile('../data/measurement-catalogue.json', join(MEASUREMENTS, 'measurement-catalogue.json'));
 await installable(
   MEASUREMENTS,
   'measurements',

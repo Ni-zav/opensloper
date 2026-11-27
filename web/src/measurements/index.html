@@ -15,11 +15,12 @@
         height: 100%;
         margin: 0;
       }
-      /* The toolbar, Name and Notes, the bar over the table, the table and the
-         status bar, as the desktop's measurements window */
+      /* The toolbar, then Name and Notes, the bar over the table and the table
+         beside the side panel, and the status bar, as the desktop's
+         measurements window */
       body {
         display: grid;
-        grid-template-rows: auto auto auto 1fr auto;
+        grid-template-rows: auto 1fr auto;
         font:
           13px system-ui,
           sans-serif;
@@ -115,9 +116,64 @@
       #table-bar select {
         font: inherit;
       }
+      #show-in-label {
+        white-space: nowrap;
+      }
+      #main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 430px;
+        min-height: 0;
+      }
+      #left {
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        min-width: 0;
+        min-height: 0;
+      }
       #table {
         display: flex;
         min-height: 0;
+      }
+      /* The side panel, as the desktop's: Add From the Catalogue at its foot */
+      #side {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        min-height: 0;
+        padding: 6px 8px 6px 0;
+      }
+      .catalogue {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        height: 410px;
+        min-height: 0;
+        margin: 0;
+        border: 1px solid #d8d6cf;
+        border-radius: 4px;
+      }
+      .catalogue select,
+      .catalogue input {
+        font: inherit;
+      }
+      .catalogue select[size] {
+        flex: 1;
+        min-height: 0;
+      }
+      .catalogue-info {
+        height: 120px;
+        overflow-y: auto;
+        padding: 2px 4px;
+        border: 1px solid #d8d6cf;
+        background: #fbfaf7;
+      }
+      .catalogue-info p {
+        margin: 0 0 4px;
+      }
+      .catalogue button {
+        align-self: flex-start;
+        border-color: #c8c5bc;
+        background: #fbfaf7;
       }
       #empty {
         padding: 12px 8px;
@@ -139,16 +195,21 @@
   </head>
   <body>
     <div id="toolbar"></div>
-    <div id="header">
-      <label><span id="set-name-label"></span><input id="set-name" type="text" /></label>
-      <label><span id="set-notes-label"></span><input id="set-notes" type="text" /></label>
+    <div id="main">
+      <div id="left">
+        <div id="header">
+          <label><span id="set-name-label"></span><input id="set-name" type="text" /></label>
+          <label><span id="set-notes-label"></span><input id="set-notes" type="text" /></label>
+        </div>
+        <div id="table-bar">
+          <div id="table-buttons"></div>
+          <label for="show-in" id="show-in-label"></label>
+          <select id="show-in"></select>
+        </div>
+        <div id="table"><p id="empty"></p></div>
+      </div>
+      <div id="side"></div>
     </div>
-    <div id="table-bar">
-      <div id="table-buttons"></div>
-      <label for="show-in" id="show-in-label"></label>
-      <select id="show-in"></select>
-    </div>
-    <div id="table"><p id="empty"></p></div>
     <div id="status"><span id="message"></span></div>
     <input id="open-input" type="file" accept=".slm" />
     <script type="module" src="main.js"></script>

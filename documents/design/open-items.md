@@ -33,7 +33,7 @@ At `/measurements/`, built in small pull requests as the web Publish app was, ea
 2. **The table**: built.
 3. **Size tables**: built.
 4. **Name and Notes**: built.
-5. **The catalogue**, beside the table: Add From the Catalogue, its groups and search, and the body figure showing where each measurement is taken.
+5. **The catalogue**, beside the table: Add From the Catalogue, its groups and search, built; the body figure showing where each measurement is taken is next.
 6. **Check Against Pattern**: a pattern given as a file, and the measurements it needs that the set lacks.
 7. **Files**: Save in place and Save As with File System Access, else downloads; autosave; offline use and installing; the keys from the engine.
 8. **Import and Export** of Seamly2D and Valentina files.

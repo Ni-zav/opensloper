@@ -5,7 +5,15 @@
 // in the unit chosen. Every edit is one undo step, and its answer is the
 // state, which the listeners hear of.
 import { EngineError, type Engine } from '../engine/engine.ts';
-import { booleanField, isRecord, recordsField, stringField, stringsField, type JsonRecord } from '../engine/replies.ts';
+import {
+  booleanField,
+  isRecord,
+  numberField,
+  recordsField,
+  stringField,
+  stringsField,
+  type JsonRecord,
+} from '../engine/replies.ts';
 import type { MeasureUnit } from '../editor/rulerTicks.ts';
 
 // A measurement as the table shows it: one value a size, or the one value
@@ -13,7 +21,26 @@ import type { MeasureUnit } from '../editor/rulerTicks.ts';
 export interface MeasurementRow {
   key: string;
   values: string[];
+  // For each value, outside its catalogue entry's typical range
+  outside: boolean[];
   description: string;
+}
+
+// A catalogue measurement the set does not have yet
+export interface CatalogueItem {
+  key: string;
+  name: string;
+}
+
+// A catalogue entry, its typical range as text in the unit shown
+export interface CatalogueEntry {
+  key: string;
+  name: string;
+  description: string;
+  howTo: string;
+  rangeMin: string;
+  rangeMax: string;
+  unit: string;
 }
 
 export interface MeasurementState {
@@ -39,6 +66,8 @@ export interface CellResult {
   done: boolean;
   reason: string;
   key: string;
+  // A value outside its catalogue entry's typical range, which is kept; else ''
+  warning: string;
 }
 
 // Hears that the set changed; generation grows when another is opened
@@ -64,6 +93,7 @@ function parseState(answer: JsonRecord): MeasurementState {
     rows: recordsField(answer, 'rows').map((row) => ({
       key: stringField(row, 'key') ?? '',
       values: stringsField(row, 'values') ?? [],
+      outside: Array.isArray(row.outside) ? row.outside.map((each) => each === true) : [],
       description: stringField(row, 'description') ?? '',
     })),
     modified: booleanField(answer, 'modified') ?? false,
@@ -141,7 +171,49 @@ export class MeasurementDocument {
       done: booleanField(answer, 'done') === true,
       reason: stringField(answer, 'reason') ?? '',
       key: stringField(answer, 'key') ?? key,
+      warning: stringField(answer, 'warning') ?? '',
     };
+  }
+
+  // The measurement catalogue, from its file's text; the number of entries
+  async loadCatalogue(text: string): Promise<number> {
+    const answer = await this.engine.call('measurements_catalogue', { text });
+    // The rows' typical ranges come with the catalogue
+    await this.showIn(this.shownIn);
+    return numberField(answer, 'count') ?? 0;
+  }
+
+  // The catalogue's measurements the set lacks, in a group ('' for all) and
+  // with the text searched for
+  async catalogueList(group: string, search: string): Promise<CatalogueItem[]> {
+    const answer = await this.engine.call('measurements_catalogue_list', { group, search });
+    return recordsField(answer, 'entries').map((entry) => ({
+      key: stringField(entry, 'key') ?? '',
+      name: stringField(entry, 'name') ?? '',
+    }));
+  }
+
+  // The entry for a key, or undefined when the catalogue has none
+  async catalogueEntry(key: string): Promise<CatalogueEntry | undefined> {
+    const answer = await this.engine.call('measurements_catalogue_entry', { key, unit: this.shownIn });
+    if (booleanField(answer, 'found') !== true) {
+      return undefined;
+    }
+    return {
+      key: stringField(answer, 'key') ?? key,
+      name: stringField(answer, 'name') ?? '',
+      description: stringField(answer, 'description') ?? '',
+      howTo: stringField(answer, 'howTo') ?? '',
+      rangeMin: stringField(answer, 'rangeMin') ?? '',
+      rangeMax: stringField(answer, 'rangeMax') ?? '',
+      unit: stringField(answer, 'unit') ?? '',
+    };
+  }
+
+  // A catalogue measurement at the end, with its key and description; a key
+  // the set has is refused with the engine's reason
+  async addKnown(key: string): Promise<void> {
+    await this.call('measurements_add_known', { key });
   }
 
   // A new measurement at the end, with a free key to type over; its key

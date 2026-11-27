@@ -31,6 +31,8 @@ export interface ListPanelRow {
   state: EvalState;
   // Shown in bold, as an unsaved edit
   marked?: boolean;
+  // Cells tinted as a warning, such as a value outside its typical range
+  warned?: readonly boolean[];
 }
 
 export interface ListColumn {
@@ -346,6 +348,7 @@ export abstract class ListPanel<D extends ListDocument = PatternDocument> implem
         cell.textContent = text;
         cell.title = text;
         cell.classList.toggle('refused', refused !== undefined);
+        cell.classList.toggle('warned', row.warned?.[column] === true);
         line.append(cell);
       }
       return line;

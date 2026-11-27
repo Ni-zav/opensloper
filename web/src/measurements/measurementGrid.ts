@@ -62,6 +62,13 @@ export class MeasurementGrid extends ListPanel<MeasurementDocument> {
     }
   }
 
+  // Chooses the measurement at its first value, as after adding it from the
+  // catalogue, once its row is listed
+  async chooseValue(key: string): Promise<void> {
+    await this.rowsLoaded();
+    this.focusCell(key, KEY_COLUMN + 1, false);
+  }
+
   // The set or the unit changed: the columns follow its sizes
   showSet(): void {
     const sizes = this.document.state.sizes;
@@ -86,6 +93,7 @@ export class MeasurementGrid extends ListPanel<MeasurementDocument> {
       this.document.state.rows.map((row) => ({
         key: row.key,
         cells: [row.key, ...row.values, row.description],
+        warned: [false, ...row.outside, false],
         state: 'valid',
       })),
     );
@@ -97,6 +105,10 @@ export class MeasurementGrid extends ListPanel<MeasurementDocument> {
     // As the desktop says, since patterns name measurements by their keys
     if (result.done && result.key !== key) {
       this.events.message(STRINGS.measureRenamed(result.key, key));
+    }
+    // As the desktop's status bar: the value is kept, the cell tinted
+    if (result.warning !== '') {
+      this.events.message(result.warning);
     }
     return result;
   }

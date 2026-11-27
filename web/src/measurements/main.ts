@@ -4,12 +4,15 @@
 // the size whose column the chosen cell is in, and Undo and Redo on the
 // toolbar; each change is one undo step. Name and Notes are above the
 // table, each committed when Enter is pressed or the field is left, Show in
-// chooses the unit of its values, and the status bar has a message. Nothing leaves the machine: the file is read in the browser and
+// chooses the unit of its values, and the status bar has a message. Beside
+// the table, Add From the Catalogue lists the measurements the set lacks,
+// with the details of the one chosen or of the table's row. Nothing leaves the machine: the file is read in the browser and
 // given to the engine as text.
 import { MeasurementDocument } from '../document/measurementDocument.ts';
-import { MEASURE_UNITS } from '../editor/rulerTicks.ts';
+import { MEASURE_UNITS, type MeasureUnit } from '../editor/rulerTicks.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { CatalogueBrowser } from './catalogueBrowser.ts';
 import { MeasurementGrid } from './measurementGrid.ts';
 
 const MEASUREMENT_EXTENSION = '.slm';
@@ -31,6 +34,7 @@ const showIn = element('show-in', HTMLSelectElement);
 const table = element('table', HTMLElement);
 const empty = element('empty', HTMLElement);
 const tableButtons = element('table-buttons', HTMLElement);
+const side = element('side', HTMLElement);
 
 function showMessage(text: string): void {
   message.textContent = text;
@@ -67,6 +71,7 @@ function iconButton(icon: string, caption: string, hint: string, action: () => v
 class MeasurementsApp {
   private readonly document: MeasurementDocument;
   private readonly grid: MeasurementGrid;
+  private readonly catalogue: CatalogueBrowser;
   private readonly undoButton: HTMLButtonElement;
   private readonly redoButton: HTMLButtonElement;
   private readonly addButton: HTMLButtonElement;
@@ -89,6 +94,7 @@ class MeasurementsApp {
     this.grid = new MeasurementGrid(this.document, {
       select: () => {
         this.refreshButtons();
+        this.catalogue.showTableKey(this.grid.chosenKey);
       },
       zoom: () => undefined,
       delete: () => {
@@ -96,6 +102,13 @@ class MeasurementsApp {
       },
       column: () => {
         this.refreshButtons();
+      },
+      message: showMessage,
+      failed: showFailure,
+    });
+    this.catalogue = new CatalogueBrowser(this.document, {
+      added: (key) => {
+        this.run(this.grid.chooseValue(key));
       },
       message: showMessage,
       failed: showFailure,
@@ -185,13 +198,38 @@ class MeasurementsApp {
     showIn.addEventListener('change', () => {
       const unit = MEASURE_UNITS.find((each) => each === showIn.value);
       if (unit !== undefined) {
-        this.run(this.document.showIn(unit));
+        this.run(this.showIn(unit));
       }
     });
+    side.append(this.catalogue.element);
     this.document.addListener(() => {
       this.showState();
     });
     this.showState();
+    this.run(this.loadCatalogue());
+  }
+
+  // Nothing depends on the catalogue, so without it the table still works
+  private async loadCatalogue(): Promise<void> {
+    const response = await fetch(new URL('./measurement-catalogue.json', import.meta.url));
+    if (!response.ok) {
+      showMessage(STRINGS.catalogueFailed(`${String(response.status)} ${response.statusText}`));
+      return;
+    }
+    try {
+      await this.document.loadCatalogue(await response.text());
+    } catch (error: unknown) {
+      if (error instanceof EngineError) {
+        showMessage(STRINGS.catalogueFailed(error.message));
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async showIn(unit: MeasureUnit): Promise<void> {
+    await this.document.showIn(unit);
+    this.catalogue.showUnit();
   }
 
   private run(pending: Promise<void>): void {
@@ -364,6 +402,7 @@ class MeasurementsApp {
       table.replaceChildren(this.grid.element);
     }
     this.grid.showSet();
+    this.catalogue.refresh();
     this.refreshButtons();
   }
 }

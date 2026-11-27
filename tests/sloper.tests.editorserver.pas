@@ -177,6 +177,11 @@ type
     procedure TestPiecePropertyEdits;
     // A note's rows: text, size, printing, look, font and making it free
     procedure TestNotePropertyEdits;
+    // measurements_open and measurements_state on a set of their own: a
+    // refused open keeps the set, and the pattern stays open
+    procedure TestStandaloneMeasurements;
+    // The measurements_ methods are in their own table, not MCP tools
+    procedure TestMeasurementsMethodsTable;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -191,7 +196,8 @@ type
 implementation
 
 uses
-  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.Editor.PanelEdits, Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64,
+  Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.API.Methods, Sloper.API.MeasurementsServer, Sloper.Editor.PanelEdits,
+  Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64,
   Sloper.Core.Pattern, Sloper.Core.PatternFile;
 
 const
@@ -686,6 +692,52 @@ begin
   AssertTrue('the grainline drawn', Answer.Arrays['pieces'].Objects[0].Arrays['marks'].Count >= 4);
   AssertEquals('one marker', 1, Answer.Arrays['markers'].Count);
   AssertTrue('its strokes', Answer.Arrays['markers'].Objects[0].Arrays['strokes'].Count >= 8);
+end;
+
+procedure TTestEditorServer.TestStandaloneMeasurements;
+const
+  MEASURE_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"Sample",' +
+    '"measurements":[{"key":"waist","value":720,"description":"Waist"}]}';
+var
+  Params: TJSONObject;
+begin
+  AddSquare;
+  Params := TJSONObject.Create(['text', MEASURE_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+    AssertEquals('Sample', Answer.Objects['set'].Strings['name']);
+    AssertEquals(1, Answer.Objects['set'].Arrays['measurements'].Count);
+  finally
+    FreeAndNil(Params);
+  end;
+  Call('measurements_open', '{"text":"invalid"}');
+  AssertEquals(RPC_REFUSED, ErrorCode);
+  Call('measurements_state');
+  AssertEquals('old set remains available', 'Sample', Answer.Objects['set'].Strings['name']);
+  Call('get_object', '{"name":"Flap"}');
+  AssertEquals('pattern still open', 'Flap', Answer.Strings['name']);
+end;
+
+procedure TTestEditorServer.TestMeasurementsMethodsTable;
+var
+  Tools: TJSONArray;
+  Index: integer;
+  Method: TApiMethod;
+  ToolName: string;
+begin
+  Tools := McpTools;
+  try
+    for Index := 0 to Tools.Count - 1 do
+    begin
+      ToolName := Tools.Objects[Index].Strings['name'];
+      AssertFalse(ToolName, ToolName.StartsWith(MEASUREMENTS_PREFIX));
+    end;
+  finally
+    FreeAndNil(Tools);
+  end;
+  AssertTrue('its own table', Length(MeasurementsMethods) > 0);
+  for Method in MeasurementsMethods do
+    AssertTrue(Method.Name, Method.Name.StartsWith(MEASUREMENTS_PREFIX));
 end;
 
 procedure TTestEditorServer.TestLabelKeys;

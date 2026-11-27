@@ -672,7 +672,9 @@ begin
   begin
     LineColor := SelectedInk;
     LineWidth := LineWidth + 1;
-  end;
+  end
+  else if (Edge.Role = erOutline) and DimFilteredOutlines(FPattern.View.HiddenRoles) then
+    LineColor.alpha := LineColor.alpha div 2;
   case Style.Dash of
     rdsDefault:
       if Edge.Role = erConstruction then

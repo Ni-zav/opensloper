@@ -32,6 +32,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- Desktop Design dims outline strokes while the Lines panel shows a subset
+  of the other line roles (#176).
 - Shortcut hints in web Design show Ctrl or Cmd for the current platform
   (#160).
 

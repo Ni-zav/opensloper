@@ -95,6 +95,7 @@ type
     procedure TestEdgesDrawnByPriority;
     procedure TestHiddenRoleNotPicked;
     procedure TestHiddenRoleNotSnappedTo;
+    procedure TestOutlineDimmingByRoleFilter;
     procedure TestCopyLinks;
     procedure TestDependencyLinksToInputs;
     procedure TestDependencyLinksToDependents;
@@ -1043,6 +1044,14 @@ begin
   AssertEquals('a selected transform links its points only', 2, Length(Links));
   AssertEquals('in pattern order', CopyA, Links[0].CopyKey);
   AssertEquals('hovered and selected once', 1, Length(CopyLinks(FPattern, [CopyA], CopyA)));
+end;
+
+procedure TTestCanvasModel.TestOutlineDimmingByRoleFilter;
+begin
+  AssertFalse('show all', DimFilteredOutlines([]));
+  AssertTrue('one visible role', DimFilteredOutlines(HIDEABLE_ROLES - [erStitch]));
+  AssertTrue('several visible roles', DimFilteredOutlines(HIDEABLE_ROLES - [erStitch, erFold]));
+  AssertFalse('hide all', DimFilteredOutlines(HIDEABLE_ROLES));
 end;
 
 initialization

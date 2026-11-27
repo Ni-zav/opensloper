@@ -67,6 +67,9 @@ type
     procedure TestOutputProfileBadStyleIgnored;
     procedure TestOutputRoleStyleInput;
     procedure TestMachineLineStyleInput;
+    procedure TestReservedProfileNames;
+    procedure TestProfileNameTaken;
+    procedure TestProfileNumbersIgnoreLocale;
   end;
 
 implementation
@@ -653,6 +656,55 @@ begin
   AssertFalse('blank layer', TryMachineLineStyle(True, '#112233', ' ', '2', Style));
   AssertFalse('zero width', TryMachineLineStyle(True, '#112233', 'Cut', '0', Style));
   AssertTrue('reserved ignoring case', IsBuiltInMachineProfile('sTaNdArD'));
+end;
+
+procedure TTestSettings.TestReservedProfileNames;
+begin
+  AssertTrue('built-in machine', IsReservedMachineProfileName(' standard '));
+  AssertTrue('no machine profile', IsReservedMachineProfileName('NONE'));
+  AssertFalse('own machine name', IsReservedMachineProfileName('Laser'));
+  AssertTrue('built-in output', IsReservedOutputProfileName('leather'));
+  AssertTrue('no output profile', IsReservedOutputProfileName(' everything'));
+  AssertFalse('own output name', IsReservedOutputProfileName('Cutter'));
+end;
+
+procedure TTestSettings.TestProfileNameTaken;
+var
+  Machines: TMachineProfileArray;
+  Outputs: TOutputProfileArray;
+begin
+  Machines := [StandardProfile, StandardProfile];
+  Machines[0].Name := 'Laser';
+  Machines[1].Name := 'Plotter';
+  AssertTrue('taken ignoring case', MachineProfileNameTaken(Machines, ' laser ', -1));
+  AssertFalse('its own name on rename', MachineProfileNameTaken(Machines, 'LASER', 0));
+  AssertTrue('another profile''s name on rename', MachineProfileNameTaken(Machines, 'plotter', 0));
+  AssertFalse('free', MachineProfileNameTaken(Machines, 'Cutter', -1));
+  Outputs := [FullOutputProfile];
+  Outputs[0].Name := 'Cutter';
+  AssertTrue('output taken', OutputProfileNameTaken(Outputs, 'CUTTER', -1));
+  AssertFalse('output own name on rename', OutputProfileNameTaken(Outputs, 'cutter', 0));
+end;
+
+// A comma locale still reads and shows a full stop, as the files do
+procedure TTestSettings.TestProfileNumbersIgnoreLocale;
+var
+  Saved: char;
+  Value: double;
+  Style: TRoleStyle;
+begin
+  Saved := DefaultFormatSettings.DecimalSeparator;
+  DefaultFormatSettings.DecimalSeparator := ',';
+  try
+    AssertTrue('full stop read', TryPositiveProfileNumber('0.5', Value));
+    AssertEquals(0.5, Value, 0.0001);
+    AssertFalse('comma refused', TryPositiveProfileNumber('0,5', Value));
+    AssertEquals('0.25', ProfileNumberText(0.25));
+    AssertTrue('dashes with full stops', TryOutputRoleStyle('#000000', '1.5 0.5', '0.3', Style));
+    AssertEquals(1.5, Style.Dashes[0], 0.0001);
+  finally
+    DefaultFormatSettings.DecimalSeparator := Saved;
+  end;
 end;
 
 initialization

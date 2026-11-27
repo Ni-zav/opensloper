@@ -65,7 +65,12 @@ function FullOutputProfile: TOutputProfile;
 // Home printing, Plotter or laser cutter, Leather and Instructions sheet
 function BuiltInOutputProfiles: TOutputProfileArray;
 function IsBuiltInOutputProfile(const AName: string): boolean;
-// Blank values select the default style; otherwise all entered values must be valid.
+// A built-in profile's name, or the "Everything" a layout shows for no profile
+function IsReservedOutputProfileName(const AName: string): boolean;
+// Ignoring case. The profile at Skip is passed over, so a rename can keep its name.
+function OutputProfileNameTaken(const Profiles: TOutputProfileArray; const AName: string; Skip: integer): boolean;
+// A role's style as typed: all blank keeps the default style, else a colour,
+// up to four dash lengths and a width above 0
 function TryOutputRoleStyle(const Color, DashText, Width: string; out Style: TRoleStyle): boolean;
 // The built-in profiles, then the user's, ignoring case. A user profile with
 // a built-in name is never found, so a built-in one always prints the same.
@@ -222,7 +227,21 @@ begin
       Insert(Data.Items[Index].AsString, Result, System.Length(Result));
 end;
 
-// Colour, up to four dash lengths and a width above 0, or none of it
+function IsReservedOutputProfileName(const AName: string): boolean;
+begin
+  Result := IsBuiltInOutputProfile(Trim(AName)) or SameText(Trim(AName), rsOutputProfileAll);
+end;
+
+function OutputProfileNameTaken(const Profiles: TOutputProfileArray; const AName: string; Skip: integer): boolean;
+var
+  Index: integer;
+begin
+  for Index := 0 to High(Profiles) do
+    if (Index <> Skip) and SameText(Profiles[Index].Name, Trim(AName)) then
+      Exit(True);
+  Result := False;
+end;
+
 function TryOutputRoleStyle(const Color, DashText, Width: string; out Style: TRoleStyle): boolean;
 var
   Candidate: TRoleStyle;
@@ -246,6 +265,7 @@ begin
   Result := True;
 end;
 
+// Colour, up to four dash lengths and a width above 0, or none of it
 function ReadStyle(Data: TJSONData; out Style: TRoleStyle): boolean;
 var
   Obj: TJSONObject;

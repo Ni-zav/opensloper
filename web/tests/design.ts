@@ -207,6 +207,10 @@ try {
   await page.goto(`http://127.0.0.1:${String(port)}/`);
   await waitForData(page, 'ready', 'true');
 
+  await page.click('.side-column [data-tab="measurements"]');
+  assert.ok(await isDisabled(page, '#measurement-test'), 'no test sizes on a new pattern without measurements');
+  await page.click('.side-column [data-tab="objects"]');
+
   // The first point added to the empty pattern stays where it was clicked:
   // the view once fitted itself round it, as if a pattern had been opened (#83)
   const emptyCanvas = await (await page.$('#canvas'))?.boundingBox();
@@ -343,6 +347,7 @@ try {
   await page.click('.side-column [data-tab="measurements"]');
   await page.waitForFunction(() => document.querySelectorAll('.list-panel:not([hidden]) tbody tr').length > 0);
   assert.equal(await page.$eval('#measurement-file', (label) => label.textContent), 'skirt-small.slm', 'the set');
+  assert.ok(!(await isDisabled(page, '#measurement-test')), 'test sizes with measurements loaded');
   await page.click('.list-panel:not([hidden]) tbody tr:first-child td:nth-child(2)');
   await page.keyboard.type('eight');
   await page.keyboard.press('Enter');
@@ -957,11 +962,28 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await page.screenshot({ path: `${process.env.SCREENSHOT ?? ''}.png` });
   }
+
+  await page.click('.side-column [data-tab="measurements"]');
+  await page.waitForSelector('#measurement-test:enabled', { timeout: TIMEOUT_MS });
+  const emptySet = join(downloads, 'empty.slm');
+  await writeFile(emptySet, JSON.stringify({ format: 'measurements', version: 1, units: 'mm', measurements: [] }));
+  const measurementsInput = await page.$('input#measurements-input');
+  assert.ok(measurementsInput !== null, 'the measurements input');
+  await measurementsInput.uploadFile(emptySet);
+  await waitForStatus(page, 'Measurements from empty.slm');
+  await page.waitForFunction(() => document.querySelector('#measurement-file')?.textContent === 'empty.slm', {
+    timeout: TIMEOUT_MS,
+  });
+  assert.ok(
+    await isDisabled(page, '#measurement-test'),
+    'no test sizes after replacing the measurements with an empty set',
+  );
+
   assert.deepEqual(problems, [], 'no errors on the page');
   console.log(
     `Design app: opened, drew ${String(inked)} pixels; chose from the lists, added, edited and deleted a variable; added, dragged and undid a point and edited it in the Properties tab, taking a formula suggestion, as a piece (an edge's own allowance focused) and a note, its text drawn as typed; drew a line, a curve, ` +
       `dragged its handle, a rectangle, a piece, a notch, a circle and a seam; wrote a note and a callout, moved the note and the callout's tip; labelled everything; exported the draft and printed it to PDF; added, renamed and deleted a material; selected a piece in the Garment tab and exported it; chose a problem; added a hem from the Features tab; ` +
-      `edited and saved a measurement, added and reverted one and tried a test size; opened an example. ` +
+      `edited and saved a measurement, added and reverted one and tried a test size; opened an example and saw test sizes disable with an empty set. ` +
       (await status(page)),
   );
 } finally {

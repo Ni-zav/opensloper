@@ -408,4 +408,17 @@ export const STRINGS = {
   measureRenamed: (key: string, old: string): string =>
     `Renamed to @${key}. Patterns using @${old} will show it as missing`,
   measureDiscardChanges: 'The measurement set has changes that are not saved. Drop them?',
+  measureAddSize: 'Add size…',
+  measureAddSizeHint: 'Add a size at the end of the table',
+  measureRenameSize: 'Rename size…',
+  measureRenameSizeHint: 'Rename the size whose column the chosen cell is in',
+  measureDeleteSize: 'Delete size',
+  measureDeleteSizeHint: 'Delete the size whose column the chosen cell is in, with its values',
+  measureSizeLeft: 'Size left',
+  measureSizeLeftHint: 'Move the size whose column the chosen cell is in left',
+  measureSizeRight: 'Size right',
+  measureSizeRightHint: 'Move the size whose column the chosen cell is in right',
+  measureSizePrompt: 'Size name',
+  measureRenameSizePrompt: (size: string): string => `Rename size ${size}`,
+  measureDeleteSizeQuestion: (size: string): string => `Delete size ${size} and its values?`,
 } as const;

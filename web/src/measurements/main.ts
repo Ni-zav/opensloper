@@ -1,7 +1,8 @@
 // The web Measurements app, as Sloper.Measurements.MainForm: starts the engine
 // and opens a measurement set or size table. Its table is edited in the grid,
-// with Add, Delete, Up and Down over it, and Undo and Redo on the toolbar; each
-// change is one undo step. Name and Notes are above the table, read only for
+// with Add, Delete, Up and Down over it, then the size buttons, which act on
+// the size whose column the chosen cell is in, and Undo and Redo on the
+// toolbar; each change is one undo step. Name and Notes are above the table, read only for
 // now, Show in chooses the unit of its values, and the status bar has a
 // message. Nothing leaves the machine: the file is read in the browser and
 // given to the engine as text.
@@ -72,6 +73,12 @@ class MeasurementsApp {
   private readonly deleteButton: HTMLButtonElement;
   private readonly upButton: HTMLButtonElement;
   private readonly downButton: HTMLButtonElement;
+  private readonly sizeButtons: HTMLElement;
+  private readonly addSizeButton: HTMLButtonElement;
+  private readonly renameSizeButton: HTMLButtonElement;
+  private readonly deleteSizeButton: HTMLButtonElement;
+  private readonly sizeLeftButton: HTMLButtonElement;
+  private readonly sizeRightButton: HTMLButtonElement;
 
   constructor(engine: Engine) {
     this.document = new MeasurementDocument(engine);
@@ -82,6 +89,9 @@ class MeasurementsApp {
       zoom: () => undefined,
       delete: () => {
         this.run(this.deleteChosen());
+      },
+      column: () => {
+        this.refreshButtons();
       },
       message: showMessage,
       failed: showFailure,
@@ -104,6 +114,31 @@ class MeasurementsApp {
     this.downButton = plainButton(STRINGS.measureDown, STRINGS.measureDownHint, () => {
       this.run(this.moveChosen(1));
     });
+    this.renameSizeButton = plainButton(STRINGS.measureRenameSize, STRINGS.measureRenameSizeHint, () => {
+      this.run(this.renameSize());
+    });
+    this.deleteSizeButton = plainButton(STRINGS.measureDeleteSize, STRINGS.measureDeleteSizeHint, () => {
+      this.run(this.deleteSize());
+    });
+    this.sizeLeftButton = plainButton(STRINGS.measureSizeLeft, STRINGS.measureSizeLeftHint, () => {
+      this.run(this.moveSize(-1));
+    });
+    this.sizeRightButton = plainButton(STRINGS.measureSizeRight, STRINGS.measureSizeRightHint, () => {
+      this.run(this.moveSize(1));
+    });
+    // Apart from the measurement buttons, as the desktop's three gaps
+    this.sizeButtons = document.createElement('div');
+    this.sizeButtons.className = 'size-buttons';
+    this.addSizeButton = plainButton(STRINGS.measureAddSize, STRINGS.measureAddSizeHint, () => {
+      this.run(this.addSize());
+    });
+    this.sizeButtons.append(
+      this.addSizeButton,
+      this.renameSizeButton,
+      this.deleteSizeButton,
+      this.sizeLeftButton,
+      this.sizeRightButton,
+    );
   }
 
   start(): void {
@@ -121,7 +156,7 @@ class MeasurementsApp {
       this.undoButton,
       this.redoButton,
     );
-    tableButtons.append(this.addButton, this.deleteButton, this.upButton, this.downButton);
+    tableButtons.append(this.addButton, this.deleteButton, this.upButton, this.downButton, this.sizeButtons);
     openInput.addEventListener('change', () => {
       const file = openInput.files?.[0];
       openInput.value = '';
@@ -195,6 +230,59 @@ class MeasurementsApp {
     }
   }
 
+  // A name refused, or the last size, says why in the status bar, as the
+  // desktop's message does
+  private async sizeEdit(edit: Promise<void>): Promise<void> {
+    try {
+      await edit;
+    } catch (error: unknown) {
+      if (error instanceof EngineError) {
+        showMessage(error.message);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async addSize(): Promise<void> {
+    const name = window.prompt(STRINGS.measureSizePrompt, '');
+    if (name !== null) {
+      await this.sizeEdit(this.document.addSize(name));
+    }
+  }
+
+  private async renameSize(): Promise<void> {
+    const size = this.grid.chosenSize;
+    const old = this.document.state.sizes[size];
+    if (old === undefined) {
+      return;
+    }
+    const name = window.prompt(`${STRINGS.measureRenameSizePrompt(old)}\n${STRINGS.measureSizePrompt}`, old);
+    if (name !== null && name !== old) {
+      await this.sizeEdit(this.document.renameSize(size, name));
+    }
+  }
+
+  // Asked first, as on the desktop
+  private async deleteSize(): Promise<void> {
+    const size = this.grid.chosenSize;
+    const name = this.document.state.sizes[size];
+    if (name !== undefined && window.confirm(STRINGS.measureDeleteSizeQuestion(name))) {
+      await this.sizeEdit(this.document.deleteSize(size));
+      this.refreshButtons();
+    }
+  }
+
+  // One column left (-1) or right (1); the chosen cell goes with it
+  private async moveSize(step: number): Promise<void> {
+    const size = this.grid.chosenSize;
+    const index = size + step;
+    if (size >= 0 && index >= 0 && index < this.document.state.sizes.length) {
+      await this.document.moveSize(size, index);
+      this.grid.chooseSize(index);
+    }
+  }
+
   // The chosen measurement's row, or -1
   private chosenIndex(): number {
     return this.document.state.rows.findIndex((row) => row.key === this.grid.chosenKey);
@@ -210,6 +298,12 @@ class MeasurementsApp {
     this.deleteButton.disabled = index < 0;
     this.upButton.disabled = index <= 0;
     this.downButton.disabled = index < 0 || index >= state.rows.length - 1;
+    const size = this.grid.chosenSize;
+    this.addSizeButton.disabled = this.document.fileName === '';
+    this.renameSizeButton.disabled = size < 0;
+    this.deleteSizeButton.disabled = size < 0;
+    this.sizeLeftButton.disabled = size <= 0;
+    this.sizeRightButton.disabled = size < 0 || size >= state.sizes.length - 1;
     document.body.dataset.undo = state.canUndo ? state.undo : '';
   }
 

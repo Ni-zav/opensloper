@@ -24,6 +24,8 @@ const KEY_COLUMN = 0;
 export interface MeasurementGridEvents extends ListPanelEvents {
   // Delete was pressed in the grid, for the page to ask and delete
   delete(): void;
+  // The current cell moved to another column, so another size may be chosen
+  column(): void;
 }
 
 export class MeasurementGrid extends ListPanel<MeasurementDocument> {
@@ -43,6 +45,21 @@ export class MeasurementGrid extends ListPanel<MeasurementDocument> {
   // The measurement chosen, or undefined
   get chosenKey(): string | undefined {
     return this.selection[0];
+  }
+
+  // The size whose column the current cell of the chosen row is in, by its
+  // index from 0, or -1, as the desktop's size buttons need
+  get chosenSize(): number {
+    const size = this.chosenColumn - 1;
+    return this.chosenKey === undefined || size < 0 || size >= this.sizes.length ? -1 : size;
+  }
+
+  // Moves the current cell to the size's column, as after moving the size
+  chooseSize(size: number): void {
+    const key = this.chosenKey;
+    if (key !== undefined) {
+      this.focusCell(key, size + 1, false);
+    }
   }
 
   // The set or the unit changed: the columns follow its sizes
@@ -86,6 +103,10 @@ export class MeasurementGrid extends ListPanel<MeasurementDocument> {
 
   protected override deleteRequested(): void {
     this.gridEvents.delete();
+  }
+
+  protected override columnChanged(): void {
+    this.gridEvents.column();
   }
 
   private useColumns(sizes: readonly string[]): void {

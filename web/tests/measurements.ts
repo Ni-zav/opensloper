@@ -6,7 +6,8 @@
 // asks and deletes it, and Undo and Redo step through. Opening another file
 // asks before dropping the changes. A size table has a column a size, and a
 // file that is not a measurement file, or cannot be read, is refused with the
-// set open kept. SCREENSHOT, as in design.ts, keeps
+// set open kept. Its sizes are renamed, moved, added and deleted with the size
+// buttons, which act on the column of the chosen cell. SCREENSHOT, as in design.ts, keeps
 // the page at the end.
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -183,14 +184,76 @@ try {
     "Women's sizes 8 to 16",
   );
 
+  // The size buttons act on the column of the chosen cell, as on the desktop
+  async function sizeButton(caption: string, enabled: boolean): Promise<void> {
+    await page.waitForFunction(
+      (text, on) =>
+        [...document.querySelectorAll('#table-buttons button')].some(
+          (button) => button instanceof HTMLButtonElement && button.textContent === text && button.disabled !== on,
+        ),
+      {},
+      caption,
+      enabled,
+    );
+  }
+  async function head(expected: string[]): Promise<void> {
+    await page.waitForFunction(
+      (captions) => [...document.querySelectorAll('#table th')].map((cell) => cell.textContent).join() === captions,
+      {},
+      expected.join(),
+    );
+  }
+  await sizeButton('Rename size…', false);
+  await page.click(cellAt(1, 3));
+  await sizeButton('Size left', true);
+  await sizeButton('Size right', true);
+  await page.click(cellAt(1, 1));
+  await sizeButton('Rename size…', false);
+  await page.click(cellAt(1, 3));
+  page.once('dialog', (dialog) => {
+    void dialog.accept('Ten');
+  });
+  await press(page, 'Rename size…');
+  await head(['Key', '8', 'Ten', '12', '14', '16', 'Description']);
+  assert.equal(await page.title(), '• size-table.slm — OpenSloper Measurements');
+  await press(page, 'Size right');
+  await head(['Key', '8', '12', 'Ten', '14', '16', 'Description']);
+  assert.equal(await page.$eval(cellAt(1, 4), (element) => element.textContent), '870', 'the values go with it');
+  assert.ok(
+    await page.$eval(cellAt(1, 4), (element) => element.classList.contains('current')),
+    'the chosen cell goes with it',
+  );
+  page.once('dialog', (dialog) => {
+    void dialog.accept('12');
+  });
+  await press(page, 'Add size…');
+  await waitForStatus(page, 'Size "12" is already in the table');
+  page.once('dialog', (dialog) => {
+    void dialog.accept('18');
+  });
+  await press(page, 'Add size…');
+  await head(['Key', '8', '12', 'Ten', '14', '16', '18', 'Description']);
+  assert.equal(await page.$eval(cellAt(1, 7), (element) => element.textContent), '', 'a new size has no values');
+  page.once('dialog', (dialog) => {
+    void dialog.accept();
+  });
+  await press(page, 'Delete size');
+  await head(['Key', '8', '12', '14', '16', '18', 'Description']);
+  await press(page, 'Undo');
+  await waitForData(page, 'undo', 'Add size');
+  await head(['Key', '8', '12', 'Ten', '14', '16', '18', 'Description']);
+
   // Refused: another kind of file, and one that cannot be read; the size table stays
   await input.uploadFile(PATTERN);
   await waitForStatus(page, 'skirt-darts.sloper is not a measurement file');
   const broken = join(folder, 'broken.slm');
   await writeFile(broken, '{"format": "measurements"');
+  page.once('dialog', (dialog) => {
+    void dialog.accept();
+  });
   await input.uploadFile(broken);
   await waitForStatus(page, 'Could not open broken.slm');
-  assert.equal(await page.title(), 'size-table.slm — OpenSloper Measurements');
+  assert.equal(await page.title(), '• size-table.slm — OpenSloper Measurements');
   assert.equal((await table(page)).rows.length, 11);
 
   // SCREENSHOT names a PNG file to keep what the page shows at the end

@@ -2,7 +2,9 @@
 // file until one is open; a set opens with its name, notes and a row a
 // measurement; Show in shows the values in cm and inches. Name and Notes
 // are edited, committed by Enter or leaving the field. A measurement is
-// added from the catalogue, and a value outside its typical range warned of. In the grid a value
+// added from the catalogue, and a value outside its typical range warned of.
+// The set is checked against a pattern, and a measurement it lacks added. In
+// the grid a value
 // is changed, one that is not a number refused, a key renamed and a
 // description typed; Add makes a row whose key is typed, Up moves it, Delete
 // asks and deletes it, and Undo and Redo step through. Opening another file
@@ -23,6 +25,7 @@ import { launchBrowser, serveApp, status, waitForData, waitForStatus, watchProbl
 const SET = '../docs/examples/skirt-block/skirt.slm';
 const SIZE_TABLE = '../docs/examples/measurements/size-table.slm';
 const PATTERN = '../docs/examples/skirt-block/skirt-darts.sloper';
+const BODICE = '../docs/examples/bodice-block/bodice-block.sloper';
 
 // The table's captions, and its rows' cells
 async function table(page: Page): Promise<{ head: string[]; rows: string[][] }> {
@@ -180,6 +183,39 @@ try {
   await press(page, 'Undo');
   await waitForData(page, 'undo', '');
   await page.waitForFunction(() => document.querySelectorAll('.catalogue select[size] option').length === 1);
+
+  // Check Against Pattern: what a pattern needs that the set lacks, under the
+  // table; Add or go to it adds one; Stop Checking closes the list
+  const patternInput = await page.$('input#pattern-input');
+  assert.ok(patternInput);
+  assert.equal(await page.$('.pattern-check:not([hidden])'), null, 'no check before a pattern is given');
+  await patternInput.uploadFile(SET);
+  await waitForStatus(page, 'skirt.slm is not a pattern file (.sloper)');
+  await patternInput.uploadFile(PATTERN);
+  await waitForStatus(page, 'Checking against skirt-darts.sloper');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.pattern-check-summary')?.textContent ===
+      'skirt-darts.sloper has everything it needs here',
+  );
+  await patternInput.uploadFile(BODICE);
+  await page.waitForFunction(() => document.querySelectorAll('.pattern-check option').length === 8);
+  assert.equal(
+    await page.$eval('.pattern-check-summary', (summary) => summary.textContent),
+    'bodice-block.sloper needs these, which this file cannot give it:',
+  );
+  await page.select('.pattern-check select', 'across_back');
+  await page.waitForFunction(() =>
+    (document.querySelector('.catalogue-info')?.textContent ?? '').startsWith('Across back'),
+  );
+  await press(page, 'Add or go to it');
+  await waitForData(page, 'undo', 'Add measurement');
+  await page.waitForSelector('#table tr.selected[data-key="across_back"]');
+  await page.waitForFunction(() => document.querySelectorAll('.pattern-check option').length === 7);
+  await press(page, 'Stop Checking');
+  await page.waitForSelector('.pattern-check', { hidden: true });
+  await press(page, 'Undo');
+  await waitForData(page, 'undo', '');
 
   // Edits in the grid, each one undo step
   assert.ok(

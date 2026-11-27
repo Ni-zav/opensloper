@@ -45,6 +45,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- Shortcut hints in web Design show Ctrl or Cmd for the current platform (#160).
+
 - A new, empty publish window no longer lists "Nothing is placed" as a
   problem; printing and exporting an empty layout are still refused (#152).
 - In the web Design app, a drag or click right after an undo no longer fails

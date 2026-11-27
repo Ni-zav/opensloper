@@ -158,6 +158,15 @@ export class MeasurementDocument {
     await this.call('measurements_move', { key, index });
   }
 
+  // The set's name and notes, as typed; unchanged text makes no undo step
+  async setName(text: string): Promise<void> {
+    await this.call('measurements_set_name', { text });
+  }
+
+  async setNotes(text: string): Promise<void> {
+    await this.call('measurements_set_notes', { text });
+  }
+
   // A size at the end; a set without sizes becomes a size table. A name
   // that is empty or in use is refused with the engine's reason.
   async addSize(name: string): Promise<void> {

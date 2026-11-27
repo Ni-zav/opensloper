@@ -400,7 +400,11 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
 
 - **The toolbar** has Open, which takes a measurement set or size table (`.slm`), then Undo and Redo, Undo's hint naming its step. A file that is not one, or cannot be read, is refused with the reason, and the set open stays. Changes not saved are dropped only when the user agrees.
 - **The title** names the file, with the modified mark while it has changes. **The status bar** has a message.
-- **Name and Notes** are above the table, read only until the step that edits them.
+- **Name and Notes** are above the table, as on the desktop.
+  - Enter, or leaving the field, commits it, as the desktop's `EditingDone`. Each change is one undo step; unchanged text makes none.
+  - Escape puts back the set's text.
+  - A field with text not yet committed keeps it when the set changes, until another set is opened. Opening another set commits it first, so the user is asked before it is dropped.
+  - They are off until a set is open.
 - **The table** (`MeasurementGrid` in `measurements/measurementGrid.ts`) is the shared `ListPanel`, as the desktop's grid: the key, a value column a size, or one Value column for a set without sizes, and the description, at the desktop's widths. It chooses one row at a time and has no search.
   - Every cell is edited in the grid, as the Design page's lists are, each edit one undo step. A key is renamed, and the status bar says patterns using the old key will show it as missing. A value is a number in the unit shown, a comma taken as the point, or blank to clear it in a size table. A refused edit stays red with the reason. An unchanged cell is not committed, so going through a table in inches does not round it.
   - **Add**, **Delete**, **Up** and **Down** are over the table, on the left, as on the desktop. Add opens the new row's key to type. Delete, or the Delete key, asks first. A moved row stays chosen.
@@ -425,6 +429,7 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
 | `measurements_set` | A cell as typed, by the measurement's `key` and the `column` (key, value with its `size`, or description), as the desktop window commits it (`RenameKey` trimmed, `SetValueText` in the unit, `SetDescription`). A refused edit answers `done` false with the `reason`; `key` is the measurement's afterwards |
 | `measurements_add` | A measurement at the end with a free key (`AddMeasurement`), answering its `key` |
 | `measurements_delete`, `measurements_move` | Deletes a measurement, or moves it to `index`, by its key |
+| `measurements_set_name`, `measurements_set_notes` | The set's name or notes, as typed (`SetName`, `SetNotes`); no undo step when unchanged |
 | `measurements_add_size` | A size at the end, by its `name` (`AddSize`). A set without sizes becomes a size table. A name empty or in use is refused with the reason |
 | `measurements_rename_size` | The `size`, by its index, renamed to `name` (`RenameSize`), refused as Add size is |
 | `measurements_delete_size` | The `size` and its values (`DeleteSize`); refused for the last size |

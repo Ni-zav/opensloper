@@ -203,7 +203,7 @@ The design app's page is built (`web/`, see its README). The TypeScript is one n
 - Point drags, through the drag methods.
 - The Point, Line, Curve (Shift+click carries it on), Circle, Rectangle, Piece, Notch, Seam, Text and Callout tools, with the role box.
 - Notes drawn and dragged. A note's text is typed in a field over the canvas, after Text or Callout or by double-clicking it.
-- Labels: contextual, all or none, and all while N is held.
+- Labels: contextual, all or none, and all while N is held. The same engine request also returns dependency arrows. The Dependents button adds arrows to objects that read the hovered or selected objects.
 - Selected seams, and pieces' direction.
 - Notes are drawn in the browser's sans-serif, as the desktop canvas uses the system's font. Their boxes come from the engine, which in Wasm has no font files and estimates text widths, so a box may be a little wider or narrower than its text.
 

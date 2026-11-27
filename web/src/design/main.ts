@@ -391,6 +391,17 @@ class DesignApp {
       },
     );
     this.rulersButton.classList.add('chosen');
+    const dependents = document.createElement('button');
+    dependents.type = 'button';
+    dependents.textContent = STRINGS.dependents;
+    dependents.title = STRINGS.dependentsHint;
+    dependents.setAttribute('aria-pressed', 'false');
+    dependents.addEventListener('click', () => {
+      const show = dependents.getAttribute('aria-pressed') !== 'true';
+      dependents.setAttribute('aria-pressed', String(show));
+      dependents.classList.toggle('chosen', show);
+      this.canvas.setDependents(show);
+    });
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
         this.open();
@@ -429,6 +440,7 @@ class DesignApp {
         this.canvas.fitAll();
       }),
       this.rulersButton,
+      dependents,
       this.exampleBox(),
       this.roleBox(),
       this.labelBox(),

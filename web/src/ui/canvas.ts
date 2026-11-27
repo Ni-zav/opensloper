@@ -14,6 +14,7 @@ import {
   isRecord,
   numberField,
   numbersField,
+  recordsField,
   stringField,
   type JsonRecord,
 } from '../engine/replies.ts';
@@ -45,6 +46,7 @@ import { LatestOnly } from './latestOnly.ts';
 import { NoteEditor } from './noteEditor.ts';
 import {
   PatternPainter,
+  type DependencyArrow,
   type DraggedTip,
   type FieldGuide,
   type SnapMarker,
@@ -157,6 +159,9 @@ export class PatternCanvas implements CanvasToolHost {
   private handles: CurveHandle[] = [];
   private hoverHandle: HandleRef | undefined;
   private labelIds: string[] = [];
+  private labelsRevision = 0;
+  private dependencyArrows: DependencyArrow[] = [];
+  private showDependents = false;
   private labelMode: LabelMode = 'contextual';
   // Every label shows while the show-labels key is held
   private labelsHeld = false;
@@ -551,17 +556,35 @@ export class PatternCanvas implements CanvasToolHost {
 
   // Drawing
 
+  setDependents(show: boolean): void {
+    this.showDependents = show;
+    this.relabel();
+  }
+
   private relabel(): void {
+    this.labelsRevision += 1;
     this.labelQueue.push(0);
   }
 
   private async loadLabels(): Promise<void> {
+    const revision = this.labelsRevision;
     const answer = await this.document.read('editor_label_keys', {
       mode: this.labelsHeld ? 'all' : this.labelMode,
       selection: numericIds(this.selection),
       hover: /^\d+$/.test(this.hoverId) ? Number(this.hoverId) : null,
       tool: numericIds(this.toolIds),
       suggestions: numericIds(this.suggestionIds),
+      links: true,
+      dependents: this.showDependents,
+    });
+    if (revision !== this.labelsRevision) return;
+    this.dependencyArrows = recordsField(answer, 'links').flatMap((link) => {
+      const fromX = numberField(link, 'fromX');
+      const fromY = numberField(link, 'fromY');
+      const toX = numberField(link, 'toX');
+      const toY = numberField(link, 'toY');
+      if (fromX === undefined || fromY === undefined || toX === undefined || toY === undefined) return [];
+      return [{ from: { x: fromX, y: fromY }, to: { x: toX, y: toY }, dependent: link.dependent === true }];
     });
     this.labelIds = idsField(answer, 'objects');
     this.repaint();
@@ -588,6 +611,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.painter.beginFrame(this.element.clientWidth, this.element.clientHeight, {
       view: this.view,
       selection: this.selection,
+      dependencyArrows: this.dependencyArrows,
       hoverId: this.hoverId,
       snap: this.snap,
       box,
@@ -692,6 +716,8 @@ export class PatternCanvas implements CanvasToolHost {
       this.autoFit = true;
       this.noteEditor.close();
       this.selection.clear();
+      this.dependencyArrows = [];
+      this.labelsRevision += 1;
       this.events.selectionChanged([]);
     } else if (changes.has('pattern') && !changes.has('measurements')) {
       // An edit: the view stays where the user is working

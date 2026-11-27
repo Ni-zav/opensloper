@@ -77,6 +77,7 @@ type
     procedure TestSceneMarks;
     // Contextual labels: the selection with what it reads and what reads it
     procedure TestLabelKeys;
+    procedure TestDependencyArrows;
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
     procedure TestImportStamp;
@@ -711,6 +712,23 @@ begin
   AssertEquals('none means none', 0, Answer.Arrays['objects'].Count);
   Call('editor_label_keys', '{"selection": [999]}');
   AssertEquals('an unknown ID is left out', 0, Answer.Arrays['objects'].Count);
+end;
+
+procedure TTestEditorServer.TestDependencyArrows;
+var
+  Arrow: TJSONObject;
+begin
+  AddSquare;
+  Call('add_point', '{"type":"offsetPoint","name":"Offset","base":"A","mode":"cartesian","dx":"20","dy":"10"}');
+  AssertEquals('offset added', 'Offset', Answer.Strings['name']);
+  Call('editor_label_keys', '{"mode":"none","selection":["Offset"],"links":true}');
+  AssertEquals('input arrow despite labels being hidden', 1, Answer.Arrays['links'].Count);
+  Arrow := Answer.Arrays['links'].Objects[0];
+  AssertFalse(Arrow.Booleans['dependent']);
+  AssertEquals(20.0, Arrow.Floats['fromX'], 0.001);
+  Call('editor_label_keys', '{"selection":["A"],"links":true,"dependents":true}');
+  AssertEquals('only the offset, not the lines ending at A', 1, Answer.Arrays['links'].Count);
+  AssertTrue(Answer.Arrays['links'].Objects[0].Booleans['dependent']);
 end;
 
 procedure TTestEditorServer.TestDeleteSelection;

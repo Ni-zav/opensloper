@@ -15,6 +15,8 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- Web Design shows dependency arrows for hovered and selected objects (#161).
+
 - The Publish app runs in the browser too, as a beta at
   opensloper.com/publish/, linked from the home page (#85). It opens a
   layout with its patterns and measurement files, or patterns to start one,

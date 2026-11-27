@@ -382,4 +382,18 @@ export const STRINGS = {
   problemCount: (count: number): string => `Problems: ${String(count)}`,
   problemCountBlocking: (count: number, blocking: number): string =>
     `Problems: ${String(count)}, ${String(blocking)} stop printing`,
+  // The Measurements app, as Sloper.Measurements.MainForm
+  measureApp: 'OpenSloper Measurements',
+  measureOpenHint: 'Open a measurement set or size table (.slm)',
+  measureFiles: 'OpenSloper measurements',
+  measureNotASet: (name: string): string => `${name} is not a measurement file (.slm)`,
+  measureOpened: (name: string): string => `Opened ${name}`,
+  measureOpenFailed: (name: string, reason: string): string => `Could not open ${name}: ${reason}`,
+  measureSetName: 'Name',
+  measureNotes: 'Notes',
+  measureShowIn: 'Show in',
+  measureColumnKey: 'Key',
+  measureColumnValue: 'Value',
+  measureColumnDescription: 'Description',
+  measureEmpty: 'Open a measurement file (.slm) to see its measurements',
 } as const;

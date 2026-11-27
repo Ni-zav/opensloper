@@ -44,20 +44,25 @@ class PagesTest(SimpleTestCase):
             self.assertIsNone(release_version(Path(folder)))
 
     def test_app_needs_its_slash(self):
-        for app in ("design", "publish"):
+        for app in ("design", "publish", "measurements"):
             page = self.client.get(f"/{app}")
             self.assertEqual(page.status_code, 301)
             self.assertEqual(page["Location"], f"/{app}/")
 
     def test_app_is_served_while_developing(self):
         with self.settings(DEBUG=True):
-            for app in ("design", "publish"):
+            for app in ("design", "publish", "measurements"):
                 page = self.client.get(f"/{app}/")
                 self.assertEqual(page.status_code, 200)
                 self.assertIn(b'src="main.js"', b"".join(page.streaming_content))
 
     def test_apps_only_while_developing(self):
         self.assertEqual(self.client.get("/publish/").status_code, 404)
+        self.assertEqual(self.client.get("/measurements/").status_code, 404)
+
+    def test_measurements_not_linked_yet(self):
+        self.assertNotContains(self.client.get("/"), 'href="/measurements/"')
+        self.assertNotContains(self.client.get("/sitemap.xml"), "/measurements/")
 
     def test_search_engine_files(self):
         self.assertContains(self.client.get("/robots.txt"), "Sitemap: https://www.opensloper.com/sitemap.xml")

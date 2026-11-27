@@ -1,6 +1,8 @@
 // Bundles the web pages with esbuild, each with the engine's worker, and
 // copies what they load beside them: the design app into out/design, with the
-// toolbar icons and the example patterns of the user guide, and the spike's page into engine/out/browser. The engine
+// toolbar icons and the example patterns of the user guide, the publish and
+// measurements apps into out/publish and out/measurements, and the spike's
+// page into engine/out/browser. The engine
 // (engine_lib.wasm) is built first by ./opensloper-make.sh web. Each app's
 // folder ends with its manifest and its service worker (sw.js), given the list
 // of every other file and a version made from their contents, so it can keep
@@ -14,6 +16,7 @@ import { build } from 'esbuild';
 const ENGINE = 'engine/out/browser/engine_lib.wasm';
 const DESIGN = 'out/design';
 const PUBLISH = 'out/publish';
+const MEASUREMENTS = 'out/measurements';
 const SERVICE_WORKER = 'sw.js';
 
 // What the browser needs to offer to install an app; icon is the name of
@@ -99,6 +102,7 @@ await mkdir(DESIGN, { recursive: true });
 await bundle(['src/design/main.ts', 'src/engine/worker.ts'], 'out/design');
 await copyFile('src/design/index.html', 'out/design/index.html');
 await copyFile('src/ui/sidePanel.css', 'out/design/sidePanel.css');
+await copyFile('src/ui/listPanel.css', 'out/design/listPanel.css');
 await copyFile('src/ui/printDialog.css', 'out/design/printDialog.css');
 await copyFile(ENGINE, 'out/design/engine_lib.wasm');
 await cp('../data/icons', 'out/design/icons', { recursive: true });
@@ -131,6 +135,21 @@ await installable(
   'opensloper-publish',
 );
 
+// The Measurements app, its own page with the same engine
+await rm(MEASUREMENTS, { recursive: true, force: true });
+await mkdir(MEASUREMENTS, { recursive: true });
+await bundle(['src/measurements/main.ts', 'src/engine/worker.ts'], MEASUREMENTS);
+await copyFile('src/measurements/index.html', join(MEASUREMENTS, 'index.html'));
+await copyFile('src/ui/listPanel.css', join(MEASUREMENTS, 'listPanel.css'));
+await copyFile(ENGINE, join(MEASUREMENTS, 'engine_lib.wasm'));
+await cp('../data/icons', join(MEASUREMENTS, 'icons'), { recursive: true });
+await installable(
+  MEASUREMENTS,
+  'measurements',
+  manifest('OpenSloper Measurements', 'Measurement sets and size tables', 'opensloper-measure'),
+  'opensloper-measure',
+);
+
 await bundle(['engine/browser/main.ts', 'src/engine/worker.ts'], 'engine/out/browser');
 await copyFile('engine/browser/index.html', 'engine/out/browser/index.html');
-console.log('Bundled out/design, out/publish and engine/out/browser');
+console.log('Bundled out/design, out/publish, out/measurements and engine/out/browser');

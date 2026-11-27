@@ -182,6 +182,8 @@ type
     procedure TestStandaloneMeasurements;
     // The measurements_ methods are in their own table, not MCP tools
     procedure TestMeasurementsMethodsTable;
+    // The table as the page shows it: a column a size, values in the unit asked for
+    procedure TestMeasurementsTable;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -716,6 +718,42 @@ begin
   AssertEquals('old set remains available', 'Sample', Answer.Objects['set'].Strings['name']);
   Call('get_object', '{"name":"Flap"}');
   AssertEquals('pattern still open', 'Flap', Answer.Strings['name']);
+end;
+
+procedure TTestEditorServer.TestMeasurementsTable;
+const
+  SIZED_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"Sizes","sizes":["S","M"],' +
+    '"measurements":[{"key":"waist","values":[700,742.5],"description":"Waist"},' +
+    '{"key":"hip","values":[960,null],"description":""}]}';
+var
+  Params: TJSONObject;
+  Rows: TJSONArray;
+begin
+  Call('measurements_state');
+  AssertEquals('mm before anything is asked', 'mm', Answer.Strings['unit']);
+  AssertEquals('no rows before a set is opened', 0, Answer.Arrays['rows'].Count);
+  Params := TJSONObject.Create(['text', SIZED_TEXT, 'unit', 'cm']);
+  try
+    Call('measurements_open', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  AssertEquals('cm', Answer.Strings['unit']);
+  AssertEquals('a column a size', 2, Answer.Arrays['sizes'].Count);
+  AssertEquals('M', Answer.Arrays['sizes'].Strings[1]);
+  Rows := Answer.Arrays['rows'];
+  AssertEquals(2, Rows.Count);
+  AssertEquals('waist', Rows.Objects[0].Strings['key']);
+  AssertEquals('in cm', '70', Rows.Objects[0].Arrays['values'].Strings[0]);
+  AssertEquals('74.25', Rows.Objects[0].Arrays['values'].Strings[1]);
+  AssertEquals('Waist', Rows.Objects[0].Strings['description']);
+  AssertEquals('no value for a size', '', Rows.Objects[1].Arrays['values'].Strings[1]);
+  Call('measurements_state', '{"unit":"in"}');
+  AssertEquals('in inches', '27.5591', Answer.Arrays['rows'].Objects[0].Arrays['values'].Strings[0]);
+  Call('measurements_open', '{"text":"{}","unit":"feet"}');
+  AssertEquals('a bad unit is refused', RPC_INVALID_PARAMS, ErrorCode);
+  Call('measurements_state');
+  AssertEquals('and the set stays', 'Sizes', Answer.Objects['set'].Strings['name']);
 end;
 
 procedure TTestEditorServer.TestMeasurementsMethodsTable;

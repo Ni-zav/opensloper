@@ -12,9 +12,13 @@
 // puts the text back. A refused value keeps its text, with the cell in red and
 // the reason sent to message, until it is committed or Escape is pressed on
 // it. Editable panels choose one row at a time, with a current cell in it.
-import type { DocumentChange, PatternDocument } from '../document/patternDocument.ts';
+//
+// A pattern's lists follow its document's changes. A list of another
+// document, such as the measurements page's table, is told by its owner when
+// to build its rows again (refresh), and chooses one row at a time.
+import { PatternDocument, type DocumentChange } from '../document/patternDocument.ts';
 import { EngineError } from '../engine/engine.ts';
-import { idsField } from '../engine/replies.ts';
+import { idsField, type JsonRecord } from '../engine/replies.ts';
 import type { EvalState } from '../editor/scene.ts';
 import { FormulaCompleter } from './formulaCompleter.ts';
 import { LatestOnly } from './latestOnly.ts';
@@ -64,15 +68,22 @@ function refusalKey(key: string, column: number): string {
   return `${key}\t${String(column)}`;
 }
 
-export abstract class ListPanel implements SideTabContent {
+// What a list reads its rows from
+export interface ListDocument {
+  read(method: string, params?: object): Promise<JsonRecord>;
+}
+
+export abstract class ListPanel<D extends ListDocument = PatternDocument> implements SideTabContent {
   readonly element: HTMLElement;
-  protected readonly document: PatternDocument;
+  protected readonly document: D;
   protected readonly header: HTMLElement;
   protected readonly events: ListPanelEvents;
   // Several rows can be chosen at once with Ctrl or Shift
   protected multiSelect = true;
   private readonly search: HTMLInputElement;
   private readonly scroller: HTMLElement;
+  private readonly widths: HTMLTableColElement;
+  private readonly head: HTMLTableRowElement;
   private readonly body: HTMLTableSectionElement;
   private readonly refreshes: LatestOnly<number>;
   private rows: ListPanelRow[] = [];
@@ -99,7 +110,7 @@ export abstract class ListPanel implements SideTabContent {
     }
   };
 
-  protected constructor(document: PatternDocument, events: ListPanelEvents, columns: readonly ListColumn[]) {
+  protected constructor(document: D, events: ListPanelEvents, columns: readonly ListColumn[]) {
     this.document = document;
     this.events = events;
     this.element = window.document.createElement('div');
@@ -122,17 +133,10 @@ export abstract class ListPanel implements SideTabContent {
     });
     const table = window.document.createElement('table');
     table.className = 'list-grid';
-    const widths = window.document.createElement('colgroup');
-    const head = table.createTHead().insertRow();
-    for (const column of columns) {
-      const col = window.document.createElement('col');
-      col.style.width = `${String(column.width)}px`;
-      widths.append(col);
-      const cell = window.document.createElement('th');
-      cell.textContent = column.caption;
-      head.append(cell);
-    }
-    table.prepend(widths);
+    this.widths = window.document.createElement('colgroup');
+    this.head = table.createTHead().insertRow();
+    this.setColumns(columns);
+    table.prepend(this.widths);
     this.body = table.createTBody();
     this.body.addEventListener('mousedown', (event) => {
       this.rowPressed(event);
@@ -154,7 +158,9 @@ export abstract class ListPanel implements SideTabContent {
         this.report(error);
       },
     );
-    document.addListener(this.listener);
+    if (document instanceof PatternDocument) {
+      document.addListener(this.listener);
+    }
   }
 
   // What the tab lists, for the search text
@@ -225,8 +231,29 @@ export abstract class ListPanel implements SideTabContent {
 
   // Stops listening to the document, so a closed panel is not kept alive
   dispose(): void {
-    this.document.removeListener(this.listener);
+    if (this.document instanceof PatternDocument) {
+      this.document.removeListener(this.listener);
+    }
     this.completer?.dispose();
+  }
+
+  // The grid's columns, as a measurement table has one a size; the rows are
+  // built again by the next refresh
+  protected setColumns(columns: readonly ListColumn[]): void {
+    this.widths.replaceChildren(
+      ...columns.map((column) => {
+        const col = window.document.createElement('col');
+        col.style.width = `${String(column.width)}px`;
+        return col;
+      }),
+    );
+    this.head.replaceChildren(
+      ...columns.map((column) => {
+        const cell = window.document.createElement('th');
+        cell.textContent = column.caption;
+        return cell;
+      }),
+    );
   }
 
   // Builds the rows again, now when the tab shows and no cell is open, else
@@ -497,7 +524,8 @@ export abstract class ListPanel implements SideTabContent {
 
   private updateCompletion(explicit: boolean): void {
     const open = this.open;
-    if (open === undefined || this.formula[open.column] !== true) {
+    // Formulas are completed from a pattern's names
+    if (open === undefined || this.formula[open.column] !== true || !(this.document instanceof PatternDocument)) {
       return;
     }
     this.completer ??= new FormulaCompleter(this.document, (error) => {

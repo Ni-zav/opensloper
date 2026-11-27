@@ -1,0 +1,104 @@
+/* The lists over a grid of rows (ListPanel): the design page's Objects,
+   Variables and Measurements tabs, and the measurements page's table */
+.list-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.list-panel[hidden] {
+  display: none;
+}
+.list-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+}
+/* A list with no search, as the measurements page's table */
+.list-header[hidden] {
+  display: none;
+}
+.list-header input,
+.list-header select {
+  margin: 0;
+  font: inherit;
+}
+.list-scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+  border-top: 1px solid #d8d6cf;
+}
+.list-grid {
+  table-layout: fixed;
+  border-collapse: collapse;
+  user-select: none;
+}
+.list-grid th {
+  position: sticky;
+  top: 0;
+  padding: 3px 6px;
+  text-align: left;
+  font-weight: 600;
+  background: #f2f1ed;
+  border-bottom: 1px solid #d8d6cf;
+}
+.list-grid td {
+  padding: 2px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid #f0efea;
+}
+.list-grid tr.marked td {
+  font-weight: 600;
+}
+.list-grid tr.failed td {
+  color: #d13438;
+}
+.list-grid tr.blocked td {
+  color: #e28c28;
+}
+.list-grid tr.selected td {
+  color: #fff;
+  background: #2574d6;
+}
+/* An editable list's current cell, one refused and one open */
+.list-grid tr.selected td.current {
+  outline: 2px solid #0f4f9e;
+  outline-offset: -2px;
+}
+.list-grid td.refused {
+  color: #d13438;
+  background: #ffd8d8;
+}
+.list-grid tr.selected td.refused {
+  color: #d13438;
+  background: #ffd8d8;
+}
+.list-grid td.editing {
+  padding: 0;
+  background: #fff;
+}
+.cell-editor {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1px 5px;
+  border: 1px solid #2574d6;
+  font: inherit;
+}
+.list-scroller:focus {
+  outline: none;
+}
+.list-buttons {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-top: 1px solid #d8d6cf;
+}
+.list-buttons button {
+  border-color: #c8c5bc;
+  background: #fbfaf7;
+}

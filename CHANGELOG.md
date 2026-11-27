@@ -15,9 +15,6 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
-- Points along edges or between points can switch between length and ratio.
-  Along-edge points can also measure from the other end (#158, #159).
-
 - The Publish app runs in the browser too, as a beta at
   opensloper.com/publish/, linked from the home page (#85). It opens a
   layout with its patterns and measurement files, or patterns to start one,
@@ -34,6 +31,8 @@ Changed, Fixed and Removed under each version.
   a length and angle and across and down. It stays where it is; its formulas
   become plain numbers, which Undo brings back. `convert_point` in the
   Automation API takes the same choice as `mode` (#146).
+- Points along edges or between points can switch between length and ratio.
+  Along-edge points can also measure from the other end (#158, #159).
 
 ### Changed
 

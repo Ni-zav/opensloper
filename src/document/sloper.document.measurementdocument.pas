@@ -88,6 +88,8 @@ type
     // Checks the file against this pattern from now on, so Missing lists what
     // it uses that the file cannot give it. An empty name stops that.
     function UsePattern(const AFileName: string; out ErrorMessage: string): boolean;
+    // Like UsePattern, for the browser's uploaded text without a disk path.
+    function UsePatternText(const Text: string; out ErrorMessage: string): boolean;
     // Call regularly: reads the pattern again when it has been saved. A file
     // that does not read is left for whoever is writing it. True when it was.
     function CheckPattern: boolean;
@@ -418,12 +420,25 @@ begin
   Text := '';
   if AFileName <> '' then
   begin
-    Result := ReadTextFile(AFileName, Text, ErrorMessage) and ReadPatternMeasurementKeys(AFileName, Keys, ErrorMessage);
+    Result := ReadTextFile(AFileName, Text, ErrorMessage) and ReadPatternMeasurementKeysText(Text, Keys, ErrorMessage);
     if not Result then
       Exit;
   end;
   FPatternFile := AFileName;
   FPatternText := Text;
+  FPatternKeys := Keys;
+  Changed;
+end;
+
+function TMeasurementDocument.UsePatternText(const Text: string; out ErrorMessage: string): boolean;
+var
+  Keys: TStringArray;
+begin
+  Result := ReadPatternMeasurementKeysText(Text, Keys, ErrorMessage);
+  if not Result then
+    Exit;
+  FPatternFile := '';
+  FPatternText := '';
   FPatternKeys := Keys;
   Changed;
 end;
@@ -434,7 +449,7 @@ var
   Keys: TStringArray;
 begin
   Result := False;
-  if (FPatternFile = '') or not ReadTextFile(FPatternFile, Text, Err) or (Text = FPatternText) or not ReadPatternMeasurementKeys(FPatternFile, Keys, Err) then
+  if (FPatternFile = '') or not ReadTextFile(FPatternFile, Text, Err) or (Text = FPatternText) or not ReadPatternMeasurementKeysText(Text, Keys, Err) then
     Exit;
   FPatternText := Text;
   FPatternKeys := Keys;

@@ -385,6 +385,13 @@ export const STRINGS = {
   // The Measurements app, as Sloper.Measurements.MainForm
   measureApp: 'OpenSloper Measurements',
   measureOpenHint: 'Open a measurement set or size table (.slm)',
+  measureCheckPattern: 'Check Against Pattern…',
+  measureCheckPatternHint: 'Show what a pattern needs that the set does not have',
+  measureStopCheck: 'Stop checking',
+  measureCheckedAgainst: (name: string): string => `Checking against ${name}`,
+  measureCheckComplete: 'All measurements the pattern needs are present.',
+  measureCheckFailed: (name: string, reason: string): string => `Could not check ${name}. ${reason}`,
+  measureNotAPattern: (name: string): string => `${name} is not a pattern file (.sloper)`,
   measureFiles: 'OpenSloper measurements',
   measureNotASet: (name: string): string => `${name} is not a measurement file (.slm)`,
   measureOpened: (name: string): string => `Opened ${name}`,

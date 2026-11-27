@@ -31,6 +31,7 @@ type
   TMeasurementsApiServer = class
   private
     FDocument: TMeasurementDocument;
+    FPatternName: string;
     // The measurement catalogue, as the page supplies it; empty until then
     FCatalogue: TCatalogue;
     // The warning for a value outside its catalogue entry's typical range,
@@ -77,6 +78,10 @@ resourcestring
   rsMeasurementsText = 'The contents of the .slm file';
   rsMeasurementsUnit = 'The unit the table shows values in: mm (the default), cm or in';
   rsMeasurementsState = 'Reads the current measurement set';
+  rsMeasurementsCheckPattern = 'Checks the set against a pattern supplied by the browser';
+  rsMeasurementsPatternText = 'The contents of the .sloper file';
+  rsMeasurementsPatternName = 'The pattern file name as shown in the browser';
+  rsMeasurementsClearPattern = 'Stops checking the set against a pattern';
   rsMeasurementsSet = 'A cell of the table as typed: a key renames the measurement, a value is a number in ' +
     '`unit`, or blank to clear it in a size table, and a description is kept as typed; one undo step. A refused ' +
     'edit answers `done` false with the `reason`';
@@ -142,7 +147,8 @@ resourcestring
     '`sizes` (none for a set without sizes) and `rows`, each with `key`, `values` (one for each size, or the one ' +
     'value, as text in the unit, empty where there is none), `outside` (for each value, true when it is outside ' +
     'its catalogue entry''s typical range) and `description`; `modified`, `canUndo`, `canRedo` ' +
-    'and `undo`, the name of the step Undo would take';
+    'and `undo`, the name of the step Undo would take; `pattern`, the pattern file name or empty, and ' +
+    '`missing`, each with a measurement `key` and its missing `sizes` (empty for a set without sizes)';
 
 function MeasurementsMethods: TApiMethodArray;
 begin
@@ -151,6 +157,12 @@ begin
   AddApiParam(Result, 'text', apText, True, rsMeasurementsText);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_state', rsMeasurementsState, rsMeasurementsStateReturns, True);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_check_pattern', rsMeasurementsCheckPattern, rsMeasurementsStateReturns);
+  AddApiParam(Result, 'text', apText, True, rsMeasurementsPatternText);
+  AddApiParam(Result, 'pattern', apText, True, rsMeasurementsPatternName);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_clear_pattern', rsMeasurementsClearPattern, rsMeasurementsStateReturns);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_set', rsMeasurementsSet, rsMeasurementsSetReturns);
   AddApiParam(Result, 'key', apText, True, rsMeasurementsKey);
@@ -242,11 +254,13 @@ end;
 function TMeasurementsApiServer.State(AUnit: TMeasureUnit): TJSONObject;
 var
   Snapshot, Answer, Row: TJSONObject;
-  Sizes, Rows, Values, Outside: TJSONArray;
+  Sizes, Rows, Values, Outside, MissingRows: TJSONArray;
   Entry: TCatalogueEntry;
   Table: TMeasurementSet;
   Index, Size: integer;
   Reason: string;
+  Missing: TMissingMeasurement;
+  SizeName: string;
 begin
   if not ParseJSONObject(FDocument.SnapshotText, Snapshot, Reason) then
     raise EApiError.Create(RPC_INTERNAL_ERROR, Reason);
@@ -283,6 +297,16 @@ begin
     Answer.Add('canUndo', FDocument.CanUndo);
     Answer.Add('canRedo', FDocument.CanRedo);
     Answer.Add('undo', FDocument.UndoDescription);
+    Answer.Add('pattern', FPatternName);
+    MissingRows := TJSONArray.Create;
+    Answer.Add('missing', MissingRows);
+    for Missing in FDocument.Missing do
+    begin
+      Sizes := TJSONArray.Create;
+      MissingRows.Add(TJSONObject.Create(['key', Missing.Key, 'sizes', Sizes]));
+      for SizeName in Missing.Sizes do
+        Sizes.Add(SizeName);
+    end;
     Result := Answer;
   except
     FreeAndNil(Answer);
@@ -506,7 +530,7 @@ end;
 
 function TMeasurementsApiServer.CallMethod(const Method: string; Params: TJSONObject): TJSONData;
 var
-  Reason: string;
+  Reason, PatternName: string;
   AUnit: TMeasureUnit;
 begin
   // A bad unit is refused before the set changes
@@ -516,6 +540,18 @@ begin
       if not FDocument.OpenText(RequireString(Params, 'text'), Reason) then
         raise EApiError.Create(RPC_REFUSED, Reason);
     'measurements_state': ;
+    'measurements_check_pattern':
+    begin
+      PatternName := RequireString(Params, 'pattern');
+      if not FDocument.UsePatternText(RequireString(Params, 'text'), Reason) then
+        raise EApiError.Create(RPC_REFUSED, Reason);
+      FPatternName := PatternName;
+    end;
+    'measurements_clear_pattern':
+    begin
+      FDocument.UsePattern('', Reason);
+      FPatternName := '';
+    end;
     'measurements_catalogue': Exit(DoCatalogue(RequireString(Params, 'text')));
     'measurements_catalogue_list': Exit(DoCatalogueList(Params));
     'measurements_catalogue_entry': Exit(DoCatalogueEntry(Params, AUnit));

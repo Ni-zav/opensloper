@@ -128,6 +128,15 @@ try {
   let shown = await table(page);
   assert.deepEqual(shown.head, ['Key', 'Value', 'Description']);
   assert.deepEqual(shown.rows[0], ['waist', '660', 'Waist circumference']);
+  const patternInput = await page.$('input#pattern-input');
+  assert.ok(patternInput);
+  await patternInput.uploadFile(PATTERN);
+  await page.waitForSelector('#pattern-complete', { visible: true });
+  assert.equal(
+    await page.$eval('#pattern-heading', (heading) => heading.textContent),
+    'Checking against skirt-darts.sloper',
+  );
+  assert.equal(await page.title(), 'skirt.slm — OpenSloper Measurements', 'checking leaves the set unchanged');
   await showIn(page, 'cm', '66');
   await showIn(page, 'in', '25.9843');
   await showIn(page, 'mm', '660');
@@ -203,6 +212,14 @@ try {
   await typeIn(page, cellAt(1, 1), 'waist_circumference');
   await waitForStatus(page, 'Renamed to @waist_circumference. Patterns using @waist');
   await waitForData(page, 'undo', 'Rename measurement');
+  await page.waitForFunction(() => document.querySelector('#missing-measurements li')?.textContent === 'waist');
+  const brokenPattern = join(folder, 'broken.sloper');
+  await writeFile(brokenPattern, '{"format": "pattern"');
+  await patternInput.uploadFile(brokenPattern);
+  await waitForStatus(page, 'Could not check broken.sloper');
+  assert.equal(await page.$eval('#missing-measurements li', (row) => row.textContent), 'waist');
+  await press(page, 'Stop checking');
+  await page.waitForSelector('#pattern-check', { hidden: true });
   await typeIn(page, cellAt(1, 3), 'Round the natural waist');
   await waitForData(page, 'undo', 'Change description');
   // Add opens the new row's key to type; Up moves it; Delete asks first

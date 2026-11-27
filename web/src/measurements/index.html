@@ -126,7 +126,7 @@
       }
       #left {
         display: grid;
-        grid-template-rows: auto auto 1fr;
+        grid-template-rows: auto auto auto 1fr;
         min-width: 0;
         min-height: 0;
       }
@@ -205,8 +205,26 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      #open-input {
+      #open-input,
+      #pattern-input {
         display: none;
+      }
+      #pattern-check {
+        margin: 4px 8px;
+        padding: 4px 8px;
+        border: 1px solid #d8d6cf;
+      }
+      .pattern-check-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+      #missing-measurements {
+        max-height: 8em;
+        overflow: auto;
+        margin: 0;
+        padding-left: 24px;
       }
     </style>
   </head>
@@ -223,12 +241,18 @@
           <label for="show-in" id="show-in-label"></label>
           <select id="show-in"></select>
         </div>
+        <section id="pattern-check" aria-live="polite" hidden>
+          <div class="pattern-check-header"><strong id="pattern-heading"></strong></div>
+          <p id="pattern-complete"></p>
+          <ul id="missing-measurements"></ul>
+        </section>
         <div id="table"><p id="empty"></p></div>
       </div>
       <div id="side"></div>
     </div>
     <div id="status"><span id="message"></span></div>
     <input id="open-input" type="file" accept=".slm" />
+    <input id="pattern-input" type="file" accept=".sloper" />
     <script type="module" src="main.js"></script>
   </body>
 </html>

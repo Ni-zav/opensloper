@@ -55,6 +55,8 @@ export interface MeasurementState {
   canRedo: boolean;
   // The name of the step undo would take
   undo: string;
+  pattern: string;
+  missing: { key: string; sizes: string[] }[];
 }
 
 // Which cell of a row an edit is to
@@ -82,6 +84,8 @@ const EMPTY: MeasurementState = {
   canUndo: false,
   canRedo: false,
   undo: '',
+  pattern: '',
+  missing: [],
 };
 
 function parseState(answer: JsonRecord): MeasurementState {
@@ -100,6 +104,11 @@ function parseState(answer: JsonRecord): MeasurementState {
     canUndo: booleanField(answer, 'canUndo') ?? false,
     canRedo: booleanField(answer, 'canRedo') ?? false,
     undo: stringField(answer, 'undo') ?? '',
+    pattern: stringField(answer, 'pattern') ?? '',
+    missing: recordsField(answer, 'missing').map((row) => ({
+      key: stringField(row, 'key') ?? '',
+      sizes: stringsField(row, 'sizes') ?? [],
+    })),
   };
 }
 
@@ -266,6 +275,14 @@ export class MeasurementDocument {
 
   async redo(): Promise<void> {
     await this.ignoreRefusal(this.call('measurements_redo'));
+  }
+
+  async checkPattern(text: string, pattern: string): Promise<void> {
+    await this.call('measurements_check_pattern', { text, pattern });
+  }
+
+  async clearPattern(): Promise<void> {
+    await this.call('measurements_clear_pattern');
   }
 
   // An edit, in the unit shown; its answer is the state

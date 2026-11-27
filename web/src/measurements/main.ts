@@ -12,6 +12,7 @@
 import { MeasurementDocument } from '../document/measurementDocument.ts';
 import { MEASURE_UNITS, type MeasureUnit } from '../editor/rulerTicks.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
+import { PATTERN_EXTENSION } from '../ui/fileAccess.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { BodyFigure } from './bodyFigure.ts';
 import { CatalogueBrowser } from './catalogueBrowser.ts';
@@ -30,6 +31,11 @@ function element<T extends HTMLElement>(id: string, type: new () => T): T {
 const toolbar = element('toolbar', HTMLElement);
 const message = element('message', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
+const patternInput = element('pattern-input', HTMLInputElement);
+const patternCheck = element('pattern-check', HTMLElement);
+const patternHeading = element('pattern-heading', HTMLElement);
+const patternComplete = element('pattern-complete', HTMLElement);
+const missingRows = element('missing-measurements', HTMLUListElement);
 const nameBox = element('set-name', HTMLInputElement);
 const notesBox = element('set-notes', HTMLInputElement);
 const showIn = element('show-in', HTMLSelectElement);
@@ -81,6 +87,14 @@ class MeasurementsApp {
   private gridHover = '';
   private readonly undoButton: HTMLButtonElement;
   private readonly redoButton: HTMLButtonElement;
+  private readonly checkButton = iconButton(
+    'file-search',
+    STRINGS.measureCheckPattern,
+    STRINGS.measureCheckPatternHint,
+    () => {
+      patternInput.click();
+    },
+  );
   private readonly addButton: HTMLButtonElement;
   private readonly deleteButton: HTMLButtonElement;
   private readonly upButton: HTMLButtonElement;
@@ -192,6 +206,7 @@ class MeasurementsApp {
       divider,
       this.undoButton,
       this.redoButton,
+      this.checkButton,
     );
     for (const box of [nameBox, notesBox]) {
       // Enter, or leaving the field, commits it, as the desktop's EditingDone
@@ -212,6 +227,19 @@ class MeasurementsApp {
         this.run(this.openFile(file));
       }
     });
+    patternInput.addEventListener('change', () => {
+      const file = patternInput.files?.[0];
+      patternInput.value = '';
+      if (file !== undefined) {
+        this.run(this.checkPattern(file));
+      }
+    });
+    patternHeading.after(
+      plainButton(STRINGS.measureStopCheck, STRINGS.measureStopCheck, () => {
+        this.run(this.document.clearPattern());
+      }),
+    );
+    patternComplete.textContent = STRINGS.measureCheckComplete;
     for (const unit of MEASURE_UNITS) {
       showIn.add(new Option(unit, unit, unit === this.document.unit, unit === this.document.unit));
     }
@@ -290,6 +318,37 @@ class MeasurementsApp {
       throw error;
     }
     showMessage(STRINGS.measureOpened(file.name));
+  }
+
+  private async checkPattern(file: File): Promise<void> {
+    if (!file.name.toLowerCase().endsWith(PATTERN_EXTENSION)) {
+      showMessage(STRINGS.measureNotAPattern(file.name));
+      return;
+    }
+    try {
+      await this.document.checkPattern(await file.text(), file.name);
+      showMessage('');
+    } catch (error: unknown) {
+      if (error instanceof EngineError) {
+        showMessage(STRINGS.measureCheckFailed(file.name, error.message));
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private showPatternCheck(): void {
+    const { pattern, missing } = this.document.state;
+    patternCheck.hidden = pattern === '';
+    patternHeading.textContent = STRINGS.measureCheckedAgainst(pattern);
+    patternComplete.hidden = missing.length > 0;
+    missingRows.replaceChildren(
+      ...missing.map(({ key, sizes }) => {
+        const row = document.createElement('li');
+        row.textContent = sizes.length === 0 ? key : `${key} (${sizes.join(', ')})`;
+        return row;
+      }),
+    );
   }
 
   // The fields' text, where it differs from the set's, as the desktop's
@@ -438,6 +497,8 @@ class MeasurementsApp {
     this.catalogue.refresh();
     this.figure.refresh();
     this.refreshButtons();
+    this.checkButton.disabled = fileName === '';
+    this.showPatternCheck();
   }
 }
 

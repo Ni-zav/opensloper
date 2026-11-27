@@ -567,7 +567,10 @@ export abstract class ListPanel<D extends ListDocument = PatternDocument> implem
   }
 
   // The row's key changed: the selection and a cell opened meanwhile follow it
+  // A row's key changed, as a renamed measurement's; the owner hears of it
+  // when the row was chosen, as the chosen key is now another
   private rekey(from: string, to: string): void {
+    const chosen = this.selected.includes(from);
     this.selected = this.selected.map((key) => (key === from ? to : key));
     if (this.anchor === from) {
       this.anchor = to;
@@ -586,6 +589,9 @@ export abstract class ListPanel<D extends ListDocument = PatternDocument> implem
       }
     }
     this.paintSelection();
+    if (chosen) {
+      this.events.select(this.selected);
+    }
   }
 
   private async commit(open: OpenCell, text: string): Promise<void> {

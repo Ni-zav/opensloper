@@ -229,7 +229,6 @@ resourcestring
   rsChooseASize = 'Click a value in the size''s column first';
   rsChooseAMeasurement = 'Click a measurement first';
   rsRenamed = 'Renamed to @%s. Patterns using @%s will show it as missing';
-  rsBadValue = 'A value must be a number, such as 82.5';
   rsFileReloaded = 'The file changed on disk, so it was read again';
   rsFileMerged = 'The file changed on disk; those changes were merged with yours';
   rsConflictQuestion = '@%s was changed here and in the file. Keep your version? No takes the one in the file.';
@@ -1082,7 +1081,6 @@ end;
 function TMeasurementsForm.CommitCell(Column, Index: integer; const NewText: string): boolean;
 var
   OldKey, Reason: string;
-  Value: double;
   Size: integer;
 begin
   Reason := '';
@@ -1099,19 +1097,9 @@ begin
   else
   begin
     Size := ColumnSize(Column);
-    if Trim(NewText) = '' then
-      Result := FDocument.ClearValue(Index, Size, Reason)
-    else
-    begin
-      Result := ParseMeasure(NewText, FUnit, Value);
-      if Result then
-      begin
-        FDocument.SetValue(Index, Size, Value);
-        WarnRange(Index, Value);
-      end
-      else
-        Reason := rsBadValue;
-    end;
+    Result := FDocument.SetValueText(Index, Size, NewText, FUnit, Reason);
+    if Result and FDocument.Measurements[Index].HasValueFor(Size) then
+      WarnRange(Index, FDocument.Measurements[Index].ValueFor(Size));
   end;
   if not Result then
     ShowRefusal(Reason);

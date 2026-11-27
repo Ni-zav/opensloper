@@ -64,6 +64,9 @@ type
     procedure TestSizeRefused;
     procedure TestOpenFailureKeepsDocument;
     procedure TestOpenTextAndSnapshot;
+    // A value as typed in a table's unit: a number, a comma for the point,
+    // blank to clear (refused without sizes), anything else refused
+    procedure TestSetValueText;
     procedure TestSameFileWaitsForAStableFile;
     procedure TestUnchangedFileIsSame;
     procedure TestReloadsWhenNothingUnsaved;
@@ -95,7 +98,8 @@ type
 implementation
 
 uses
-  SysUtils, Sloper.Core.JSON, Sloper.Core.Names, Sloper.Core.Pattern, Sloper.Core.PatternCheck, Sloper.Core.PatternFile, Sloper.Core.TextHistory;
+  SysUtils, Sloper.Core.JSON, Sloper.Core.Units, Sloper.Core.Names, Sloper.Core.Pattern, Sloper.Core.PatternCheck,
+  Sloper.Core.PatternFile, Sloper.Core.TextHistory;
 
 procedure TTestMeasurementDocument.SetUp;
 begin
@@ -374,6 +378,20 @@ begin
   AssertTrue(Err, WriteTextFile(FFileName, 'not json', Err));
   AssertFalse(FDocument.Open(FFileName, Err));
   AssertNear('what was open stays', 830, FDocument.Measurements[0].Value);
+end;
+
+procedure TTestMeasurementDocument.TestSetValueText;
+var
+  Reason: string;
+begin
+  OpenSample;
+  AssertTrue(Reason, FDocument.SetValueText(0, 0, '84,5', muCentimetre, Reason));
+  AssertNear('in cm, with a comma', 845, FDocument.Measurements[0].Value);
+  AssertEquals('one step', 'Change value', FDocument.UndoDescription);
+  AssertFalse('not a number', FDocument.SetValueText(0, 0, 'wide', muMillimetre, Reason));
+  AssertEquals('A value must be a number, such as 82.5', Reason);
+  AssertFalse('blank needs a size table', FDocument.SetValueText(0, 0, ' ', muMillimetre, Reason));
+  AssertNear('kept', 845, FDocument.Measurements[0].Value);
 end;
 
 procedure TTestMeasurementDocument.TestOpenTextAndSnapshot;

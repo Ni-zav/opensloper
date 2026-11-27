@@ -60,9 +60,10 @@ Built into `out/publish`.
 
 Built into `out/measurements`, step by step (`documents/design/open-items.md`).
 
-- **Open** takes a measurement set or size table (`.slm`).
+- **Open** takes a measurement set or size table (`.slm`). **Undo** and **Redo** take back each change.
 - **Name and Notes** are above the table, read only for now.
-- **The table** has a row a measurement: its key, a value column a size, or one Value column, and its description, read only for now. **Show in** chooses mm, cm or inches.
+- **The table** has a row a measurement: its key, a value column a size, or one Value column, and its description. Every cell is edited in the grid. **Add**, **Delete**, **Up** and **Down** are over it.
+- **Show in** chooses mm, cm or inches.
 
 ## The Design and Publish apps
 

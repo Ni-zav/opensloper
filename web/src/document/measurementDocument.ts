@@ -1,9 +1,11 @@
 // The measurement set open in the engine's Measurements server, as the
 // desktop's TMeasurementDocument is to the measurements window. The browser
 // has no disk, so a set is opened from its file's text. The engine keeps the
-// set and says how the table shows it, values as text in the unit chosen.
-import type { Engine } from '../engine/engine.ts';
-import { isRecord, recordsField, stringField, stringsField, type JsonRecord } from '../engine/replies.ts';
+// set and its undo history, and says how the table shows it, values as text
+// in the unit chosen. Every edit is one undo step, and its answer is the
+// state, which the listeners hear of.
+import { EngineError, type Engine } from '../engine/engine.ts';
+import { booleanField, isRecord, recordsField, stringField, stringsField, type JsonRecord } from '../engine/replies.ts';
 import type { MeasureUnit } from '../editor/rulerTicks.ts';
 
 // A measurement as the table shows it: one value a size, or the one value
@@ -20,12 +22,38 @@ export interface MeasurementState {
   // None for a set without sizes
   sizes: string[];
   rows: MeasurementRow[];
+  // Changed since it was opened
+  modified: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  // The name of the step undo would take
+  undo: string;
+}
+
+// Which cell of a row an edit is to
+export type MeasurementColumn = 'key' | 'value' | 'description';
+
+// What setting a cell did: refused, with the reason, or done; key is the
+// measurement's afterwards, as a rename changes it
+export interface CellResult {
+  done: boolean;
+  reason: string;
+  key: string;
 }
 
 // Hears that the set changed; generation grows when another is opened
 export type MeasurementListener = (document: MeasurementDocument) => void;
 
-const EMPTY: MeasurementState = { name: '', notes: '', sizes: [], rows: [] };
+const EMPTY: MeasurementState = {
+  name: '',
+  notes: '',
+  sizes: [],
+  rows: [],
+  modified: false,
+  canUndo: false,
+  canRedo: false,
+  undo: '',
+};
 
 function parseState(answer: JsonRecord): MeasurementState {
   const set = isRecord(answer.set) ? answer.set : {};
@@ -38,6 +66,10 @@ function parseState(answer: JsonRecord): MeasurementState {
       values: stringsField(row, 'values') ?? [],
       description: stringField(row, 'description') ?? '',
     })),
+    modified: booleanField(answer, 'modified') ?? false,
+    canUndo: booleanField(answer, 'canUndo') ?? false,
+    canRedo: booleanField(answer, 'canRedo') ?? false,
+    undo: stringField(answer, 'undo') ?? '',
   };
 }
 
@@ -99,6 +131,58 @@ export class MeasurementDocument {
     this.current = parseState(await this.engine.call('measurements_state', { unit }));
     this.shownIn = unit;
     this.changed();
+  }
+
+  // A cell as typed: a key, a value in the unit shown (size by its index, 0
+  // without sizes) or a description
+  async setCell(key: string, column: MeasurementColumn, size: number, text: string): Promise<CellResult> {
+    const answer = await this.call('measurements_set', { key, column, size, text });
+    return {
+      done: booleanField(answer, 'done') === true,
+      reason: stringField(answer, 'reason') ?? '',
+      key: stringField(answer, 'key') ?? key,
+    };
+  }
+
+  // A new measurement at the end, with a free key to type over; its key
+  async add(): Promise<string> {
+    return stringField(await this.call('measurements_add'), 'key') ?? '';
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.call('measurements_delete', { key });
+  }
+
+  // To its place in the table afterwards, from 0
+  async move(key: string, index: number): Promise<void> {
+    await this.call('measurements_move', { key, index });
+  }
+
+  async undo(): Promise<void> {
+    await this.ignoreRefusal(this.call('measurements_undo'));
+  }
+
+  async redo(): Promise<void> {
+    await this.ignoreRefusal(this.call('measurements_redo'));
+  }
+
+  // An edit, in the unit shown; its answer is the state
+  private async call(method: string, params: object = {}): Promise<JsonRecord> {
+    const answer = await this.engine.call(method, { ...params, unit: this.shownIn });
+    this.current = parseState(answer);
+    this.changed();
+    return answer;
+  }
+
+  // Nothing to undo or redo is no error to the user
+  private async ignoreRefusal(pending: Promise<JsonRecord>): Promise<void> {
+    try {
+      await pending;
+    } catch (error: unknown) {
+      if (!(error instanceof EngineError)) {
+        throw error;
+      }
+    }
   }
 
   private changed(): void {

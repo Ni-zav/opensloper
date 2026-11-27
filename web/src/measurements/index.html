@@ -59,6 +59,13 @@
         width: 18px;
         height: 18px;
       }
+      /* Between the toolbar's groups, as the desktop's dividers */
+      .divider {
+        width: 1px;
+        align-self: stretch;
+        margin: 2px 4px;
+        background: #d8d6cf;
+      }
       /* Name and Notes, read only until they can be edited */
       #header {
         display: flex;
@@ -84,13 +91,21 @@
       #set-notes {
         width: 420px;
       }
-      /* Over the table; Show in sits at its end, as on the desktop */
+      /* Over the table: Add, Delete, Up and Down, then Show in at its end, as on the desktop */
       #table-bar {
         display: flex;
-        justify-content: flex-end;
         align-items: center;
         gap: 6px;
         padding: 4px 8px;
+      }
+      #table-buttons {
+        display: flex;
+        gap: 6px;
+        margin-right: auto;
+      }
+      #table-buttons button {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
       }
       #table-bar select {
         font: inherit;
@@ -124,6 +139,7 @@
       <label><span id="set-notes-label"></span><input id="set-notes" type="text" readonly /></label>
     </div>
     <div id="table-bar">
+      <div id="table-buttons"></div>
       <label for="show-in" id="show-in-label"></label>
       <select id="show-in"></select>
     </div>

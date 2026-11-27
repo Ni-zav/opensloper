@@ -184,6 +184,8 @@ type
     procedure TestMeasurementsMethodsTable;
     // The table as the page shows it: a column a size, values in the unit asked for
     procedure TestMeasurementsTable;
+    // Cells set, rows added, moved and deleted, each one undo step
+    procedure TestMeasurementsEdits;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -754,6 +756,77 @@ begin
   AssertEquals('a bad unit is refused', RPC_INVALID_PARAMS, ErrorCode);
   Call('measurements_state');
   AssertEquals('and the set stays', 'Sizes', Answer.Objects['set'].Strings['name']);
+end;
+
+procedure TTestEditorServer.TestMeasurementsEdits;
+const
+  SET_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"Two",' +
+    '"measurements":[{"key":"waist","value":700,"description":"Waist"},{"key":"hip","value":960}]}';
+var
+  Params: TJSONObject;
+  Added: string;
+
+  function Keys: string;
+  var
+    Index: integer;
+  begin
+    Result := '';
+    for Index := 0 to Answer.Arrays['rows'].Count - 1 do
+      Result := Result + Answer.Arrays['rows'].Objects[Index].Strings['key'] + ' ';
+    Result := Trim(Result);
+  end;
+
+begin
+  Params := TJSONObject.Create(['text', SET_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  AssertFalse('nothing to undo after opening', Answer.Booleans['canUndo']);
+  Call('measurements_set', '{"key":"waist","column":"value","text":"72","unit":"cm"}');
+  AssertTrue(Answer.Strings['reason'], Answer.Booleans['done']);
+  AssertEquals('shown in the unit', '72', Answer.Arrays['rows'].Objects[0].Arrays['values'].Strings[0]);
+  AssertTrue('modified', Answer.Booleans['modified']);
+  AssertEquals('Change value', Answer.Strings['undo']);
+  Call('measurements_set', '{"key":"waist","column":"value","text":"wide"}');
+  AssertFalse('not a number', Answer.Booleans['done']);
+  AssertEquals('A value must be a number, such as 82.5', Answer.Strings['reason']);
+  Call('measurements_set', '{"key":"waist","column":"key","text":"hip"}');
+  AssertFalse('a key in use', Answer.Booleans['done']);
+  Call('measurements_set', '{"key":"waist","column":"key","text":" waist_circumference "}');
+  AssertTrue(Answer.Strings['reason'], Answer.Booleans['done']);
+  AssertEquals('renamed, trimmed', 'waist_circumference', Answer.Strings['key']);
+  Call('measurements_set', '{"key":"hip","column":"description","text":"Hip"}');
+  AssertEquals('Hip', Answer.Arrays['rows'].Objects[1].Strings['description']);
+  Call('measurements_add');
+  Added := Answer.Strings['key'];
+  AssertEquals('added at the end', 'waist_circumference hip ' + Added, Keys);
+  Call('measurements_move', '{"key":"' + Added + '","index":0}');
+  AssertEquals('moved to the top', Added + ' waist_circumference hip', Keys);
+  Call('measurements_move', '{"key":"hip","index":3}');
+  AssertEquals('past the end refused', RPC_INVALID_PARAMS, ErrorCode);
+  Call('measurements_delete', '{"key":"' + Added + '"}');
+  AssertEquals('deleted', 'waist_circumference hip', Keys);
+  Call('measurements_delete', '{"key":"chest"}');
+  AssertEquals('no such key', RPC_REFUSED, ErrorCode);
+  Call('measurements_set', '{"key":"hip","column":"value","size":1,"text":"9"}');
+  AssertEquals('no such size', RPC_INVALID_PARAMS, ErrorCode);
+  // Back through every step: delete, move, add, description, rename, value
+  Call('measurements_undo');
+  AssertEquals('Move measurement', Answer.Strings['undo']);
+  Call('measurements_undo');
+  Call('measurements_undo');
+  Call('measurements_undo');
+  Call('measurements_undo');
+  AssertEquals('waist hip', Keys);
+  Call('measurements_undo');
+  AssertEquals('the first value back', '700', Answer.Arrays['rows'].Objects[0].Arrays['values'].Strings[0]);
+  AssertFalse('all undone', Answer.Booleans['canUndo']);
+  Call('measurements_undo');
+  AssertEquals('nothing left to undo', RPC_REFUSED, ErrorCode);
+  Call('measurements_redo');
+  AssertEquals('the value redone, in mm', '720', Answer.Arrays['rows'].Objects[0].Arrays['values'].Strings[0]);
 end;
 
 procedure TTestEditorServer.TestMeasurementsMethodsTable;

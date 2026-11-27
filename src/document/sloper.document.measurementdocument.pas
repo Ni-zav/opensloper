@@ -27,7 +27,7 @@ unit Sloper.Document.MeasurementDocument;
 interface
 
 uses
-  Classes, SysUtils, Sloper.Core.Measurements, Sloper.Core.TextHistory;
+  Classes, SysUtils, Sloper.Core.Measurements, Sloper.Core.TextHistory, Sloper.Core.Units;
 
 type
   // fcReloaded: the file changed and nothing was unsaved. fcMerged: unsaved
@@ -112,6 +112,10 @@ type
     procedure SetValue(Index, SizeIndex: integer; Value: double);
     // Only a size table can have no value
     function ClearValue(Index, SizeIndex: integer; out ErrorMessage: string): boolean;
+    // A value as typed in a table showing AUnit: blank clears it (ClearValue),
+    // else a number in AUnit, a comma taken as the point; False with the reason
+    function SetValueText(Index, SizeIndex: integer; const Text: string; AUnit: TMeasureUnit;
+      out ErrorMessage: string): boolean;
     function AddSize(const Size: string; out ErrorMessage: string): boolean;
     function RenameSize(Index: integer; const NewSize: string; out ErrorMessage: string): boolean;
     function DeleteSize(Index: integer; out ErrorMessage: string): boolean;
@@ -132,6 +136,7 @@ type
 resourcestring
   rsFileChangedOnDisk = 'The file has changed on disk. Its changes are being taken in; save again in a moment';
   rsNeedsAValue = 'A set with no sizes needs a value for every measurement';
+  rsNotANumber = 'A value must be a number, such as 82.5';
   rsChangeName = 'Change name';
   rsChangeNotes = 'Change notes';
   rsChangeAdd = 'Add measurement';
@@ -588,6 +593,21 @@ begin
   BeginChange(rsChangeValue);
   FSet[Index].ClearValueFor(SizeIndex);
   EndChange;
+end;
+
+function TMeasurementDocument.SetValueText(Index, SizeIndex: integer; const Text: string; AUnit: TMeasureUnit;
+  out ErrorMessage: string): boolean;
+var
+  Value: double;
+begin
+  if Trim(Text) = '' then
+    Exit(ClearValue(Index, SizeIndex, ErrorMessage));
+  ErrorMessage := '';
+  Result := ParseMeasure(Text, AUnit, Value);
+  if Result then
+    SetValue(Index, SizeIndex, Value)
+  else
+    ErrorMessage := rsNotANumber;
 end;
 
 function TMeasurementDocument.AddSize(const Size: string; out ErrorMessage: string): boolean;

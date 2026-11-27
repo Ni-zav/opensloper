@@ -396,4 +396,16 @@ export const STRINGS = {
   measureColumnValue: 'Value',
   measureColumnDescription: 'Description',
   measureEmpty: 'Open a measurement file (.slm) to see its measurements',
+  measureAdd: 'Add',
+  measureAddHint: 'Add a measurement at the end, with its key to type',
+  measureDelete: 'Delete',
+  measureDeleteHint: 'Delete the measurement chosen',
+  measureUp: 'Up',
+  measureUpHint: 'Move the measurement chosen up',
+  measureDown: 'Down',
+  measureDownHint: 'Move the measurement chosen down',
+  measureDeleteQuestion: (key: string): string => `Delete @${key}? Patterns using it will show it as missing.`,
+  measureRenamed: (key: string, old: string): string =>
+    `Renamed to @${key}. Patterns using @${old} will show it as missing`,
+  measureDiscardChanges: 'The measurement set has changes that are not saved. Drop them?',
 } as const;

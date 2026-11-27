@@ -398,11 +398,13 @@ The replies of the first three are `publish_state`'s, which also gives the undo 
 
 The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Sloper.Measurements.MainForm`), built in steps (#84, see [Open items](open-items.md)). It is served but not linked from the site until it is ready.
 
-- **The toolbar** has Open, which takes a measurement set or size table (`.slm`). A file that is not one, or cannot be read, is refused with the reason, and the set open stays.
-- **The title** names the file. **The status bar** has a message.
+- **The toolbar** has Open, which takes a measurement set or size table (`.slm`), then Undo and Redo, Undo's hint naming its step. A file that is not one, or cannot be read, is refused with the reason, and the set open stays. Changes not saved are dropped only when the user agrees.
+- **The title** names the file, with the modified mark while it has changes. **The status bar** has a message.
 - **Name and Notes** are above the table, read only until the step that edits them.
-- **The table** (`MeasurementGrid` in `measurements/measurementGrid.ts`) is the shared `ListPanel`, as the desktop's grid: the key, a value column a size, or one Value column for a set without sizes, and the description, at the desktop's widths. It chooses one row at a time and has no search. It is read only for now.
-  - `ListPanel` takes any document that reads (`ListDocument`). It follows a `PatternDocument`'s changes itself; the measurements page tells its table when to build the rows again. `setColumns` gives it a column a size.
+- **The table** (`MeasurementGrid` in `measurements/measurementGrid.ts`) is the shared `ListPanel`, as the desktop's grid: the key, a value column a size, or one Value column for a set without sizes, and the description, at the desktop's widths. It chooses one row at a time and has no search.
+  - Every cell is edited in the grid, as the Design page's lists are, each edit one undo step. A key is renamed, and the status bar says patterns using the old key will show it as missing. A value is a number in the unit shown, a comma taken as the point, or blank to clear it in a size table. A refused edit stays red with the reason. An unchanged cell is not committed, so going through a table in inches does not round it.
+  - **Add**, **Delete**, **Up** and **Down** are over the table, on the left, as on the desktop. Add opens the new row's key to type. Delete, or the Delete key, asks first. A moved row stays chosen.
+  - `ListPanel` takes any document that reads (`ListDocument`). It follows a `PatternDocument`'s changes itself; the measurements page tells its table when to build the rows again. `setColumns` gives it a column a size. When a rename changes the chosen row's key, its owner hears of the new selection.
   - The grid's styles are in `ui/listPanel.css`, which the design page links too.
 - **Show in**, over the table at its end as on the desktop, chooses mm, cm or inches. The engine formats the values in it (`FormatMeasure`), so they read as the desktop shows them. It starts at mm and is not kept yet.
 - `MeasurementDocument` (`document/measurementDocument.ts`) is the proxy of the engine's set, as `LayoutDocument` is of the layout.
@@ -413,8 +415,12 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
 | --- | --- |
 | `measurements_open` | Opens a set from its `.slm` text (`TMeasurementDocument.OpenText`): no file to watch, nothing to undo, not modified. Text that cannot be read is refused, and the set open stays |
 | `measurements_state` | The set open, as its `.slm` file holds it (`SnapshotText`), without counting it as saved; an empty set before one is opened |
+| `measurements_set` | A cell as typed, by the measurement's `key` and the `column` (key, value with its `size`, or description), as the desktop window commits it (`RenameKey` trimmed, `SetValueText` in the unit, `SetDescription`). A refused edit answers `done` false with the `reason`; `key` is the measurement's afterwards |
+| `measurements_add` | A measurement at the end with a free key (`AddMeasurement`), answering its `key` |
+| `measurements_delete`, `measurements_move` | Deletes a measurement, or moves it to `index`, by its key |
+| `measurements_undo`, `measurements_redo` | The document's Undo and Redo; refused when there is nothing to take |
 
-Both take `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Both answer with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none) and `description`.
+Every one takes `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Every one answers with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none) and `description`; and with `modified`, `canUndo`, `canRedo` and `undo`, the step Undo would take. Each edit is one undo step of the document's own history.
 
 ## Server
 

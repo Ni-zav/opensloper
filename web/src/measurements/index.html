@@ -66,7 +66,7 @@
         margin: 2px 4px;
         background: #d8d6cf;
       }
-      /* Name and Notes, read only until they can be edited */
+      /* Name and Notes, each committed on Enter or leaving it */
       #header {
         display: flex;
         flex-wrap: wrap;
@@ -140,8 +140,8 @@
   <body>
     <div id="toolbar"></div>
     <div id="header">
-      <label><span id="set-name-label"></span><input id="set-name" type="text" readonly /></label>
-      <label><span id="set-notes-label"></span><input id="set-notes" type="text" readonly /></label>
+      <label><span id="set-name-label"></span><input id="set-name" type="text" /></label>
+      <label><span id="set-notes-label"></span><input id="set-notes" type="text" /></label>
     </div>
     <div id="table-bar">
       <div id="table-buttons"></div>

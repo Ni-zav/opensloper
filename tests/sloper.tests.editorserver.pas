@@ -188,6 +188,8 @@ type
     procedure TestMeasurementsEdits;
     // Sizes added, renamed, moved and deleted, as the desktop's size buttons
     procedure TestMeasurementsSizes;
+    // Name and Notes, each change one undo step
+    procedure TestMeasurementsNameAndNotes;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -907,6 +909,38 @@ begin
   Call('measurements_undo');
   Call('measurements_undo');
   AssertEquals('a set without sizes again', '', Sizes);
+  AssertFalse('all undone', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestEditorServer.TestMeasurementsNameAndNotes;
+const
+  SET_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"One","notes":"Taken in May",' +
+    '"measurements":[{"key":"waist","value":700}]}';
+var
+  Params: TJSONObject;
+begin
+  Params := TJSONObject.Create(['text', SET_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  Call('measurements_set_name', '{"text":"One"}');
+  AssertFalse('unchanged: no undo step', Answer.Booleans['canUndo']);
+  AssertFalse('nor modified', Answer.Booleans['modified']);
+  Call('measurements_set_name', '{"text":"Anna"}');
+  AssertEquals('Anna', Answer.Objects['set'].Strings['name']);
+  AssertEquals('Change name', Answer.Strings['undo']);
+  AssertTrue('modified', Answer.Booleans['modified']);
+  Call('measurements_set_notes', '{"text":"Taken in June"}');
+  AssertEquals('Taken in June', Answer.Objects['set'].Strings['notes']);
+  AssertEquals('Change notes', Answer.Strings['undo']);
+  Call('measurements_set_notes', '{}');
+  AssertEquals('text needed', RPC_INVALID_PARAMS, ErrorCode);
+  Call('measurements_undo');
+  AssertEquals('Taken in May', Answer.Objects['set'].Strings['notes']);
+  Call('measurements_undo');
+  AssertEquals('One', Answer.Objects['set'].Strings['name']);
   AssertFalse('all undone', Answer.Booleans['canUndo']);
 end;
 

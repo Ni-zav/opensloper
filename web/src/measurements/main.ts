@@ -2,9 +2,9 @@
 // and opens a measurement set or size table. Its table is edited in the grid,
 // with Add, Delete, Up and Down over it, then the size buttons, which act on
 // the size whose column the chosen cell is in, and Undo and Redo on the
-// toolbar; each change is one undo step. Name and Notes are above the table, read only for
-// now, Show in chooses the unit of its values, and the status bar has a
-// message. Nothing leaves the machine: the file is read in the browser and
+// toolbar; each change is one undo step. Name and Notes are above the
+// table, each committed when Enter is pressed or the field is left, Show in
+// chooses the unit of its values, and the status bar has a message. Nothing leaves the machine: the file is read in the browser and
 // given to the engine as text.
 import { MeasurementDocument } from '../document/measurementDocument.ts';
 import { MEASURE_UNITS } from '../editor/rulerTicks.ts';
@@ -74,6 +74,10 @@ class MeasurementsApp {
   private readonly upButton: HTMLButtonElement;
   private readonly downButton: HTMLButtonElement;
   private readonly sizeButtons: HTMLElement;
+  // The set whose name and notes the fields show
+  private shownGeneration = -1;
+  private shownName = '';
+  private shownNotes = '';
   private readonly addSizeButton: HTMLButtonElement;
   private readonly renameSizeButton: HTMLButtonElement;
   private readonly deleteSizeButton: HTMLButtonElement;
@@ -156,6 +160,17 @@ class MeasurementsApp {
       this.undoButton,
       this.redoButton,
     );
+    for (const box of [nameBox, notesBox]) {
+      // Enter, or leaving the field, commits it, as the desktop's EditingDone
+      box.addEventListener('change', () => {
+        this.run(this.commitHeader());
+      });
+      box.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          box.value = box === nameBox ? this.document.state.name : this.document.state.notes;
+        }
+      });
+    }
     tableButtons.append(this.addButton, this.deleteButton, this.upButton, this.downButton, this.sizeButtons);
     openInput.addEventListener('change', () => {
       const file = openInput.files?.[0];
@@ -190,6 +205,7 @@ class MeasurementsApp {
       showMessage(STRINGS.measureNotASet(file.name));
       return;
     }
+    await this.commitHeader();
     if (this.document.state.modified && !window.confirm(STRINGS.measureDiscardChanges)) {
       return;
     }
@@ -203,6 +219,20 @@ class MeasurementsApp {
       throw error;
     }
     showMessage(STRINGS.measureOpened(file.name));
+  }
+
+  // The fields' text, where it differs from the set's, as the desktop's
+  // HeaderDone; each change one undo step
+  private async commitHeader(): Promise<void> {
+    if (this.document.fileName === '') {
+      return;
+    }
+    if (nameBox.value !== this.document.state.name) {
+      await this.document.setName(nameBox.value);
+    }
+    if (notesBox.value !== this.document.state.notes) {
+      await this.document.setNotes(notesBox.value);
+    }
   }
 
   // A new measurement at the end, its key open to type, as on the desktop
@@ -312,8 +342,21 @@ class MeasurementsApp {
     const fileName = this.document.fileName;
     const shown = state.modified ? `${STRINGS.modifiedMark} ${fileName}` : fileName;
     document.title = fileName === '' ? STRINGS.measureApp : `${shown} — ${STRINGS.measureApp}`;
-    nameBox.value = state.name;
-    notesBox.value = state.notes;
+    // A field with text not yet committed keeps it, as the desktop's field
+    // being typed in, unless another set was opened
+    const opened = this.document.generation !== this.shownGeneration;
+    this.shownGeneration = this.document.generation;
+    for (const [box, text, before] of [
+      [nameBox, state.name, this.shownName],
+      [notesBox, state.notes, this.shownNotes],
+    ] as const) {
+      if (opened || box.value === before) {
+        box.value = text;
+      }
+      box.disabled = fileName === '';
+    }
+    this.shownName = state.name;
+    this.shownNotes = state.notes;
     // The table once a set is open, else a line saying to open one
     if (fileName === '') {
       table.replaceChildren(empty);

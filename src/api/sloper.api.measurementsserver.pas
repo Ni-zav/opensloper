@@ -80,6 +80,9 @@ resourcestring
   rsMeasurementsUndo = 'Undoes the last change to the set';
   rsMeasurementsRedo = 'Makes the change undone again';
   rsMeasurementsEditReturns = 'The state, as measurements_state';
+  rsMeasurementsSetName = 'Sets the set''s name, as typed; one undo step, none when it is unchanged';
+  rsMeasurementsSetNotes = 'Sets the set''s notes, as typed; one undo step, none when they are unchanged';
+  rsMeasurementsHeaderText = 'The text as typed';
   rsMeasurementsAddSize = 'Adds a size at the end of the table: a set without sizes becomes a size table, its ' +
     'values the new size''s; one undo step';
   rsMeasurementsSizeName = 'The size''s name, such as 12 or M';
@@ -118,6 +121,12 @@ begin
   AddApiMethod(Result, 'measurements_move', rsMeasurementsMove, rsMeasurementsEditReturns);
   AddApiParam(Result, 'key', apText, True, rsMeasurementsKey);
   AddApiParam(Result, 'index', apNumber, True, rsMeasurementsIndex);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_set_name', rsMeasurementsSetName, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'text', apText, True, rsMeasurementsHeaderText);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_set_notes', rsMeasurementsSetNotes, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'text', apText, True, rsMeasurementsHeaderText);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_add_size', rsMeasurementsAddSize, rsMeasurementsEditReturns);
   AddApiParam(Result, 'name', apText, True, rsMeasurementsSizeName);
@@ -327,6 +336,13 @@ begin
     'measurements_move':
       if not DoMove(Params) then
         raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['index']));
+    // As the desktop's fields: unchanged text makes no undo step
+    'measurements_set_name':
+      if RequireString(Params, 'text') <> FDocument.Measurements.Name then
+        FDocument.SetName(RequireString(Params, 'text'));
+    'measurements_set_notes':
+      if RequireString(Params, 'text') <> FDocument.Measurements.Notes then
+        FDocument.SetNotes(RequireString(Params, 'text'));
     'measurements_add_size', 'measurements_rename_size', 'measurements_delete_size', 'measurements_move_size':
       DoSizeEdit(Method, Params);
     'measurements_undo':

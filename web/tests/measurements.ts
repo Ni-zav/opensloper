@@ -1,6 +1,7 @@
 // Drives the built Measurements app in headless Chromium: the page asks for a
 // file until one is open; a set opens with its name, notes and a row a
-// measurement; Show in shows the values in cm and inches. In the grid a value
+// measurement; Show in shows the values in cm and inches. Name and Notes
+// are edited, committed by Enter or leaving the field. In the grid a value
 // is changed, one that is not a number refused, a key renamed and a
 // description typed; Add makes a row whose key is typed, Up moves it, Delete
 // asks and deletes it, and Undo and Redo step through. Opening another file
@@ -84,6 +85,10 @@ try {
   await waitForData(page, 'ready', 'true');
   assert.equal(await page.title(), 'OpenSloper Measurements');
   assert.equal(await page.$('#table input[type=search]'), null, 'no search box before a set is open');
+  assert.ok(
+    await page.$eval('#set-name', (box) => box instanceof HTMLInputElement && box.disabled),
+    'nothing to name before a set is open',
+  );
   assert.match(await page.$eval('#table', (element) => element.textContent), /Open a measurement file/u);
   const input = await page.$('input#open-input');
   assert.ok(input);
@@ -94,7 +99,6 @@ try {
   await waitForRows(page, 4);
   assert.equal(await page.title(), 'skirt.slm — OpenSloper Measurements');
   assert.equal(await page.$eval('#set-name', (box) => (box instanceof HTMLInputElement ? box.value : '')), 'Tutorial');
-  assert.ok(await page.$eval('#set-name', (box) => box instanceof HTMLInputElement && box.readOnly));
   assert.ok(
     await page.$eval('#table .list-header', (header) => header instanceof HTMLElement && header.offsetHeight === 0),
     'the table has no search box',
@@ -105,6 +109,31 @@ try {
   await showIn(page, 'cm', '66');
   await showIn(page, 'in', '25.9843');
   await showIn(page, 'mm', '660');
+
+  // Name and Notes: committed by Enter or by leaving the field, each one undo
+  // step; Escape puts back the set's text
+  async function fieldValue(id: string): Promise<string> {
+    return page.$eval(id, (box) => (box instanceof HTMLInputElement ? box.value : ''));
+  }
+  await page.click('#set-name', { count: 3 });
+  await page.keyboard.type('Anna');
+  await page.keyboard.press('Enter');
+  await waitForData(page, 'undo', 'Change name');
+  assert.equal(await page.title(), '• skirt.slm — OpenSloper Measurements');
+  await page.click('#set-notes', { count: 3 });
+  await page.keyboard.type('Taken in June');
+  await page.click(cellAt(2, 1));
+  await waitForData(page, 'undo', 'Change notes');
+  await page.click('#set-name', { count: 3 });
+  await page.keyboard.type('Bea');
+  await page.keyboard.press('Escape');
+  assert.equal(await fieldValue('#set-name'), 'Anna');
+  await press(page, 'Undo');
+  await waitForData(page, 'undo', 'Change name');
+  assert.equal(await fieldValue('#set-name'), 'Anna', 'Escape committed nothing');
+  await press(page, 'Undo');
+  await waitForData(page, 'undo', '');
+  assert.equal(await fieldValue('#set-name'), 'Tutorial');
 
   // Edits in the grid, each one undo step
   assert.ok(

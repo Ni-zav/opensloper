@@ -22,6 +22,11 @@ Changed, Fixed and Removed under each version.
 - Web Design draws the dependency arrows: blue to what the hovered or
   selected object reads, and with Dependents on, purple to what reads it
   (#161).
+- A point along an edge or between points has a *Measure by* row, to switch
+  between a length and a ratio, and a point along an edge a *Measured from*
+  choice of the edge's ends. It stays where it is; its formula becomes a plain
+  number, which Undo brings back. `convert_point` takes `mode` and `end`
+  (#158, #159).
 
 ### Fixed
 

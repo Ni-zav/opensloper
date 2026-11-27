@@ -369,10 +369,11 @@ type
   TInputSection = class(TPropertySection)
   private
     FTexts: array of TGridLabel;
-    FModeBox: TComboBox;
+    FModeBox, FEndBox: TComboBox;
+    procedure EndChange(Sender: TObject);
     procedure ModeChange(Sender: TObject);
     // ItemIndex is the mode box's choice
-    procedure ChangeMode(ItemIndex: integer);
+    procedure ChangeMode(const RowId: string; ItemIndex: integer);
   public
     procedure Build(Node: TEvalNode; Place: TSectionPlace); override;
     procedure Refresh(Node: TEvalNode); override;
@@ -452,6 +453,8 @@ const
   QUEUED_CONVERT_TYPE = 0;
   QUEUED_MARKER = 1;
   QUEUED_OFFSET_MODE = 2;
+  QUEUED_MEASURE_MODE = 3;
+  QUEUED_MEASURE_END = 4;
 
 function SameNames(const First, Second: TStringArray): boolean;
 var
@@ -735,7 +738,7 @@ end;
 procedure TPropertiesPanel.AddSections(Node: TEvalNode);
 begin
   FSections.Add(TCommonSection.Create(Self));
-  if Length(PointInputs(Document.Pattern, Node)) > 0 then
+  if Length(PointInputs(Node)) > 0 then
     FSections.Add(TInputSection.Create(Self));
   if Node is TEdgeObject then
     FSections.Add(TEdgeSection.Create(Self));
@@ -1868,44 +1871,58 @@ begin
   if Place <> spInputs then
     Exit;
   FTexts := nil;
-  for Input in PointInputs(Panel.Document.Pattern, Node) do
+  for Input in PointInputs(Node) do
     Insert(Panel.AddTextRow(Input.Caption, ''), FTexts, Length(FTexts));
   FModeBox := nil;
+  FEndBox := nil;
   if Node is TOffsetPoint then
+    FModeBox := Panel.AddChoiceRow(rsPropOffsetBy, OffsetModeChoices, nil)
+  else if (Node is TAlongEdgePoint) or (Node is TBetweenPoint) then
   begin
-    FModeBox := Panel.AddChoiceRow(rsPropOffsetBy, OffsetModeChoices, nil);
-    FModeBox.ItemIndex := Ord(TOffsetPoint(Node).Mode);
-    FModeBox.OnChange := @ModeChange;
+    if Node is TAlongEdgePoint then
+    begin
+      FEndBox := Panel.AddChoiceRow(rsPropInputMeasuredFrom, PointMeasureEndChoices(Panel.Document.Pattern, TAlongEdgePoint(Node)), nil);
+      FEndBox.OnChange := @EndChange;
+    end;
+    FModeBox := Panel.AddChoiceRow(rsPropMeasureBy, PointMeasureChoices, nil);
   end;
+  if Assigned(FModeBox) then
+    FModeBox.OnChange := @ModeChange;
 end;
 
-// Changing mode replaces the point and rebuilds the panel, box and all
+// Changing a choice replaces the point, so wait until its control is idle
 procedure TInputSection.ModeChange(Sender: TObject);
 begin
-  Panel.QueueChange(Self, QUEUED_OFFSET_MODE, FModeBox.ItemIndex);
+  if Panel.SelectedNode is TOffsetPoint then
+    Panel.QueueChange(Self, QUEUED_OFFSET_MODE, FModeBox.ItemIndex)
+  else
+    Panel.QueueChange(Self, QUEUED_MEASURE_MODE, FModeBox.ItemIndex);
+end;
+
+procedure TInputSection.EndChange(Sender: TObject);
+begin
+  Panel.QueueChange(Self, QUEUED_MEASURE_END, FEndBox.ItemIndex);
 end;
 
 procedure TInputSection.QueuedChangeDue(Change, Data: integer);
 begin
-  if Change = QUEUED_OFFSET_MODE then
-    ChangeMode(Data);
+  case Change of
+    QUEUED_OFFSET_MODE: ChangeMode(PROPERTY_ROW_OFFSET_MODE, Data);
+    QUEUED_MEASURE_MODE: ChangeMode(PROPERTY_ROW_MEASURE_MODE, Data);
+    QUEUED_MEASURE_END: ChangeMode(PROPERTY_ROW_MEASURE_END, Data);
+  end;
 end;
 
-// The commit rebuilds the panel, which frees this section, so only the panel
-// is used after it
-procedure TInputSection.ChangeMode(ItemIndex: integer);
+procedure TInputSection.ChangeMode(const RowId: string; ItemIndex: integer);
 var
   APanel: TPropertiesPanel;
-  Node: TEvalNode;
   Reason: string;
 begin
-  if not Assigned(FModeBox) or (ItemIndex < 0) then
+  if ItemIndex < 0 then
     Exit;
   APanel := Panel;
-  Node := APanel.SelectedNode;
-  if not (Node is TOffsetPoint) or SetOffsetModeStep(APanel.Document, Node, TOffsetMode(ItemIndex), Reason) then
+  if CommitPropertyRow(APanel.Document, APanel.SelectedNode, RowId, ItemIndex, Reason) then
     Exit;
-  // The box goes back to the mode the point still has
   APanel.Rebuild;
   APanel.Report(Reason);
 end;
@@ -1916,8 +1933,9 @@ var
   Inputs: TPointInputArray;
   Found: TEvalNode;
   Index: integer;
+  EndChoices: TStringArray;
 begin
-  Inputs := PointInputs(Panel.Document.Pattern, Node);
+  Inputs := PointInputs(Node);
   for Index := 0 to Min(High(Inputs), High(FTexts)) do
   begin
     Found := Panel.Document.Pattern.FindNode(Inputs[Index].Key);
@@ -1926,8 +1944,20 @@ begin
     else
       FTexts[Index].Caption := Inputs[Index].Key;
   end;
-  if Assigned(FModeBox) and (Node is TOffsetPoint) then
-    FModeBox.ItemIndex := Ord(TOffsetPoint(Node).Mode);
+  if Assigned(FModeBox) then
+    if Node is TOffsetPoint then
+      FModeBox.ItemIndex := Ord(TOffsetPoint(Node).Mode)
+    else if Node is TAlongEdgePoint then
+      FModeBox.ItemIndex := Ord(TAlongEdgePoint(Node).Mode)
+    else if Node is TBetweenPoint then
+      FModeBox.ItemIndex := Ord(TBetweenPoint(Node).Mode);
+  if Assigned(FEndBox) and (Node is TAlongEdgePoint) then
+  begin
+    EndChoices := PointMeasureEndChoices(Panel.Document.Pattern, TAlongEdgePoint(Node));
+    for Index := 0 to Min(High(EndChoices), FEndBox.Items.Count - 1) do
+      FEndBox.Items[Index] := EndChoices[Index];
+    FEndBox.ItemIndex := Ord(TAlongEdgePoint(Node).FromEnd);
+  end;
 end;
 
 procedure TRepeatSection.Build(Node: TEvalNode; Place: TSectionPlace);

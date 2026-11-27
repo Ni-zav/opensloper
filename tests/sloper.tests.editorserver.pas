@@ -172,6 +172,7 @@ type
     // Its edits, each one undo step, refused with the reason
     procedure TestPropertyEdits;
     procedure TestOffsetModeEdit;
+    procedure TestPointMeasurementEdits;
     // A piece's rows: cut, fold, own allowance, grainline, material and fill
     procedure TestPiecePropertyEdits;
     // A note's rows: text, size, printing, look, font and making it free
@@ -1759,7 +1760,7 @@ begin
   Call('add_point', '{"type": "projectPoint", "name": "T", "point": "A", "edge": "Line_B_C", ' +
     '"direction": "perpendicular"}');
   AssertEquals('an offset', 'From: A', Inputs('P'));
-  AssertEquals('along an edge', 'Along: Line_A_B; Measured from: B', Inputs('Q'));
+  AssertEquals('along an edge', 'Along: Line_A_B', Inputs('Q'));
   AssertEquals('between', 'From: A; To: C', Inputs('R'));
   AssertEquals('a crossing', 'First edge: Line_A_B; Second edge: Line_B_C', Inputs('S'));
   AssertEquals('a projection', 'From: A; Onto: Line_B_C', Inputs('T'));
@@ -1830,6 +1831,28 @@ begin
   AssertFalse('no such row', Answer.Booleans['done']);
   Call('editor_property_set', '{"id": ' + IdEdge + '}');
   AssertEquals('which row', RPC_INVALID_PARAMS, ErrorCode);
+end;
+
+// Measure by and Measured from: the point stays, its formula becomes a
+// number, and each undo puts one change back
+procedure TTestEditorServer.TestPointMeasurementEdits;
+var
+  PointId: string;
+begin
+  AddSquare;
+  Call('add_point', '{"type":"alongEdgePoint","name":"Q","edge":"Line_A_B","from":"start","mode":"length","value":"10+15"}');
+  PointId := IntToStr(IdOf('Q'));
+  Call('editor_property_set', '{"id":' + PointId + ',"row":"measureMode","value":1}');
+  AssertTrue('mode changed', Answer.Booleans['done']);
+  Call('editor_property_set', '{"id":' + PointId + ',"row":"measureEnd","value":1}');
+  AssertTrue('end flipped', Answer.Booleans['done']);
+  Call('get_object', '{"name":"Q"}');
+  AssertEquals(25.0, Answer.Floats['x'], 0.001);
+  AssertEquals('0.75', Answer.Objects['formulas'].Strings['value']);
+  Call('undo');
+  Call('undo');
+  Call('get_object', '{"name":"Q"}');
+  AssertEquals('10+15', Answer.Objects['formulas'].Strings['value']);
 end;
 
 // Length and angle, or across and down: the point stays, its formulas become

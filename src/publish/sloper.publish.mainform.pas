@@ -121,6 +121,7 @@ type
     procedure RefreshControls;
     procedure RefreshCommands;
     procedure PreferencesClick(Sender: TObject);
+    procedure ProfilesClick(Sender: TObject);
     procedure AboutClick(Sender: TObject);
     procedure UserGuideClick(Sender: TObject);
     procedure WatchTick(Sender: TObject);
@@ -309,10 +310,9 @@ resourcestring
   rsExportSVG = 'Export SVG...';
   rsExportDXF = 'Export DXF...';
   rsExportMachineDXF = 'Export Machine DXF...';
+  rsMenuProfiles = 'Output and Machine Profiles...';
   rsProfile = 'Machine profile';
-  rsProfileNone = 'None';
   rsOutputProfile = 'Output profile';
-  rsOutputProfileAll = 'Everything';
   rsPackPieces = 'Pack pieces';
   rsPackChange = 'Pack pieces';
   rsPackedPages = 'Packed %d copies on %d pages';
@@ -334,7 +334,7 @@ resourcestring
 implementation
 
 uses
-  LCLType, Math, StrUtils, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles,
+  LCLType, Math, StrUtils, Sloper.Core.Geometry, Sloper.Core.MachineProfiles, Sloper.Core.OutputProfiles, Sloper.Core.RecentFiles, Sloper.Publish.ProfilesDialog,
   Sloper.Core.Settings, Sloper.Core.IconSet, Sloper.UI.Spacing, Sloper.UI.FontBox,
   Sloper.UI.About, Sloper.UI.Help, Sloper.UI.Preferences, Sloper.UI.AssistantHosts,
   Sloper.Output.LayoutPDF, Sloper.Output.Packing, Sloper.Output.Preview, Sloper.Output.Printing, Sloper.Output.Tiling,
@@ -539,6 +539,7 @@ begin
   FCommands.AddMenuItem(Group, FRedoAction);
   Group.AddSeparator;
   FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuPreferences, aiPreferences, @PreferencesClick, CommandShortCut(kcPreferences)));
+  FCommands.AddMenuItem(Group, FCommands.NewAction(rsMenuProfiles, aiPreferences, @ProfilesClick));
   Group := AddMenu(rsMenuView);
   FCommands.AddMenuItem(Group, FZoomInAction);
   FCommands.AddMenuItem(Group, FZoomOutAction);
@@ -1507,11 +1508,14 @@ function TPublishForm.AppLinkMessage(const Method: string; Params: TJSONObject):
 var
   LayoutFile: string;
 begin
-  // Another app saved them; only printing reads the calibration
+  // Another app saved preferences or profiles
   if Method = APP_LINK_PREFERENCES then
   begin
     FDocument.Layout.Calibration := UserCalibration;
+    FDocument.Layout.MachineProfiles := UserMachineProfiles;
+    FDocument.Layout.OutputProfiles := UserOutputProfiles;
     FAssistant.KeyChanged;
+    DocumentChanged(FDocument);
     Exit(True);
   end;
   Result := (Method = APP_LINK_SHOW) and GetJSONString(Params, APP_LINK_LAYOUT_PARAM, LayoutFile) and
@@ -1770,6 +1774,19 @@ end;
 procedure TPublishForm.UserGuideClick(Sender: TObject);
 begin
   ShowUserGuide;
+end;
+
+procedure TPublishForm.ProfilesClick(Sender: TObject);
+var
+  Machines: TMachineProfileArray;
+  Outputs: TOutputProfileArray;
+begin
+  if not EditUserProfiles(Self, Machines, Outputs) then
+    Exit;
+  FDocument.Layout.MachineProfiles := Machines;
+  FDocument.Layout.OutputProfiles := Outputs;
+  DocumentChanged(FDocument);
+  TellApps(APP_LINK_PREFERENCES, FAppLink);
 end;
 
 procedure TPublishForm.PreferencesClick(Sender: TObject);

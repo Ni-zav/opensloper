@@ -13,6 +13,11 @@ Changed, Fixed and Removed under each version.
 
 ## 0.10.0
 
+### Added
+
+- Publish can create and edit named output and machine profiles from the
+  Edit menu (#57).
+
 ## 0.9.0
 
 ### Added

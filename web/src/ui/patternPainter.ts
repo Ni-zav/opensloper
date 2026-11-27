@@ -34,7 +34,13 @@ const GUIDE_DOTS = [1, 2];
 // A piece's grainline, fold and marking strokes, and its notches, in pixels
 const PIECE_MARK_WIDTH = 1.5;
 const NOTCH_WIDTH = 2;
+const PROBLEM_HALO_WIDTH = 10;
+const PROBLEM_HALO_GROW = 6;
+const PROBLEM_HALO = { red: 209, green: 52, blue: 56, alpha: 80 };
 const SEAM_LINE_WIDTH = 4;
+const LINK_ARROW_WIDTH = 2;
+const LINK_ARROW_GAP = 6;
+const LINK_ARROW_HEAD = 10;
 const CHEVRON_SIZE = 10;
 // Degrees either side of the way a chevron points, to its wings
 const CHEVRON_SPREAD = 150;
@@ -98,6 +104,7 @@ const SNAP_INK = rgba(196, 48, 140);
 const BOX_FILL = rgba(37, 116, 214, 20);
 const PIECE_HOVER_TINT = rgba(37, 116, 214, 30);
 const HOVER_HALO = rgba(37, 116, 214, 60);
+const DEPENDENT_INK = rgba(140, 80, 200);
 const ERROR_INK = rgba(209, 52, 56);
 const BLOCKED_INK = rgba(226, 140, 40);
 const SEAM_INK_A = rgba(214, 96, 37);
@@ -150,9 +157,17 @@ export interface SnapMarker {
 }
 
 // What the canvas shows besides the pattern itself
+export interface DependencyArrow {
+  from: Vec2;
+  to: Vec2;
+  dependent: boolean;
+}
+
 export interface PaintState {
+  dependencyArrows: readonly DependencyArrow[];
   view: ViewTransform;
   selection: ReadonlySet<string>;
+  problemIds: ReadonlySet<string>;
   hoverId: string;
   snap: SnapMarker | undefined;
   // The selection box's screen corners, while one is dragged
@@ -257,13 +272,59 @@ export class PatternPainter {
   // Pieces under edges, edges under points; what an isolated piece leaves out under a wash
   drawPattern(scene: Scene, tables: Tables): void {
     if (scene.isolated === '') {
+      this.drawProblemHalos(scene);
       this.drawLayer(scene, tables, false);
       return;
     }
     this.drawLayer(scene, tables, true);
     this.context.fillStyle = css({ ...PAPER, alpha: DIM_WASH_ALPHA });
     this.context.fillRect(0, 0, this.width, this.height);
+    this.drawProblemHalos(scene);
     this.drawLayer(scene, tables, false);
+  }
+
+  private drawProblemHalos(scene: Scene): void {
+    const { problemIds, view } = this.paintState();
+    if (problemIds.size === 0) return;
+    const shown = (object: SceneObject): boolean => !object.dimmed && problemIds.has(object.id);
+    const context = this.context;
+    context.lineWidth = PROBLEM_HALO_WIDTH;
+    context.lineJoin = 'round';
+    context.lineCap = 'round';
+    context.strokeStyle = css(PROBLEM_HALO);
+    context.fillStyle = css(PROBLEM_HALO);
+    context.setLineDash([]);
+    for (const piece of scene.pieces) {
+      if (shown(piece) && piece.cutLine.length >= 6) {
+        this.tracePolyline(piece.cutLine);
+        context.closePath();
+        context.stroke();
+      }
+    }
+    for (const edge of scene.edges) {
+      if (shown(edge) && edge.line.length >= 4) {
+        const gap = edge.slot * COINCIDENT_GAP;
+        this.tracePolyline(edge.line, { x: edge.normal.x * gap, y: edge.normal.y * gap });
+        context.stroke();
+      }
+    }
+    for (const seam of scene.seams) {
+      if (shown(seam)) {
+        this.strokeLines(seam.sideA, PROBLEM_HALO, PROBLEM_HALO_WIDTH);
+        this.strokeLines(seam.sideB, PROBLEM_HALO, PROBLEM_HALO_WIDTH);
+      }
+    }
+    for (const marker of scene.markers) {
+      if (shown(marker)) this.strokeSegments(marker.strokes, css(PROBLEM_HALO), PROBLEM_HALO_WIDTH);
+    }
+    for (const point of scene.points) {
+      if (shown(point)) {
+        const at = view.toScreen(point);
+        context.beginPath();
+        context.arc(at.x, at.y, POINT_RADIUS + PROBLEM_HALO_GROW, 0, 2 * Math.PI);
+        context.fill();
+      }
+    }
   }
 
   // Each note's text in its size and font, with a callout's leader, a white
@@ -639,6 +700,15 @@ export class PatternPainter {
       context.lineWidth = 1.5;
       context.stroke();
     }
+    if (!note.dimmed && state.problemIds.has(note.id)) {
+      context.fillStyle = css(PROBLEM_HALO);
+      context.fillRect(
+        frameFirst.x - PROBLEM_HALO_GROW,
+        frameFirst.y - PROBLEM_HALO_GROW,
+        frameLast.x - frameFirst.x + 2 * PROBLEM_HALO_GROW,
+        frameLast.y - frameFirst.y + 2 * PROBLEM_HALO_GROW,
+      );
+    }
     if (note.boxed) {
       context.fillStyle = css(WHITE);
       context.fillRect(frameFirst.x, frameFirst.y, frameLast.x - frameFirst.x, frameLast.y - frameFirst.y);
@@ -778,6 +848,35 @@ export class PatternPainter {
     context.stroke();
   }
 
+  private drawDependencyArrows(): void {
+    const { dependencyArrows, view } = this.paintState();
+    const context = this.context;
+    for (const arrow of dependencyArrows) {
+      const from = view.toScreen(arrow.from);
+      const to = view.toScreen(arrow.to);
+      const span = Math.hypot(to.x - from.x, to.y - from.y);
+      if (span < 3 * LINK_ARROW_GAP) continue;
+      const along = { x: (to.x - from.x) / span, y: (to.y - from.y) / span };
+      const tip = { x: to.x - along.x * LINK_ARROW_GAP, y: to.y - along.y * LINK_ARROW_GAP };
+      const base = { x: tip.x - along.x * LINK_ARROW_HEAD, y: tip.y - along.y * LINK_ARROW_HEAD };
+      const wing = { x: (-along.y * LINK_ARROW_HEAD) / 2, y: (along.x * LINK_ARROW_HEAD) / 2 };
+      const color = css(arrow.dependent ? DEPENDENT_INK : SELECTED_INK);
+      context.strokeStyle = color;
+      context.lineWidth = LINK_ARROW_WIDTH;
+      context.beginPath();
+      context.moveTo(from.x + along.x * LINK_ARROW_GAP, from.y + along.y * LINK_ARROW_GAP);
+      context.lineTo(tip.x, tip.y);
+      context.stroke();
+      context.fillStyle = color;
+      context.beginPath();
+      context.moveTo(tip.x, tip.y);
+      context.lineTo(base.x + wing.x, base.y + wing.y);
+      context.lineTo(base.x - wing.x, base.y - wing.y);
+      context.closePath();
+      context.fill();
+    }
+  }
+
   private drawLayer(scene: Scene, tables: Tables, dimmed: boolean): void {
     const state = this.paintState();
     const context = this.context;
@@ -854,6 +953,7 @@ export class PatternPainter {
         this.strokeSegments(marker.strokes, css(this.isSelected(marker) ? SELECTED_INK : inkFor(marker, INK)), 1);
       }
     }
+    if (!dimmed) this.drawDependencyArrows();
     for (const point of scene.points) {
       if (point.dimmed !== dimmed) {
         continue;

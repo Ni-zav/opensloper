@@ -74,6 +74,8 @@ export const STRINGS = {
   fit: 'Fit',
   fitHint: 'Fit everything in the window',
   rulers: 'Rulers',
+  dependents: 'Dependents',
+  dependentsHint: 'Show arrows to objects that read the selection or hovered object',
   rulersHint: (keys: string): string => `Show or hide the rulers (${keys})`,
   drawRoleHint: 'The role of the lines and shapes drawn next',
   labelsHint: 'Which objects are labelled',

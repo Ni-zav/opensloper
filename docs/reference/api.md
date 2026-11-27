@@ -311,7 +311,8 @@ Changes how a point is placed, keeping its ID, name and users. Its numbers are w
 | `id` or `name` | number or text | yes | The object, by its ID or its name |
 | `type` | one of: `freePoint`, `offsetPoint`, `alongEdgePoint`, `betweenPoint`, `intersectPoint`, `circleEdgePoint`, `circleCirclePoint`, `projectPoint` | yes | What it becomes, as the pattern file names it |
 | `from` | list of IDs or names |  | What it is placed from, in order: offsetPoint a point; alongEdgePoint an edge; betweenPoint two points; intersectPoint two edges; circleEdgePoint the centre and an edge; circleCirclePoint the two centres; projectPoint the point and the edge. None for freePoint |
-| `mode` | one of: `polar`, `cartesian` |  | For offsetPoint: polar, a length and angle, or cartesian, across and down (the default). An offset point can change mode from the same base |
+| `mode` | one of: `polar`, `cartesian`, `length`, `ratio` |  | For offsetPoint: polar, a length and angle, or cartesian, across and down (the default). For alongEdgePoint or betweenPoint: length or ratio. An offset point can change mode from the same base |
+| `end` | one of: `start`, `end` |  | For alongEdgePoint: the start or end to measure from |
 
 Returns: The object, as `get_object` gives it.
 

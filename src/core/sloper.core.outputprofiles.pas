@@ -65,6 +65,13 @@ function FullOutputProfile: TOutputProfile;
 // Home printing, Plotter or laser cutter, Leather and Instructions sheet
 function BuiltInOutputProfiles: TOutputProfileArray;
 function IsBuiltInOutputProfile(const AName: string): boolean;
+// A built-in profile's name, or the "Everything" a layout shows for no profile
+function IsReservedOutputProfileName(const AName: string): boolean;
+// Ignoring case. The profile at Skip is passed over, so a rename can keep its name.
+function OutputProfileNameTaken(const Profiles: TOutputProfileArray; const AName: string; Skip: integer): boolean;
+// A role's style as typed: all blank keeps the default style, else a colour,
+// up to four dash lengths and a width above 0
+function TryOutputRoleStyle(const Color, DashText, Width: string; out Style: TRoleStyle): boolean;
 // The built-in profiles, then the user's, ignoring case. A user profile with
 // a built-in name is never found, so a built-in one always prints the same.
 function FindOutputProfile(const Profiles: TOutputProfileArray; const AName: string; out Found: TOutputProfile): boolean;
@@ -74,6 +81,9 @@ function OutputProfilesToJSON(const Profiles: TOutputProfileArray): TJSONArray;
 // A profile with no name, or a built-in one's name, is skipped; unknown
 // roles, marks and bad styles are passed over
 function OutputProfilesFromJSON(Data: TJSONData): TOutputProfileArray;
+
+resourcestring
+  rsOutputProfileAll = 'Everything';
 
 implementation
 
@@ -215,6 +225,44 @@ begin
   for Index := 0 to Data.Count - 1 do
     if Data.Items[Index].JSONType = jtString then
       Insert(Data.Items[Index].AsString, Result, System.Length(Result));
+end;
+
+function IsReservedOutputProfileName(const AName: string): boolean;
+begin
+  Result := IsBuiltInOutputProfile(Trim(AName)) or SameText(Trim(AName), rsOutputProfileAll);
+end;
+
+function OutputProfileNameTaken(const Profiles: TOutputProfileArray; const AName: string; Skip: integer): boolean;
+var
+  Index: integer;
+begin
+  for Index := 0 to High(Profiles) do
+    if (Index <> Skip) and SameText(Profiles[Index].Name, Trim(AName)) then
+      Exit(True);
+  Result := False;
+end;
+
+function TryOutputRoleStyle(const Color, DashText, Width: string; out Style: TRoleStyle): boolean;
+var
+  Candidate: TRoleStyle;
+  Parts: TStringArray;
+  Index: integer;
+begin
+  Style := Default(TRoleStyle);
+  Candidate := Default(TRoleStyle);
+  Candidate.Color := Trim(Color);
+  Parts := Trim(DashText).Split([' ', #9], TStringSplitOptions.ExcludeEmpty);
+  if (Candidate.Color = '') and (Length(Parts) = 0) and (Trim(Width) = '') then
+    Exit(True);
+  if not IsHexColor(Candidate.Color) or not TryPositiveProfileNumber(Width, Candidate.Width) or
+    (Length(Parts) > Length(Candidate.Dashes)) then
+    Exit(False);
+  for Index := 0 to High(Parts) do
+    if not TryPositiveProfileNumber(Parts[Index], Candidate.Dashes[Index]) then
+      Exit(False);
+  Candidate.Custom := True;
+  Style := Candidate;
+  Result := True;
 end;
 
 // Colour, up to four dash lengths and a width above 0, or none of it

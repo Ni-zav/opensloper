@@ -27,6 +27,8 @@ Changed, Fixed and Removed under each version.
   choice of the edge's ends. It stays where it is; its formula becomes a plain
   number, which Undo brings back. `convert_point` takes `mode` and `end`
   (#158, #159).
+- The user guide has a Development page: getting the code, building, testing,
+  and links to the Pascal source documentation (#47).
 
 ### Fixed
 

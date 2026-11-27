@@ -18,6 +18,11 @@ Changed, Fixed and Removed under each version.
 - Publish can create, rename and edit named output and machine profiles from
   the Edit menu (#57).
 
+### Fixed
+
+- Shortcut hints in web Design show Ctrl or Cmd for the current platform
+  (#160).
+
 ## 0.9.0
 
 ### Added

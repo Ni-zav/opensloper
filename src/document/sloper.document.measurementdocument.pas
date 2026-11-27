@@ -72,9 +72,9 @@ type
     // Starts a new, unnamed file with what an import made, not yet saved
     procedure TakeImported(Imported: TMeasurementSet);
     function Open(const AFileName: string; out ErrorMessage: string): boolean;
-    // Opens a measurement set supplied by the caller, with no file to watch.
+    // Opens a set from a file's text, with no file to watch, as a browser gives it
     function OpenText(const Text: string; out ErrorMessage: string): boolean;
-    // Serializes the current set without changing the saved state.
+    // The set as its file would hold it, without counting it as saved
     function SnapshotText: string;
     // Written atomically. Refused when the open file has changed on disk
     // since it was read, until CheckFile has taken that change in.

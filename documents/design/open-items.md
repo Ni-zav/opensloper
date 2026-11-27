@@ -29,10 +29,7 @@ At `/measurements/`, built in small pull requests as the web Publish app was, ea
 - **Shared parts**: the list grid, `STRINGS`, the engine's shortcut tables, `FileAccess`, `Autosave` and the service worker.
 - **#111 is the reference** for the document from text, the pattern check and the catalogue figure, and is credited where its ideas are used.
 
-1. **Open**: the page with its toolbar and status bar shows the set read only.
-   Its engine methods are `measurements_open` (the file text) and `measurements_state`,
-   both returning the current set as `.slm` fields. They use a separate
-   `TMeasurementDocument` so opening a set remains independent of Design.
+1. **Open**: the page with its toolbar and status bar, and the set shown read only. The engine's half is built: `TMeasurementDocument.OpenText`, `measurements_open` and `measurements_state` (see [Web version](web-version.md)).
 2. **The table**: values edited in the list grid, rows added, deleted and moved, names and descriptions; Undo and Redo.
 3. **Size tables**: a column per size, sizes added, renamed, deleted and moved.
 4. **Name and Notes**: the fields above the table, each change one undo step.

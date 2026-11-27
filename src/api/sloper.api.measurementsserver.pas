@@ -25,7 +25,7 @@ unit Sloper.API.MeasurementsServer;
 interface
 
 uses
-  fpjson, Sloper.API.Methods, Sloper.Core.Catalogue, Sloper.Core.Units, Sloper.Document.MeasurementDocument;
+  SysUtils, fpjson, Sloper.API.Methods, Sloper.Core.Catalogue, Sloper.Core.Units, Sloper.Document.MeasurementDocument;
 
 type
   TMeasurementsApiServer = class
@@ -41,6 +41,10 @@ type
     function DoCatalogueList(Params: TJSONObject): TJSONObject;
     function DoCatalogueEntry(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
     function DoAddKnown(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
+    // The set's keys, which the body figure draws and picks from
+    function SetKeys: TStringArray;
+    function DoFigure(Params: TJSONObject): TJSONObject;
+    function DoFigureAt(Params: TJSONObject): TJSONObject;
     // The set as its file holds it, and as the table shows it in AUnit
     function State(AUnit: TMeasureUnit): TJSONObject;
     // The measurement with the key given, refused when there is none
@@ -65,7 +69,8 @@ function MeasurementsMethods: TApiMethodArray;
 implementation
 
 uses
-  SysUtils, Math, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Measurements;
+  Math, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.Geometry, Sloper.Core.JSON,
+  Sloper.Core.Measurements, Sloper.Output.BodyFigureSVG;
 
 resourcestring
   rsMeasurementsOpen = 'Opens a measurement set supplied by the browser';
@@ -118,6 +123,16 @@ resourcestring
   rsMeasurementsAddKnown = 'Adds a catalogue measurement at the end, with its key and description; one undo step. ' +
     'A key the set has is refused';
   rsMeasurementsAddKnownReturns = 'Its `key`, and the state, as measurements_state';
+  rsMeasurementsFigure = 'The body figure as SVG, as the desktop draws it: the front, back and side outlines, ' +
+    'the set''s measurements on them, and one highlighted';
+  rsMeasurementsFigureWidth = 'Its width in pixels';
+  rsMeasurementsFigureHeight = 'Its height in pixels';
+  rsMeasurementsHighlight = 'The measurement to highlight, by its key; it need not be in the set';
+  rsMeasurementsFigureReturns = '`svg`, the figure''s SVG text';
+  rsMeasurementsFigureAt = 'The set''s measurement drawn under a point of the body figure, as a click picks it';
+  rsMeasurementsFigureX = 'The point, in pixels from the figure''s left';
+  rsMeasurementsFigureY = 'The point, in pixels from the figure''s top';
+  rsMeasurementsFigureAtReturns = '`key`, empty when no measurement is drawn there';
   rsMeasurementsNoEntry = 'The catalogue has no measurement %s';
   rsMeasurementsOutsideRange = '@%s is outside the usual %s to %s %s; it is kept, in case that is right';
   rsMeasurementsNoKey = 'There is no measurement @%s';
@@ -185,6 +200,15 @@ begin
   AddApiMethod(Result, 'measurements_add_known', rsMeasurementsAddKnown, rsMeasurementsAddKnownReturns);
   AddApiParam(Result, 'key', apText, True, rsMeasurementsCatalogueKey);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_figure', rsMeasurementsFigure, rsMeasurementsFigureReturns, True);
+  AddApiParam(Result, 'width', apNumber, True, rsMeasurementsFigureWidth);
+  AddApiParam(Result, 'height', apNumber, True, rsMeasurementsFigureHeight);
+  AddApiParam(Result, 'highlight', apText, False, rsMeasurementsHighlight);
+  AddApiMethod(Result, 'measurements_figure_at', rsMeasurementsFigureAt, rsMeasurementsFigureAtReturns, True);
+  AddApiParam(Result, 'width', apNumber, True, rsMeasurementsFigureWidth);
+  AddApiParam(Result, 'height', apNumber, True, rsMeasurementsFigureHeight);
+  AddApiParam(Result, 'x', apNumber, True, rsMeasurementsFigureX);
+  AddApiParam(Result, 'y', apNumber, True, rsMeasurementsFigureY);
   AddApiMethod(Result, 'measurements_undo', rsMeasurementsUndo, rsMeasurementsEditReturns);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_redo', rsMeasurementsRedo, rsMeasurementsEditReturns);
@@ -411,6 +435,36 @@ begin
   Result.Add('key', Entry.Key);
 end;
 
+// A number the method needs, refused when it is missing
+function NumberParam(Params: TJSONObject; const Name: string): double;
+begin
+  Result := 0;
+  if not OptionalNumber(Params, Name, Result) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [Name]));
+end;
+
+function TMeasurementsApiServer.SetKeys: TStringArray;
+var
+  Index: integer;
+begin
+  Result := nil;
+  SetLength(Result, FDocument.Measurements.Count);
+  for Index := 0 to High(Result) do
+    Result[Index] := FDocument.Measurements[Index].Key;
+end;
+
+function TMeasurementsApiServer.DoFigure(Params: TJSONObject): TJSONObject;
+begin
+  Result := TJSONObject.Create(['svg', BodyFigureToSVG(FCatalogue, NumberParam(Params, 'width'),
+    NumberParam(Params, 'height'), SetKeys, OptionalString(Params, 'highlight'))]);
+end;
+
+function TMeasurementsApiServer.DoFigureAt(Params: TJSONObject): TJSONObject;
+begin
+  Result := TJSONObject.Create(['key', BodyFigureKeyAt(FCatalogue, NumberParam(Params, 'width'),
+    NumberParam(Params, 'height'), Vec2(NumberParam(Params, 'x'), NumberParam(Params, 'y')), SetKeys)]);
+end;
+
 function TMeasurementsApiServer.SizeIndex(Params: TJSONObject; const Name: string): integer;
 var
   Number: double;
@@ -466,6 +520,8 @@ begin
     'measurements_catalogue_list': Exit(DoCatalogueList(Params));
     'measurements_catalogue_entry': Exit(DoCatalogueEntry(Params, AUnit));
     'measurements_add_known': Exit(DoAddKnown(Params, AUnit));
+    'measurements_figure': Exit(DoFigure(Params));
+    'measurements_figure_at': Exit(DoFigureAt(Params));
     'measurements_set': Exit(DoSet(Params, AUnit));
     'measurements_add': Exit(DoAdd(AUnit));
     'measurements_delete': FDocument.DeleteMeasurement(KeyIndex(Params));

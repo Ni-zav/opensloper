@@ -15,8 +15,6 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
-- Web Design shows dependency arrows for hovered and selected objects (#161).
-
 - The Publish app runs in the browser too, as a beta at
   opensloper.com/publish/, linked from the home page (#85). It opens a
   layout with its patterns and measurement files, or patterns to start one,
@@ -39,7 +37,8 @@ Changed, Fixed and Removed under each version.
 - The design canvas's dependency arrows are solid and wider, with larger
   heads, so an arrow along an outline, such as from an offset point to the
   point it starts from, shows over the line. A piece's direction chevrons
-  grow to match, on the desktop and the web (#145).
+  grow to match, on the desktop and the web (#145). Web Design can also
+  show the arrows for hovered and selected objects (#161).
 - Importing an SVG stamp never reads a document type's external files or
   expands its entities. A plain document type, as Illustrator writes, is
   ignored; one with an internal subset, or one that cannot be read, is

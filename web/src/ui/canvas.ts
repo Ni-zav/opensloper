@@ -609,9 +609,9 @@ export class PatternCanvas implements CanvasToolHost {
   private paint(): void {
     const box: [Vec2, Vec2] | undefined = this.mode === 'boxing' ? [this.pressAt, this.lastAt] : undefined;
     this.painter.beginFrame(this.element.clientWidth, this.element.clientHeight, {
+      dependencyArrows: this.dependencyArrows,
       view: this.view,
       selection: this.selection,
-      dependencyArrows: this.dependencyArrows,
       hoverId: this.hoverId,
       snap: this.snap,
       box,
@@ -713,11 +713,11 @@ export class PatternCanvas implements CanvasToolHost {
     if (this.document.state.generation !== this.generation) {
       // Another pattern: what was selected or shown means nothing now
       this.generation = this.document.state.generation;
+      this.dependencyArrows = [];
+      this.labelsRevision += 1;
       this.autoFit = true;
       this.noteEditor.close();
       this.selection.clear();
-      this.dependencyArrows = [];
-      this.labelsRevision += 1;
       this.events.selectionChanged([]);
     } else if (changes.has('pattern') && !changes.has('measurements')) {
       // An edit: the view stays where the user is working

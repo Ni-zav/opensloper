@@ -190,6 +190,9 @@ type
     procedure TestMeasurementsSizes;
     // Name and Notes, each change one undo step
     procedure TestMeasurementsNameAndNotes;
+    // The catalogue: listed without what the set has, an entry's details,
+    // Add to the file, and values outside the typical range
+    procedure TestMeasurementsCatalogue;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -206,7 +209,7 @@ implementation
 uses
   Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.API.Methods, Sloper.API.MeasurementsServer, Sloper.Editor.PanelEdits,
   Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64,
-  Sloper.Core.Pattern, Sloper.Core.PatternFile;
+  Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.AppPaths;
 
 const
   TOLERANCE = 1e-6;
@@ -942,6 +945,75 @@ begin
   Call('measurements_undo');
   AssertEquals('One', Answer.Objects['set'].Strings['name']);
   AssertFalse('all undone', Answer.Booleans['canUndo']);
+end;
+
+procedure TTestEditorServer.TestMeasurementsCatalogue;
+const
+  SET_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"One",' +
+    '"measurements":[{"key":"head_length","value":100}]}';
+var
+  Params: TJSONObject;
+  Text, Reason: string;
+
+  function Listed: string;
+  var
+    Index: integer;
+  begin
+    Result := '';
+    for Index := 0 to Answer.Arrays['entries'].Count - 1 do
+      Result := Result + Answer.Arrays['entries'].Objects[Index].Strings['key'] + ' ';
+    Result := Trim(Result);
+  end;
+
+begin
+  Params := TJSONObject.Create(['text', SET_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  // Without a catalogue, nothing is listed and nothing is out of range
+  Call('measurements_catalogue_list');
+  AssertEquals('', Listed);
+  AssertTrue(Reason, ReadTextFile(TAppPaths.CatalogueFile, Text, Reason));
+  Params := TJSONObject.Create(['text', Text]);
+  try
+    Call('measurements_catalogue', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  AssertTrue('the catalogue loaded', Answer.Integers['count'] > 0);
+  Call('measurements_catalogue', '{"text":"{}"}');
+  AssertEquals('not a catalogue', RPC_REFUSED, ErrorCode);
+  Call('measurements_catalogue_list', '{"group":"head"}');
+  AssertEquals('without the one the set has', 'head_circumference head_width', Listed);
+  Call('measurements_catalogue_list', '{"search":"WAIST, BACK ARC"}');
+  AssertEquals('by name, ignoring case', 'waist_back_arc', Listed);
+  Call('measurements_catalogue_entry', '{"key":"waist_circumference","unit":"cm"}');
+  AssertTrue(Answer.Booleans['found']);
+  AssertEquals('Waist circumference', Answer.Strings['name']);
+  AssertEquals('in the unit', '55', Answer.Strings['rangeMin']);
+  AssertEquals('150', Answer.Strings['rangeMax']);
+  Call('measurements_catalogue_entry', '{"key":"tail_length"}');
+  AssertFalse('no such entry', Answer.Booleans['found']);
+  Call('measurements_add_known', '{"key":"waist_circumference"}');
+  AssertEquals('waist_circumference', Answer.Strings['key']);
+  AssertEquals('with its description', 'Round the natural waist.',
+    Answer.Arrays['rows'].Objects[1].Strings['description']);
+  AssertEquals('Add measurement', Answer.Strings['undo']);
+  Call('measurements_add_known', '{"key":"waist_circumference"}');
+  AssertEquals('one the set has', RPC_REFUSED, ErrorCode);
+  Call('measurements_add_known', '{"key":"tail_length"}');
+  AssertEquals('not in the catalogue', RPC_REFUSED, ErrorCode);
+  // Outside the typical range only warns: the value is kept
+  Call('measurements_set', '{"key":"waist_circumference","column":"value","text":"300"}');
+  AssertTrue(Answer.Booleans['done']);
+  AssertEquals('@waist_circumference is outside the usual 550 to 1500 mm; it is kept, in case that is right',
+    Answer.Strings['warning']);
+  AssertTrue('flagged', Answer.Arrays['rows'].Objects[1].Arrays['outside'].Booleans[0]);
+  Call('measurements_set', '{"key":"waist_circumference","column":"value","text":"700"}');
+  AssertEquals('inside it', '', Answer.Strings['warning']);
+  AssertFalse(Answer.Arrays['rows'].Objects[1].Arrays['outside'].Booleans[0]);
 end;
 
 procedure TTestEditorServer.TestMeasurementsMethodsTable;

@@ -1,7 +1,8 @@
 // Drives the built Measurements app in headless Chromium: the page asks for a
 // file until one is open; a set opens with its name, notes and a row a
 // measurement; Show in shows the values in cm and inches. Name and Notes
-// are edited, committed by Enter or leaving the field. In the grid a value
+// are edited, committed by Enter or leaving the field. A measurement is
+// added from the catalogue, and a value outside its typical range warned of. In the grid a value
 // is changed, one that is not a number refused, a key renamed and a
 // description typed; Add makes a row whose key is typed, Up moves it, Delete
 // asks and deletes it, and Undo and Redo step through. Opening another file
@@ -80,6 +81,8 @@ const app = await serveApp({ root: 'out/measurements' });
 const browser = await launchBrowser();
 try {
   const page = await browser.newPage();
+  // The table beside the side panel, as in a desktop browser window
+  await page.setViewport({ width: 1200, height: 800 });
   const problems = watchProblems(page);
   await page.goto(`http://127.0.0.1:${String(app.port)}/`);
   await waitForData(page, 'ready', 'true');
@@ -134,6 +137,30 @@ try {
   await press(page, 'Undo');
   await waitForData(page, 'undo', '');
   assert.equal(await fieldValue('#set-name'), 'Tutorial');
+
+  // Add From the Catalogue: a group and a search, the entry's details, Add to
+  // the file, and a value outside its typical range kept with a warning
+  await page.waitForFunction(() => document.querySelectorAll('.catalogue option').length > 20);
+  await page.select('.catalogue select:not([size])', 'circumferences');
+  await page.type('.catalogue input[type=search]', 'under bust');
+  await page.waitForFunction(() => document.querySelectorAll('.catalogue select[size] option').length === 1);
+  await page.select('.catalogue select[size]', 'under_bust_circumference');
+  await page.waitForFunction(() =>
+    (document.querySelector('.catalogue-info')?.textContent ?? '').includes('Typically 650 to 1350 mm'),
+  );
+  await press(page, 'Add to the file');
+  await waitForData(page, 'undo', 'Add measurement');
+  assert.equal((await keys(page)).at(-1), 'under_bust_circumference');
+  await page.waitForFunction(() => document.querySelectorAll('.catalogue select[size] option').length === 0);
+  // The new row is chosen at its value, ready to type
+  await page.keyboard.type('400');
+  await page.keyboard.press('Enter');
+  await waitForStatus(page, '@under_bust_circumference is outside the usual 650 to 1350 mm');
+  await page.waitForSelector('#table td.warned');
+  await press(page, 'Undo');
+  await press(page, 'Undo');
+  await waitForData(page, 'undo', '');
+  await page.waitForFunction(() => document.querySelectorAll('.catalogue select[size] option').length === 1);
 
   // Edits in the grid, each one undo step
   assert.ok(

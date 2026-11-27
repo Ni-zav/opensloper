@@ -418,6 +418,12 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
   - The current cell keeps its column when the columns change, while that column can still be edited. Its owner hears when it moves to another column (`columnChanged`).
   - The grid's styles are in `ui/listPanel.css`, which the design page links too.
 - **Show in**, over the table at its end as on the desktop, chooses mm, cm or inches. The engine formats the values in it (`FormatMeasure`), so they read as the desktop shows them. It starts at mm and is not kept yet.
+- **The side panel** is on the right, as on the desktop, beside Name and Notes, the bar and the table. **Add From the Catalogue** is at its foot (`CatalogueBrowser` in `measurements/catalogueBrowser.ts`).
+  - A group, a search, and the catalogue's measurements the set does not have yet, as the desktop lists them.
+  - Under the list, the details of the measurement chosen in it, else of the table's row: its name, description, how to take it, and its typical range in the unit shown.
+  - **Add to the file**, a double-click or Enter adds the one chosen at the end, with its key and description. Its row is chosen at its value, ready to type, and the list's choice is cleared.
+  - A value outside its typical range is kept, as on the desktop. The status bar says so and its cell is tinted, but not on the chosen row.
+  - The page fetches `measurement-catalogue.json`, which the build copies beside it, and gives it to the engine. Without it the table still works, and the status bar says why.
 - `MeasurementDocument` (`document/measurementDocument.ts`) is the proxy of the engine's set, as `LayoutDocument` is of the layout.
 
 **Its methods** are named `measurements_`, in their own table (`MeasurementsMethods` in `Sloper.API.MeasurementsServer`). The editor server passes them to a `TMeasurementsApiServer`, which holds a `TMeasurementDocument` of its own, apart from the design page's pattern and measurements. They are not MCP tools.
@@ -434,9 +440,13 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
 | `measurements_rename_size` | The `size`, by its index, renamed to `name` (`RenameSize`), refused as Add size is |
 | `measurements_delete_size` | The `size` and its values (`DeleteSize`); refused for the last size |
 | `measurements_move_size` | The `size` moved to the column `index` (`MoveSize`), with its values |
+| `measurements_catalogue` | Loads the catalogue from its text (`TCatalogue.LoadFromText`). One that cannot be read is refused, and the one loaded stays |
+| `measurements_catalogue_list` | The catalogue's measurements the set lacks, by `group` and `search` (`TCatalogue.Search`), each with `key` and `name` |
+| `measurements_catalogue_entry` | An entry's name, description, how to take it and typical range in the unit; `found` false when there is none |
+| `measurements_add_known` | A catalogue measurement at the end, with its key and description (`AddKnown`). A key the set has, or one not in the catalogue, is refused |
 | `measurements_undo`, `measurements_redo` | The document's Undo and Redo; refused when there is nothing to take |
 
-Every one takes `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Every one answers with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none) and `description`; and with `modified`, `canUndo`, `canRedo` and `undo`, the step Undo would take. Each edit is one undo step of the document's own history.
+Every one takes `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Every one answers with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none), `outside` (for each value, whether it is outside its catalogue entry's typical range) and `description`; `measurements_set` adds the `warning` for such a value; and with `modified`, `canUndo`, `canRedo` and `undo`, the step Undo would take. Each edit is one undo step of the document's own history.
 
 ## Server
 

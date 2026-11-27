@@ -158,6 +158,27 @@ export class MeasurementDocument {
     await this.call('measurements_move', { key, index });
   }
 
+  // A size at the end; a set without sizes becomes a size table. A name
+  // that is empty or in use is refused with the engine's reason.
+  async addSize(name: string): Promise<void> {
+    await this.call('measurements_add_size', { name });
+  }
+
+  // The size by its index from 0
+  async renameSize(size: number, name: string): Promise<void> {
+    await this.call('measurements_rename_size', { size, name });
+  }
+
+  // Refused for the last size, as a size table needs one
+  async deleteSize(size: number): Promise<void> {
+    await this.call('measurements_delete_size', { size });
+  }
+
+  // To its column afterwards, from 0
+  async moveSize(size: number, index: number): Promise<void> {
+    await this.call('measurements_move_size', { size, index });
+  }
+
   async undo(): Promise<void> {
     await this.ignoreRefusal(this.call('measurements_undo'));
   }

@@ -38,6 +38,9 @@ type
     function DoSet(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
     function DoAdd(AUnit: TMeasureUnit): TJSONObject;
     function DoMove(Params: TJSONObject): boolean;
+    // The size given by its index, refused when there is none
+    function SizeIndex(Params: TJSONObject; const Name: string): integer;
+    procedure DoSizeEdit(const Method: string; Params: TJSONObject);
   public
     constructor Create;
     destructor Destroy; override;
@@ -77,6 +80,14 @@ resourcestring
   rsMeasurementsUndo = 'Undoes the last change to the set';
   rsMeasurementsRedo = 'Makes the change undone again';
   rsMeasurementsEditReturns = 'The state, as measurements_state';
+  rsMeasurementsAddSize = 'Adds a size at the end of the table: a set without sizes becomes a size table, its ' +
+    'values the new size''s; one undo step';
+  rsMeasurementsSizeName = 'The size''s name, such as 12 or M';
+  rsMeasurementsRenameSize = 'Renames a size; one undo step';
+  rsMeasurementsDeleteSize = 'Deletes a size and its values; one undo step. The last size cannot be deleted';
+  rsMeasurementsMoveSize = 'Moves a size to another column; one undo step';
+  rsMeasurementsSizeIndex = 'The size, by its index from 0';
+  rsMeasurementsSizePlace = 'Its index afterwards, from 0';
   rsMeasurementsNoKey = 'There is no measurement @%s';
   rsMeasurementsNothingToUndo = 'There is nothing to undo';
   rsMeasurementsNothingToRedo = 'There is nothing to redo';
@@ -107,6 +118,20 @@ begin
   AddApiMethod(Result, 'measurements_move', rsMeasurementsMove, rsMeasurementsEditReturns);
   AddApiParam(Result, 'key', apText, True, rsMeasurementsKey);
   AddApiParam(Result, 'index', apNumber, True, rsMeasurementsIndex);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_add_size', rsMeasurementsAddSize, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'name', apText, True, rsMeasurementsSizeName);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_rename_size', rsMeasurementsRenameSize, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'size', apNumber, True, rsMeasurementsSizeIndex);
+  AddApiParam(Result, 'name', apText, True, rsMeasurementsSizeName);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_delete_size', rsMeasurementsDeleteSize, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'size', apNumber, True, rsMeasurementsSizeIndex);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_move_size', rsMeasurementsMoveSize, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'size', apNumber, True, rsMeasurementsSizeIndex);
+  AddApiParam(Result, 'index', apNumber, True, rsMeasurementsSizePlace);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_undo', rsMeasurementsUndo, rsMeasurementsEditReturns);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
@@ -245,6 +270,45 @@ begin
     FDocument.MoveMeasurement(Index, Round(Place));
 end;
 
+function TMeasurementsApiServer.SizeIndex(Params: TJSONObject; const Name: string): integer;
+var
+  Number: double;
+begin
+  Number := -1;
+  OptionalNumber(Params, Name, Number);
+  Result := Round(Number);
+  if (Result < 0) or (Result >= FDocument.Measurements.SizeCount) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [Name]));
+end;
+
+// As the desktop's size buttons: a name refused, or the last size, says why
+procedure TMeasurementsApiServer.DoSizeEdit(const Method: string; Params: TJSONObject);
+var
+  Index: integer;
+  Done: boolean;
+  Reason: string;
+begin
+  Reason := '';
+  Done := True;
+  case Method of
+    'measurements_add_size': Done := FDocument.AddSize(RequireString(Params, 'name'), Reason);
+    'measurements_rename_size':
+    begin
+      Index := SizeIndex(Params, 'size');
+      Done := FDocument.RenameSize(Index, RequireString(Params, 'name'), Reason);
+    end;
+    'measurements_delete_size': Done := FDocument.DeleteSize(SizeIndex(Params, 'size'), Reason);
+    else
+    begin
+      Index := SizeIndex(Params, 'size');
+      if SizeIndex(Params, 'index') <> Index then
+        FDocument.MoveSize(Index, SizeIndex(Params, 'index'));
+    end;
+  end;
+  if not Done then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+end;
+
 function TMeasurementsApiServer.CallMethod(const Method: string; Params: TJSONObject): TJSONData;
 var
   Reason: string;
@@ -263,6 +327,8 @@ begin
     'measurements_move':
       if not DoMove(Params) then
         raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, ['index']));
+    'measurements_add_size', 'measurements_rename_size', 'measurements_delete_size', 'measurements_move_size':
+      DoSizeEdit(Method, Params);
     'measurements_undo':
     begin
       if not FDocument.CanUndo then

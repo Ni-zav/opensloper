@@ -38,6 +38,9 @@ const PROBLEM_HALO_WIDTH = 10;
 const PROBLEM_HALO_GROW = 6;
 const PROBLEM_HALO = { red: 209, green: 52, blue: 56, alpha: 80 };
 const SEAM_LINE_WIDTH = 4;
+const LINK_ARROW_WIDTH = 2;
+const LINK_ARROW_GAP = 6;
+const LINK_ARROW_HEAD = 10;
 const CHEVRON_SIZE = 10;
 // Degrees either side of the way a chevron points, to its wings
 const CHEVRON_SPREAD = 150;
@@ -101,6 +104,7 @@ const SNAP_INK = rgba(196, 48, 140);
 const BOX_FILL = rgba(37, 116, 214, 20);
 const PIECE_HOVER_TINT = rgba(37, 116, 214, 30);
 const HOVER_HALO = rgba(37, 116, 214, 60);
+const DEPENDENT_INK = rgba(140, 80, 200);
 const ERROR_INK = rgba(209, 52, 56);
 const BLOCKED_INK = rgba(226, 140, 40);
 const SEAM_INK_A = rgba(214, 96, 37);
@@ -153,7 +157,14 @@ export interface SnapMarker {
 }
 
 // What the canvas shows besides the pattern itself
+export interface DependencyArrow {
+  from: Vec2;
+  to: Vec2;
+  dependent: boolean;
+}
+
 export interface PaintState {
+  dependencyArrows: readonly DependencyArrow[];
   view: ViewTransform;
   selection: ReadonlySet<string>;
   problemIds: ReadonlySet<string>;
@@ -837,6 +848,35 @@ export class PatternPainter {
     context.stroke();
   }
 
+  private drawDependencyArrows(): void {
+    const { dependencyArrows, view } = this.paintState();
+    const context = this.context;
+    for (const arrow of dependencyArrows) {
+      const from = view.toScreen(arrow.from);
+      const to = view.toScreen(arrow.to);
+      const span = Math.hypot(to.x - from.x, to.y - from.y);
+      if (span < 3 * LINK_ARROW_GAP) continue;
+      const along = { x: (to.x - from.x) / span, y: (to.y - from.y) / span };
+      const tip = { x: to.x - along.x * LINK_ARROW_GAP, y: to.y - along.y * LINK_ARROW_GAP };
+      const base = { x: tip.x - along.x * LINK_ARROW_HEAD, y: tip.y - along.y * LINK_ARROW_HEAD };
+      const wing = { x: (-along.y * LINK_ARROW_HEAD) / 2, y: (along.x * LINK_ARROW_HEAD) / 2 };
+      const color = css(arrow.dependent ? DEPENDENT_INK : SELECTED_INK);
+      context.strokeStyle = color;
+      context.lineWidth = LINK_ARROW_WIDTH;
+      context.beginPath();
+      context.moveTo(from.x + along.x * LINK_ARROW_GAP, from.y + along.y * LINK_ARROW_GAP);
+      context.lineTo(tip.x, tip.y);
+      context.stroke();
+      context.fillStyle = color;
+      context.beginPath();
+      context.moveTo(tip.x, tip.y);
+      context.lineTo(base.x + wing.x, base.y + wing.y);
+      context.lineTo(base.x - wing.x, base.y - wing.y);
+      context.closePath();
+      context.fill();
+    }
+  }
+
   private drawLayer(scene: Scene, tables: Tables, dimmed: boolean): void {
     const state = this.paintState();
     const context = this.context;
@@ -913,6 +953,7 @@ export class PatternPainter {
         this.strokeSegments(marker.strokes, css(this.isSelected(marker) ? SELECTED_INK : inkFor(marker, INK)), 1);
       }
     }
+    if (!dimmed) this.drawDependencyArrows();
     for (const point of scene.points) {
       if (point.dimmed !== dimmed) {
         continue;

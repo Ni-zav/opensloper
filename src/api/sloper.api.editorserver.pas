@@ -286,7 +286,9 @@ resourcestring
   rsEditorHover = 'The hovered object''s ID';
   rsEditorSuggestObjects = 'The IDs of the objects the formula suggestions in view read, as editor_suggest gives them';
   rsEditorToolObjects = 'The IDs of the objects the tool is working with, as editor_tool_snap gives them';
-  rsEditorLabelKeysReturns = '`objects`, their IDs in pattern order';
+  rsEditorLabelKeysReturns = '`objects`, their IDs in pattern order, and `links` when requested, each with its endpoints in mm';
+  rsEditorLinks = 'Include arrows from the hovered and selected objects to their inputs';
+  rsEditorDependents = 'Also include arrows to their dependents';
   rsEditorSeamPick = 'The Seam tool''s click: the piece''s edge at the place goes on the side being picked, or comes ' +
     'off it. Without a place, only says how the sides compare, as after Tab.';
   rsEditorSideA = 'Side A as picked so far, each with `piece` and `edge`';
@@ -653,6 +655,8 @@ begin
     AddApiParam(Built, 'hover', apReference, False, rsEditorHover);
     AddApiParam(Built, 'tool', apReferences, False, rsEditorToolObjects);
     AddApiParam(Built, 'suggestions', apReferences, False, rsEditorSuggestObjects);
+    AddApiParam(Built, 'links', apFlag, False, rsEditorLinks);
+    AddApiParam(Built, 'dependents', apFlag, False, rsEditorDependents);
     AddApiMethod(Built, 'editor_seam_pick', rsEditorSeamPick, rsEditorSeamPickReturns, True);
     AddApiParam(Built, 'x', apNumber, False, rsEditorX);
     AddApiParam(Built, 'y', apNumber, False, rsEditorY);
@@ -2702,13 +2706,33 @@ function TEditorApiServer.DoLabelKeys(Params: TJSONObject): TJSONData;
 var
   Mode: TLabelMode;
   HoverKey: string;
+  Selection: TStringArray;
+  Links: TJSONArray;
+  Link: TDependencyLink;
+  Answer: TJSONObject;
 begin
   Mode := TLabelMode(ChoiceParam(Params, 'mode', LABEL_MODE_NAMES));
   HoverKey := '';
   if Assigned(Params.Find('hover')) and (Params.Find('hover').JSONType <> jtNull) then
     HoverKey := Reference(Params, 'hover', False);
-  Result := TJSONObject.Create(['objects', KeysToJSON(LabelKeys(Document.Pattern, Mode, ShownKeysParam(Params, 'selection'), HoverKey,
-    Concat(ShownKeysParam(Params, 'tool'), ShownKeysParam(Params, 'suggestions'))))]);
+  Selection := ShownKeysParam(Params, 'selection');
+  Answer := TJSONObject.Create;
+  try
+    Answer.Add('objects', KeysToJSON(LabelKeys(Document.Pattern, Mode, Selection, HoverKey,
+      Concat(ShownKeysParam(Params, 'tool'), ShownKeysParam(Params, 'suggestions')))));
+    if BooleanParam(Params, 'links') then
+    begin
+      Links := TJSONArray.Create;
+      Answer.Add('links', Links);
+      for Link in DependencyLinks(Document.Pattern, Selection, HoverKey, BooleanParam(Params, 'dependents')) do
+        Links.Add(TJSONObject.Create(['fromX', Link.FromAt.X, 'fromY', Link.FromAt.Y,
+          'toX', Link.ToAt.X, 'toY', Link.ToAt.Y, 'dependent', Link.Dependent]));
+    end;
+    Result := Answer;
+  except
+    FreeAndNil(Answer);
+    raise;
+  end;
 end;
 
 // A seam side by IDs, as the editor keeps it

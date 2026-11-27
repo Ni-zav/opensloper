@@ -19,6 +19,9 @@ Changed, Fixed and Removed under each version.
   the Edit menu (#57).
 - Web Design shows a faint red halo around objects listed in Problems
   (#162).
+- Web Design draws the dependency arrows: blue to what the hovered or
+  selected object reads, and with Dependents on, purple to what reads it
+  (#161).
 
 ### Fixed
 

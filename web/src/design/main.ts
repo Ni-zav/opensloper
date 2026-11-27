@@ -60,6 +60,7 @@ const ICONS = {
   paste: 'clipboard',
   fit: 'zoom-scan',
   rulers: 'ruler-2',
+  dependents: 'sitemap',
   // The side panel's tabs
   propertiesTab: 'adjustments-horizontal',
   objectsTab: 'list-tree',
@@ -386,6 +387,14 @@ class DesignApp {
       this.toggleRulers();
     });
     this.rulersButton.classList.add('chosen');
+    // As the desktop's View → Dependents, with its icon
+    const dependents = iconButton(ICONS.dependents, STRINGS.dependents, STRINGS.dependentsHint, () => {
+      const show = dependents.getAttribute('aria-pressed') !== 'true';
+      dependents.setAttribute('aria-pressed', String(show));
+      dependents.classList.toggle('chosen', show);
+      this.canvas.setDependents(show);
+    });
+    dependents.setAttribute('aria-pressed', 'false');
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
         this.open();
@@ -424,6 +433,7 @@ class DesignApp {
         this.canvas.fitAll();
       }),
       this.rulersButton,
+      dependents,
       this.exampleBox(),
       this.roleBox(),
       this.labelBox(),

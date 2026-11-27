@@ -193,6 +193,8 @@ type
     // The catalogue: listed without what the set has, an entry's details,
     // Add to the file, and values outside the typical range
     procedure TestMeasurementsCatalogue;
+    // The body figure as SVG, and the measurement a point on it picks
+    procedure TestMeasurementsFigure;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -209,7 +211,7 @@ implementation
 uses
   Sloper.Core.JSON, Sloper.Core.Piece, Sloper.API.Mcp, Sloper.API.Methods, Sloper.API.MeasurementsServer, Sloper.Editor.PanelEdits,
   Sloper.Editor.PropertyRows, Sloper.Editor.FeatureForms, base64,
-  Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.AppPaths;
+  Sloper.Core.Pattern, Sloper.Core.PatternFile, Sloper.Core.AppPaths, Sloper.Core.Catalogue, Sloper.Core.Geometry;
 
 const
   TOLERANCE = 1e-6;
@@ -1014,6 +1016,62 @@ begin
   Call('measurements_set', '{"key":"waist_circumference","column":"value","text":"700"}');
   AssertEquals('inside it', '', Answer.Strings['warning']);
   AssertFalse(Answer.Arrays['rows'].Objects[1].Arrays['outside'].Booleans[0]);
+end;
+
+procedure TTestEditorServer.TestMeasurementsFigure;
+const
+  SET_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"One",' +
+    '"measurements":[{"key":"height","value":1700}]}';
+  Width = 430;
+  Height = 300;
+var
+  Params: TJSONObject;
+  Text, Reason, Svg: string;
+  Entry: TCatalogueEntry;
+  Layout: TFigureLayout;
+  Spot: TVec2;
+  Catalogue: TCatalogue;
+begin
+  Params := TJSONObject.Create(['text', SET_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  Call('measurements_figure', '{"width":430,"height":300}');
+  AssertTrue('a figure before the catalogue', Pos('<svg', Answer.Strings['svg']) = 1);
+  AssertEquals('with nothing drawn on it', 0, Pos('<polygon', Answer.Strings['svg']));
+  AssertTrue(Reason, ReadTextFile(TAppPaths.CatalogueFile, Text, Reason));
+  Params := TJSONObject.Create(['text', Text]);
+  try
+    Call('measurements_catalogue', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  Call('measurements_figure', '{"width":430,"height":300,"highlight":"waist_circumference"}');
+  Svg := Answer.Strings['svg'];
+  AssertTrue('the outlines', Pos('<polygon', Svg) > 0);
+  AssertTrue('the views named', Pos('>Front</text>', Svg) > 0);
+  AssertTrue('the set''s measurement drawn faintly', Pos('stroke="#7896BE"', Svg) > 0);
+  AssertTrue('the highlight, though not in the set', Pos('stroke="#C8322A"', Svg) > 0);
+  Call('measurements_figure', '{"width":430}');
+  AssertEquals('a size needed', RPC_INVALID_PARAMS, ErrorCode);
+  // A point on the height's line picks it; one off the figure picks nothing
+  Catalogue := TCatalogue.Create;
+  try
+    AssertTrue(Reason, Catalogue.LoadFromText(Text, Reason));
+    Entry := Catalogue.Find('height');
+    // As the figure lays itself out, with room for the captions under it
+    Layout := LayoutFigures(Width, Height - 19);
+    Spot := FigureToScreen(Layout, Entry.View, Entry.Overlay[0]);
+  finally
+    FreeAndNil(Catalogue);
+  end;
+  Call('measurements_figure_at', Format('{"width":%d,"height":%d,"x":%s,"y":%s}', [Width, Height,
+    FormatJSONFloat(Spot.X), FormatJSONFloat(Spot.Y)]));
+  AssertEquals('height', Answer.Strings['key']);
+  Call('measurements_figure_at', '{"width":430,"height":300,"x":1,"y":1}');
+  AssertEquals('', Answer.Strings['key']);
 end;
 
 procedure TTestEditorServer.TestMeasurementsMethodsTable;

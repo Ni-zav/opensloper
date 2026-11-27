@@ -1,6 +1,7 @@
 // The measurements page's Add From the Catalogue, as the desktop measurements
 // window's side panel: a group, a search, the catalogue's measurements the set
-// does not have yet, the details of the one chosen (or of the table's row),
+// does not have yet, the details of the one the body figure's pointer is on,
+// else of the one chosen, else of the table's row,
 // and Add to the file, which a double-click does too. The engine holds the
 // catalogue and searches it; this draws the panel and hands on the choices.
 import type { CatalogueEntry, CatalogueItem, MeasurementDocument } from '../document/measurementDocument.ts';
@@ -13,6 +14,8 @@ const GROUPS = ['heights', 'circumferences', 'widths', 'arm', 'leg', 'crotch', '
 export interface CatalogueBrowserEvents {
   // A catalogue measurement was added to the set, by its key
   added(key: string): void;
+  // The entry whose details show, '' for none, which the figure highlights
+  shown(key: string): void;
   // A hint or the reason something could not be done
   message(text: string): void;
   failed(error: unknown): void;
@@ -33,6 +36,8 @@ export class CatalogueBrowser {
   private entryRequest = 0;
   // The entry shown when nothing in the list is chosen: the table's row
   private tableKey: string | undefined;
+  // The figure's measurement under the pointer, shown over the others
+  private hoverKey: string | undefined;
 
   constructor(document: MeasurementDocument, events: CatalogueBrowserEvents) {
     this.document = document;
@@ -93,14 +98,23 @@ export class CatalogueBrowser {
   // The table's chosen row, whose entry shows while nothing here is chosen
   showTableKey(key: string | undefined): void {
     this.tableKey = key;
-    if (this.chosen === undefined) {
-      this.run(this.showEntry(key));
-    }
+    this.run(this.showEntry(this.current));
+  }
+
+  // The figure's measurement under the pointer, undefined when it leaves
+  showHover(key: string | undefined): void {
+    this.hoverKey = key;
+    this.run(this.showEntry(this.current));
   }
 
   // The unit changed: the entry's range is shown in it
   showUnit(): void {
-    this.run(this.showEntry(this.chosen?.key ?? this.tableKey));
+    this.run(this.showEntry(this.current));
+  }
+
+  // As the desktop: the figure's hover, else the list's choice, else the table's row
+  private get current(): string | undefined {
+    return this.hoverKey ?? this.chosen?.key ?? this.tableKey;
   }
 
   private get chosen(): CatalogueItem | undefined {
@@ -127,7 +141,7 @@ export class CatalogueBrowser {
 
   private listChanged(): void {
     this.addButton.disabled = this.chosen === undefined || this.document.fileName === '';
-    this.run(this.showEntry(this.chosen?.key ?? this.tableKey));
+    this.run(this.showEntry(this.current));
   }
 
   // As the desktop's: its name, description, how to take it and its typical range
@@ -154,6 +168,8 @@ export class CatalogueBrowser {
       }),
     );
     this.info.dataset.key = entry?.key ?? '';
+    // As the desktop's ShowEntry, which highlights it on the figure
+    this.events.shown(key ?? '');
   }
 
   // The list's choice is cleared, or the next line slides under the mouse,

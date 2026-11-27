@@ -5,13 +5,15 @@
 // toolbar; each change is one undo step. Name and Notes are above the
 // table, each committed when Enter is pressed or the field is left, Show in
 // chooses the unit of its values, and the status bar has a message. Beside
-// the table, Add From the Catalogue lists the measurements the set lacks,
-// with the details of the one chosen or of the table's row. Nothing leaves the machine: the file is read in the browser and
-// given to the engine as text.
+// the table, the body figure shows where the set's measurements are taken,
+// and Add From the Catalogue lists the measurements the set lacks, with the
+// details of the one chosen or of the table's row. Nothing leaves the
+// machine: the file is read in the browser and given to the engine as text.
 import { MeasurementDocument } from '../document/measurementDocument.ts';
 import { MEASURE_UNITS, type MeasureUnit } from '../editor/rulerTicks.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { BodyFigure } from './bodyFigure.ts';
 import { CatalogueBrowser } from './catalogueBrowser.ts';
 import { MeasurementGrid } from './measurementGrid.ts';
 
@@ -72,6 +74,11 @@ class MeasurementsApp {
   private readonly document: MeasurementDocument;
   private readonly grid: MeasurementGrid;
   private readonly catalogue: CatalogueBrowser;
+  private readonly figure: BodyFigure;
+  // The entry the catalogue shows, and the table's row under the pointer,
+  // which the figure highlights over it, as on the desktop
+  private shownKey = '';
+  private gridHover = '';
   private readonly undoButton: HTMLButtonElement;
   private readonly redoButton: HTMLButtonElement;
   private readonly addButton: HTMLButtonElement;
@@ -110,7 +117,20 @@ class MeasurementsApp {
       added: (key) => {
         this.run(this.grid.chooseValue(key));
       },
+      shown: (key) => {
+        this.shownKey = key;
+        this.showHighlight();
+      },
       message: showMessage,
+      failed: showFailure,
+    });
+    this.figure = new BodyFigure(this.document, {
+      hover: (key) => {
+        this.catalogue.showHover(key === '' ? undefined : key);
+      },
+      pick: (key) => {
+        this.run(this.grid.chooseValue(key));
+      },
       failed: showFailure,
     });
     this.undoButton = iconButton('arrow-back-up', STRINGS.undo, STRINGS.undoHint, () => {
@@ -201,7 +221,16 @@ class MeasurementsApp {
         this.run(this.showIn(unit));
       }
     });
-    side.append(this.catalogue.element);
+    side.append(this.figure.element, this.catalogue.element);
+    this.grid.element.addEventListener('mouseover', (event) => {
+      const row = event.target instanceof Element ? event.target.closest('tr') : null;
+      this.gridHover = row?.dataset.key ?? '';
+      this.showHighlight();
+    });
+    this.grid.element.addEventListener('mouseleave', () => {
+      this.gridHover = '';
+      this.showHighlight();
+    });
     this.document.addListener(() => {
       this.showState();
     });
@@ -225,6 +254,10 @@ class MeasurementsApp {
       }
       throw error;
     }
+  }
+
+  private showHighlight(): void {
+    this.figure.highlight = this.gridHover === '' ? this.shownKey : this.gridHover;
   }
 
   private async showIn(unit: MeasureUnit): Promise<void> {
@@ -403,6 +436,7 @@ class MeasurementsApp {
     }
     this.grid.showSet();
     this.catalogue.refresh();
+    this.figure.refresh();
     this.refreshButtons();
   }
 }

@@ -396,7 +396,16 @@ The replies of the first three are `publish_state`'s, which also gives the undo 
 
 ### The Measurements editor
 
-Built in steps (#84, see [Open items](open-items.md)). The engine's half of the first step is built; the page is not yet.
+The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Sloper.Measurements.MainForm`), built in steps (#84, see [Open items](open-items.md)). It is served but not linked from the site until it is ready.
+
+- **The toolbar** has Open, which takes a measurement set or size table (`.slm`). A file that is not one, or cannot be read, is refused with the reason, and the set open stays.
+- **The title** names the file. **The status bar** has a message.
+- **Name and Notes** are above the table, read only until the step that edits them.
+- **The table** (`MeasurementGrid` in `measurements/measurementGrid.ts`) is the shared `ListPanel`, as the desktop's grid: the key, a value column a size, or one Value column for a set without sizes, and the description, at the desktop's widths. It chooses one row at a time and has no search. It is read only for now.
+  - `ListPanel` takes any document that reads (`ListDocument`). It follows a `PatternDocument`'s changes itself; the measurements page tells its table when to build the rows again. `setColumns` gives it a column a size.
+  - The grid's styles are in `ui/listPanel.css`, which the design page links too.
+- **Show in**, over the table at its end as on the desktop, chooses mm, cm or inches. The engine formats the values in it (`FormatMeasure`), so they read as the desktop shows them. It starts at mm and is not kept yet.
+- `MeasurementDocument` (`document/measurementDocument.ts`) is the proxy of the engine's set, as `LayoutDocument` is of the layout.
 
 **Its methods** are named `measurements_`, in their own table (`MeasurementsMethods` in `Sloper.API.MeasurementsServer`). The editor server passes them to a `TMeasurementsApiServer`, which holds a `TMeasurementDocument` of its own, apart from the design page's pattern and measurements. They are not MCP tools.
 
@@ -405,7 +414,7 @@ Built in steps (#84, see [Open items](open-items.md)). The engine's half of the 
 | `measurements_open` | Opens a set from its `.slm` text (`TMeasurementDocument.OpenText`): no file to watch, nothing to undo, not modified. Text that cannot be read is refused, and the set open stays |
 | `measurements_state` | The set open, as its `.slm` file holds it (`SnapshotText`), without counting it as saved; an empty set before one is opened |
 
-Both answer with `set`.
+Both take `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Both answer with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none) and `description`.
 
 ## Server
 

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSloper Measurements</title>
+    <link rel="icon" href="opensloper-measure.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="listPanel.css" />
+    <meta name="theme-color" content="#f2f1ed" />
+    <style>
+      /* As the design and publish apps' pages */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      /* The toolbar, Name and Notes, the bar over the table, the table and the
+         status bar, as the desktop's measurements window */
+      body {
+        display: grid;
+        grid-template-rows: auto auto auto 1fr auto;
+        font:
+          13px system-ui,
+          sans-serif;
+        color: #222428;
+        background: #f2f1ed;
+      }
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        border-bottom: 1px solid #d8d6cf;
+      }
+      button {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: none;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      button img {
+        width: 18px;
+        height: 18px;
+      }
+      /* Name and Notes, read only until they can be edited */
+      #header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 12px;
+        padding: 6px 8px;
+      }
+      #header label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #header input {
+        font: inherit;
+        padding: 2px 4px;
+        border: 1px solid #d8d6cf;
+        background: #fbfaf7;
+      }
+      #set-name {
+        width: 240px;
+      }
+      #set-notes {
+        width: 420px;
+      }
+      /* Over the table; Show in sits at its end, as on the desktop */
+      #table-bar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+      }
+      #table-bar select {
+        font: inherit;
+      }
+      #table {
+        display: flex;
+        min-height: 0;
+      }
+      #empty {
+        padding: 12px 8px;
+        color: #6b6a66;
+      }
+      /* A message, as the desktop's status bar */
+      #status {
+        padding: 4px 8px;
+        border-top: 1px solid #d8d6cf;
+        min-height: 1.4em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #open-input {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar"></div>
+    <div id="header">
+      <label><span id="set-name-label"></span><input id="set-name" type="text" readonly /></label>
+      <label><span id="set-notes-label"></span><input id="set-notes" type="text" readonly /></label>
+    </div>
+    <div id="table-bar">
+      <label for="show-in" id="show-in-label"></label>
+      <select id="show-in"></select>
+    </div>
+    <div id="table"><p id="empty"></p></div>
+    <div id="status"><span id="message"></span></div>
+    <input id="open-input" type="file" accept=".slm" />
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

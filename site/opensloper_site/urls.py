@@ -1,6 +1,6 @@
-"""The site's addresses. The web apps live under /design/ and /publish/ (and
-later /measurements/); Apache serves them in production, and Django only
-while developing, as it does the static files."""
+"""The site's addresses. The web apps live under /design/, /publish/ and
+/measurements/; Apache serves them in production, and Django only while
+developing, as it does the static files."""
 from django.conf import settings
 from django.http import Http404
 from django.urls import include, path, re_path
@@ -16,7 +16,7 @@ def app_file(request, path, app):
 
 
 urlpatterns = [path("", include("pages.urls"))]
-for app in ("design", "publish"):
+for app in ("design", "publish", "measurements"):
     urlpatterns += [
         # The app's files are relative to its folder, so it needs the slash
         path(app, RedirectView.as_view(url=f"/{app}/", permanent=True)),

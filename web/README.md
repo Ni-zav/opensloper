@@ -1,23 +1,25 @@
 # The web version
 
 The web Design app (issue #78) and Publish app (issue #85), as
-`documents/design/web-version.md` plans them.
+`documents/design/web-version.md` plans them, and the Measurements app
+(issue #84), being built in steps.
 
 - The engine is the Pascal core compiled to WebAssembly (`engine/`). It runs in a Web Worker.
 - The editor on top of it is plain TypeScript.
 - Files stay on the user's machine. The page opens and saves them as text and sends nothing anywhere.
 
-| Folder          | What it is                                                                                                                               |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine/`       | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                 |
-| `src/engine/`   | The worker that runs the engine, and `Engine`, which calls it                                                                            |
-| `src/document/` | `PatternDocument`, the open pattern, as the desktop's `TPatternDocument`; `LayoutDocument`, the open layout                              |
-| `src/editor/`   | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                     |
-| `src/ui/`       | The canvas, its painter and tools, side tabs, list panels, the properties panel, shortcuts and strings, named after their `src/ui` units |
-| `src/design/`   | The Design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                         |
-| `src/publish/`  | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                       |
-| `tests/`        | Unit tests (`*.test.ts`, run with `node --test`) and the browser tests (see below); `browser.ts` serves the apps for them                |
-| `bundle.ts`     | Bundles the pages with esbuild into `out/design`, `out/publish` and `engine/out/browser`                                                 |
+| Folder              | What it is                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `engine/`           | The engine's Wasm build and the spike's timing page (`engine/README.md`)                                                                                     |
+| `src/engine/`       | The worker that runs the engine, and `Engine`, which calls it                                                                                                |
+| `src/document/`     | `PatternDocument`, the open pattern, as the desktop's `TPatternDocument`; `LayoutDocument`, the open layout; `MeasurementDocument`, the open measurement set |
+| `src/editor/`       | Copies of Pascal logic run on every frame (`view.ts`, `labelPlacement.ts`), and the engine's scene and tables, typed                                         |
+| `src/ui/`           | The canvas, its painter and tools, side tabs, list panels, the properties panel, shortcuts and strings, named after their `src/ui` units                     |
+| `src/design/`       | The Design app's page and `main.ts`, as `Sloper.Design.MainForm`                                                                                             |
+| `src/publish/`      | The Publish app's page and `main.ts`, as `Sloper.Publish.MainForm`                                                                                           |
+| `src/measurements/` | The Measurements app's page, `main.ts` as `Sloper.Measurements.MainForm`, and its table (`measurementGrid.ts`)                                               |
+| `tests/`            | Unit tests (`*.test.ts`, run with `node --test`) and the browser tests (see below); `browser.ts` serves the apps for them                                    |
+| `bundle.ts`         | Bundles the pages with esbuild into `out/design`, `out/publish`, `out/measurements` and `engine/out/browser`                                                 |
 
 ## The Design app
 
@@ -54,7 +56,15 @@ Built into `out/publish`.
 - **Print** goes through the browser. Export writes PDF, SVG and DXF-AAMA. Machine DXF stays on the desktop.
 - **The keys** are the desktop's.
 
-## Both apps
+## The Measurements app
+
+Built into `out/measurements`, step by step (`documents/design/open-items.md`).
+
+- **Open** takes a measurement set or size table (`.slm`).
+- **Name and Notes** are above the table, read only for now.
+- **The table** has a row a measurement: its key, a value column a size, or one Value column, and its description, read only for now. **Show in** chooses mm, cm or inches.
+
+## The Design and Publish apps
 
 - **File System Access**, in Chrome and Edge, saves files in place. It also finds a pattern's measurement file, or a layout's patterns, in a folder granted once. Other browsers upload and download files.
 - **Work not yet saved** is kept in the browser (OPFS). It is offered back after the tab that had it closes.
@@ -76,7 +86,7 @@ From the repository's root:
 
 ```
 ./opensloper-make.sh web               # the engine, then npm run build: check, unit tests, bundle
-./opensloper-make.sh site --serve      # both apps in the Django site, at 127.0.0.1:8000/design/ and /publish/
+./opensloper-make.sh site --serve      # the apps in the Django site, at 127.0.0.1:8000/design/, /publish/ and /measurements/
 ```
 
 Or serve one app on its own:
@@ -84,12 +94,14 @@ Or serve one app on its own:
 ```
 python3 -m http.server 8766 --bind 127.0.0.1 --directory web/out/design    # http://127.0.0.1:8766/
 python3 -m http.server 8767 --bind 127.0.0.1 --directory web/out/publish   # http://127.0.0.1:8767/
+python3 -m http.server 8768 --bind 127.0.0.1 --directory web/out/measurements   # http://127.0.0.1:8768/
 ```
 
 - Serve the app over HTTP. Its module worker does not load from `file://`.
 - The service worker keeps answering from the build it has. After rebuilding, click Update, or clear it in the browser's developer tools.
 - In Design, open a `.sloper` file and choose its measurement file with it, or later with Measurements….
 - In Publish, open a `.slayout` with its patterns, or a pattern with its measurement file.
+- In Measurements, open a `.slm`, such as `docs/examples/measurements/size-table.slm`.
 
 ## Testing
 
@@ -97,7 +109,7 @@ python3 -m http.server 8767 --bind 127.0.0.1 --directory web/out/publish   # htt
 (cd web && npm run test:browser)   # the apps in headless Chromium; SCREENSHOT=name keeps name.png
 ```
 
-- The browser tests are `design.ts`, `files.ts`, `offline.ts`, `publish.ts`, `publishFiles.ts` and `publishOffline.ts`.
+- The browser tests are `design.ts`, `files.ts`, `offline.ts`, `publish.ts`, `publishFiles.ts`, `publishOffline.ts` and `measurements.ts`.
 - They use `/usr/bin/chromium` on Linux and Google Chrome in `/Applications` on macOS. Set `CHROMIUM` to use another browser.
 - If `npm` is not found, put the `venv` on the path first: `export PATH=$PWD/../venv/bin:$PATH`.
 

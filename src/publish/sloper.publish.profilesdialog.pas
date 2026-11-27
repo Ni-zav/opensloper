@@ -41,6 +41,7 @@ resourcestring
   rsProfilesMachine = 'Machine profiles';
   rsProfilesAdd = 'Add...';
   rsProfilesRemove = 'Remove';
+  rsProfilesRename = 'Rename...';
   rsProfilesName = 'Profile name';
   rsProfilesNameTaken = 'Choose a new, non-empty profile name';
   rsProfilesReservedName = 'That name belongs to a built-in profile';
@@ -86,9 +87,9 @@ type
   TProfilesDialog = class(TForm)
   private
     FKindBox, FProfileBox: TComboBox;
-    FRemove, FAdd: TButton;
+    FRemove, FAdd, FRename: TButton;
     FEmpty: TLabel;
-    FMarksPanel: TPanel;
+    FTopBar, FMarksPanel, FBody: TPanel;
     FGrid: TStringGrid;
     FMarks: TCheckListBox;
     FAllowance: TCheckBox;
@@ -99,12 +100,16 @@ type
     FUpdating: boolean;
     procedure RefreshProfiles(Index: integer);
     procedure ShowProfile;
+    procedure FitContents;
+    function ProfileName(Index: integer): string;
+    function NameIsUsable(var AName: string; Skip: integer): boolean;
     function ReadProfile: boolean;
     function ReadMachine: boolean;
     function ReadOutput: boolean;
     procedure PickProfile(Sender: TObject);
     procedure AddProfile(Sender: TObject);
     procedure RemoveProfile(Sender: TObject);
+    procedure RenameProfile(Sender: TObject);
     procedure SaveProfiles(Sender: TObject);
   protected
     procedure DoShow; override;
@@ -130,13 +135,12 @@ begin
     begin
       if Result <> '' then
         Result := Result + ' ';
-      Result := Result + FloatToStr(Value);
+      Result := Result + ProfileNumberText(Value);
     end;
 end;
 
 constructor TProfilesDialog.CreateDialog(AOwner: TComponent; Settings: TAppSettings);
 var
-  TopBar: TPanel;
   Buttons: TButtonPanel;
   HintLabel, MarkLabel: TLabel;
   Column: TGridColumn;
@@ -153,6 +157,7 @@ begin
   inherited CreateNew(AOwner);
   Caption := rsProfilesTitle;
   Position := poMainFormCenter;
+  BorderStyle := bsDialog;
   Width := Scale96ToForm(710);
   Height := Scale96ToForm(510);
   FMachines := Copy(Settings.MachineProfiles);
@@ -165,14 +170,14 @@ begin
   Buttons.OKButton.ModalResult := mrNone;
   Buttons.OKButton.OnClick := @SaveProfiles;
 
-  TopBar := TPanel.Create(Self);
-  TopBar.Parent := Self;
-  TopBar.Align := alTop;
-  TopBar.Height := Scale96ToForm(36);
-  TopBar.BevelOuter := bvNone;
-  TopBar.BorderSpacing.Around := Scale96ToForm(8);
+  FTopBar := TPanel.Create(Self);
+  FTopBar.Parent := Self;
+  FTopBar.Align := alTop;
+  FTopBar.Height := Scale96ToForm(36);
+  FTopBar.BevelOuter := bvNone;
+  FTopBar.BorderSpacing.Around := Scale96ToForm(8);
   FKindBox := TComboBox.Create(Self);
-  FKindBox.Parent := TopBar;
+  FKindBox.Parent := FTopBar;
   FKindBox.Align := alLeft;
   FKindBox.Style := csDropDownList;
   FKindBox.Width := Scale96ToForm(155);
@@ -180,19 +185,25 @@ begin
   FKindBox.Items.Add(rsProfilesMachine);
   FKindBox.ItemIndex := Ord(FKind);
 
-  FRemove := TButton.Create(Self);
-  FRemove.Parent := TopBar;
-  FRemove.Align := alRight;
-  FRemove.Caption := rsProfilesRemove;
-  FRemove.OnClick := @RemoveProfile;
+  // Aligned right, the last made is rightmost: Add..., Rename... and Remove
   FAdd := TButton.Create(Self);
-  FAdd.Parent := TopBar;
+  FAdd.Parent := FTopBar;
   FAdd.Align := alRight;
   FAdd.Caption := rsProfilesAdd;
   FAdd.OnClick := @AddProfile;
+  FRename := TButton.Create(Self);
+  FRename.Parent := FTopBar;
+  FRename.Align := alRight;
+  FRename.Caption := rsProfilesRename;
+  FRename.OnClick := @RenameProfile;
+  FRemove := TButton.Create(Self);
+  FRemove.Parent := FTopBar;
+  FRemove.Align := alRight;
+  FRemove.Caption := rsProfilesRemove;
+  FRemove.OnClick := @RemoveProfile;
 
   FProfileBox := TComboBox.Create(Self);
-  FProfileBox.Parent := TopBar;
+  FProfileBox.Parent := FTopBar;
   FProfileBox.Align := alClient;
   FProfileBox.Style := csDropDownList;
   FKindBox.OnChange := @PickProfile;
@@ -225,10 +236,19 @@ begin
   for Mark := Low(TPieceMark) to High(TPieceMark) do
     FMarks.Items.Add(MARK_CAPTIONS[Mark]);
 
+  // The grid, or in its place the line saying to add a profile
+  FBody := TPanel.Create(Self);
+  FBody.Parent := Self;
+  FBody.Align := alClient;
+  FBody.BevelOuter := bvNone;
+  FBody.BorderSpacing.Around := Scale96ToForm(8);
+  FEmpty := TLabel.Create(Self);
+  FEmpty.Parent := FBody;
+  FEmpty.Align := alTop;
+  FEmpty.Caption := rsProfilesEmpty;
   FGrid := TStringGrid.Create(Self);
-  FGrid.Parent := Self;
+  FGrid.Parent := FBody;
   FGrid.Align := alClient;
-  FGrid.BorderSpacing.Around := Scale96ToForm(8);
   FGrid.FixedCols := 0;
   FGrid.Options := FGrid.Options + [goEditing, goColSizing] - [goRangeSelect];
   AddColumn(rsProfilesLine, 100).ReadOnly := True;
@@ -239,29 +259,26 @@ begin
   AddColumn(rsProfilesColor, 85);
   AddColumn(rsProfilesDashes, 130);
   AddColumn(rsProfilesWidth, 90);
-  FEmpty := TLabel.Create(Self);
-  FEmpty.Parent := Self;
-  FEmpty.Align := alTop;
-  FEmpty.BorderSpacing.Around := Scale96ToForm(8);
-  FEmpty.Caption := rsProfilesEmpty;
   RefreshProfiles(0);
 end;
 
-procedure TProfilesDialog.DoShow;
+// The sizes are only known once the controls are laid out with the real
+// font. The width comes first: the help wraps to fewer lines when wider.
+procedure TProfilesDialog.FitContents;
 var
-  Needed, MarksWidth, ColumnWidth, Index, PreferredWidth, PreferredHeight: integer;
+  Needed, MarksWidth, ColumnWidth, Index, Rows, PreferredWidth, PreferredHeight, Extra: integer;
   Mark: TPieceMark;
   Role: TEdgeRole;
   Kind: TLineType;
   Limit: TRect;
 begin
-  inherited DoShow;
   if Assigned(Monitor) then
     Limit := Monitor.WorkareaRect
   else
     Limit := Screen.WorkAreaRect;
-  FGrid.Canvas.Font := FGrid.Font;
-  Needed := Scale96ToForm(32);
+  // Each column fits its header and the line names
+  Needed := Scale96ToForm(8);
+  Rows := 0;
   for Index := 0 to FGrid.Columns.Count - 1 do
   begin
     FGrid.Canvas.Font := FGrid.TitleFont;
@@ -273,7 +290,10 @@ begin
       FGrid.Canvas.Font := FGrid.Font;
       for Role := Low(TEdgeRole) to High(TEdgeRole) do
         if Role in MARKING_ROLES then
+        begin
           ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(RoleCaption(Role)));
+          Inc(Rows);
+        end;
       for Kind := Low(TLineType) to High(TLineType) do
         ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(LINE_CAPTIONS[Kind]));
     end;
@@ -288,9 +308,37 @@ begin
   for Mark := Low(TPieceMark) to High(TPieceMark) do
     MarksWidth := Max(MarksWidth, Canvas.TextWidth(MARK_CAPTIONS[Mark]) + Scale96ToForm(32));
   FMarksPanel.Width := Max(FMarksPanel.Width, MarksWidth);
-  Needed := Needed + FMarksPanel.Width + Scale96ToForm(16);
-  Width := Min(Limit.Width, Width + Max(0, Needed - ClientWidth));
-  Height := Min(Height, Limit.Height);
+  Needed := Needed + FMarksPanel.Width + Scale96ToForm(32);
+  // The kind box fits its longest choice, beside its drop-down button
+  ColumnWidth := 0;
+  for Index := 0 to FKindBox.Items.Count - 1 do
+    ColumnWidth := Max(ColumnWidth, Canvas.TextWidth(FKindBox.Items[Index]));
+  FKindBox.Width := Max(FKindBox.Width, ColumnWidth + Scale96ToForm(40));
+  for Index := 0 to FTopBar.ControlCount - 1 do
+    if FTopBar.Controls[Index] is TButton then
+    begin
+      FTopBar.Controls[Index].GetPreferredSize(PreferredWidth, PreferredHeight, True);
+      FTopBar.Controls[Index].Width := Max(FTopBar.Controls[Index].Width, PreferredWidth);
+    end;
+  Needed := Max(Needed, FKindBox.Width + FAdd.Width + FRename.Width + FRemove.Width + Scale96ToForm(176));
+  Width := Min(Limit.Width, Width + Needed - ClientWidth);
+  // Laid out again at the new width before the heights are measured
+  DisableAutoSizing;
+  EnableAutoSizing;
+  // The grid shows all the rows of either kind, and the marks all theirs
+  Rows := Max(Rows, Ord(High(TLineType)) + 1) + 1;
+  Extra := Rows * (FGrid.DefaultRowHeight + FGrid.GridLineWidth) + Scale96ToForm(6) - FBody.ClientHeight;
+  if FMarks.Count > 0 then
+    Extra := Max(Extra, FMarks.Top + FMarks.ItemRect(FMarks.Count - 1).Bottom + Scale96ToForm(6) +
+      FAllowance.Height - FMarksPanel.ClientHeight);
+  Height := Min(Height + Extra, Limit.Height);
+end;
+
+// Only a shown dialog is laid out, so it is fitted here and centred again
+procedure TProfilesDialog.DoShow;
+begin
+  inherited DoShow;
+  FitContents;
   MoveToDefaultPosition;
 end;
 
@@ -330,6 +378,7 @@ begin
   FGrid.Visible := FGrid.Enabled;
   FEmpty.Visible := not FGrid.Enabled;
   FRemove.Enabled := FGrid.Enabled;
+  FRename.Enabled := FGrid.Enabled;
   FMarks.Parent.Visible := FKind = prOutput;
   FMarks.Enabled := FGrid.Enabled;
   FAllowance.Enabled := FGrid.Enabled;
@@ -356,7 +405,7 @@ begin
       FGrid.Cells[COL_INCLUDE, Row] := CheckedText(Line.Enabled);
       FGrid.Cells[COL_COLOR, Row] := Line.Color;
       FGrid.Cells[COL_LAYER_OR_DASH, Row] := Line.Layer;
-      FGrid.Cells[COL_WIDTH, Row] := FloatToStr(Line.Width);
+      FGrid.Cells[COL_WIDTH, Row] := ProfileNumberText(Line.Width);
     end;
     Exit;
   end;
@@ -372,7 +421,7 @@ begin
       begin
         FGrid.Cells[COL_COLOR, Row] := Style.Color;
         FGrid.Cells[COL_LAYER_OR_DASH, Row] := DashText(Style.Dashes);
-        FGrid.Cells[COL_WIDTH, Row] := FloatToStr(Style.Width);
+        FGrid.Cells[COL_WIDTH, Row] := ProfileNumberText(Style.Width);
       end;
       Inc(Row);
     end;
@@ -477,37 +526,50 @@ begin
   RefreshProfiles(Index);
 end;
 
+function TProfilesDialog.ProfileName(Index: integer): string;
+begin
+  if FKind = prMachine then
+    Result := FMachines[Index].Name
+  else
+    Result := FOutputs[Index].Name;
+end;
+
+// Trims the name; False with a message when it is empty, reserved or taken
+// by a profile of this kind other than the one at Skip
+function TProfilesDialog.NameIsUsable(var AName: string; Skip: integer): boolean;
+begin
+  AName := Trim(AName);
+  if ((FKind = prMachine) and IsReservedMachineProfileName(AName)) or
+    ((FKind = prOutput) and IsReservedOutputProfileName(AName)) then
+  begin
+    MessageDlg(rsProfilesReservedName, mtError, [mbOK], 0);
+    Exit(False);
+  end;
+  Result := (AName <> '') and not (((FKind = prMachine) and MachineProfileNameTaken(FMachines, AName, Skip)) or
+    ((FKind = prOutput) and OutputProfileNameTaken(FOutputs, AName, Skip)));
+  if not Result then
+    MessageDlg(rsProfilesNameTaken, mtError, [mbOK], 0);
+end;
+
+// A new profile starts as a copy of the one shown
 procedure TProfilesDialog.AddProfile(Sender: TObject);
 var
   Machine: TMachineProfile;
   Output: TOutputProfile;
-  ProfileName: string;
+  NewName: string;
 begin
   if not ReadProfile then
     Exit;
-  ProfileName := '';
-  if not InputQuery(rsProfilesAdd, rsProfilesName, ProfileName) then
+  NewName := '';
+  if not InputQuery(rsProfilesAdd, rsProfilesName, NewName) or not NameIsUsable(NewName, -1) then
     Exit;
-  ProfileName := Trim(ProfileName);
-  if ((FKind = prMachine) and (IsBuiltInMachineProfile(ProfileName) or SameText(ProfileName, rsProfileNone))) or
-    ((FKind = prOutput) and (IsBuiltInOutputProfile(ProfileName) or SameText(ProfileName, rsOutputProfileAll))) then
-  begin
-    MessageDlg(rsProfilesReservedName, mtError, [mbOK], 0);
-    Exit;
-  end;
-  if (ProfileName = '') or ((FKind = prMachine) and FindMachineProfile(FMachines, ProfileName, Machine)) or
-    ((FKind = prOutput) and FindOutputProfile(FOutputs, ProfileName, Output)) then
-  begin
-    MessageDlg(rsProfilesNameTaken, mtError, [mbOK], 0);
-    Exit;
-  end;
   if FKind = prMachine then
   begin
     if FIndex >= 0 then
       Machine := FMachines[FIndex]
     else
       Machine := StandardProfile;
-    Machine.Name := ProfileName;
+    Machine.Name := NewName;
     Insert(Machine, FMachines, Length(FMachines));
     RefreshProfiles(High(FMachines));
   end
@@ -517,10 +579,27 @@ begin
       Output := FOutputs[FIndex]
     else
       Output := FullOutputProfile;
-    Output.Name := ProfileName;
+    Output.Name := NewName;
     Insert(Output, FOutputs, Length(FOutputs));
     RefreshProfiles(High(FOutputs));
   end;
+end;
+
+// Layouts that chose the old name no longer find the profile
+procedure TProfilesDialog.RenameProfile(Sender: TObject);
+var
+  NewName: string;
+begin
+  if (FIndex < 0) or not ReadProfile then
+    Exit;
+  NewName := ProfileName(FIndex);
+  if not InputQuery(rsProfilesRename, rsProfilesName, NewName) or not NameIsUsable(NewName, FIndex) then
+    Exit;
+  if FKind = prMachine then
+    FMachines[FIndex].Name := NewName
+  else
+    FOutputs[FIndex].Name := NewName;
+  RefreshProfiles(FIndex);
 end;
 
 procedure TProfilesDialog.RemoveProfile(Sender: TObject);

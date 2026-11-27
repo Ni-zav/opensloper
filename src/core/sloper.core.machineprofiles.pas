@@ -56,7 +56,14 @@ function StandardProfile: TMachineProfile;
 function FindMachineProfile(const Profiles: TMachineProfileArray; const AName: string; out Found: TMachineProfile): boolean;
 function IsHexColor(const Text: string): boolean;
 function IsBuiltInMachineProfile(const AName: string): boolean;
+// The built-in profile's name, or the "None" a layout shows for no profile
+function IsReservedMachineProfileName(const AName: string): boolean;
+// Ignoring case. The profile at Skip is passed over, so a rename can keep its name.
+function MachineProfileNameTaken(const Profiles: TMachineProfileArray; const AName: string; Skip: integer): boolean;
+// A number above 0, written with a full stop whatever the system's locale
 function TryPositiveProfileNumber(const Text: string; out Value: double): boolean;
+// A width or dash length as the profiles window shows it, with a full stop
+function ProfileNumberText(Value: double): string;
 function TryMachineLineStyle(Enabled: boolean; const Color, Layer, Width: string; out Style: TLineStyle): boolean;
 function MachineProfilesToJSON(const Profiles: TMachineProfileArray): TJSONArray;
 // A profile with no name is skipped, and a bad value keeps Standard's
@@ -123,9 +130,37 @@ begin
   Result := SameText(AName, STANDARD_PROFILE_NAME);
 end;
 
+function IsReservedMachineProfileName(const AName: string): boolean;
+begin
+  Result := IsBuiltInMachineProfile(Trim(AName)) or SameText(Trim(AName), rsProfileNone);
+end;
+
+function MachineProfileNameTaken(const Profiles: TMachineProfileArray; const AName: string; Skip: integer): boolean;
+var
+  Index: integer;
+begin
+  for Index := 0 to High(Profiles) do
+    if (Index <> Skip) and SameText(Profiles[Index].Name, Trim(AName)) then
+      Exit(True);
+  Result := False;
+end;
+
+function ProfileNumberFormats: TFormatSettings;
+begin
+  Result := DefaultFormatSettings;
+  Result.DecimalSeparator := '.';
+  Result.ThousandSeparator := #0;
+end;
+
 function TryPositiveProfileNumber(const Text: string; out Value: double): boolean;
 begin
-  Result := TryStrToFloat(Trim(Text), Value) and not IsNan(Value) and not IsInfinite(Value) and (Value > 0);
+  Result := TryStrToFloat(Trim(Text), Value, ProfileNumberFormats) and not IsNan(Value) and not IsInfinite(Value) and
+    (Value > 0);
+end;
+
+function ProfileNumberText(Value: double): string;
+begin
+  Result := FormatFloat('0.######', Value, ProfileNumberFormats);
 end;
 
 function TryMachineLineStyle(Enabled: boolean; const Color, Layer, Width: string; out Style: TLineStyle): boolean;

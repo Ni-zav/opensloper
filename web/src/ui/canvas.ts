@@ -169,6 +169,7 @@ export class PatternCanvas implements CanvasToolHost {
   private readonly noteEditor: NoteEditor;
   private scene: Scene = EMPTY_SCENE;
   private selection = new Set<string>();
+  private problemIds = new Set<string>();
   private hoverId = '';
   private snap: SnapMarker | undefined;
   private tool = SELECT_TOOL;
@@ -463,6 +464,11 @@ export class PatternCanvas implements CanvasToolHost {
     }
   }
 
+  showProblems(ids: readonly string[]): void {
+    this.problemIds = new Set(ids);
+    this.repaint();
+  }
+
   showSeamSides(sideA: number[][], sideB: number[][]): void {
     this.seamA = sideA;
     this.seamB = sideB;
@@ -588,6 +594,7 @@ export class PatternCanvas implements CanvasToolHost {
     this.painter.beginFrame(this.element.clientWidth, this.element.clientHeight, {
       view: this.view,
       selection: this.selection,
+      problemIds: this.problemIds,
       hoverId: this.hoverId,
       snap: this.snap,
       box,
@@ -692,6 +699,7 @@ export class PatternCanvas implements CanvasToolHost {
       this.autoFit = true;
       this.noteEditor.close();
       this.selection.clear();
+      this.problemIds.clear();
       this.events.selectionChanged([]);
     } else if (changes.has('pattern') && !changes.has('measurements')) {
       // An edit: the view stays where the user is working

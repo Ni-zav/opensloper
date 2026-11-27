@@ -787,7 +787,9 @@ class DesignApp {
 
   // The pattern's problems in full (editor_problems), each keyed by what it is about
   private async loadProblems(): Promise<void> {
+    const generation = this.document.state.generation;
     const answer = await this.document.read('editor_problems');
+    if (generation !== this.document.state.generation) return;
     this.problemSubjects = new Map();
     const listed = recordsField(answer, 'problems').map((problem) => {
       const subject = parseSubject(problem);
@@ -795,6 +797,9 @@ class DesignApp {
       this.problemSubjects.set(key, subject);
       return { key, text: stringField(problem, 'text') ?? '', blocking: false };
     });
+    this.canvas.showProblems(
+      [...this.problemSubjects.values()].flatMap((subject) => (subject.kind === 'object' ? [subject.id] : [])),
+    );
     this.problems.setProblems(listed);
     this.side.setCount('problems', listed.length);
     this.side.setCaption(

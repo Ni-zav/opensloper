@@ -34,6 +34,9 @@ const GUIDE_DOTS = [1, 2];
 // A piece's grainline, fold and marking strokes, and its notches, in pixels
 const PIECE_MARK_WIDTH = 1.5;
 const NOTCH_WIDTH = 2;
+const PROBLEM_HALO_WIDTH = 10;
+const PROBLEM_HALO_GROW = 6;
+const PROBLEM_HALO = { red: 209, green: 52, blue: 56, alpha: 80 };
 const SEAM_LINE_WIDTH = 4;
 const CHEVRON_SIZE = 10;
 // Degrees either side of the way a chevron points, to its wings
@@ -153,6 +156,7 @@ export interface SnapMarker {
 export interface PaintState {
   view: ViewTransform;
   selection: ReadonlySet<string>;
+  problemIds: ReadonlySet<string>;
   hoverId: string;
   snap: SnapMarker | undefined;
   // The selection box's screen corners, while one is dragged
@@ -257,13 +261,59 @@ export class PatternPainter {
   // Pieces under edges, edges under points; what an isolated piece leaves out under a wash
   drawPattern(scene: Scene, tables: Tables): void {
     if (scene.isolated === '') {
+      this.drawProblemHalos(scene);
       this.drawLayer(scene, tables, false);
       return;
     }
     this.drawLayer(scene, tables, true);
     this.context.fillStyle = css({ ...PAPER, alpha: DIM_WASH_ALPHA });
     this.context.fillRect(0, 0, this.width, this.height);
+    this.drawProblemHalos(scene);
     this.drawLayer(scene, tables, false);
+  }
+
+  private drawProblemHalos(scene: Scene): void {
+    const { problemIds, view } = this.paintState();
+    if (problemIds.size === 0) return;
+    const shown = (object: SceneObject): boolean => !object.dimmed && problemIds.has(object.id);
+    const context = this.context;
+    context.lineWidth = PROBLEM_HALO_WIDTH;
+    context.lineJoin = 'round';
+    context.lineCap = 'round';
+    context.strokeStyle = css(PROBLEM_HALO);
+    context.fillStyle = css(PROBLEM_HALO);
+    context.setLineDash([]);
+    for (const piece of scene.pieces) {
+      if (shown(piece) && piece.cutLine.length >= 6) {
+        this.tracePolyline(piece.cutLine);
+        context.closePath();
+        context.stroke();
+      }
+    }
+    for (const edge of scene.edges) {
+      if (shown(edge) && edge.line.length >= 4) {
+        const gap = edge.slot * COINCIDENT_GAP;
+        this.tracePolyline(edge.line, { x: edge.normal.x * gap, y: edge.normal.y * gap });
+        context.stroke();
+      }
+    }
+    for (const seam of scene.seams) {
+      if (shown(seam)) {
+        this.strokeLines(seam.sideA, PROBLEM_HALO, PROBLEM_HALO_WIDTH);
+        this.strokeLines(seam.sideB, PROBLEM_HALO, PROBLEM_HALO_WIDTH);
+      }
+    }
+    for (const marker of scene.markers) {
+      if (shown(marker)) this.strokeSegments(marker.strokes, css(PROBLEM_HALO), PROBLEM_HALO_WIDTH);
+    }
+    for (const point of scene.points) {
+      if (shown(point)) {
+        const at = view.toScreen(point);
+        context.beginPath();
+        context.arc(at.x, at.y, POINT_RADIUS + PROBLEM_HALO_GROW, 0, 2 * Math.PI);
+        context.fill();
+      }
+    }
   }
 
   // Each note's text in its size and font, with a callout's leader, a white
@@ -638,6 +688,15 @@ export class PatternPainter {
       context.strokeStyle = css(SELECTED_INK);
       context.lineWidth = 1.5;
       context.stroke();
+    }
+    if (!note.dimmed && state.problemIds.has(note.id)) {
+      context.fillStyle = css(PROBLEM_HALO);
+      context.fillRect(
+        frameFirst.x - PROBLEM_HALO_GROW,
+        frameFirst.y - PROBLEM_HALO_GROW,
+        frameLast.x - frameFirst.x + 2 * PROBLEM_HALO_GROW,
+        frameLast.y - frameFirst.y + 2 * PROBLEM_HALO_GROW,
+      );
     }
     if (note.boxed) {
       context.fillStyle = css(WHITE);

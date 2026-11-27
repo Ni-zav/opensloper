@@ -11,11 +11,23 @@ The layout follows [Keep a Changelog](https://keepachangelog.com): Added,
 Changed, Fixed and Removed under each version.
 
 
-## 0.9.0
+## 0.10.0
 
 ### Added
 
-- Web Design shows a faint red halo around objects listed in Problems (#162).
+- Publish can create, rename and edit named output and machine profiles from
+  the Edit menu (#57).
+- Web Design shows a faint red halo around objects listed in Problems
+  (#162).
+
+### Fixed
+
+- Shortcut hints in web Design show Ctrl or Cmd for the current platform
+  (#160).
+
+## 0.9.0
+
+### Added
 
 - The Publish app runs in the browser too, as a beta at
   opensloper.com/publish/, linked from the home page (#85). It opens a

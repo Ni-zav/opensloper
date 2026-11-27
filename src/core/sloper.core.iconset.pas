@@ -131,6 +131,7 @@ resourcestring
   rsIconUndo = 'Undo';
   rsIconRedo = 'Redo';
   rsIconPreferences = 'Preferences…';
+  rsIconProfiles = 'Output and Machine Profiles…';
   rsIconZoomIn = 'Zoom In';
   rsIconZoomOut = 'Zoom Out';
   rsIconUserGuide = 'User Guide';
@@ -218,6 +219,7 @@ resourcestring
   rsIconUndoText = 'Take back the last change';
   rsIconRedoText = 'Make the change undone again';
   rsIconPreferencesText = 'Settings for every pattern: units, colours, the canvas';
+  rsIconProfilesText = 'Add, rename and edit your output and machine profiles';
   rsIconUserGuideText = 'Open this guide';
   rsIconAboutText = 'The version and licence';
   rsIconNewSetText = 'Start a measurement set for the pattern';
@@ -565,6 +567,7 @@ begin
   AddKey(aiQuit, rsIconQuit, kcQuit, rsIconQuitText);
   Menu := rsIconMenuEdit;
   AddKey(aiPreferences, rsIconPreferences, kcPreferences, rsIconPreferencesText);
+  Add(aiPreferences, rsIconProfiles, rsIconProfilesText);
   Menu := rsIconMenuHelp;
   Add(aiUserGuide, rsIconUserGuide, rsIconUserGuideText);
   Add(aiAbout, rsIconAbout, rsIconAboutText);

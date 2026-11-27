@@ -47,6 +47,7 @@ type
     procedure TestRulersRoundTrip;
     procedure TestOpenTabsRoundTrip;
     procedure TestSavingPublishTabKeepsTheRest;
+    procedure TestSavingProfilesKeepsOtherSettings;
     procedure TestUnknownLabelModeIsIgnored;
     procedure TestPreferenceDefaults;
     procedure TestPreferencesRoundTrip;
@@ -64,12 +65,17 @@ type
     procedure TestBuiltInOutputProfiles;
     procedure TestBuiltInProfileCannotBeChanged;
     procedure TestOutputProfileBadStyleIgnored;
+    procedure TestOutputRoleStyleInput;
+    procedure TestMachineLineStyleInput;
+    procedure TestReservedProfileNames;
+    procedure TestProfileNameTaken;
+    procedure TestProfileNumbersIgnoreLocale;
   end;
 
 implementation
 
 uses
-  SysUtils, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.OutputProfiles;
+  SysUtils, Sloper.Core.Measurements, Sloper.Core.Units, Sloper.Core.JSON, Sloper.Core.Draft, Sloper.Core.OutputProfiles, Sloper.Core.MachineProfiles;
 
 const
   NEWER_SETTINGS = '{"format": "opensloper-settings", "version": 999}';
@@ -158,6 +164,38 @@ begin
     AssertFalse('rulers kept', FSettings.ShowRulers);
     AssertEquals('design tab kept', 'variables', FSettings.SideTab);
     AssertEquals('notes', FSettings.PublishTab);
+  finally
+    DeleteFile(FileName);
+  end;
+end;
+
+procedure TTestSettings.TestSavingProfilesKeepsOtherSettings;
+var
+  FileName, Reason: string;
+  Machine: TMachineProfile;
+  Output: TOutputProfile;
+begin
+  FileName := GetTempFileName(GetTempDir, 'oss');
+  try
+    FSettings.SideTab := 'variables';
+    FSettings.Preferences.Calibration.X := 1.01;
+    AssertTrue(Reason, FSettings.SaveToFile(FileName, Reason));
+    Machine := StandardProfile;
+    Machine.Name := 'Workshop';
+    Machine.Lines[ltScore].Layer := 'Fold';
+    Output := FullOutputProfile;
+    Output.Name := 'Paper';
+    Output.Allowance := apNone;
+    AssertTrue(Reason, SaveProfilesToFile(FileName, [Machine], [Output], Reason));
+    AssertTrue(Reason, FSettings.LoadFromFile(FileName, Reason));
+    AssertEquals('design tab kept', 'variables', FSettings.SideTab);
+    AssertNear('calibration kept', 1.01, FSettings.Preferences.Calibration.X);
+    AssertEquals('machine layer', 'Fold', FSettings.MachineProfiles[0].Lines[ltScore].Layer);
+    AssertTrue('paper allowance saved', FSettings.OutputProfiles[0].Allowance = apNone);
+    AssertTrue(Reason, SaveProfilesToFile(FileName, [], [], Reason));
+    AssertTrue(Reason, FSettings.LoadFromFile(FileName, Reason));
+    AssertEquals('machine profile removed', 0, Length(FSettings.MachineProfiles));
+    AssertEquals('output profile removed', 0, Length(FSettings.OutputProfiles));
   finally
     DeleteFile(FileName);
   end;
@@ -588,6 +626,85 @@ begin
   AssertFalse(FSettings.OutputProfiles[0].Styles[erStitch].Custom);
   AssertFalse(FSettings.OutputProfiles[0].Styles[erFold].Custom);
   AssertTrue('everything when not listed', FSettings.OutputProfiles[0].Roles = MARKING_ROLES);
+end;
+
+procedure TTestSettings.TestOutputRoleStyleInput;
+var
+  Style: TRoleStyle;
+begin
+  AssertTrue('blank keeps default', TryOutputRoleStyle('', '', '', Style) and not Style.Custom);
+  AssertTrue('valid style', TryOutputRoleStyle(' #ff0000 ', '1  2'#9'3', '4', Style));
+  AssertTrue(Style.Custom);
+  AssertEquals('#ff0000', Style.Color);
+  AssertEquals(3.0, Style.Dashes[2], 0.001);
+  AssertEquals(4.0, Style.Width, 0.001);
+  AssertFalse('bad colour', TryOutputRoleStyle('red', '', '4', Style));
+  AssertFalse('too many dashes', TryOutputRoleStyle('#ff0000', '1 2 3 4 5', '4', Style));
+  AssertFalse('zero dash', TryOutputRoleStyle('#ff0000', '1 0', '4', Style));
+  AssertFalse('zero width', TryOutputRoleStyle('#ff0000', '', '0', Style));
+end;
+
+procedure TTestSettings.TestMachineLineStyleInput;
+var
+  Style: TLineStyle;
+begin
+  AssertTrue('valid line', TryMachineLineStyle(True, '#112233', ' Cuts ', '2', Style));
+  AssertTrue(Style.Enabled);
+  AssertEquals('Cuts', Style.Layer);
+  AssertEquals(2.0, Style.Width, 0.001);
+  AssertFalse('bad colour', TryMachineLineStyle(True, 'blue', 'Cut', '2', Style));
+  AssertFalse('blank layer', TryMachineLineStyle(True, '#112233', ' ', '2', Style));
+  AssertFalse('zero width', TryMachineLineStyle(True, '#112233', 'Cut', '0', Style));
+  AssertTrue('reserved ignoring case', IsBuiltInMachineProfile('sTaNdArD'));
+end;
+
+procedure TTestSettings.TestReservedProfileNames;
+begin
+  AssertTrue('built-in machine', IsReservedMachineProfileName(' standard '));
+  AssertTrue('no machine profile', IsReservedMachineProfileName('NONE'));
+  AssertFalse('own machine name', IsReservedMachineProfileName('Laser'));
+  AssertTrue('built-in output', IsReservedOutputProfileName('leather'));
+  AssertTrue('no output profile', IsReservedOutputProfileName(' everything'));
+  AssertFalse('own output name', IsReservedOutputProfileName('Cutter'));
+end;
+
+procedure TTestSettings.TestProfileNameTaken;
+var
+  Machines: TMachineProfileArray;
+  Outputs: TOutputProfileArray;
+begin
+  Machines := [StandardProfile, StandardProfile];
+  Machines[0].Name := 'Laser';
+  Machines[1].Name := 'Plotter';
+  AssertTrue('taken ignoring case', MachineProfileNameTaken(Machines, ' laser ', -1));
+  AssertFalse('its own name on rename', MachineProfileNameTaken(Machines, 'LASER', 0));
+  AssertTrue('another profile''s name on rename', MachineProfileNameTaken(Machines, 'plotter', 0));
+  AssertFalse('free', MachineProfileNameTaken(Machines, 'Cutter', -1));
+  Outputs := [FullOutputProfile];
+  Outputs[0].Name := 'Cutter';
+  AssertTrue('output taken', OutputProfileNameTaken(Outputs, 'CUTTER', -1));
+  AssertFalse('output own name on rename', OutputProfileNameTaken(Outputs, 'cutter', 0));
+end;
+
+// A comma locale still reads and shows a full stop, as the files do
+procedure TTestSettings.TestProfileNumbersIgnoreLocale;
+var
+  Saved: char;
+  Value: double;
+  Style: TRoleStyle;
+begin
+  Saved := DefaultFormatSettings.DecimalSeparator;
+  DefaultFormatSettings.DecimalSeparator := ',';
+  try
+    AssertTrue('full stop read', TryPositiveProfileNumber('0.5', Value));
+    AssertEquals(0.5, Value, 0.0001);
+    AssertFalse('comma refused', TryPositiveProfileNumber('0,5', Value));
+    AssertEquals('0.25', ProfileNumberText(0.25));
+    AssertTrue('dashes with full stops', TryOutputRoleStyle('#000000', '1.5 0.5', '0.3', Style));
+    AssertEquals(1.5, Style.Dashes[0], 0.0001);
+  finally
+    DefaultFormatSettings.DecimalSeparator := Saved;
+  end;
 end;
 
 initialization

@@ -34,7 +34,7 @@ import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { PropertiesPanel } from '../ui/properties.ts';
 import { CanvasRulers } from '../ui/ruler.ts';
-import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
+import { matchesShortcut, parseShortcut, shortcutText } from '../ui/shortcuts.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { VariablesPanel } from '../ui/variablesPanel.ts';
@@ -218,7 +218,7 @@ class DesignApp {
       this.run(this.canvas.deleteSelection());
     });
     this.deleteButton = deleteButton;
-    const shortcutOf = (command: string): string => tables.shortcuts.get(command) ?? '';
+    const shortcutOf = (command: string): string => shortcutText(tables.shortcuts.get(command) ?? '');
     const selectionButtons = [
       iconButton(ICONS.cut, STRINGS.cut, STRINGS.cutHint(shortcutOf('cut')), () => {
         this.run(this.copy(true));
@@ -382,14 +382,9 @@ class DesignApp {
     this.redoButton = iconButton(ICONS.redo, STRINGS.redo, STRINGS.redo, () => {
       this.run(this.document.redo());
     });
-    this.rulersButton = iconButton(
-      ICONS.rulers,
-      STRINGS.rulers,
-      STRINGS.rulersHint(this.tables.shortcuts.get('rulers') ?? ''),
-      () => {
-        this.toggleRulers();
-      },
-    );
+    this.rulersButton = iconButton(ICONS.rulers, STRINGS.rulers, STRINGS.rulersHint(shortcutOf('rulers')), () => {
+      this.toggleRulers();
+    });
     this.rulersButton.classList.add('chosen');
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
@@ -435,9 +430,14 @@ class DesignApp {
       this.pointTypeSelect,
     );
     for (const tool of tables.tools.filter((each) => this.canvas.hasTool(each.name))) {
-      const button = iconButton(tool.icon, tool.caption, `${tool.caption} (${tool.keys})`, () => {
-        this.useTool(tool.name);
-      });
+      const button = iconButton(
+        tool.icon,
+        tool.caption,
+        tool.keys === '' ? tool.caption : STRINGS.withShortcut(tool.caption, shortcutText(tool.keys)),
+        () => {
+          this.useTool(tool.name);
+        },
+      );
       this.toolButtons.set(tool.name, button);
       toolsBar.append(button);
     }
@@ -926,7 +926,7 @@ class DesignApp {
     box.title = STRINGS.labelsHint;
     const captions: Record<LabelMode, string> = {
       contextual: STRINGS.labelsContextual,
-      all: STRINGS.labelsAll(this.tables.shortcuts.get('showLabels') ?? ''),
+      all: STRINGS.labelsAll(shortcutText(this.tables.shortcuts.get('showLabels') ?? '')),
       none: STRINGS.labelsNone,
     };
     for (const mode of LABEL_MODES) {

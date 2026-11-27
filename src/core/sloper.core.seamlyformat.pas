@@ -161,7 +161,7 @@ end;
 
 function FormatNumber(Value: double): string;
 begin
-  Result := FormatJSONFloat(RoundTo(Value, -6));
+  Result := FormatRoundedJSONFloat(Value, 6);
 end;
 
 function ChildText(Parent: TDOMNode; const TagName: string): string;

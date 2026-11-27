@@ -126,13 +126,38 @@
       }
       #left {
         display: grid;
-        grid-template-rows: auto auto 1fr;
+        grid-template-rows: auto auto 1fr auto;
         min-width: 0;
         min-height: 0;
       }
       #table {
         display: flex;
         min-height: 0;
+      }
+      /* Pattern Check, under the table while the set is checked against a
+         pattern, as the desktop's */
+      .pattern-check {
+        margin: 6px 8px;
+        border: 1px solid #d8d6cf;
+        border-radius: 4px;
+      }
+      .pattern-check[hidden] {
+        display: none;
+      }
+      .pattern-check-body {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin-top: 4px;
+      }
+      .pattern-check select {
+        flex: 1;
+        height: 100px;
+        font: inherit;
+      }
+      .pattern-check button {
+        border-color: #c8c5bc;
+        background: #fbfaf7;
       }
       /* The side panel, as the desktop's: the body figure over Add From the
          Catalogue */
@@ -205,7 +230,8 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      #open-input {
+      #open-input,
+      #pattern-input {
         display: none;
       }
     </style>
@@ -229,6 +255,7 @@
     </div>
     <div id="status"><span id="message"></span></div>
     <input id="open-input" type="file" accept=".slm" />
+    <input id="pattern-input" type="file" accept=".sloper" />
     <script type="module" src="main.js"></script>
   </body>
 </html>

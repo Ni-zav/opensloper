@@ -398,7 +398,9 @@ The replies of the first three are `publish_state`'s, which also gives the undo 
 
 The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Sloper.Measurements.MainForm`), built in steps (#84, see [Open items](open-items.md)). It is served but not linked from the site until it is ready.
 
-- **The toolbar** has Open, which takes a measurement set or size table (`.slm`), then Undo and Redo, Undo's hint naming its step. A file that is not one, or cannot be read, is refused with the reason, and the set open stays. Changes not saved are dropped only when the user agrees.
+- **The toolbar** has Open, Save, Save As, Undo and Redo, with shortcuts from the engine. Open takes a measurement set or size table (`.slm`). A refused open keeps the set and says why. Changes not saved are dropped only when the user agrees.
+- **Saving** writes the set to its file in browsers with File System Access. Save As picks another file, and Save downloads where the browser has no file picker. The page refuses to overwrite a set that changed on disk since it was read or written.
+- **Work in progress and offline use** use the same browser storage and service worker as Design and Publish. A closed tab's unsaved set can be recovered and saved to the file it came from.
 - **The title** names the file, with the modified mark while it has changes. **The status bar** has a message.
 - **Name and Notes** are above the table, as on the desktop.
   - Enter, or leaving the field, commits it, as the desktop's `EditingDone`. Each change is one undo step; unchanged text makes none.

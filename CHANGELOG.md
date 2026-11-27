@@ -29,6 +29,8 @@ Changed, Fixed and Removed under each version.
   (#158, #159).
 - The user guide has a Development page: getting the code, building, testing,
   and links to the Pascal source documentation (#47).
+- Web Measurements saves measurement sets, recovers unsaved work and can
+  be installed for offline use (#84).
 
 ### Fixed
 

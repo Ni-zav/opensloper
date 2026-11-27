@@ -205,6 +205,7 @@ The design app's page is built (`web/`, see its README). The TypeScript is one n
 - Notes drawn and dragged. A note's text is typed in a field over the canvas, after Text or Callout or by double-clicking it.
 - Labels: contextual, all or none, and all while N is held.
 - Selected seams, and pieces' direction.
+- Problem halos: a faint red halo under each object the Problems tab lists, as the desktop's, under the hover and selection paint. Always on; the web has no View → Problems yet.
 - Notes are drawn in the browser's sans-serif, as the desktop canvas uses the system's font. Their boxes come from the engine, which in Wasm has no font files and estimates text widths, so a box may be a little wider or narrower than its text.
 
 **Commands:**

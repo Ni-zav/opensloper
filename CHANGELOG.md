@@ -17,6 +17,8 @@ Changed, Fixed and Removed under each version.
 
 - Publish can create, rename and edit named output and machine profiles from
   the Edit menu (#57).
+- Web Design shows a faint red halo around objects listed in Problems
+  (#162).
 
 ### Fixed
 

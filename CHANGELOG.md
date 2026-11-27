@@ -32,6 +32,8 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- The Lines panel's Save As and Delete preset buttons share a width and use
+  the standard spacing (#174).
 - Shortcut hints in web Design show Ctrl or Cmd for the current platform
   (#160).
 

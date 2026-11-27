@@ -72,6 +72,7 @@ nav = [
     "reference/cli.md",
     "reference/api.md",
   ] },
+  { "Development" = "development.md" },
 ]
 
 extra_css = ["stylesheets/extra.css"]

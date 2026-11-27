@@ -32,6 +32,13 @@ To contribute, see `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`. To report a secur
 
 To use a Lazarus/FPC that is not on `PATH` (for example an fpcupdeluxe install), copy `build.local.sh.example` to `build.local.sh` and edit the paths.
 
+## Documentation
+
+- [User guide](https://docs.opensloper.com/), for the released version; [development version](https://docs.opensloper.com/dev/), from `development`. Its source is in `docs/`.
+- [Development](https://docs.opensloper.com/dev/development/): getting the code, building, testing and the documentation (`docs/development.md`).
+- [Pascal source documentation](https://docs.opensloper.com/dev/pasdoc/), made by PasDoc from `development`. Build it locally with `./opensloper-make.sh devdocs` into `release/dev_docs`.
+- Design: `documents/opensloper-design-document.md`.
+
 ## Licence
 
 GPLv3 or later; see `LICENSE`.

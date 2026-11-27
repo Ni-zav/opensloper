@@ -105,3 +105,10 @@ The status bar says why. A change is refused:
 
 With the Automation API, `convert_point` makes the same change; see
 [Automation API](../reference/api.md).
+
+### Changing how a point is measured
+
+For a point along an edge or between two points, use **Measure by** in
+Properties to switch between a length and a ratio. For a point along an
+edge, **Measured from** switches the end. The point stays in place. Its
+formula becomes the equivalent number, and Undo restores the formula.

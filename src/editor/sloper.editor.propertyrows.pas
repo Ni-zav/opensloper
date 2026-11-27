@@ -128,6 +128,8 @@ const
   PROPERTY_ROW_INPUT = 'input';
   // An offset point's mode: length and angle, or across and down
   PROPERTY_ROW_OFFSET_MODE = 'offsetMode';
+  PROPERTY_ROW_MEASURE_MODE = 'measureMode';
+  PROPERTY_ROW_MEASURE_END = 'measureEnd';
   MAX_CUT_COUNT = 99;
   NOTE_SIZE_STEP = 1;
   STAMP_SCALE_STEP = 0.1;
@@ -165,7 +167,7 @@ function PropertyRows(Pattern: TPattern; Node: TEvalNode): TPropertyRowArray;
 // What a point is placed from, by its type: an offset's base, the edge a
 // point lies along and the end it is measured from, and so on; none for a
 // free point or anything else
-function PointInputs(Pattern: TPattern; Node: TEvalNode): TPointInputArray;
+function PointInputs(Node: TEvalNode): TPointInputArray;
 // A formula field's caption with "Change" for its undo step
 function FieldEditName(const FieldName: string): string;
 
@@ -207,6 +209,8 @@ function ConvertEdgeStep(Document: TPatternDocument; Node: TEvalNode; Choice: in
 // formulas it had become plain numbers
 function SetOffsetModeStep(Document: TPatternDocument; Node: TEvalNode; Mode: TOffsetMode; out Reason: string): boolean;
 // The offset mode row's items, in TOffsetMode's order
+function PointMeasureChoices: TStringArray;
+function PointMeasureEndChoices(Pattern: TPattern; Point: TAlongEdgePoint): TStringArray;
 function OffsetModeChoices: TStringArray;
 function SetEdgeRoleStep(Document: TPatternDocument; Node: TEvalNode; Role: TEdgeRole; out Reason: string): boolean;
 function SetMarkerStep(Document: TPatternDocument; Node: TEvalNode; Marker: TPointMarker; out Reason: string): boolean;
@@ -308,6 +312,12 @@ resourcestring
   rsPropInputCopyOf = 'Copy of';
   rsPropChangeType = 'Change edge type';
   rsPropOffsetBy = 'Offset by';
+  rsPropMeasureBy = 'Measure by';
+  rsPropMeasureRatio = 'Ratio';
+  rsPropMeasureStart = 'Start';
+  rsPropMeasureEnd = 'End';
+  rsPropMeasureNamedEnd = '%s (%s)';
+  rsPropChangeMeasure = 'Change point measurement';
   rsPropOffsetPolar = 'Length and angle';
   rsPropOffsetCartesian = 'Across and down';
   rsPropChangeOffsetMode = 'Change offset';
@@ -569,7 +579,7 @@ begin
 end;
 
 // Type, name and formula fields first, as TCommonSection
-function PointInputs(Pattern: TPattern; Node: TEvalNode): TPointInputArray;
+function PointInputs(Node: TEvalNode): TPointInputArray;
 
   procedure Add(const ACaption, AKey: string);
   var
@@ -580,22 +590,12 @@ function PointInputs(Pattern: TPattern; Node: TEvalNode): TPointInputArray;
     Insert(Input, Result, Length(Result));
   end;
 
-var
-  Edge: TEvalNode;
 begin
   Result := nil;
   if Node is TOffsetPoint then
     Add(rsPropInputFrom, TOffsetPoint(Node).Base)
   else if Node is TAlongEdgePoint then
-  begin
-    Add(rsPropInputAlong, TAlongEdgePoint(Node).Edge);
-    Edge := Pattern.FindNode(TAlongEdgePoint(Node).Edge);
-    if Edge is TEdgeObject then
-      if TAlongEdgePoint(Node).FromEnd then
-        Add(rsPropInputMeasuredFrom, TEdgeObject(Edge).EndKey)
-      else
-        Add(rsPropInputMeasuredFrom, TEdgeObject(Edge).StartKey);
-  end
+    Add(rsPropInputAlong, TAlongEdgePoint(Node).Edge)
   else if Node is TBetweenPoint then
   begin
     Add(rsPropInputFrom, TBetweenPoint(Node).PointA);
@@ -635,11 +635,19 @@ var
   Inputs: TPointInputArray;
   Index: integer;
 begin
-  Inputs := PointInputs(Pattern, Node);
+  Inputs := PointInputs(Node);
   for Index := 0 to High(Inputs) do
     Builder.Add(PROPERTY_ROW_INPUT + IntToStr(Index), prkText, Inputs[Index].Caption, NameOf(Pattern, Inputs[Index].Key));
   if Node is TOffsetPoint then
-    Builder.AddChoice(PROPERTY_ROW_OFFSET_MODE, rsPropOffsetBy, OffsetModeChoices, Ord(TOffsetPoint(Node).Mode));
+    Builder.AddChoice(PROPERTY_ROW_OFFSET_MODE, rsPropOffsetBy, OffsetModeChoices, Ord(TOffsetPoint(Node).Mode))
+  else if Node is TAlongEdgePoint then
+  begin
+    Builder.AddChoice(PROPERTY_ROW_MEASURE_END, rsPropInputMeasuredFrom,
+      PointMeasureEndChoices(Pattern, TAlongEdgePoint(Node)), Ord(TAlongEdgePoint(Node).FromEnd));
+    Builder.AddChoice(PROPERTY_ROW_MEASURE_MODE, rsPropMeasureBy, PointMeasureChoices, Ord(TAlongEdgePoint(Node).Mode));
+  end
+  else if Node is TBetweenPoint then
+    Builder.AddChoice(PROPERTY_ROW_MEASURE_MODE, rsPropMeasureBy, PointMeasureChoices, Ord(TBetweenPoint(Node).Mode));
 end;
 
 procedure AddCommonRows(var Builder: TRowBuilder; Pattern: TPattern; Node: TEvalNode; Place: TSectionPlace);
@@ -1167,6 +1175,56 @@ begin
   else
     Done := Assigned(Pattern.ConvertToCurve(TEdgeObject(Node)));
   Result := FinishStep(Document, Done, Reason);
+end;
+
+function PointMeasureChoices: TStringArray;
+begin
+  Result := [rsPropLength, rsPropMeasureRatio];
+end;
+
+function PointMeasureEndChoices(Pattern: TPattern; Point: TAlongEdgePoint): TStringArray;
+var
+  Edge: TEvalNode;
+
+  function NamedEnd(const Caption, Key: string): string;
+  begin
+    if Key = '' then
+      Exit(Caption);
+    Result := Format(rsPropMeasureNamedEnd, [Caption, NameOf(Pattern, Key)]);
+  end;
+
+begin
+  Result := nil;
+  Edge := Pattern.FindNode(Point.Edge);
+  if Edge is TEdgeObject then
+    Result := [NamedEnd(rsPropMeasureStart, TEdgeObject(Edge).StartKey), NamedEnd(rsPropMeasureEnd, TEdgeObject(Edge).EndKey)];
+end;
+
+function SetPointMeasureStep(Document: TPatternDocument; Node: TEvalNode; Measure: TPointMeasureMode;
+  Origin: TPointMeasureEnd; out Reason: string): boolean;
+var
+  Converted: TPointObject;
+begin
+  Reason := '';
+  if Node is TAlongEdgePoint then
+  begin
+    if ((Measure = pmKeep) or (Ord(Measure) = Ord(TAlongEdgePoint(Node).Mode) + 1)) and
+      ((Origin = peKeep) or (Ord(Origin) = Ord(TAlongEdgePoint(Node).FromEnd) + 1)) then
+      Exit(True);
+    Document.BeginChange(rsPropChangeMeasure);
+    Converted := Document.Pattern.ConvertPoint(TPointObject(Node), pcAlongEdge, [TAlongEdgePoint(Node).Edge], omCartesian, Measure, Origin);
+  end
+  else if (Node is TBetweenPoint) and (Origin = peKeep) then
+  begin
+    if (Measure = pmKeep) or (Ord(Measure) = Ord(TBetweenPoint(Node).Mode) + 1) then
+      Exit(True);
+    Document.BeginChange(rsPropChangeMeasure);
+    Converted := Document.Pattern.ConvertPoint(TPointObject(Node), pcBetween,
+      [TBetweenPoint(Node).PointA, TBetweenPoint(Node).PointB], omCartesian, Measure);
+  end
+  else
+    Exit(Refuse(Reason));
+  Result := FinishStep(Document, Assigned(Converted), Reason);
 end;
 
 function OffsetModeChoices: TStringArray;
@@ -1716,6 +1774,16 @@ begin
   begin
     if not BadChoice(Value, Ord(High(TOffsetMode)) + 1, Reason) then
       Result := SetOffsetModeStep(Document, Node, TOffsetMode(Value), Reason);
+  end
+  else if RowId = PROPERTY_ROW_MEASURE_MODE then
+  begin
+    if not BadChoice(Value, Length(PointMeasureChoices), Reason) then
+      Result := SetPointMeasureStep(Document, Node, TPointMeasureMode(Value + 1), peKeep, Reason);
+  end
+  else if RowId = PROPERTY_ROW_MEASURE_END then
+  begin
+    if (Node is TAlongEdgePoint) and not BadChoice(Value, Length(PointMeasureEndChoices(Document.Pattern, TAlongEdgePoint(Node))), Reason) then
+      Result := SetPointMeasureStep(Document, Node, pmKeep, TPointMeasureEnd(Value + 1), Reason);
   end
   else if RowId = PROPERTY_ROW_ROLE then
   begin

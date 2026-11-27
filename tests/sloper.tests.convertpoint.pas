@@ -44,6 +44,8 @@ type
   published
     procedure TestFreeToAlongEdgeKeepsIdNameAndUsers;
     procedure TestAlongEdgeFromTheNearerEnd;
+    procedure TestAlongEdgeChangesUnitsAndEnd;
+    procedure TestBetweenChangesUnits;
     procedure TestAlongEdgeToFreeReplacesFormulas;
     procedure TestFreeToOffset;
     procedure TestBetweenMovesOntoTheLine;
@@ -147,6 +149,41 @@ begin
   AssertTrue('from the end', TAlongEdgePoint(Converted).FromEnd);
   AssertEquals('30', Converted.Field('value').StoredText);
   AssertPointsNear('stays', Vec2(70, 0), Converted.Position);
+end;
+
+procedure TTestConvertPoint.TestAlongEdgeChangesUnitsAndEnd;
+var
+  Edge: string;
+  Point: TPointObject;
+begin
+  Edge := Line(Pt('A', 0, 0), Pt('B', 100, 0));
+  Point := FPattern.AddAlongEdgePoint('P', Edge, False, amLength, '10+15');
+  Point := FPattern.ConvertPoint(Point, pcAlongEdge, [Edge], omCartesian, pmRatio);
+  AssertNotNull(FPattern.LastError, Point);
+  AssertEquals('0.25', Point.Field('value').StoredText);
+  AssertFalse(TAlongEdgePoint(Point).FromEnd);
+  Point := FPattern.ConvertPoint(Point, pcAlongEdge, [Edge], omCartesian, pmKeep, peEnd);
+  AssertNotNull(FPattern.LastError, Point);
+  AssertTrue(TAlongEdgePoint(Point).FromEnd);
+  AssertEquals('0.75', Point.Field('value').StoredText);
+  FPattern.Evaluate;
+  AssertPointsNear('same place', Vec2(25, 0), Point.Position);
+end;
+
+procedure TTestConvertPoint.TestBetweenChangesUnits;
+var
+  First, Last: string;
+  Point: TPointObject;
+begin
+  First := Pt('A', 0, 0);
+  Last := Pt('B', 0, 80);
+  Point := FPattern.AddBetweenPoint('P', First, Last, amRatio, '1/4');
+  Point := FPattern.ConvertPoint(Point, pcBetween, [First, Last], omCartesian, pmLength);
+  AssertNotNull(FPattern.LastError, Point);
+  AssertTrue(TBetweenPoint(Point).Mode = amLength);
+  AssertEquals('20', Point.Field('value').StoredText);
+  FPattern.Evaluate;
+  AssertPointsNear('same place', Vec2(0, 20), Point.Position);
 end;
 
 procedure TTestConvertPoint.TestAlongEdgeToFreeReplacesFormulas;

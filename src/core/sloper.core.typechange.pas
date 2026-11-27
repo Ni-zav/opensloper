@@ -49,9 +49,11 @@ function ConvertToAlongEdge(Pattern: TPattern; Point: TPointObject; const EdgeId
 // as it was, for a repeat's point, a copy, a rounded corner's end, a point
 // with no place yet, inputs of the wrong kind or with no place, the operation
 // and inputs it already has (an offset's mode too), and inputs that read
-// Point. Mode is only read for pcOffset.
+// Point. Mode is only read for pcOffset. Measure and Origin choose the units
+// and end for points along an edge; Measure also applies between points.
 function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
-  Mode: TOffsetMode = omCartesian): TPointObject;
+  Mode: TOffsetMode = omCartesian; Measure: TPointMeasureMode = pmKeep;
+  Origin: TPointMeasureEnd = peKeep): TPointObject;
 // What a point becomes, for messages: "an offset point"
 function PointConversionName(Conversion: TPointConversion): string;
 // Its role and place stay, and a name the user gave it is kept. An arc
@@ -88,6 +90,8 @@ resourcestring
   rsPatternConvertCornerPoint = '%s is an end of the rounded corner %s, so its type cannot change';
   rsPatternConvertNoPlace = '%s has no place yet, so its type cannot change';
   rsPatternConvertInputNoPlace = '%s has no place yet, so %s cannot be placed from it';
+  rsPatternConvertZeroSpan = 'A ratio needs a length above zero';
+  rsPatternConvertRatioOutside = 'The point lies outside the interval for a ratio';
   rsPatternConvertAlready = '%s is already placed that way';
   rsPatternConvertTooFar = '%s is %s from where it would go; move it closer first';
   rsPatternConvertNoCrossing = '%s and %s do not cross';
@@ -138,6 +142,7 @@ type
     Names, Texts: TStringArray;
     FromEnd, ExtendA, ExtendB, Perpendicular: boolean;
     Pick: integer;
+    AlongMode: TAlongMode;
   end;
 
 // Lines, curves and arcs the user drew; copies and parts follow other edges
@@ -393,20 +398,36 @@ begin
   Plan.Pick := Index + 1;
 end;
 
-function PlanAlongEdge(Edge: TEdgeObject; Pattern: TPattern; const Here: TVec2; var Plan: TConversionPlan): boolean;
+function AddAlongValue(Pattern: TPattern; Span, DistanceAlong: double; Measure: TPointMeasureMode;
+  var Plan: TConversionPlan): boolean;
+begin
+  Result := True;
+  if Measure = pmRatio then
+  begin
+    if Span <= DEFAULT_TOLERANCE then
+      Exit(Pattern.SetError(rsPatternConvertZeroSpan));
+    Plan.AlongMode := amRatio;
+    AddField(Plan, 'value', FormatJSONFloat(EnsureRange(DistanceAlong / Span, 0.0, 1.0)));
+  end
+  else
+    AddField(Plan, 'value', LengthText(Pattern, DistanceAlong));
+end;
+
+function PlanAlongEdge(Edge: TEdgeObject; Pattern: TPattern; const Here: TVec2; Measure: TPointMeasureMode;
+  Origin: TPointMeasureEnd; var Plan: TConversionPlan): boolean;
 var
   Position, Offset: double;
 begin
   Plan.Target := Edge.Locate(Here, Position, Offset);
-  // Measured from the nearer end, as the Point tool does
-  Plan.FromEnd := Position > Edge.Length / 2;
+  // A newly converted point defaults to the nearer end.
+  Plan.FromEnd := (Origin = peEnd) or ((Origin = peKeep) and (Position > Edge.Length / 2));
   if Plan.FromEnd then
     Position := Edge.Length - Position;
-  AddField(Plan, 'value', LengthText(Pattern, Position));
-  Result := True;
+  Result := AddAlongValue(Pattern, Edge.Length, Position, Measure, Plan);
 end;
 
-function PlanBetween(PointA, PointB: TPointObject; Pattern: TPattern; const Here: TVec2; var Plan: TConversionPlan): boolean;
+function PlanBetween(PointA, PointB: TPointObject; Pattern: TPattern; const Here: TVec2; Measure: TPointMeasureMode;
+  var Plan: TConversionPlan): boolean;
 var
   Span: TVec2;
   SpanLength, Along: double;
@@ -417,7 +438,51 @@ begin
     Exit(Pattern.SetError(Format(rsPatternConvertSamePlace, [PointA.DisplayName, PointB.DisplayName])));
   Along := Dot(Vec2(Here.X - PointA.Position.X, Here.Y - PointA.Position.Y), Span) / SpanLength;
   Plan.Target := Lerp(PointA.Position, PointB.Position, Along / SpanLength);
-  AddField(Plan, 'value', LengthText(Pattern, Along));
+  if (Measure = pmRatio) and ((Along < -DEFAULT_TOLERANCE) or (Along > SpanLength + DEFAULT_TOLERANCE)) then
+    Exit(Pattern.SetError(rsPatternConvertRatioOutside));
+  Result := AddAlongValue(Pattern, SpanLength, Along, Measure, Plan);
+end;
+
+// Reuse the evaluated value when the inputs did not change. Locating a point
+// again on a self-crossing edge could otherwise choose another stretch.
+function ReplanAlong(Pattern: TPattern; Point: TPointObject; Span: double; PreviousMode: TAlongMode;
+  WasFromEnd: boolean; Measure: TPointMeasureMode; Origin: TPointMeasureEnd; out Plan: TConversionPlan): boolean;
+var
+  Value, LengthScale: double;
+begin
+  Plan := Default(TConversionPlan);
+  Plan.Target := Point.Position;
+  Plan.AlongMode := PreviousMode;
+  if Measure = pmLength then
+    Plan.AlongMode := amLength
+  else if Measure = pmRatio then
+    Plan.AlongMode := amRatio;
+  Plan.FromEnd := (Origin = peEnd) or ((Origin = peKeep) and WasFromEnd);
+  if (Plan.AlongMode = PreviousMode) and (Plan.FromEnd = WasFromEnd) then
+    Exit(Pattern.SetError(Format(rsPatternConvertAlready, [Point.DisplayName])));
+  if not Pattern.EvaluateText(Point.Field('value').StoredText, Value) then
+    Exit(False);
+  LengthScale := MILLIMETRES_PER_UNIT[Pattern.Units];
+  if PreviousMode = amLength then
+    Value := Value * LengthScale;
+  if (PreviousMode = amLength) and (Plan.AlongMode = amRatio) then
+  begin
+    if Span <= DEFAULT_TOLERANCE then
+      Exit(Pattern.SetError(rsPatternConvertZeroSpan));
+    Value := Value / Span;
+  end
+  else if (PreviousMode = amRatio) and (Plan.AlongMode = amLength) then
+    Value := Value * Span;
+  if Plan.FromEnd <> WasFromEnd then
+    if Plan.AlongMode = amRatio then
+      Value := 1 - Value
+    else
+      Value := Span - Value;
+  if Plan.AlongMode = amLength then
+    Value := Value / LengthScale
+  else
+    Value := EnsureRange(Value, 0.0, 1.0);
+  AddField(Plan, 'value', FormatJSONFloat(Value));
   Result := True;
 end;
 
@@ -491,7 +556,7 @@ end;
 
 // Where Conversion puts the point and with what, from Nodes, the inputs
 function PlanConversion(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Nodes: array of TDraftObject;
-  Mode: TOffsetMode; out Plan: TConversionPlan): boolean;
+  Mode: TOffsetMode; Measure: TPointMeasureMode; Origin: TPointMeasureEnd; out Plan: TConversionPlan): boolean;
 var
   Here: TVec2;
 begin
@@ -516,8 +581,8 @@ begin
         AddField(Plan, 'dx', LengthText(Pattern, Here.X - TPointObject(Nodes[0]).Position.X));
         AddField(Plan, 'dy', LengthText(Pattern, Here.Y - TPointObject(Nodes[0]).Position.Y));
       end;
-    pcAlongEdge: Result := PlanAlongEdge(TEdgeObject(Nodes[0]), Pattern, Here, Plan);
-    pcBetween: Result := PlanBetween(TPointObject(Nodes[0]), TPointObject(Nodes[1]), Pattern, Here, Plan);
+    pcAlongEdge: Result := PlanAlongEdge(TEdgeObject(Nodes[0]), Pattern, Here, Measure, Origin, Plan);
+    pcBetween: Result := PlanBetween(TPointObject(Nodes[0]), TPointObject(Nodes[1]), Pattern, Here, Measure, Plan);
     pcIntersect: Result := PlanIntersect(TEdgeObject(Nodes[0]), TEdgeObject(Nodes[1]), Pattern, Here, Plan);
     pcCircleEdge: Result := PlanCircleEdge(TPointObject(Nodes[0]), TEdgeObject(Nodes[1]), Point, Pattern, Plan);
     pcCircleCircle: Result := PlanCircleCircle(TPointObject(Nodes[0]), TPointObject(Nodes[1]), Point, Pattern, Plan);
@@ -533,8 +598,8 @@ begin
   case Conversion of
     pcFree: Result := TFreePoint.Create(Key);
     pcOffset: Result := TOffsetPoint.Create(Key, Inputs[0], Mode);
-    pcAlongEdge: Result := TAlongEdgePoint.Create(Key, Inputs[0], Plan.FromEnd, amLength);
-    pcBetween: Result := TBetweenPoint.Create(Key, Inputs[0], Inputs[1], amLength);
+    pcAlongEdge: Result := TAlongEdgePoint.Create(Key, Inputs[0], Plan.FromEnd, Plan.AlongMode);
+    pcBetween: Result := TBetweenPoint.Create(Key, Inputs[0], Inputs[1], Plan.AlongMode);
     pcIntersect: Result := TIntersectPoint.Create(Key, Inputs[0], Inputs[1], Plan.ExtendA, Plan.ExtendB, Plan.Pick);
     pcCircleEdge: Result := TCircleEdgePoint.Create(Key, Inputs[0], Inputs[1], Plan.ExtendA, Plan.Pick);
     pcCircleCircle: Result := TCircleCirclePoint.Create(Key, Inputs[0], Inputs[1], Plan.Pick);
@@ -599,7 +664,7 @@ begin
 end;
 
 function ConvertPoint(Pattern: TPattern; Point: TPointObject; Conversion: TPointConversion; const Inputs: array of string;
-  Mode: TOffsetMode): TPointObject;
+  Mode: TOffsetMode; Measure: TPointMeasureMode; Origin: TPointMeasureEnd): TPointObject;
 var
   Nodes: TDraftObjectArray;
   Plan: TConversionPlan;
@@ -614,10 +679,25 @@ begin
     Exit;
   if AlreadyConverted(Point, Conversion, Inputs, Mode) then
   begin
-    Pattern.SetError(Format(rsPatternConvertAlready, [Point.DisplayName]));
-    Exit;
-  end;
-  if not PlanConversion(Pattern, Point, Conversion, Nodes, Mode, Plan) then
+    if Point is TAlongEdgePoint then
+    begin
+      if not ReplanAlong(Pattern, Point, TEdgeObject(Nodes[0]).Length, TAlongEdgePoint(Point).Mode,
+        TAlongEdgePoint(Point).FromEnd, Measure, Origin, Plan) then
+        Exit;
+    end
+    else if Point is TBetweenPoint then
+    begin
+      if not ReplanAlong(Pattern, Point, Distance(TPointObject(Nodes[0]).Position, TPointObject(Nodes[1]).Position),
+        TBetweenPoint(Point).Mode, False, Measure, peKeep, Plan) then
+        Exit;
+    end
+    else
+    begin
+      Pattern.SetError(Format(rsPatternConvertAlready, [Point.DisplayName]));
+      Exit;
+    end;
+  end
+  else if not PlanConversion(Pattern, Point, Conversion, Nodes, Mode, Measure, Origin, Plan) then
     Exit;
   // ReplacePoint frees the new point when it refuses it
   Result := NewConvertedPoint(Point.Key, Conversion, Inputs, Plan, Mode);

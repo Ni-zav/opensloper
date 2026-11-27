@@ -34,7 +34,7 @@ import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { PropertiesPanel } from '../ui/properties.ts';
 import { CanvasRulers } from '../ui/ruler.ts';
-import { matchesShortcut, parseShortcut } from '../ui/shortcuts.ts';
+import { matchesShortcut, parseShortcut, shortcutText } from '../ui/shortcuts.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { STRINGS } from '../ui/strings.ts';
 import { VariablesPanel } from '../ui/variablesPanel.ts';
@@ -60,6 +60,7 @@ const ICONS = {
   paste: 'clipboard',
   fit: 'zoom-scan',
   rulers: 'ruler-2',
+  dependents: 'sitemap',
   // The side panel's tabs
   propertiesTab: 'adjustments-horizontal',
   objectsTab: 'list-tree',
@@ -218,7 +219,7 @@ class DesignApp {
       this.run(this.canvas.deleteSelection());
     });
     this.deleteButton = deleteButton;
-    const shortcutOf = (command: string): string => tables.shortcuts.get(command) ?? '';
+    const shortcutOf = (command: string): string => shortcutText(tables.shortcuts.get(command) ?? '');
     const selectionButtons = [
       iconButton(ICONS.cut, STRINGS.cut, STRINGS.cutHint(shortcutOf('cut')), () => {
         this.run(this.copy(true));
@@ -382,26 +383,18 @@ class DesignApp {
     this.redoButton = iconButton(ICONS.redo, STRINGS.redo, STRINGS.redo, () => {
       this.run(this.document.redo());
     });
-    this.rulersButton = iconButton(
-      ICONS.rulers,
-      STRINGS.rulers,
-      STRINGS.rulersHint(this.tables.shortcuts.get('rulers') ?? ''),
-      () => {
-        this.toggleRulers();
-      },
-    );
+    this.rulersButton = iconButton(ICONS.rulers, STRINGS.rulers, STRINGS.rulersHint(shortcutOf('rulers')), () => {
+      this.toggleRulers();
+    });
     this.rulersButton.classList.add('chosen');
-    const dependents = document.createElement('button');
-    dependents.type = 'button';
-    dependents.textContent = STRINGS.dependents;
-    dependents.title = STRINGS.dependentsHint;
-    dependents.setAttribute('aria-pressed', 'false');
-    dependents.addEventListener('click', () => {
+    // As the desktop's View → Dependents, with its icon
+    const dependents = iconButton(ICONS.dependents, STRINGS.dependents, STRINGS.dependentsHint, () => {
       const show = dependents.getAttribute('aria-pressed') !== 'true';
       dependents.setAttribute('aria-pressed', String(show));
       dependents.classList.toggle('chosen', show);
       this.canvas.setDependents(show);
     });
+    dependents.setAttribute('aria-pressed', 'false');
     toolbar.append(
       iconButton(ICONS.open, STRINGS.open, STRINGS.openHint, () => {
         this.open();
@@ -447,9 +440,14 @@ class DesignApp {
       this.pointTypeSelect,
     );
     for (const tool of tables.tools.filter((each) => this.canvas.hasTool(each.name))) {
-      const button = iconButton(tool.icon, tool.caption, `${tool.caption} (${tool.keys})`, () => {
-        this.useTool(tool.name);
-      });
+      const button = iconButton(
+        tool.icon,
+        tool.caption,
+        tool.keys === '' ? tool.caption : STRINGS.withShortcut(tool.caption, shortcutText(tool.keys)),
+        () => {
+          this.useTool(tool.name);
+        },
+      );
       this.toolButtons.set(tool.name, button);
       toolsBar.append(button);
     }
@@ -799,7 +797,9 @@ class DesignApp {
 
   // The pattern's problems in full (editor_problems), each keyed by what it is about
   private async loadProblems(): Promise<void> {
+    const generation = this.document.state.generation;
     const answer = await this.document.read('editor_problems');
+    if (generation !== this.document.state.generation) return;
     this.problemSubjects = new Map();
     const listed = recordsField(answer, 'problems').map((problem) => {
       const subject = parseSubject(problem);
@@ -807,6 +807,9 @@ class DesignApp {
       this.problemSubjects.set(key, subject);
       return { key, text: stringField(problem, 'text') ?? '', blocking: false };
     });
+    this.canvas.showProblems(
+      [...this.problemSubjects.values()].flatMap((subject) => (subject.kind === 'object' ? [subject.id] : [])),
+    );
     this.problems.setProblems(listed);
     this.side.setCount('problems', listed.length);
     this.side.setCaption(
@@ -933,7 +936,7 @@ class DesignApp {
     box.title = STRINGS.labelsHint;
     const captions: Record<LabelMode, string> = {
       contextual: STRINGS.labelsContextual,
-      all: STRINGS.labelsAll(this.tables.shortcuts.get('showLabels') ?? ''),
+      all: STRINGS.labelsAll(shortcutText(this.tables.shortcuts.get('showLabels') ?? '')),
       none: STRINGS.labelsNone,
     };
     for (const mode of LABEL_MODES) {

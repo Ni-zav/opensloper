@@ -11,6 +11,23 @@ The layout follows [Keep a Changelog](https://keepachangelog.com): Added,
 Changed, Fixed and Removed under each version.
 
 
+## 0.10.0
+
+### Added
+
+- Publish can create, rename and edit named output and machine profiles from
+  the Edit menu (#57).
+- Web Design shows a faint red halo around objects listed in Problems
+  (#162).
+- Web Design draws the dependency arrows: blue to what the hovered or
+  selected object reads, and with Dependents on, purple to what reads it
+  (#161).
+
+### Fixed
+
+- Shortcut hints in web Design show Ctrl or Cmd for the current platform
+  (#160).
+
 ## 0.9.0
 
 ### Added
@@ -37,8 +54,7 @@ Changed, Fixed and Removed under each version.
 - The design canvas's dependency arrows are solid and wider, with larger
   heads, so an arrow along an outline, such as from an offset point to the
   point it starts from, shows over the line. A piece's direction chevrons
-  grow to match, on the desktop and the web (#145). Web Design can also
-  show the arrows for hovered and selected objects (#161).
+  grow to match, on the desktop and the web (#145).
 - Importing an SVG stamp never reads a document type's external files or
   expands its entities. A plain document type, as Illustrator writes, is
   ignored; one with an internal subset, or one that cannot be read, is

@@ -38,6 +38,11 @@ folds the material before a machine cuts it.
 
 ## Output profiles
 
+Use **Edit → Output and Machine Profiles…** to add or edit profiles. In an
+output profile, choose the printed lines, piece marks and seam allowance.
+In a machine profile, set the colour, layer and width of each enabled line.
+Choose the saved profile in the layout's Output tab.
+
 **Output profile** chooses which marks print: Everything, Home printing,
 Plotter or laser cutter, Leather, or Instructions sheet. A profile can leave out
 seam lines, notches, grainlines and kinds of marking line, or the seam

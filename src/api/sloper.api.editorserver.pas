@@ -32,7 +32,7 @@ interface
 uses
   SysUtils, fpjson, Sloper.API.Methods, Sloper.API.Server, Sloper.Document.PatternDocument, Sloper.Core.TextFields,
   Sloper.Core.Geometry, Sloper.Core.Evaluator, Sloper.Editor.Snap, Sloper.Core.Drag, Sloper.Editor.PanelEdits,
-  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment, Sloper.API.PublishServer;
+  Sloper.Editor.SuggestionGrade, Sloper.Core.Garment, Sloper.API.PublishServer, Sloper.API.MeasurementsServer;
 
 type
   TEditorApiServer = class(TApiServer)
@@ -61,6 +61,7 @@ type
     // Keeps the Garment tab's pieces, so only those that changed are built again
     FGarment: TGarmentBuilder;
     FPublish: TPublishApiServer;
+    FMeasurements: TMeasurementsApiServer;
     // The Garment tab's scene: as the canvas shows the pieces, of the call's material
     function GarmentScene(Params: TJSONObject): TGarmentScene;
     function DoGarment(Params: TJSONObject): TJSONData;
@@ -2339,6 +2340,7 @@ begin
   FreeAndNil(FPending);
   FreeAndNil(FGrade);
   FreeAndNil(FGarment);
+  FreeAndNil(FMeasurements);
   FreeAndNil(FPublish);
   inherited Destroy;
 end;
@@ -2918,6 +2920,12 @@ begin
         if not Assigned(FPublish) then
           FPublish := TPublishApiServer.Create;
         Result := FPublish.CallMethod(Method, Params);
+      end
+      else if StartsStr(MEASUREMENTS_PREFIX, Method) then
+      begin
+        if not Assigned(FMeasurements) then
+          FMeasurements := TMeasurementsApiServer.Create;
+        Result := FMeasurements.CallMethod(Method, Params);
       end
       else
         Result := inherited DispatchMethod(Method, Params);

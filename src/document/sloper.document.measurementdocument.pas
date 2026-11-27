@@ -57,6 +57,7 @@ type
     function GetCanRedo: boolean;
     function GetUndoDescription: string;
     procedure Changed;
+    function OpenContents(const Text, Path: string; out ErrorMessage: string): boolean;
     procedure Restore(const Text: string);
     // Takes the file's text as the new base, keeping the set's edits
     procedure AdoptFile(const Text: string);
@@ -71,6 +72,10 @@ type
     // Starts a new, unnamed file with what an import made, not yet saved
     procedure TakeImported(Imported: TMeasurementSet);
     function Open(const AFileName: string; out ErrorMessage: string): boolean;
+    // Opens a measurement set supplied by the caller, with no file to watch.
+    function OpenText(const Text: string; out ErrorMessage: string): boolean;
+    // Serializes the current set without changing the saved state.
+    function SnapshotText: string;
     // Written atomically. Refused when the open file has changed on disk
     // since it was read, until CheckFile has taken that change in.
     function Save(const AFileName: string; out ErrorMessage: string): boolean;
@@ -222,11 +227,25 @@ end;
 function TMeasurementDocument.Open(const AFileName: string; out ErrorMessage: string): boolean;
 var
   Text: string;
+begin
+  Result := ReadTextFile(AFileName, Text, ErrorMessage) and OpenContents(Text, AFileName, ErrorMessage);
+end;
+
+function TMeasurementDocument.OpenText(const Text: string; out ErrorMessage: string): boolean;
+begin
+  Result := OpenContents(Text, '', ErrorMessage);
+end;
+
+function TMeasurementDocument.SnapshotText: string;
+begin
+  Result := FSet.SaveToText;
+end;
+
+function TMeasurementDocument.OpenContents(const Text, Path: string; out ErrorMessage: string): boolean;
+var
   Loaded: TMeasurementSet;
 begin
   Result := False;
-  if not ReadTextFile(AFileName, Text, ErrorMessage) then
-    Exit;
   Loaded := TMeasurementSet.Create;
   try
     if not Loaded.LoadFromText(Text, ErrorMessage) then
@@ -237,7 +256,7 @@ begin
   finally
     FreeAndNil(Loaded);
   end;
-  FFileName := AFileName;
+  FFileName := Path;
   FBaseText := Text;
   FPendingText := '';
   FHistory.Clear;
@@ -260,7 +279,7 @@ begin
     ErrorMessage := rsFileChangedOnDisk;
     Exit(False);
   end;
-  Text := FSet.SaveToText;
+  Text := SnapshotText;
   Result := WriteTextFileAtomic(AFileName, Text, ErrorMessage);
   if not Result then
     Exit;

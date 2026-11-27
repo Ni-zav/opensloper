@@ -77,6 +77,7 @@ type
     procedure TestSceneMarks;
     // Contextual labels: the selection with what it reads and what reads it
     procedure TestLabelKeys;
+    procedure TestStandaloneMeasurements;
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
     procedure TestImportStamp;
@@ -684,6 +685,30 @@ begin
   AssertTrue('the grainline drawn', Answer.Arrays['pieces'].Objects[0].Arrays['marks'].Count >= 4);
   AssertEquals('one marker', 1, Answer.Arrays['markers'].Count);
   AssertTrue('its strokes', Answer.Arrays['markers'].Objects[0].Arrays['strokes'].Count >= 8);
+end;
+
+procedure TTestEditorServer.TestStandaloneMeasurements;
+const
+  MEASURE_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"Sample",' +
+    '"measurements":[{"key":"waist","value":720,"description":"Waist"}]}';
+var
+  Params: TJSONObject;
+begin
+  AddSquare;
+  Params := TJSONObject.Create(['text', MEASURE_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+    AssertEquals('Sample', Answer.Objects['set'].Strings['name']);
+    AssertEquals(1, Answer.Objects['set'].Arrays['measurements'].Count);
+  finally
+    FreeAndNil(Params);
+  end;
+  Call('measurements_open', '{"text":"invalid"}');
+  AssertEquals(RPC_REFUSED, ErrorCode);
+  Call('measurements_state');
+  AssertEquals('old set remains available', 'Sample', Answer.Objects['set'].Strings['name']);
+  Call('get_object', '{"name":"Flap"}');
+  AssertEquals('pattern still open', 'Flap', Answer.Strings['name']);
 end;
 
 procedure TTestEditorServer.TestLabelKeys;

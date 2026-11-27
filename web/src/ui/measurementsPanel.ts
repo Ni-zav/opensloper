@@ -59,6 +59,7 @@ export class MeasurementsPanel extends ListPanel {
   private newKeys = new Set<string>();
   private pendingCount = 0;
   private testPercent = 0;
+  private hasMeasurements = false;
 
   constructor(document: PatternDocument, events: ListPanelEvents) {
     super(document, events, [
@@ -158,6 +159,7 @@ export class MeasurementsPanel extends ListPanel {
     const answer = await this.document.read('editor_list_measurements', { search });
     this.pendingCount = numberField(answer, 'pendingCount') ?? 0;
     this.testPercent = numberField(answer, 'testPercent') ?? 0;
+    this.hasMeasurements = booleanField(answer, 'hasMeasurements') === true;
     const file = stringField(answer, 'file') ?? '';
     this.setFile = file;
     this.fileLabel.textContent = file === '' ? STRINGS.measurementsNoSet : baseName(file);
@@ -242,7 +244,7 @@ export class MeasurementsPanel extends ListPanel {
     // Another size or a test shows other values, so the edits are settled first
     this.sizeBox.disabled = pending;
     this.sizeBox.title = pending ? STRINGS.measurementsTestPaused : '';
-    this.testSlider.disabled = pending;
+    this.testSlider.disabled = pending || !this.hasMeasurements;
     this.testReset.disabled = !testing;
     if (this.testSlider !== window.document.activeElement) {
       this.testSlider.value = String(this.testPercent);

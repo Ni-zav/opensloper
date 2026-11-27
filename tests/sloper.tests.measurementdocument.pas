@@ -63,6 +63,7 @@ type
     procedure TestDeleteLastSizeRefused;
     procedure TestSizeRefused;
     procedure TestOpenFailureKeepsDocument;
+    procedure TestOpenTextAndSnapshot;
     procedure TestSameFileWaitsForAStableFile;
     procedure TestUnchangedFileIsSame;
     procedure TestReloadsWhenNothingUnsaved;
@@ -373,6 +374,25 @@ begin
   AssertTrue(Err, WriteTextFile(FFileName, 'not json', Err));
   AssertFalse(FDocument.Open(FFileName, Err));
   AssertNear('what was open stays', 830, FDocument.Measurements[0].Value);
+end;
+
+procedure TTestMeasurementDocument.TestOpenTextAndSnapshot;
+var
+  Text, Reason: string;
+begin
+  OpenSample;
+  Text := FDocument.SnapshotText;
+  FDocument.SetName('Edited');
+  AssertTrue('snapshot keeps edits dirty', FDocument.Modified);
+  AssertTrue('undo is available', FDocument.CanUndo);
+  AssertFalse('invalid text refused', FDocument.OpenText('not a measurement file', Reason));
+  AssertTrue('failed open keeps edits', FDocument.Modified);
+  AssertTrue('failed open keeps undo', FDocument.CanUndo);
+  AssertTrue(Reason, FDocument.OpenText(Text, Reason));
+  AssertEquals('no path to watch', '', FDocument.FileName);
+  AssertEquals('same measurements', Text, FDocument.SnapshotText);
+  AssertFalse('opened text is clean', FDocument.Modified);
+  AssertFalse('opened text has no old undo', FDocument.CanUndo);
 end;
 
 procedure TTestMeasurementDocument.TestSameFileWaitsForAStableFile;

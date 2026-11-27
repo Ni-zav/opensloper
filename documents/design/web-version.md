@@ -394,6 +394,19 @@ The Publish app's page is at `/publish/` (`src/publish/`, as `Sloper.Publish.Mai
 
 The replies of the first three are `publish_state`'s, which also gives the undo state and whether the layout is modified. `LayoutDocument` asks for it after every change and tells its listeners.
 
+### The Measurements editor
+
+Built in steps (#84, see [Open items](open-items.md)). The engine's half of the first step is built; the page is not yet.
+
+**Its methods** are named `measurements_`, in their own table (`MeasurementsMethods` in `Sloper.API.MeasurementsServer`). The editor server passes them to a `TMeasurementsApiServer`, which holds a `TMeasurementDocument` of its own, apart from the design page's pattern and measurements. They are not MCP tools.
+
+| Method | Does |
+| --- | --- |
+| `measurements_open` | Opens a set from its `.slm` text (`TMeasurementDocument.OpenText`): no file to watch, nothing to undo, not modified. Text that cannot be read is refused, and the set open stays |
+| `measurements_state` | The set open, as its `.slm` file holds it (`SnapshotText`), without counting it as saved; an empty set before one is opened |
+
+Both answer with `set`.
+
 ## Server
 
 Django serves the editor and `.wasm` file, accounts (with the admin as back office), subscriptions and simple pages as templates. It stores no patterns or measurements and runs no engine jobs. Its own packages are kept to what the job needs and locked, and nothing they use reaches the engine.

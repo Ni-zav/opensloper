@@ -77,6 +77,9 @@ function OutputProfilesToJSON(const Profiles: TOutputProfileArray): TJSONArray;
 // roles, marks and bad styles are passed over
 function OutputProfilesFromJSON(Data: TJSONData): TOutputProfileArray;
 
+resourcestring
+  rsOutputProfileAll = 'Everything';
+
 implementation
 
 uses

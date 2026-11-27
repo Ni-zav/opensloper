@@ -322,9 +322,7 @@ resourcestring
   rsExportMachineDXF = 'Export Machine DXF...';
   rsMenuProfiles = 'Output and Machine Profiles...';
   rsProfile = 'Machine profile';
-  rsProfileNone = 'None';
   rsOutputProfile = 'Output profile';
-  rsOutputProfileAll = 'Everything';
   rsPackPieces = 'Pack pieces';
   rsPackChange = 'Pack pieces';
   rsPackedPages = 'Packed %d copies on %d pages';

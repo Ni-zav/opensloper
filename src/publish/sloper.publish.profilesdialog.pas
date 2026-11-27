@@ -264,11 +264,13 @@ begin
   Needed := Scale96ToForm(32);
   for Index := 0 to FGrid.Columns.Count - 1 do
   begin
+    FGrid.Canvas.Font := FGrid.TitleFont;
     ColumnWidth := FGrid.Canvas.TextWidth(FGrid.Columns[Index].Title.Caption);
     if Index = COL_LAYER_OR_DASH then
       ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(rsProfilesDashes));
     if Index = 0 then
     begin
+      FGrid.Canvas.Font := FGrid.Font;
       for Role := Low(TEdgeRole) to High(TEdgeRole) do
         if Role in MARKING_ROLES then
           ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(RoleCaption(Role)));
@@ -487,8 +489,8 @@ begin
   if not InputQuery(rsProfilesAdd, rsProfilesName, ProfileName) then
     Exit;
   ProfileName := Trim(ProfileName);
-  if ((FKind = prMachine) and IsBuiltInMachineProfile(ProfileName)) or
-    ((FKind = prOutput) and IsBuiltInOutputProfile(ProfileName)) then
+  if ((FKind = prMachine) and (IsBuiltInMachineProfile(ProfileName) or SameText(ProfileName, rsProfileNone))) or
+    ((FKind = prOutput) and (IsBuiltInOutputProfile(ProfileName) or SameText(ProfileName, rsOutputProfileAll))) then
   begin
     MessageDlg(rsProfilesReservedName, mtError, [mbOK], 0);
     Exit;

@@ -62,6 +62,9 @@ function MachineProfilesToJSON(const Profiles: TMachineProfileArray): TJSONArray
 // A profile with no name is skipped, and a bad value keeps Standard's
 function MachineProfilesFromJSON(Data: TJSONData): TMachineProfileArray;
 
+resourcestring
+  rsProfileNone = 'None';
+
 implementation
 
 uses

@@ -16,11 +16,13 @@ import type { Vec2 } from '../editor/view.ts';
 import { Engine } from '../engine/engine.ts';
 import { booleanField, numberField, recordsField, stringField } from '../engine/replies.ts';
 import { baseName, downloadBlob, downloadText } from '../ui/download.ts';
+import { fetchExampleFile } from '../ui/examples.ts';
 import { PreviewCanvas } from '../ui/previewCanvas.ts';
 import { ProblemsPanel } from '../ui/problemsPanel.ts';
 import { SideTabs } from '../ui/sideTabs.ts';
 import { matchesShortcut, parseShortcut, shortcutText } from '../ui/shortcuts.ts';
 import { STRINGS } from '../ui/strings.ts';
+import { PUBLISH_EXAMPLES } from './examples.ts';
 import { InfoTab } from './infoTab.ts';
 import { MaterialsTab } from './materialsTab.ts';
 import { NotesTab } from './notesTab.ts';
@@ -392,10 +394,11 @@ class PublishApp {
     // In the desktop's order
     toolbar.append(
       this.button('open', STRINGS.open, STRINGS.publishOpenHint, () => {
-        if (!this.document.state.modified || window.confirm(STRINGS.layoutDiscardChanges)) {
+        if (this.mayOpen()) {
           this.open();
         }
       }),
+      this.exampleBox(),
       this.button(
         'save',
         STRINGS.save,
@@ -486,6 +489,45 @@ class PublishApp {
   // The layout's base name, for the files it is saved and exported as
   private baseName(): string {
     return this.document.fileName.replace(/\.[^.]*$/, '');
+  }
+
+  private mayOpen(): boolean {
+    return !this.document.state.modified || window.confirm(STRINGS.layoutDiscardChanges);
+  }
+
+  private exampleBox(): HTMLSelectElement {
+    const box = document.createElement('select');
+    box.id = 'examples';
+    box.title = STRINGS.publishExamplesHint;
+    box.setAttribute('aria-label', STRINGS.publishExamplesHint);
+    box.add(new Option(STRINGS.examples, '', true, true));
+    for (const example of PUBLISH_EXAMPLES) {
+      box.add(new Option(example.caption, example.layout));
+    }
+    box.addEventListener('change', () => {
+      const example = PUBLISH_EXAMPLES.find((entry) => entry.layout === box.value);
+      box.value = '';
+      if (example !== undefined) {
+        this.run(this.openExample(example));
+      }
+    });
+    return box;
+  }
+
+  private async openExample(example: (typeof PUBLISH_EXAMPLES)[number]): Promise<void> {
+    const generation = this.document.generation;
+    const files = await Promise.all(
+      [example.layout, ...example.sources].map(async (path) => {
+        const file = await fetchExampleFile(new URL(`examples/${path}`, window.location.href));
+        if (file === undefined) {
+          throw new Error(STRINGS.exampleMissing(baseName(path)));
+        }
+        return { file, handle: undefined };
+      }),
+    );
+    if (this.document.generation === generation && this.mayOpen()) {
+      await this.openFiles(files);
+    }
   }
 
   // With File System Access, the files are chosen in the browser's picker,

@@ -30,6 +30,7 @@ import { MaterialsDialog } from '../ui/materialDialog.ts';
 import { PrintDialog } from '../ui/printDialog.ts';
 import { MaterialsPanel } from '../ui/materialPanel.ts';
 import { FileAccess, PATTERN_EXTENSION } from '../ui/fileAccess.ts';
+import { fetchExampleFile } from '../ui/examples.ts';
 import { MeasurementsPanel } from '../ui/measurementsPanel.ts';
 import { ObjectsPanel } from '../ui/objectsPanel.ts';
 import { PropertiesPanel } from '../ui/properties.ts';
@@ -156,15 +157,6 @@ function isTextField(target: EventTarget | null): boolean {
     target instanceof HTMLTextAreaElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   );
-}
-
-// A file from the site, named as its address ends; undefined when it cannot be had
-async function fetchFile(address: URL): Promise<File | undefined> {
-  const response = await fetch(address);
-  if (!response.ok) {
-    return undefined;
-  }
-  return new File([await response.text()], baseName(address.pathname));
 }
 
 class DesignApp {
@@ -875,7 +867,7 @@ class DesignApp {
   // The example and the measurement file it names, from beside it on the site
   private async openExample(path: string): Promise<void> {
     const address = new URL(`examples/${path}`, window.location.href);
-    const pattern = await fetchFile(address);
+    const pattern = await fetchExampleFile(address);
     if (pattern === undefined) {
       showMessage(STRINGS.exampleMissing(baseName(path)));
       return;
@@ -884,7 +876,7 @@ class DesignApp {
     if (this.wantedMeasurements === '') {
       return;
     }
-    const measurements = await fetchFile(new URL(this.wantedMeasurements, address));
+    const measurements = await fetchExampleFile(new URL(this.wantedMeasurements, address));
     if (measurements === undefined) {
       showMessage(STRINGS.needsMeasurements(this.wantedMeasurements));
     } else {

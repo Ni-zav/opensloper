@@ -14,6 +14,7 @@ import {
   isRecord,
   numberField,
   numbersField,
+  recordsField,
   stringField,
   type JsonRecord,
 } from '../engine/replies.ts';
@@ -45,6 +46,7 @@ import { LatestOnly } from './latestOnly.ts';
 import { NoteEditor } from './noteEditor.ts';
 import {
   PatternPainter,
+  type DependencyArrow,
   type DraggedTip,
   type FieldGuide,
   type SnapMarker,
@@ -157,6 +159,9 @@ export class PatternCanvas implements CanvasToolHost {
   private handles: CurveHandle[] = [];
   private hoverHandle: HandleRef | undefined;
   private labelIds: string[] = [];
+  private labelsRevision = 0;
+  private dependencyArrows: DependencyArrow[] = [];
+  private showDependents = false;
   private labelMode: LabelMode = 'contextual';
   // Every label shows while the show-labels key is held
   private labelsHeld = false;
@@ -169,6 +174,7 @@ export class PatternCanvas implements CanvasToolHost {
   private readonly noteEditor: NoteEditor;
   private scene: Scene = EMPTY_SCENE;
   private selection = new Set<string>();
+  private problemIds = new Set<string>();
   private hoverId = '';
   private snap: SnapMarker | undefined;
   private tool = SELECT_TOOL;
@@ -463,6 +469,11 @@ export class PatternCanvas implements CanvasToolHost {
     }
   }
 
+  showProblems(ids: readonly string[]): void {
+    this.problemIds = new Set(ids);
+    this.repaint();
+  }
+
   showSeamSides(sideA: number[][], sideB: number[][]): void {
     this.seamA = sideA;
     this.seamB = sideB;
@@ -551,17 +562,35 @@ export class PatternCanvas implements CanvasToolHost {
 
   // Drawing
 
+  setDependents(show: boolean): void {
+    this.showDependents = show;
+    this.relabel();
+  }
+
   private relabel(): void {
+    this.labelsRevision += 1;
     this.labelQueue.push(0);
   }
 
   private async loadLabels(): Promise<void> {
+    const revision = this.labelsRevision;
     const answer = await this.document.read('editor_label_keys', {
       mode: this.labelsHeld ? 'all' : this.labelMode,
       selection: numericIds(this.selection),
       hover: /^\d+$/.test(this.hoverId) ? Number(this.hoverId) : null,
       tool: numericIds(this.toolIds),
       suggestions: numericIds(this.suggestionIds),
+      links: true,
+      dependents: this.showDependents,
+    });
+    if (revision !== this.labelsRevision) return;
+    this.dependencyArrows = recordsField(answer, 'links').flatMap((link) => {
+      const fromX = numberField(link, 'fromX');
+      const fromY = numberField(link, 'fromY');
+      const toX = numberField(link, 'toX');
+      const toY = numberField(link, 'toY');
+      if (fromX === undefined || fromY === undefined || toX === undefined || toY === undefined) return [];
+      return [{ from: { x: fromX, y: fromY }, to: { x: toX, y: toY }, dependent: link.dependent === true }];
     });
     this.labelIds = idsField(answer, 'objects');
     this.repaint();
@@ -586,8 +615,10 @@ export class PatternCanvas implements CanvasToolHost {
   private paint(): void {
     const box: [Vec2, Vec2] | undefined = this.mode === 'boxing' ? [this.pressAt, this.lastAt] : undefined;
     this.painter.beginFrame(this.element.clientWidth, this.element.clientHeight, {
+      dependencyArrows: this.dependencyArrows,
       view: this.view,
       selection: this.selection,
+      problemIds: this.problemIds,
       hoverId: this.hoverId,
       snap: this.snap,
       box,
@@ -689,9 +720,12 @@ export class PatternCanvas implements CanvasToolHost {
     if (this.document.state.generation !== this.generation) {
       // Another pattern: what was selected or shown means nothing now
       this.generation = this.document.state.generation;
+      this.dependencyArrows = [];
+      this.labelsRevision += 1;
       this.autoFit = true;
       this.noteEditor.close();
       this.selection.clear();
+      this.problemIds.clear();
       this.events.selectionChanged([]);
     } else if (changes.has('pattern') && !changes.has('measurements')) {
       // An edit: the view stays where the user is working

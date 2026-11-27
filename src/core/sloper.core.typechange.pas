@@ -125,6 +125,9 @@ uses
   Sloper.Core.Transform, Sloper.Core.Units, Sloper.Core.JSON;
 
 const
+  // A ratio a conversion writes is rounded to this many places, which moves
+  // a point at most 0.05 mm along a 1 m edge
+  RATIO_DECIMALS = 4;
   // A converted point this near a place counts as on it (mm): a projection
   // lands on the foot of the perpendicular, and a crossing needs no extension
   CONVERT_SAME_PLACE = 0.05;
@@ -398,6 +401,13 @@ begin
   Plan.Pick := Index + 1;
 end;
 
+// A ratio as a formula: between 0 and 1, to RATIO_DECIMALS places, as a
+// length is rounded as a drag rounds it
+function RatioText(Ratio: double): string;
+begin
+  Result := FormatJSONFloat(RoundTo(EnsureRange(Ratio, 0.0, 1.0), -RATIO_DECIMALS));
+end;
+
 function AddAlongValue(Pattern: TPattern; Span, DistanceAlong: double; Measure: TPointMeasureMode;
   var Plan: TConversionPlan): boolean;
 begin
@@ -407,7 +417,7 @@ begin
     if Span <= DEFAULT_TOLERANCE then
       Exit(Pattern.SetError(rsPatternConvertZeroSpan));
     Plan.AlongMode := amRatio;
-    AddField(Plan, 'value', FormatJSONFloat(EnsureRange(DistanceAlong / Span, 0.0, 1.0)));
+    AddField(Plan, 'value', RatioText(DistanceAlong / Span));
   end
   else
     AddField(Plan, 'value', LengthText(Pattern, DistanceAlong));
@@ -478,11 +488,11 @@ begin
       Value := 1 - Value
     else
       Value := Span - Value;
+  // Rounded as the other conversions round, so the formula stays readable
   if Plan.AlongMode = amLength then
-    Value := Value / LengthScale
+    AddField(Plan, 'value', LengthText(Pattern, Value))
   else
-    Value := EnsureRange(Value, 0.0, 1.0);
-  AddField(Plan, 'value', FormatJSONFloat(Value));
+    AddField(Plan, 'value', RatioText(Value));
   Result := True;
 end;
 

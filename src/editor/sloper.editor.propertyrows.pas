@@ -209,9 +209,12 @@ function ConvertEdgeStep(Document: TPatternDocument; Node: TEvalNode; Choice: in
 // formulas it had become plain numbers
 function SetOffsetModeStep(Document: TPatternDocument; Node: TEvalNode; Mode: TOffsetMode; out Reason: string): boolean;
 // The offset mode row's items, in TOffsetMode's order
-function PointMeasureChoices: TStringArray;
-function PointMeasureEndChoices(Pattern: TPattern; Point: TAlongEdgePoint): TStringArray;
 function OffsetModeChoices: TStringArray;
+// The Measure by row's items, in TAlongMode's order: length, then ratio
+function PointMeasureChoices: TStringArray;
+// The Measured from row's items: the edge's start, then its end, each with
+// its point's name, or none when the edge is not found
+function PointMeasureEndChoices(Pattern: TPattern; Point: TAlongEdgePoint): TStringArray;
 function SetEdgeRoleStep(Document: TPatternDocument; Node: TEvalNode; Role: TEdgeRole; out Reason: string): boolean;
 function SetMarkerStep(Document: TPatternDocument; Node: TEvalNode; Marker: TPointMarker; out Reason: string): boolean;
 function SetRepeatEndsStep(Document: TPatternDocument; Node: TEvalNode; Include: boolean; out Reason: string): boolean;
@@ -1200,6 +1203,8 @@ begin
     Result := [NamedEnd(rsPropMeasureStart, TEdgeObject(Edge).StartKey), NamedEnd(rsPropMeasureEnd, TEdgeObject(Edge).EndKey)];
 end;
 
+// A point along an edge or between points measured by length or ratio, or
+// along an edge from its other end: ConvertPoint in place, one undo step
 function SetPointMeasureStep(Document: TPatternDocument; Node: TEvalNode; Measure: TPointMeasureMode;
   Origin: TPointMeasureEnd; out Reason: string): boolean;
 var

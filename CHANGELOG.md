@@ -11,6 +11,28 @@ The layout follows [Keep a Changelog](https://keepachangelog.com): Added,
 Changed, Fixed and Removed under each version.
 
 
+## 0.10.0
+
+### Added
+
+- Publish can create, rename and edit named output and machine profiles from
+  the Edit menu (#57).
+- Web Design shows a faint red halo around objects listed in Problems
+  (#162).
+- Web Design draws the dependency arrows: blue to what the hovered or
+  selected object reads, and with Dependents on, purple to what reads it
+  (#161).
+- A point along an edge or between points has a *Measure by* row, to switch
+  between a length and a ratio, and a point along an edge a *Measured from*
+  choice of the edge's ends. It stays where it is; its formula becomes a plain
+  number, which Undo brings back. `convert_point` takes `mode` and `end`
+  (#158, #159).
+
+### Fixed
+
+- Shortcut hints in web Design show Ctrl or Cmd for the current platform
+  (#160).
+
 ## 0.9.0
 
 ### Added
@@ -31,8 +53,6 @@ Changed, Fixed and Removed under each version.
   a length and angle and across and down. It stays where it is; its formulas
   become plain numbers, which Undo brings back. `convert_point` in the
   Automation API takes the same choice as `mode` (#146).
-- Points along edges or between points can switch between length and ratio.
-  Along-edge points can also measure from the other end (#158, #159).
 
 ### Changed
 

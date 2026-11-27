@@ -46,6 +46,8 @@ type
     procedure TestAlongEdgeFromTheNearerEnd;
     procedure TestAlongEdgeChangesUnitsAndEnd;
     procedure TestBetweenChangesUnits;
+    // An uneven length or ratio is rounded as a drag rounds, not written in full
+    procedure TestMeasureChangesRoundTheirNumbers;
     procedure TestAlongEdgeToFreeReplacesFormulas;
     procedure TestFreeToOffset;
     procedure TestBetweenMovesOntoTheLine;
@@ -184,6 +186,31 @@ begin
   AssertEquals('20', Point.Field('value').StoredText);
   FPattern.Evaluate;
   AssertPointsNear('same place', Vec2(0, 20), Point.Position);
+end;
+
+procedure TTestConvertPoint.TestMeasureChangesRoundTheirNumbers;
+var
+  First, Last, Edge: string;
+  Point: TPointObject;
+begin
+  // A span of 43.566 mm
+  First := Pt('A', 0, 0);
+  Last := Pt('B', 37, 23);
+  Edge := Line(First, Last);
+  Point := FPattern.AddAlongEdgePoint('P', Edge, False, amLength, '10');
+  Point := FPattern.ConvertPoint(Point, pcAlongEdge, [Edge], omCartesian, pmKeep, peEnd);
+  AssertNotNull(FPattern.LastError, Point);
+  AssertEquals('the length from the end to 0.1 mm', '33.6', Point.Field('value').StoredText);
+  Point := FPattern.ConvertPoint(Point, pcAlongEdge, [Edge], omCartesian, pmRatio);
+  AssertNotNull(FPattern.LastError, Point);
+  AssertEquals('the ratio to 4 places', '0.7712', Point.Field('value').StoredText);
+  FPattern.Evaluate;
+  AssertPointsNear('moved by no more than the rounding', Lerp(Vec2(0, 0), Vec2(37, 23), 10 / Sqrt(37 * 37 + 23 * 23)),
+    Point.Position, 0.1);
+  Point := FPattern.AddBetweenPoint('R', First, Last, amLength, '20');
+  Point := FPattern.ConvertPoint(Point, pcBetween, [First, Last], omCartesian, pmRatio);
+  AssertNotNull(FPattern.LastError, Point);
+  AssertEquals('a between ratio to 4 places', '0.4591', Point.Field('value').StoredText);
 end;
 
 procedure TTestConvertPoint.TestAlongEdgeToFreeReplacesFormulas;

@@ -55,6 +55,9 @@ function StandardProfile: TMachineProfile;
 // Ignoring case. A profile in the list goes before the built-in one.
 function FindMachineProfile(const Profiles: TMachineProfileArray; const AName: string; out Found: TMachineProfile): boolean;
 function IsHexColor(const Text: string): boolean;
+function IsBuiltInMachineProfile(const AName: string): boolean;
+function TryPositiveProfileNumber(const Text: string; out Value: double): boolean;
+function TryMachineLineStyle(Enabled: boolean; const Color, Layer, Width: string; out Style: TLineStyle): boolean;
 function MachineProfilesToJSON(const Profiles: TMachineProfileArray): TJSONArray;
 // A profile with no name is skipped, and a bad value keeps Standard's
 function MachineProfilesFromJSON(Data: TJSONData): TMachineProfileArray;
@@ -62,7 +65,7 @@ function MachineProfilesFromJSON(Data: TJSONData): TMachineProfileArray;
 implementation
 
 uses
-  SysUtils, Sloper.Core.JSON;
+  SysUtils, Math, Sloper.Core.JSON;
 
 const
   DEFAULT_WIDTH = 0.1;
@@ -98,7 +101,7 @@ begin
       Exit(True);
     end;
   Found := StandardProfile;
-  Result := SameText(AName, STANDARD_PROFILE_NAME);
+  Result := IsBuiltInMachineProfile(AName);
 end;
 
 function IsHexColor(const Text: string): boolean;
@@ -110,6 +113,29 @@ begin
     for Index := 2 to 7 do
       if not (Text[Index] in ['0'..'9', 'a'..'f', 'A'..'F']) then
         Exit(False);
+end;
+
+function IsBuiltInMachineProfile(const AName: string): boolean;
+begin
+  Result := SameText(AName, STANDARD_PROFILE_NAME);
+end;
+
+function TryPositiveProfileNumber(const Text: string; out Value: double): boolean;
+begin
+  Result := TryStrToFloat(Trim(Text), Value) and not IsNan(Value) and not IsInfinite(Value) and (Value > 0);
+end;
+
+function TryMachineLineStyle(Enabled: boolean; const Color, Layer, Width: string; out Style: TLineStyle): boolean;
+var
+  Candidate: TLineStyle;
+begin
+  Style := Default(TLineStyle);
+  Candidate.Enabled := Enabled;
+  Candidate.Color := Trim(Color);
+  Candidate.Layer := Trim(Layer);
+  Result := IsHexColor(Candidate.Color) and (Candidate.Layer <> '') and TryPositiveProfileNumber(Width, Candidate.Width);
+  if Result then
+    Style := Candidate;
 end;
 
 function MachineProfilesToJSON(const Profiles: TMachineProfileArray): TJSONArray;

@@ -33,16 +33,18 @@ implementation
 
 uses
   SysUtils, Math, Forms, Controls, StdCtrls, ExtCtrls, ButtonPanel, Dialogs, Grids, CheckLst, Types,
-  Sloper.Core.Settings, Sloper.Core.AppPaths, Sloper.Core.Draft, Sloper.Core.JSON, Sloper.Editor.PropertyText;
+  Sloper.Core.Settings, Sloper.Core.AppPaths, Sloper.Core.Draft, Sloper.Editor.PropertyText;
 
 resourcestring
   rsProfilesTitle = 'Output and Machine Profiles';
   rsProfilesOutput = 'Output profiles';
   rsProfilesMachine = 'Machine profiles';
-  rsProfilesAdd = 'Add…';
+  rsProfilesAdd = 'Add...';
   rsProfilesRemove = 'Remove';
   rsProfilesName = 'Profile name';
-  rsProfilesNameTaken = 'Choose a new, non-empty profile name.';
+  rsProfilesNameTaken = 'Choose a new, non-empty profile name';
+  rsProfilesReservedName = 'That name belongs to a built-in profile';
+  rsProfilesEmpty = 'Choose Add to create a profile';
   rsProfilesLine = 'Line';
   rsProfilesInclude = 'Include';
   rsProfilesColor = 'Colour';
@@ -63,9 +65,9 @@ resourcestring
   rsProfilesMark = 'Mark';
   rsProfilesEngrave = 'Engrave';
   rsProfilesHole = 'Hole';
-  rsProfilesBadLine = '%s: use a colour in #rrggbb form, a layer name, and a positive width.';
-  rsProfilesBadStyle = '%s: enter a #rrggbb colour and positive width, or leave both blank. Enter up to four positive dash lengths separated by spaces.';
-  rsProfilesHelp = 'Create a named profile to use in a layout. Leave the colour and width blank to use the default output line style.';
+  rsProfilesBadLine = '%s: use a colour in #rrggbb form, a layer name, and a positive width';
+  rsProfilesBadStyle = '%s: enter a #rrggbb colour and positive width, or leave both blank. Enter up to four positive dash lengths separated by spaces';
+  rsProfilesHelp = 'Create a named profile to use in a layout. Leave the colour and width blank to use the default output line style';
 
 const
   CHECKED_VALUE = '1';
@@ -84,7 +86,9 @@ type
   TProfilesDialog = class(TForm)
   private
     FKindBox, FProfileBox: TComboBox;
-    FRemove: TButton;
+    FRemove, FAdd: TButton;
+    FEmpty: TLabel;
+    FMarksPanel: TPanel;
     FGrid: TStringGrid;
     FMarks: TCheckListBox;
     FAllowance: TCheckBox;
@@ -102,6 +106,8 @@ type
     procedure AddProfile(Sender: TObject);
     procedure RemoveProfile(Sender: TObject);
     procedure SaveProfiles(Sender: TObject);
+  protected
+    procedure DoShow; override;
   public
     constructor CreateDialog(AOwner: TComponent; Settings: TAppSettings);
   end;
@@ -128,31 +134,10 @@ begin
     end;
 end;
 
-function PositiveNumber(const Text: string; out Value: double): boolean;
-begin
-  Result := TryStrToFloat(Trim(Text), Value) and not IsNan(Value) and not IsInfinite(Value) and (Value > 0);
-end;
-
-function ReadDashes(const Text: string; out Dashes: TDashPattern): boolean;
-var
-  Parts: TStringArray;
-  Index: integer;
-begin
-  Dashes := Default(TDashPattern);
-  Parts := Trim(Text).Split([' ', #9], TStringSplitOptions.ExcludeEmpty);
-  if Length(Parts) > Length(Dashes) then
-    Exit(False);
-  for Index := 0 to High(Parts) do
-    if not PositiveNumber(Parts[Index], Dashes[Index]) then
-      Exit(False);
-  Result := True;
-end;
-
 constructor TProfilesDialog.CreateDialog(AOwner: TComponent; Settings: TAppSettings);
 var
-  TopBar, MarksPanel: TPanel;
+  TopBar: TPanel;
   Buttons: TButtonPanel;
-  AddButton: TButton;
   HintLabel, MarkLabel: TLabel;
   Column: TGridColumn;
   Mark: TPieceMark;
@@ -200,11 +185,11 @@ begin
   FRemove.Align := alRight;
   FRemove.Caption := rsProfilesRemove;
   FRemove.OnClick := @RemoveProfile;
-  AddButton := TButton.Create(Self);
-  AddButton.Parent := TopBar;
-  AddButton.Align := alRight;
-  AddButton.Caption := rsProfilesAdd;
-  AddButton.OnClick := @AddProfile;
+  FAdd := TButton.Create(Self);
+  FAdd.Parent := TopBar;
+  FAdd.Align := alRight;
+  FAdd.Caption := rsProfilesAdd;
+  FAdd.OnClick := @AddProfile;
 
   FProfileBox := TComboBox.Create(Self);
   FProfileBox.Parent := TopBar;
@@ -220,22 +205,22 @@ begin
   HintLabel.WordWrap := True;
   HintLabel.Caption := rsProfilesHelp;
 
-  MarksPanel := TPanel.Create(Self);
-  MarksPanel.Parent := Self;
-  MarksPanel.Align := alRight;
-  MarksPanel.Width := Scale96ToForm(145);
-  MarksPanel.BevelOuter := bvNone;
-  MarksPanel.BorderSpacing.Around := Scale96ToForm(8);
+  FMarksPanel := TPanel.Create(Self);
+  FMarksPanel.Parent := Self;
+  FMarksPanel.Align := alRight;
+  FMarksPanel.Width := Scale96ToForm(145);
+  FMarksPanel.BevelOuter := bvNone;
+  FMarksPanel.BorderSpacing.Around := Scale96ToForm(8);
   MarkLabel := TLabel.Create(Self);
-  MarkLabel.Parent := MarksPanel;
+  MarkLabel.Parent := FMarksPanel;
   MarkLabel.Align := alTop;
   MarkLabel.Caption := rsProfilesMarks;
   FAllowance := TCheckBox.Create(Self);
-  FAllowance.Parent := MarksPanel;
+  FAllowance.Parent := FMarksPanel;
   FAllowance.Align := alBottom;
   FAllowance.Caption := rsProfilesKeepAllowance;
   FMarks := TCheckListBox.Create(Self);
-  FMarks.Parent := MarksPanel;
+  FMarks.Parent := FMarksPanel;
   FMarks.Align := alClient;
   for Mark := Low(TPieceMark) to High(TPieceMark) do
     FMarks.Items.Add(MARK_CAPTIONS[Mark]);
@@ -254,7 +239,57 @@ begin
   AddColumn(rsProfilesColor, 85);
   AddColumn(rsProfilesDashes, 130);
   AddColumn(rsProfilesWidth, 90);
+  FEmpty := TLabel.Create(Self);
+  FEmpty.Parent := Self;
+  FEmpty.Align := alTop;
+  FEmpty.BorderSpacing.Around := Scale96ToForm(8);
+  FEmpty.Caption := rsProfilesEmpty;
   RefreshProfiles(0);
+end;
+
+procedure TProfilesDialog.DoShow;
+var
+  Needed, MarksWidth, ColumnWidth, Index, PreferredWidth, PreferredHeight: integer;
+  Mark: TPieceMark;
+  Role: TEdgeRole;
+  Kind: TLineType;
+  Limit: TRect;
+begin
+  inherited DoShow;
+  if Assigned(Monitor) then
+    Limit := Monitor.WorkareaRect
+  else
+    Limit := Screen.WorkAreaRect;
+  FGrid.Canvas.Font := FGrid.Font;
+  Needed := Scale96ToForm(32);
+  for Index := 0 to FGrid.Columns.Count - 1 do
+  begin
+    ColumnWidth := FGrid.Canvas.TextWidth(FGrid.Columns[Index].Title.Caption);
+    if Index = COL_LAYER_OR_DASH then
+      ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(rsProfilesDashes));
+    if Index = 0 then
+    begin
+      for Role := Low(TEdgeRole) to High(TEdgeRole) do
+        if Role in MARKING_ROLES then
+          ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(RoleCaption(Role)));
+      for Kind := Low(TLineType) to High(TLineType) do
+        ColumnWidth := Max(ColumnWidth, FGrid.Canvas.TextWidth(LINE_CAPTIONS[Kind]));
+    end;
+    FGrid.Columns[Index].Width := Max(FGrid.Columns[Index].Width, ColumnWidth + Scale96ToForm(24));
+    Inc(Needed, FGrid.Columns[Index].Width);
+  end;
+  PreferredWidth := 0;
+  PreferredHeight := 0;
+  FAllowance.GetPreferredSize(PreferredWidth, PreferredHeight, True);
+  FAllowance.Height := Max(FAllowance.Height, PreferredHeight);
+  MarksWidth := Max(PreferredWidth, Canvas.TextWidth(rsProfilesKeepAllowance) + Scale96ToForm(32));
+  for Mark := Low(TPieceMark) to High(TPieceMark) do
+    MarksWidth := Max(MarksWidth, Canvas.TextWidth(MARK_CAPTIONS[Mark]) + Scale96ToForm(32));
+  FMarksPanel.Width := Max(FMarksPanel.Width, MarksWidth);
+  Needed := Needed + FMarksPanel.Width + Scale96ToForm(16);
+  Width := Min(Limit.Width, Width + Max(0, Needed - ClientWidth));
+  Height := Min(Height, Limit.Height);
+  MoveToDefaultPosition;
 end;
 
 procedure TProfilesDialog.RefreshProfiles(Index: integer);
@@ -290,6 +325,8 @@ var
   Row: integer;
 begin
   FGrid.Enabled := FIndex >= 0;
+  FGrid.Visible := FGrid.Enabled;
+  FEmpty.Visible := not FGrid.Enabled;
   FRemove.Enabled := FGrid.Enabled;
   FMarks.Parent.Visible := FKind = prOutput;
   FMarks.Enabled := FGrid.Enabled;
@@ -352,11 +389,8 @@ begin
   for Kind := Low(TLineType) to High(TLineType) do
   begin
     Row := Ord(Kind) + 1;
-    Profile.Lines[Kind].Enabled := FGrid.Cells[COL_INCLUDE, Row] = CHECKED_VALUE;
-    Profile.Lines[Kind].Color := Trim(FGrid.Cells[COL_COLOR, Row]);
-    Profile.Lines[Kind].Layer := Trim(FGrid.Cells[COL_LAYER_OR_DASH, Row]);
-    if not IsHexColor(Profile.Lines[Kind].Color) or (Profile.Lines[Kind].Layer = '') or not
-      PositiveNumber(FGrid.Cells[COL_WIDTH, Row], Profile.Lines[Kind].Width) then
+    if not TryMachineLineStyle(FGrid.Cells[COL_INCLUDE, Row] = CHECKED_VALUE, FGrid.Cells[COL_COLOR, Row],
+      FGrid.Cells[COL_LAYER_OR_DASH, Row], FGrid.Cells[COL_WIDTH, Row], Profile.Lines[Kind]) then
     begin
       MessageDlg(Format(rsProfilesBadLine, [LINE_CAPTIONS[Kind]]), mtError, [mbOK], 0);
       Exit(False);
@@ -373,7 +407,6 @@ var
   Role: TEdgeRole;
   Mark: TPieceMark;
   Row: integer;
-  Dash, WidthText: string;
 begin
   Profile := FOutputs[FIndex];
   Row := 1;
@@ -384,12 +417,8 @@ begin
         Include(Profile.Roles, Role)
       else
         Exclude(Profile.Roles, Role);
-      Style := Default(TRoleStyle);
-      Style.Color := Trim(FGrid.Cells[COL_COLOR, Row]);
-      Dash := Trim(FGrid.Cells[COL_LAYER_OR_DASH, Row]);
-      WidthText := Trim(FGrid.Cells[COL_WIDTH, Row]);
-      Style.Custom := (Style.Color <> '') or (Dash <> '') or (WidthText <> '');
-      if Style.Custom and (not IsHexColor(Style.Color) or not PositiveNumber(WidthText, Style.Width) or not ReadDashes(Dash, Style.Dashes)) then
+      if not TryOutputRoleStyle(FGrid.Cells[COL_COLOR, Row], FGrid.Cells[COL_LAYER_OR_DASH, Row],
+        FGrid.Cells[COL_WIDTH, Row], Style) then
       begin
         MessageDlg(Format(rsProfilesBadStyle, [RoleCaption(Role)]), mtError, [mbOK], 0);
         Exit(False);
@@ -458,6 +487,12 @@ begin
   if not InputQuery(rsProfilesAdd, rsProfilesName, ProfileName) then
     Exit;
   ProfileName := Trim(ProfileName);
+  if ((FKind = prMachine) and IsBuiltInMachineProfile(ProfileName)) or
+    ((FKind = prOutput) and IsBuiltInOutputProfile(ProfileName)) then
+  begin
+    MessageDlg(rsProfilesReservedName, mtError, [mbOK], 0);
+    Exit;
+  end;
   if (ProfileName = '') or ((FKind = prMachine) and FindMachineProfile(FMachines, ProfileName, Machine)) or
     ((FKind = prOutput) and FindOutputProfile(FOutputs, ProfileName, Output)) then
   begin
@@ -466,14 +501,20 @@ begin
   end;
   if FKind = prMachine then
   begin
-    Machine := StandardProfile;
+    if FIndex >= 0 then
+      Machine := FMachines[FIndex]
+    else
+      Machine := StandardProfile;
     Machine.Name := ProfileName;
     Insert(Machine, FMachines, Length(FMachines));
     RefreshProfiles(High(FMachines));
   end
   else
   begin
-    Output := FullOutputProfile;
+    if FIndex >= 0 then
+      Output := FOutputs[FIndex]
+    else
+      Output := FullOutputProfile;
     Output.Name := ProfileName;
     Insert(Output, FOutputs, Length(FOutputs));
     RefreshProfiles(High(FOutputs));

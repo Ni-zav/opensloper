@@ -65,6 +65,8 @@ type
     procedure TestBuiltInOutputProfiles;
     procedure TestBuiltInProfileCannotBeChanged;
     procedure TestOutputProfileBadStyleIgnored;
+    procedure TestOutputRoleStyleInput;
+    procedure TestMachineLineStyleInput;
   end;
 
 implementation
@@ -621,6 +623,36 @@ begin
   AssertFalse(FSettings.OutputProfiles[0].Styles[erStitch].Custom);
   AssertFalse(FSettings.OutputProfiles[0].Styles[erFold].Custom);
   AssertTrue('everything when not listed', FSettings.OutputProfiles[0].Roles = MARKING_ROLES);
+end;
+
+procedure TTestSettings.TestOutputRoleStyleInput;
+var
+  Style: TRoleStyle;
+begin
+  AssertTrue('blank keeps default', TryOutputRoleStyle('', '', '', Style) and not Style.Custom);
+  AssertTrue('valid style', TryOutputRoleStyle(' #ff0000 ', '1  2'#9'3', '4', Style));
+  AssertTrue(Style.Custom);
+  AssertEquals('#ff0000', Style.Color);
+  AssertEquals(3.0, Style.Dashes[2], 0.001);
+  AssertEquals(4.0, Style.Width, 0.001);
+  AssertFalse('bad colour', TryOutputRoleStyle('red', '', '4', Style));
+  AssertFalse('too many dashes', TryOutputRoleStyle('#ff0000', '1 2 3 4 5', '4', Style));
+  AssertFalse('zero dash', TryOutputRoleStyle('#ff0000', '1 0', '4', Style));
+  AssertFalse('zero width', TryOutputRoleStyle('#ff0000', '', '0', Style));
+end;
+
+procedure TTestSettings.TestMachineLineStyleInput;
+var
+  Style: TLineStyle;
+begin
+  AssertTrue('valid line', TryMachineLineStyle(True, '#112233', ' Cuts ', '2', Style));
+  AssertTrue(Style.Enabled);
+  AssertEquals('Cuts', Style.Layer);
+  AssertEquals(2.0, Style.Width, 0.001);
+  AssertFalse('bad colour', TryMachineLineStyle(True, 'blue', 'Cut', '2', Style));
+  AssertFalse('blank layer', TryMachineLineStyle(True, '#112233', ' ', '2', Style));
+  AssertFalse('zero width', TryMachineLineStyle(True, '#112233', 'Cut', '0', Style));
+  AssertTrue('reserved ignoring case', IsBuiltInMachineProfile('sTaNdArD'));
 end;
 
 initialization

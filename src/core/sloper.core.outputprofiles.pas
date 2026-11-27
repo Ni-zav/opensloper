@@ -65,6 +65,8 @@ function FullOutputProfile: TOutputProfile;
 // Home printing, Plotter or laser cutter, Leather and Instructions sheet
 function BuiltInOutputProfiles: TOutputProfileArray;
 function IsBuiltInOutputProfile(const AName: string): boolean;
+// Blank values select the default style; otherwise all entered values must be valid.
+function TryOutputRoleStyle(const Color, DashText, Width: string; out Style: TRoleStyle): boolean;
 // The built-in profiles, then the user's, ignoring case. A user profile with
 // a built-in name is never found, so a built-in one always prints the same.
 function FindOutputProfile(const Profiles: TOutputProfileArray; const AName: string; out Found: TOutputProfile): boolean;
@@ -218,6 +220,29 @@ begin
 end;
 
 // Colour, up to four dash lengths and a width above 0, or none of it
+function TryOutputRoleStyle(const Color, DashText, Width: string; out Style: TRoleStyle): boolean;
+var
+  Candidate: TRoleStyle;
+  Parts: TStringArray;
+  Index: integer;
+begin
+  Style := Default(TRoleStyle);
+  Candidate := Default(TRoleStyle);
+  Candidate.Color := Trim(Color);
+  Parts := Trim(DashText).Split([' ', #9], TStringSplitOptions.ExcludeEmpty);
+  if (Candidate.Color = '') and (Length(Parts) = 0) and (Trim(Width) = '') then
+    Exit(True);
+  if not IsHexColor(Candidate.Color) or not TryPositiveProfileNumber(Width, Candidate.Width) or
+    (Length(Parts) > Length(Candidate.Dashes)) then
+    Exit(False);
+  for Index := 0 to High(Parts) do
+    if not TryPositiveProfileNumber(Parts[Index], Candidate.Dashes[Index]) then
+      Exit(False);
+  Candidate.Custom := True;
+  Style := Candidate;
+  Result := True;
+end;
+
 function ReadStyle(Data: TJSONData; out Style: TRoleStyle): boolean;
 var
   Obj: TJSONObject;

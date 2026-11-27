@@ -320,7 +320,7 @@ resourcestring
   rsExportSVG = 'Export SVG...';
   rsExportDXF = 'Export DXF...';
   rsExportMachineDXF = 'Export Machine DXF...';
-  rsMenuProfiles = 'Output and Machine Profiles…';
+  rsMenuProfiles = 'Output and Machine Profiles...';
   rsProfile = 'Machine profile';
   rsProfileNone = 'None';
   rsOutputProfile = 'Output profile';
@@ -1599,11 +1599,14 @@ function TPublishForm.AppLinkMessage(const Method: string; Params: TJSONObject):
 var
   LayoutFile: string;
 begin
-  // Another app saved them; only printing reads the calibration
+  // Another app saved preferences or profiles
   if Method = APP_LINK_PREFERENCES then
   begin
     FDocument.Layout.Calibration := UserCalibration;
+    FDocument.Layout.MachineProfiles := UserMachineProfiles;
+    FDocument.Layout.OutputProfiles := UserOutputProfiles;
     FAssistant.KeyChanged;
+    DocumentChanged(FDocument);
     Exit(True);
   end;
   Result := (Method = APP_LINK_SHOW) and GetJSONString(Params, APP_LINK_LAYOUT_PARAM, LayoutFile) and
@@ -1888,6 +1891,7 @@ begin
   FDocument.Layout.MachineProfiles := Machines;
   FDocument.Layout.OutputProfiles := Outputs;
   DocumentChanged(FDocument);
+  TellApps(APP_LINK_PREFERENCES, FAppLink);
 end;
 
 procedure TPublishForm.PreferencesClick(Sender: TObject);

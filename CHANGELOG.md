@@ -11,6 +11,18 @@ The layout follows [Keep a Changelog](https://keepachangelog.com): Added,
 Changed, Fixed and Removed under each version.
 
 
+## 0.10.0
+
+### Added
+
+- Publish can create, rename and edit named output and machine profiles from
+  the Edit menu (#57).
+
+### Fixed
+
+- Shortcut hints in web Design show Ctrl or Cmd for the current platform
+  (#160).
+
 ## 0.9.0
 
 ### Added
@@ -44,8 +56,6 @@ Changed, Fixed and Removed under each version.
   refused with a message saying to save the drawing again without it (#90).
 
 ### Fixed
-
-- Shortcut hints in web Design show Ctrl or Cmd for the current platform (#160).
 
 - A new, empty publish window no longer lists "Nothing is placed" as a
   problem; printing and exporting an empty layout are still refused (#152).

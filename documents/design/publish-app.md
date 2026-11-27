@@ -70,6 +70,17 @@ The design app stores every marking; the publish app decides which reach the out
 
 The four built-in profiles cannot be changed, so a layout naming one always prints the same; their names stay English, since layouts store them.
 
+**Edit → Output and Machine Profiles...** manages the user's named profiles.
+
+- Output profiles set included roles and piece marks, allowance and paper line styles.
+- Machine profiles set the enabled line types, colours, layers and widths.
+- Profiles are added (a copy of the one shown), renamed and removed. Built-in names, and the None and Everything a layout shows for no profile, are refused.
+- Numbers are read and shown with a full stop, whatever the locale, as in the files.
+- The line checks are core functions (`TryOutputRoleStyle`, `TryMachineLineStyle`); the window only reads the grid.
+- The window fits its contents when shown, then keeps that size.
+- Saving updates the local settings, refreshes the preview and profile pickers, and tells the other open apps, so their Publish windows reload the profiles.
+- A layout that names a renamed or removed profile keeps the name and reports it as missing.
+
 **Notes on paper.** A note prints with a piece when anchored to it or one of its points or edges, or when its top left lies inside the cutting line; it follows the piece's placement, upright when the piece is flipped. A print note in no piece is a warning. DXF carries no notes.
 
 ## Draft export

@@ -70,13 +70,17 @@ the order you make them, so make them in the order given here.
 
 1. With the Point tool (++p++), make **A** and set X and Y to `0`: the centre
    back neck.
-2. Click straight below A, about 20 cm down, for **B**: the centre back at the
-   level of the underarm. Open the wand, **f**, beside its Length and choose
-   `#scye_depth`. Click further below, about 41 cm down, for **C**, the centre
-   back waist, and choose `@neck_back_to_waist` from the wand.
-3. Click level with B, to its right, for **D**, Length `#half_width`: the
-   underarm at the side seam. Click right of C for **E**, Length
-   `#half_width - #side_shaping`: the waist at the side seam.
+2. Click straight below A, about 20.5 cm down, for **B**: the centre back at
+   the underarm. Open the wand, **f**, beside its Length and choose
+   `#scye_depth`. Click about 41 cm below A for **C**, the centre back waist,
+   and choose `@neck_back_to_waist` from the wand.
+3. Click about 25 cm to the right of B for **D**, the underarm at the side
+   seam. Use the Length wand to choose `#half_width`. Click right of C for
+   **E** and set its Length to `#half_width - #side_shaping`.
+
+If the formula you need is missing, leave the wand open and drag the point
+closer so the [suggestions](../design/formulas.md#formula-suggestions) update.
+You can also type the formula directly in Length.
 
 Then draw, with the Line tool (++l++), and name the centre back line
 **Centre_back**, as the piece is folded along it:

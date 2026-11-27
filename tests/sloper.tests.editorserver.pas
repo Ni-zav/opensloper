@@ -186,6 +186,8 @@ type
     procedure TestMeasurementsTable;
     // Cells set, rows added, moved and deleted, each one undo step
     procedure TestMeasurementsEdits;
+    // Sizes added, renamed, moved and deleted, as the desktop's size buttons
+    procedure TestMeasurementsSizes;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;
@@ -827,6 +829,85 @@ begin
   AssertEquals('nothing left to undo', RPC_REFUSED, ErrorCode);
   Call('measurements_redo');
   AssertEquals('the value redone, in mm', '720', Answer.Arrays['rows'].Objects[0].Arrays['values'].Strings[0]);
+end;
+
+procedure TTestEditorServer.TestMeasurementsSizes;
+const
+  SET_TEXT = '{"format":"measurements","version":1,"units":"mm","name":"One",' +
+    '"measurements":[{"key":"waist","value":700}]}';
+var
+  Params: TJSONObject;
+
+  function Sizes: string;
+  var
+    Index: integer;
+  begin
+    Result := '';
+    for Index := 0 to Answer.Arrays['sizes'].Count - 1 do
+      Result := Result + Answer.Arrays['sizes'].Strings[Index] + ' ';
+    Result := Trim(Result);
+  end;
+
+  function Values: string;
+  var
+    Index: integer;
+    Row: TJSONArray;
+  begin
+    Result := '';
+    Row := Answer.Arrays['rows'].Objects[0].Arrays['values'];
+    for Index := 0 to Row.Count - 1 do
+      Result := Result + Row.Strings[Index] + ' ';
+    Result := Trim(Result);
+  end;
+
+begin
+  Params := TJSONObject.Create(['text', SET_TEXT]);
+  try
+    Call('measurements_open', Params.AsJSON);
+  finally
+    FreeAndNil(Params);
+  end;
+  // The first size takes the set's values
+  Call('measurements_add_size', '{"name":"M"}');
+  AssertEquals('M', Sizes);
+  AssertEquals('the value kept', '700', Values);
+  AssertEquals('Add size', Answer.Strings['undo']);
+  Call('measurements_add_size', '{"name":"L"}');
+  AssertEquals('M L', Sizes);
+  AssertEquals('the new size empty', '700', Values);
+  Call('measurements_add_size', '{"name":"m"}');
+  AssertEquals('a name in use, ignoring case', RPC_REFUSED, ErrorCode);
+  Call('measurements_add_size', '{"name":""}');
+  AssertEquals('no name', RPC_REFUSED, ErrorCode);
+  AssertEquals('with the reason', 'A size needs a name', TJSONObject(FReply.Find('error')).Get('message', ''));
+  Call('measurements_set', '{"key":"waist","column":"value","size":1,"text":"740"}');
+  Call('measurements_rename_size', '{"size":0,"name":"Medium"}');
+  AssertEquals('Medium L', Sizes);
+  Call('measurements_rename_size', '{"size":1,"name":"Medium"}');
+  AssertEquals('a name in use', RPC_REFUSED, ErrorCode);
+  Call('measurements_rename_size', '{"size":2,"name":"XL"}');
+  AssertEquals('no such size', RPC_INVALID_PARAMS, ErrorCode);
+  Call('measurements_move_size', '{"size":1,"index":0}');
+  AssertEquals('L Medium', Sizes);
+  AssertEquals('the values move with it', '740 700', Values);
+  AssertEquals('Move size', Answer.Strings['undo']);
+  Call('measurements_move_size', '{"size":1,"index":2}');
+  AssertEquals('past the end refused', RPC_INVALID_PARAMS, ErrorCode);
+  Call('measurements_delete_size', '{"size":0}');
+  AssertEquals('Medium', Sizes);
+  AssertEquals('700', Values);
+  Call('measurements_delete_size', '{"size":0}');
+  AssertEquals('not the last size', RPC_REFUSED, ErrorCode);
+  // Back through delete, move, rename, value and the two sizes added
+  Call('measurements_undo');
+  Call('measurements_undo');
+  Call('measurements_undo');
+  AssertEquals('M L', Sizes);
+  Call('measurements_undo');
+  Call('measurements_undo');
+  Call('measurements_undo');
+  AssertEquals('a set without sizes again', '', Sizes);
+  AssertFalse('all undone', Answer.Booleans['canUndo']);
 end;
 
 procedure TTestEditorServer.TestMeasurementsMethodsTable;

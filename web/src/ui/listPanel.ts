@@ -191,12 +191,25 @@ export abstract class ListPanel<D extends ListDocument = PatternDocument> implem
     // Nothing to delete in a plain list
   }
 
-  // Turns on editing in the grid. Formula columns offer name completion.
+  // The current cell moved to another column of the chosen row
+  protected columnChanged(): void {
+    // A plain list has no current cell
+  }
+
+  // The column of the current cell, from 0
+  protected get chosenColumn(): number {
+    return this.currentColumn;
+  }
+
+  // Turns on editing in the grid. Formula columns offer name completion. The
+  // current cell keeps its column while that column is still editable.
   protected setEditableColumns(editable: readonly boolean[], formula: readonly boolean[]): void {
     this.editable = [...editable];
     this.formula = [...formula];
     this.multiSelect = false;
-    this.currentColumn = Math.max(0, this.editable.indexOf(true));
+    if (this.editable[this.currentColumn] !== true) {
+      this.currentColumn = Math.max(0, this.editable.indexOf(true));
+    }
   }
 
   // Keys of the selected rows
@@ -372,10 +385,14 @@ export abstract class ListPanel<D extends ListDocument = PatternDocument> implem
     event.preventDefault();
     this.scroller.focus();
     if (this.isEditable) {
+      const moved = this.currentColumn !== cell.cellIndex;
       this.currentColumn = cell.cellIndex;
       // Moving along a row of an editable list is not a new choice
       if (this.selected.length === 1 && this.selected[0] === key) {
         this.paintSelection();
+        if (moved) {
+          this.columnChanged();
+        }
         return;
       }
     }
@@ -454,8 +471,12 @@ export abstract class ListPanel<D extends ListDocument = PatternDocument> implem
         break;
       }
     }
+    const moved = this.currentColumn !== column;
     this.currentColumn = column;
     this.paintSelection();
+    if (moved) {
+      this.columnChanged();
+    }
   }
 
   // Opens the current cell of the selected row; typed, when given, replaces its text

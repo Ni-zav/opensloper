@@ -77,7 +77,6 @@ type
     procedure TestSceneMarks;
     // Contextual labels: the selection with what it reads and what reads it
     procedure TestLabelKeys;
-    procedure TestStandaloneMeasurements;
     // Picking a seam's sides edge by edge, then making it as one step
     procedure TestSeamTool;
     procedure TestImportStamp;
@@ -176,6 +175,7 @@ type
     procedure TestPiecePropertyEdits;
     // A note's rows: text, size, printing, look, font and making it free
     procedure TestNotePropertyEdits;
+    procedure TestStandaloneMeasurements;
   private
     // The row with this id in the last editor_properties answer
     function PropertyRow(const RowId: string): TJSONObject;

@@ -1,0 +1,59 @@
+{
+  "format": "layout",
+  "version": 1,
+  "units": "mm",
+  "name": "circle-skirt",
+  "nextId": 2,
+  "sources": [
+    {
+      "id": 1,
+      "pattern": "circle-skirt.sloper"
+    }
+  ],
+  "output": {
+    "kind": "tiled",
+    "rollWidth": 914,
+    "paper": "A4",
+    "margin": 6,
+    "overlap": 10,
+    "marks": "diamond"
+  },
+  "placements": [
+    {
+      "source": 1,
+      "piece": 29,
+      "copy": 1,
+      "x": 672,
+      "y": 28.5,
+      "rotation": 0,
+      "flipped": false
+    },
+    {
+      "source": 1,
+      "piece": 29,
+      "copy": 2,
+      "x": 0,
+      "y": 120,
+      "rotation": 0,
+      "flipped": false
+    },
+    {
+      "source": 1,
+      "piece": 30,
+      "copy": 1,
+      "x": 0,
+      "y": 0,
+      "rotation": 0,
+      "flipped": false
+    }
+  ],
+  "titleBlock": {
+    "corner": "bottomRight",
+    "fields": [
+      "pattern.name",
+      "measurements.name",
+      "date"
+    ],
+    "everyPage": false
+  }
+}

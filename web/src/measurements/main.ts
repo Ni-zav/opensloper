@@ -7,9 +7,11 @@
 // chooses the unit of its values, and the status bar has a message. Beside
 // the table, the body figure shows where the set's measurements are taken,
 // and Add From the Catalogue lists the measurements the set lacks, with the
-// details of the one chosen or of the table's row. Nothing leaves the
-// machine: the file is read in the browser and given to the engine as text.
-import { MeasurementDocument } from '../document/measurementDocument.ts';
+// details of the one chosen or of the table's row. Check Against Pattern
+// lists, under the table, what a pattern needs that the set cannot give it.
+// Nothing leaves the machine: the files are read in the browser and given to
+// the engine as text.
+import { MeasurementDocument, type MissingMeasurement } from '../document/measurementDocument.ts';
 import { MEASURE_UNITS, type MeasureUnit } from '../editor/rulerTicks.ts';
 import { Engine, EngineError } from '../engine/engine.ts';
 import { recordsField, stringField } from '../engine/replies.ts';
@@ -22,7 +24,9 @@ import { STRINGS } from '../ui/strings.ts';
 import { BodyFigure } from './bodyFigure.ts';
 import { CatalogueBrowser } from './catalogueBrowser.ts';
 import { MeasurementGrid } from './measurementGrid.ts';
+import { PatternCheck } from './patternCheck.ts';
 
+const PATTERN_EXTENSION = '.sloper';
 const WORK_SET = 'set';
 const WORK_DISK_TEXT = 'disk';
 
@@ -37,6 +41,8 @@ function element<T extends HTMLElement>(id: string, type: new () => T): T {
 const toolbar = element('toolbar', HTMLElement);
 const message = element('message', HTMLElement);
 const openInput = element('open-input', HTMLInputElement);
+const patternInput = element('pattern-input', HTMLInputElement);
+const left = element('left', HTMLElement);
 const nameBox = element('set-name', HTMLInputElement);
 const notesBox = element('set-notes', HTMLInputElement);
 const showIn = element('show-in', HTMLSelectElement);
@@ -88,6 +94,9 @@ class MeasurementsApp {
   private readonly grid: MeasurementGrid;
   private readonly catalogue: CatalogueBrowser;
   private readonly figure: BodyFigure;
+  private readonly patternCheck: PatternCheck;
+  private readonly checkButton: HTMLButtonElement;
+  private readonly stopCheckButton: HTMLButtonElement;
   // The entry the catalogue shows, and the table's row under the pointer,
   // which the figure highlights over it, as on the desktop
   private shownKey = '';
@@ -178,6 +187,20 @@ class MeasurementsApp {
       },
       failed: showFailure,
     });
+    this.patternCheck = new PatternCheck(this.document, {
+      chosen: (key) => {
+        this.catalogue.showTableKey(key);
+      },
+      fix: (item) => {
+        this.run(this.fixMissing(item));
+      },
+    });
+    this.checkButton = iconButton('file-search', STRINGS.checkPattern, STRINGS.checkPatternHint, () => {
+      patternInput.click();
+    });
+    this.stopCheckButton = iconButton('player-stop', STRINGS.stopCheck, STRINGS.stopCheckHint, () => {
+      this.run(this.document.stopCheck());
+    });
     this.undoButton = iconButton('arrow-back-up', STRINGS.undo, STRINGS.undoHint, () => {
       this.run(this.document.undo());
     });
@@ -254,7 +277,9 @@ class MeasurementsApp {
     if (this.files !== undefined) {
       toolbar.append(this.saveAsButton);
     }
-    toolbar.append(divider, this.undoButton, this.redoButton);
+    const secondDivider = document.createElement('span');
+    secondDivider.className = 'divider';
+    toolbar.append(divider, this.undoButton, this.redoButton, secondDivider, this.checkButton, this.stopCheckButton);
     // Capture file shortcuts before the editable grid handles its own keys.
     const buttons = {
       open: openButton,
@@ -264,6 +289,14 @@ class MeasurementsApp {
       redo: this.redoButton,
     };
     window.addEventListener('keydown', (event) => this.keyDown(event, buttons), true);
+    left.append(this.patternCheck.element);
+    patternInput.addEventListener('change', () => {
+      const file = patternInput.files?.[0];
+      patternInput.value = '';
+      if (file !== undefined) {
+        this.run(this.checkPattern(file));
+      }
+    });
     for (const box of [nameBox, notesBox]) {
       // Enter, or leaving the field, commits it, as the desktop's EditingDone
       box.addEventListener('change', () => {
@@ -534,6 +567,45 @@ class MeasurementsApp {
     }
   }
 
+  // A file that is not a pattern, or does not read as one, says why, and
+  // the check before stays
+  private async checkPattern(file: File): Promise<void> {
+    if (!file.name.toLowerCase().endsWith(PATTERN_EXTENSION)) {
+      showMessage(STRINGS.notAPattern(file.name));
+      return;
+    }
+    try {
+      await this.document.checkPattern(file.name, await file.text());
+    } catch (error: unknown) {
+      if (error instanceof EngineError) {
+        showMessage(error.message);
+        return;
+      }
+      throw error;
+    }
+    showMessage(STRINGS.checkingPattern(file.name));
+  }
+
+  // As the desktop's Add or go to it: a key the set lacks is added, and a
+  // value it is short of is gone to, at that size
+  private async fixMissing(item: MissingMeasurement): Promise<void> {
+    const [size] = item.sizes;
+    if (size !== undefined) {
+      await this.grid.chooseValue(item.key, Math.max(0, this.document.state.sizes.indexOf(size)));
+      return;
+    }
+    try {
+      await this.document.addMissing(item.key);
+    } catch (error: unknown) {
+      if (error instanceof EngineError) {
+        showMessage(error.message);
+        return;
+      }
+      throw error;
+    }
+    await this.grid.chooseValue(item.key);
+  }
+
   // The fields' text, where it differs from the set's, as the desktop's
   // HeaderDone; each change one undo step
   private async commitHeader(): Promise<void> {
@@ -641,6 +713,8 @@ class MeasurementsApp {
     this.saveButton.disabled = this.document.fileName === '';
     this.saveAsButton.disabled = this.saveButton.disabled;
     this.addButton.disabled = this.document.fileName === '';
+    this.checkButton.disabled = this.document.fileName === '';
+    this.stopCheckButton.disabled = state.pattern === '';
     this.deleteButton.disabled = index < 0;
     this.upButton.disabled = index <= 0;
     this.downButton.disabled = index < 0 || index >= state.rows.length - 1;
@@ -682,6 +756,7 @@ class MeasurementsApp {
     this.grid.showSet(opened);
     this.catalogue.refresh();
     this.figure.refresh();
+    this.patternCheck.refresh();
     this.refreshButtons();
   }
 }

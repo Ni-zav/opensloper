@@ -10,8 +10,9 @@
 // TypeScript as it is.
 import { createHash } from 'node:crypto';
 import { access, copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { build } from 'esbuild';
+import { PUBLISH_EXAMPLES } from './src/publish/examples.ts';
 
 const ENGINE = 'engine/out/browser/engine_lib.wasm';
 const DESIGN = 'out/design';
@@ -107,10 +108,10 @@ await copyFile('src/ui/printDialog.css', 'out/design/printDialog.css');
 await copyFile(ENGINE, 'out/design/engine_lib.wasm');
 await cp('../data/icons', 'out/design/icons', { recursive: true });
 // Patterns and measurement files, laid out as in the guide so each finds its
-// measurement file; the drape files are for the drape app
+// measurement file. Drape and layout files belong to the other apps.
 await cp('../docs/examples', 'out/design/examples', {
   recursive: true,
-  filter: (source) => !source.endsWith('.sdrape'),
+  filter: (source) => !source.endsWith('.sdrape') && !source.endsWith('.slayout'),
 });
 await installable(
   DESIGN,
@@ -128,6 +129,14 @@ await copyFile('src/ui/sidePanel.css', join(PUBLISH, 'sidePanel.css'));
 await copyFile('src/ui/printDialog.css', join(PUBLISH, 'printDialog.css'));
 await copyFile(ENGINE, join(PUBLISH, 'engine_lib.wasm'));
 await cp('../data/icons', join(PUBLISH, 'icons'), { recursive: true });
+const publishExampleFiles = new Set(PUBLISH_EXAMPLES.flatMap(({ layout, sources }) => sources.concat(layout)));
+await Promise.all(
+  [...publishExampleFiles].map(async (path) => {
+    const target = join(PUBLISH, 'examples', path);
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(join('../docs/examples', path), target);
+  }),
+);
 await installable(
   PUBLISH,
   'publish',

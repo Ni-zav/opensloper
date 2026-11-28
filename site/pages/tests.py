@@ -15,6 +15,7 @@ class PagesTest(SimpleTestCase):
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'href="/design/"')
         self.assertContains(page, 'href="/publish/"')
+        self.assertContains(page, 'class="btn btn-solid" href="/publish/"', count=2)
         self.assertContains(page, f"Download {version()}")
         self.assertContains(page, "Beta")
         self.assertContains(page, "images/web-publish.webp")

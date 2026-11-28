@@ -76,7 +76,7 @@ What needs the evaluated pattern goes behind the API: snapping, completion, the 
 
 | Method | Does |
 | --- | --- |
-| `editor_list_objects`, `editor_list_variables`, `editor_list_measurements` | The lists' rows. The measurements come with the tab's unsaved edits laid over the set (`TPendingMeasurements.Rows`), and the set's file, sizes, size used, test size and count of edits |
+| `editor_list_objects`, `editor_list_variables`, `editor_list_measurements` | The lists' rows. The measurements come with the tab's unsaved edits laid over the set (`TPendingMeasurements.Rows`), and the set's file, sizes, size used, test size, whether the set has any measurements (`hasMeasurements`, without which the test size is off) and count of edits |
 | `editor_list_click` | The selection after a click, Ctrl+click or Shift+click on a list's row (`SelectionAfterClick`). Its keys are plain text (the `apTexts` kind), as a measurement's key is no object |
 | `editor_complete` | Name completion. Caret and word are in characters, not UTF-8 bytes |
 | `editor_variable_add`, `editor_variable_set`, `editor_variable_delete` | The Variables tab's edits (`AddVariableStep`, `CommitVariableCell`, `DeleteVariableStep` in PanelEdits) |
@@ -399,6 +399,12 @@ The replies of the first three are `publish_state`'s, which also gives the undo 
 The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Sloper.Measurements.MainForm`), built in steps (#84, see [Open items](open-items.md)). It is served but not linked from the site until it is ready.
 
 - **The toolbar** has Open, Save, Save As, Undo and Redo, with shortcuts from the engine. Open takes a measurement set or size table (`.slm`). A refused open keeps the set and says why. Changes not saved are dropped only when the user agrees.
+- **Check Against Pattern…** and **Stop Checking** follow on the toolbar; the desktop has Stop Checking in its File menu, which the page has none of.
+  - Check Against Pattern takes a pattern (`.sloper`), read in the browser and given to the engine as text. A file that is not one, or does not read as one, is refused with the reason, and the check before stays.
+  - **Pattern Check** shows under the table while checking (`PatternCheck` in `measurements/patternCheck.ts`). It says the pattern has everything it needs, or lists what the set cannot give it: a key it lacks, or a key with no value for some sizes.
+  - Choosing one shows its details beside the table. **Add or go to it**, a double-click or Enter adds a key the set lacks, with the catalogue's description, or goes to the empty value at its first size.
+  - The pattern is not read again when it changes, as the desktop's is, since the page has only the text it was given.
+  - It stays while another set is opened, as on the desktop.
 - **Saving** writes the set to its file in browsers with File System Access. Save As picks another file, and Save downloads where the browser has no file picker. The page refuses to overwrite a set that changed on disk since it was read or written.
 - **Work in progress and offline use** use the same browser storage and service worker as Design and Publish. A closed tab's unsaved set can be recovered and saved to the file it came from.
 - **The title** names the file, with the modified mark while it has changes. **The status bar** has a message.
@@ -452,9 +458,12 @@ The Measurements app's page is at `/measurements/` (`src/measurements/`, as `Slo
 | `measurements_add_known` | A catalogue measurement at the end, with its key and description (`AddKnown`). A key the set has, or one not in the catalogue, is refused |
 | `measurements_figure` | The body figure as SVG, `width` by `height` pixels, with the set's measurements and the `highlight` |
 | `measurements_figure_at` | The set's measurement whose line is within a few pixels of `x`, `y` on a figure of that size, else empty |
+| `measurements_check_pattern` | Checks the set against a pattern from its `name` and `text` (`UsePatternText`, `PatternTextMeasurementKeys`). One that does not read is refused, and the check before stays |
+| `measurements_stop_check` | Stops checking |
+| `measurements_add_missing` | A key the pattern needs at the end, with the catalogue's description when it has one (`AddKnown`) |
 | `measurements_undo`, `measurements_redo` | The document's Undo and Redo; refused when there is nothing to take |
 
-Every one takes `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Every one answers with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none), `outside` (for each value, whether it is outside its catalogue entry's typical range) and `description`; `measurements_set` adds the `warning` for such a value; and with `modified`, `canUndo`, `canRedo` and `undo`, the step Undo would take. Each edit is one undo step of the document's own history.
+Every one takes `unit`, the table's: mm (the default), cm or in; a bad one is refused before the set changes. Every one answers with `set`, and with the table as the page shows it: `unit`, `sizes`, and `rows`, each with its `key`, `values` (one a size, or the one value, as text in the unit, empty where there is none), `outside` (for each value, whether it is outside its catalogue entry's typical range) and `description`; `measurements_set` adds the `warning` for such a value; `pattern`, the pattern checked against, and `missing`, each with its `key` and the `sizes` with no value; and with `modified`, `canUndo`, `canRedo` and `undo`, the step Undo would take. Each edit is one undo step of the document's own history.
 
 ## Server
 

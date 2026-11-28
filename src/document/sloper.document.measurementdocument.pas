@@ -48,6 +48,8 @@ type
     FConflicts: TStringArray;
     // The pattern being checked against, its keys and its text when read
     FPatternFile, FPatternText: string;
+    // The pattern came as text, so there is no file to read again
+    FPatternGiven: boolean;
     FPatternKeys: TStringArray;
     FChangeOpen: boolean;
     FBefore, FDescription: string;
@@ -92,6 +94,9 @@ type
     // Checks the file against this pattern from now on, so Missing lists what
     // it uses that the file cannot give it. An empty name stops that.
     function UsePattern(const AFileName: string; out ErrorMessage: string): boolean;
+    // The same with the pattern's text, as the browser supplies it, by the
+    // file's name; nothing is read again, so CheckPattern leaves it
+    function UsePatternText(const AName, AText: string; out ErrorMessage: string): boolean;
     // Call regularly: reads the pattern again when it has been saved. A file
     // that does not read is left for whoever is writing it. True when it was.
     function CheckPattern: boolean;
@@ -439,6 +444,21 @@ begin
   FPatternFile := AFileName;
   FPatternText := Text;
   FPatternKeys := Keys;
+  FPatternGiven := False;
+  Changed;
+end;
+
+function TMeasurementDocument.UsePatternText(const AName, AText: string; out ErrorMessage: string): boolean;
+var
+  Keys: TStringArray;
+begin
+  Result := PatternTextMeasurementKeys(AText, Keys, ErrorMessage);
+  if not Result then
+    Exit;
+  FPatternFile := AName;
+  FPatternText := AText;
+  FPatternKeys := Keys;
+  FPatternGiven := True;
   Changed;
 end;
 
@@ -448,7 +468,8 @@ var
   Keys: TStringArray;
 begin
   Result := False;
-  if (FPatternFile = '') or not ReadTextFile(FPatternFile, Text, Err) or (Text = FPatternText) or not ReadPatternMeasurementKeys(FPatternFile, Keys, Err) then
+  if (FPatternFile = '') or FPatternGiven or not ReadTextFile(FPatternFile, Text, Err) or (Text = FPatternText) or not
+    ReadPatternMeasurementKeys(FPatternFile, Keys, Err) then
     Exit;
   FPatternText := Text;
   FPatternKeys := Keys;

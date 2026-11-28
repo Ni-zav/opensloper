@@ -55,6 +55,16 @@ export interface MeasurementState {
   canRedo: boolean;
   // The name of the step undo would take
   undo: string;
+  // The pattern the set is checked against, '' for none, and what it lacks
+  pattern: string;
+  missing: MissingMeasurement[];
+}
+
+// A measurement the pattern checked against needs that the set cannot give
+// it: the sizes with no value, none when the set lacks the key
+export interface MissingMeasurement {
+  key: string;
+  sizes: string[];
 }
 
 // Which cell of a row an edit is to
@@ -82,6 +92,8 @@ const EMPTY: MeasurementState = {
   canUndo: false,
   canRedo: false,
   undo: '',
+  pattern: '',
+  missing: [],
 };
 
 function parseState(answer: JsonRecord): MeasurementState {
@@ -100,6 +112,11 @@ function parseState(answer: JsonRecord): MeasurementState {
     canUndo: booleanField(answer, 'canUndo') ?? false,
     canRedo: booleanField(answer, 'canRedo') ?? false,
     undo: stringField(answer, 'undo') ?? '',
+    pattern: stringField(answer, 'pattern') ?? '',
+    missing: recordsField(answer, 'missing').map((item) => ({
+      key: stringField(item, 'key') ?? '',
+      sizes: stringsField(item, 'sizes') ?? [],
+    })),
   };
 }
 
@@ -277,6 +294,22 @@ export class MeasurementDocument {
   // To its column afterwards, from 0
   async moveSize(size: number, index: number): Promise<void> {
     await this.call('measurements_move_size', { size, index });
+  }
+
+  // Checks the set against a pattern from now on, given as its file's text;
+  // one that is not a pattern is refused with the engine's reason
+  async checkPattern(name: string, text: string): Promise<void> {
+    await this.call('measurements_check_pattern', { name, text });
+  }
+
+  async stopCheck(): Promise<void> {
+    await this.call('measurements_stop_check');
+  }
+
+  // A measurement the pattern needs, at the end, with the catalogue's
+  // description when it has one
+  async addMissing(key: string): Promise<void> {
+    await this.call('measurements_add_missing', { key });
   }
 
   async undo(): Promise<void> {

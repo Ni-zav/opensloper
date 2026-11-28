@@ -260,7 +260,12 @@ function TEvalNode.EvalLength(Context: TEvalContext; const AName: string; out Va
 begin
   Result := EvalField(Context, AName, Value);
   if Result then
+  begin
     Value := Value * Context.LengthScale;
+    // Some targets produce infinity instead of trapping on overflow.
+    if IsInfinite(Value) then
+      raise EOverflow.Create(rsEvalOutOfRange);
+  end;
 end;
 
 function TEvalNode.Fail(AState: TEvalState; const Msg: string): TEvalState;

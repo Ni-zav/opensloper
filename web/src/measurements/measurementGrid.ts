@@ -62,11 +62,11 @@ export class MeasurementGrid extends ListPanel<MeasurementDocument> {
     }
   }
 
-  // Chooses the measurement at its first value, as after adding it from the
-  // catalogue, once its row is listed
-  async chooseValue(key: string): Promise<void> {
+  // Chooses the measurement at a size's value, the first by default, as
+  // after adding it from the catalogue, once its row is listed
+  async chooseValue(key: string, size = 0): Promise<void> {
     await this.rowsLoaded();
-    this.focusCell(key, KEY_COLUMN + 1, false);
+    this.focusCell(key, KEY_COLUMN + 1 + size, false);
   }
 
   // The set or the unit changed: the columns follow its sizes

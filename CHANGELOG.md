@@ -15,6 +15,8 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- Web Publish can open a packed circle skirt layout from its Examples menu
+  (#179).
 - Publish can create, rename and edit named output and machine profiles from
   the Edit menu (#57).
 - Web Design shows a faint red halo around objects listed in Problems
@@ -29,15 +31,21 @@ Changed, Fixed and Removed under each version.
   (#158, #159).
 - The user guide has a Development page: getting the code, building, testing,
   and links to the Pascal source documentation (#47).
-- Web Measurements saves measurement sets, recovers unsaved work and can
-  be installed for offline use (#84).
+
+### Changed
+
+- Desktop Design dims outline strokes while the Lines panel shows a subset
+  of the other line roles (#176).
 
 ### Fixed
 
+- The homepage's Open Publish buttons match the Open Design buttons (#178).
 - The Test Sizes slider in Design is disabled when there are no measurements
   to scale, in the desktop and web apps (#175).
 - Shortcut hints in web Design show Ctrl or Cmd for the current platform
   (#160).
+- Native builds preserve decimal round trips and report out-of-range draft
+  coordinates on Apple silicon (#193).
 
 ## 0.9.0
 

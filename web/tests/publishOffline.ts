@@ -5,7 +5,7 @@
 // tab that kept it has closed: opened again, it is as it was, not saved.
 import assert from 'node:assert/strict';
 import type { Browser, Page } from 'puppeteer-core';
-import { launchBrowser, serveApp, status, waitForData, waitForStatus, watchProblems } from './browser.ts';
+import { launchBrowser, serveApp, status, TIMEOUT_MS, waitForData, waitForStatus, watchProblems } from './browser.ts';
 
 const PATTERN = '../docs/examples/skirt-block/skirt-darts.sloper';
 const MEASUREMENTS = '../docs/examples/skirt-block/skirt.slm';
@@ -75,6 +75,28 @@ try {
   await waitForStatus(other, 'Opened the unsaved work on skirt-darts.slayout');
   assert.equal(await other.title(), '• skirt-darts — OpenSloper Publish', 'not saved');
   assert.match(await status(other), /No problems$/u, 'its files with it');
+
+  // The example's layout, pattern and size table are all available offline.
+  const example = 'circle-skirt/circle-skirt.slayout';
+  const selection = '#examples';
+  const rejected = new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('No confirmation before opening the example')), TIMEOUT_MS);
+    other.once('dialog', (dialog) => {
+      clearTimeout(timer);
+      dialog.dismiss().then(() => resolve(dialog.message()), reject);
+    });
+  });
+  await other.select(selection, example);
+  assert.equal(await rejected, 'The layout has changes not saved. Drop them?');
+  assert.equal(await other.title(), '• skirt-darts — OpenSloper Publish', 'cancelling keeps the open layout');
+  other.once('dialog', (dialog) => {
+    void dialog.accept();
+  });
+  await other.select(selection, example);
+  await waitForStatus(other, 'Opened circle-skirt.slayout');
+  assert.equal(await other.title(), 'circle-skirt — OpenSloper Publish');
+  await other.waitForSelector('#toolbar button[title^="Print"]:enabled');
+  assert.equal(await other.$eval('#problem-count', (count) => count.textContent), 'No problems');
 
   assert.deepEqual(problems, []);
   console.log('Publish offline passed');

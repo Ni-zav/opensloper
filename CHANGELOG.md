@@ -32,6 +32,7 @@ Changed, Fixed and Removed under each version.
 
 ### Fixed
 
+- The homepage's Open Publish buttons match the Open Design buttons (#178).
 - The Test Sizes slider in Design is disabled when there are no measurements
   to scale, in the desktop and web apps (#175).
 - Shortcut hints in web Design show Ctrl or Cmd for the current platform

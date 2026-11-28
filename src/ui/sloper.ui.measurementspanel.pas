@@ -28,7 +28,7 @@
 // The Test size slider tries the pattern a size up or down: every measurement
 // is scaled by up to 20% either way, 1% a step. Nothing is saved; the values
 // shown are the scaled ones. Editing waits until the slider is back at 0%,
-// and the slider waits until there are no unsaved edits.
+// and the slider needs measurements with no unsaved edits.
 unit Sloper.UI.MeasurementsPanel;
 
 {$mode ObjFPC}{$H+}
@@ -333,7 +333,7 @@ begin
   else
     FTestLabel.Caption := Format(rsMeasurementsTest, [rsMeasurementsTestOff]);
   FTestReset.Enabled := Testing;
-  FTestSlider.Enabled := not HasPending;
+  FTestSlider.Enabled := Assigned(Document) and Assigned(Document.Measurements) and (Document.Measurements.Count > 0) and not HasPending;
 end;
 
 procedure TMeasurementsPanel.TestChange(Sender: TObject);

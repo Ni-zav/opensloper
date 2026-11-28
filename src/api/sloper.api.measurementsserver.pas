@@ -25,7 +25,7 @@ unit Sloper.API.MeasurementsServer;
 interface
 
 uses
-  fpjson, Sloper.API.Methods, Sloper.Core.Catalogue, Sloper.Core.Units, Sloper.Document.MeasurementDocument;
+  SysUtils, fpjson, Sloper.API.Methods, Sloper.Core.Catalogue, Sloper.Core.Units, Sloper.Document.MeasurementDocument;
 
 type
   TMeasurementsApiServer = class
@@ -41,6 +41,12 @@ type
     function DoCatalogueList(Params: TJSONObject): TJSONObject;
     function DoCatalogueEntry(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
     function DoAddKnown(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
+    // The set's keys, which the body figure draws and picks from
+    function SetKeys: TStringArray;
+    function DoFigure(Params: TJSONObject): TJSONObject;
+    function DoFigureAt(Params: TJSONObject): TJSONObject;
+    function DoCheckPattern(Params: TJSONObject): boolean;
+    function DoAddMissing(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
     // The set as its file holds it, and as the table shows it in AUnit
     function State(AUnit: TMeasureUnit): TJSONObject;
     // The measurement with the key given, refused when there is none
@@ -65,7 +71,8 @@ function MeasurementsMethods: TApiMethodArray;
 implementation
 
 uses
-  SysUtils, Math, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.JSON, Sloper.Core.Measurements;
+  Math, Sloper.API.Rpc, Sloper.API.Server, Sloper.Core.Geometry, Sloper.Core.JSON,
+  Sloper.Core.Measurements, Sloper.Output.BodyFigureSVG;
 
 resourcestring
   rsMeasurementsOpen = 'Opens a measurement set supplied by the browser';
@@ -118,6 +125,26 @@ resourcestring
   rsMeasurementsAddKnown = 'Adds a catalogue measurement at the end, with its key and description; one undo step. ' +
     'A key the set has is refused';
   rsMeasurementsAddKnownReturns = 'Its `key`, and the state, as measurements_state';
+  rsMeasurementsFigure = 'The body figure as SVG, as the desktop draws it: the front, back and side outlines, ' +
+    'the set''s measurements on them, and one highlighted';
+  rsMeasurementsFigureWidth = 'Its width in pixels';
+  rsMeasurementsFigureHeight = 'Its height in pixels';
+  rsMeasurementsHighlight = 'The measurement to highlight, by its key; it need not be in the set';
+  rsMeasurementsFigureReturns = '`svg`, the figure''s SVG text';
+  rsMeasurementsFigureAt = 'The set''s measurement drawn under a point of the body figure, as a click picks it';
+  rsMeasurementsFigureX = 'The point, in pixels from the figure''s left';
+  rsMeasurementsFigureY = 'The point, in pixels from the figure''s top';
+  rsMeasurementsFigureAtReturns = '`key`, empty when no measurement is drawn there';
+  rsMeasurementsCheckPattern = 'Checks the set against a pattern from now on, which the page supplies as text: ' +
+    'the state''s `missing` lists what it uses that the set cannot give it. A file that is not a pattern is ' +
+    'refused, and the pattern before stays';
+  rsMeasurementsPatternName = 'The pattern file''s name, as the page shows it';
+  rsMeasurementsPatternText = 'The contents of the .sloper file';
+  rsMeasurementsStopCheck = 'Stops checking against a pattern';
+  rsMeasurementsAddMissing = 'Adds a measurement the pattern needs at the end, with the catalogue''s description ' +
+    'when it has one; one undo step. A key the set has is refused';
+  rsMeasurementsMissingKey = 'The measurement, by its key';
+  rsMeasurementsPatternFailed = 'Could not read %s: %s';
   rsMeasurementsNoEntry = 'The catalogue has no measurement %s';
   rsMeasurementsOutsideRange = '@%s is outside the usual %s to %s %s; it is kept, in case that is right';
   rsMeasurementsNoKey = 'There is no measurement @%s';
@@ -127,7 +154,9 @@ resourcestring
     '`sizes` (none for a set without sizes) and `rows`, each with `key`, `values` (one for each size, or the one ' +
     'value, as text in the unit, empty where there is none), `outside` (for each value, true when it is outside ' +
     'its catalogue entry''s typical range) and `description`; `modified`, `canUndo`, `canRedo` ' +
-    'and `undo`, the name of the step Undo would take';
+    'and `undo`, the name of the step Undo would take; `pattern`, the name of the pattern checked against, or ' +
+    'empty, and `missing`, what it uses that the set cannot give it, each with `key` and `sizes` (the sizes with ' +
+    'no value; none when the set lacks the key)';
 
 function MeasurementsMethods: TApiMethodArray;
 begin
@@ -185,6 +214,24 @@ begin
   AddApiMethod(Result, 'measurements_add_known', rsMeasurementsAddKnown, rsMeasurementsAddKnownReturns);
   AddApiParam(Result, 'key', apText, True, rsMeasurementsCatalogueKey);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_figure', rsMeasurementsFigure, rsMeasurementsFigureReturns, True);
+  AddApiParam(Result, 'width', apNumber, True, rsMeasurementsFigureWidth);
+  AddApiParam(Result, 'height', apNumber, True, rsMeasurementsFigureHeight);
+  AddApiParam(Result, 'highlight', apText, False, rsMeasurementsHighlight);
+  AddApiMethod(Result, 'measurements_figure_at', rsMeasurementsFigureAt, rsMeasurementsFigureAtReturns, True);
+  AddApiParam(Result, 'width', apNumber, True, rsMeasurementsFigureWidth);
+  AddApiParam(Result, 'height', apNumber, True, rsMeasurementsFigureHeight);
+  AddApiParam(Result, 'x', apNumber, True, rsMeasurementsFigureX);
+  AddApiParam(Result, 'y', apNumber, True, rsMeasurementsFigureY);
+  AddApiMethod(Result, 'measurements_check_pattern', rsMeasurementsCheckPattern, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'name', apText, True, rsMeasurementsPatternName);
+  AddApiParam(Result, 'text', apText, True, rsMeasurementsPatternText);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_stop_check', rsMeasurementsStopCheck, rsMeasurementsEditReturns);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
+  AddApiMethod(Result, 'measurements_add_missing', rsMeasurementsAddMissing, rsMeasurementsAddKnownReturns);
+  AddApiParam(Result, 'key', apText, True, rsMeasurementsMissingKey);
+  AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_undo', rsMeasurementsUndo, rsMeasurementsEditReturns);
   AddApiParam(Result, 'unit', apChoice, False, rsMeasurementsUnit, string.Join(', ', MEASURE_UNIT_NAMES));
   AddApiMethod(Result, 'measurements_redo', rsMeasurementsRedo, rsMeasurementsEditReturns);
@@ -218,7 +265,8 @@ end;
 function TMeasurementsApiServer.State(AUnit: TMeasureUnit): TJSONObject;
 var
   Snapshot, Answer, Row: TJSONObject;
-  Sizes, Rows, Values, Outside: TJSONArray;
+  Sizes, Rows, Values, Outside, Missing, MissingSizes: TJSONArray;
+  Item: TMissingMeasurement;
   Entry: TCatalogueEntry;
   Table: TMeasurementSet;
   Index, Size: integer;
@@ -259,6 +307,16 @@ begin
     Answer.Add('canUndo', FDocument.CanUndo);
     Answer.Add('canRedo', FDocument.CanRedo);
     Answer.Add('undo', FDocument.UndoDescription);
+    Answer.Add('pattern', FDocument.PatternFile);
+    Missing := TJSONArray.Create;
+    Answer.Add('missing', Missing);
+    for Item in FDocument.Missing do
+    begin
+      MissingSizes := TJSONArray.Create;
+      for Size := 0 to High(Item.Sizes) do
+        MissingSizes.Add(Item.Sizes[Size]);
+      Missing.Add(TJSONObject.Create(['key', Item.Key, 'sizes', MissingSizes]));
+    end;
     Result := Answer;
   except
     FreeAndNil(Answer);
@@ -411,6 +469,64 @@ begin
   Result.Add('key', Entry.Key);
 end;
 
+// A number the method needs, refused when it is missing
+function NumberParam(Params: TJSONObject; const Name: string): double;
+begin
+  Result := 0;
+  if not OptionalNumber(Params, Name, Result) then
+    raise EApiError.Create(RPC_INVALID_PARAMS, Format(rsApiMissingParam, [Name]));
+end;
+
+function TMeasurementsApiServer.SetKeys: TStringArray;
+var
+  Index: integer;
+begin
+  Result := nil;
+  SetLength(Result, FDocument.Measurements.Count);
+  for Index := 0 to High(Result) do
+    Result[Index] := FDocument.Measurements[Index].Key;
+end;
+
+function TMeasurementsApiServer.DoFigure(Params: TJSONObject): TJSONObject;
+begin
+  Result := TJSONObject.Create(['svg', BodyFigureToSVG(FCatalogue, NumberParam(Params, 'width'),
+    NumberParam(Params, 'height'), SetKeys, OptionalString(Params, 'highlight'))]);
+end;
+
+function TMeasurementsApiServer.DoFigureAt(Params: TJSONObject): TJSONObject;
+begin
+  Result := TJSONObject.Create(['key', BodyFigureKeyAt(FCatalogue, NumberParam(Params, 'width'),
+    NumberParam(Params, 'height'), Vec2(NumberParam(Params, 'x'), NumberParam(Params, 'y')), SetKeys)]);
+end;
+
+// A file that does not read as a pattern says why, and the check before stays
+function TMeasurementsApiServer.DoCheckPattern(Params: TJSONObject): boolean;
+var
+  Name, Reason: string;
+begin
+  Name := RequireString(Params, 'name');
+  Result := FDocument.UsePatternText(Name, RequireString(Params, 'text'), Reason);
+  if not Result then
+    raise EApiError.Create(RPC_REFUSED, Format(rsMeasurementsPatternFailed, [Name, Reason]));
+end;
+
+// As the desktop's Add or go to it for a key the set lacks
+function TMeasurementsApiServer.DoAddMissing(Params: TJSONObject; AUnit: TMeasureUnit): TJSONObject;
+var
+  Key, Description, Reason: string;
+  Entry: TCatalogueEntry;
+begin
+  Key := RequireString(Params, 'key');
+  Description := '';
+  Entry := FCatalogue.Find(Key);
+  if Assigned(Entry) then
+    Description := Entry.Description;
+  if not FDocument.AddKnown(Key, Description, Reason) then
+    raise EApiError.Create(RPC_REFUSED, Reason);
+  Result := State(AUnit);
+  Result.Add('key', Key);
+end;
+
 function TMeasurementsApiServer.SizeIndex(Params: TJSONObject; const Name: string): integer;
 var
   Number: double;
@@ -466,6 +582,11 @@ begin
     'measurements_catalogue_list': Exit(DoCatalogueList(Params));
     'measurements_catalogue_entry': Exit(DoCatalogueEntry(Params, AUnit));
     'measurements_add_known': Exit(DoAddKnown(Params, AUnit));
+    'measurements_figure': Exit(DoFigure(Params));
+    'measurements_check_pattern': DoCheckPattern(Params);
+    'measurements_stop_check': FDocument.UsePattern('', Reason);
+    'measurements_add_missing': Exit(DoAddMissing(Params, AUnit));
+    'measurements_figure_at': Exit(DoFigureAt(Params));
     'measurements_set': Exit(DoSet(Params, AUnit));
     'measurements_add': Exit(DoAdd(AUnit));
     'measurements_delete': FDocument.DeleteMeasurement(KeyIndex(Params));

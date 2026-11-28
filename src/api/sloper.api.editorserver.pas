@@ -353,7 +353,7 @@ resourcestring
   rsEditorListMeasurementsReturns = '`rows`, each with `key`, `value`, `description`, `missing`, `pending` (an unsaved ' +
     'edit) and `isNew` (made by editor_measurement_add, so its key can be changed); `file`, the measurement file as ' +
     'the pattern records it, or empty; `sizes`, a size table''s sizes, and `size`, the one used; `testPercent`, the ' +
-    'test size; and `pendingCount`, how many edits are unsaved';
+    'test size; `hasMeasurements`, whether the loaded set has any measurements; and `pendingCount`, how many edits are unsaved';
   rsEditorMeasurementAdd = 'Adds an unsaved measurement to the Measurements tab, as its Add does: the first free key ' +
     'of measurement, measurement2 and so on, with no value yet.';
   rsEditorMeasurementAddReturns = '`key`, the new row''s';
@@ -1686,6 +1686,7 @@ var
   Rows, Sizes: TJSONArray;
   Size: string;
   Index: integer;
+  HasMeasurements: boolean;
 begin
   CheckMeasurementsShared;
   Rows := TJSONArray.Create;
@@ -1694,14 +1695,16 @@ begin
       'pending', Row.Pending, 'isNew', Row.IsNew]));
   Sizes := TJSONArray.Create;
   Size := '';
+  HasMeasurements := False;
   if Assigned(Document.Measurements) then
   begin
+    HasMeasurements := Document.Measurements.Count > 0;
     for Index := 0 to Document.Measurements.SizeCount - 1 do
       Sizes.Add(Document.Measurements.Sizes[Index]);
     Size := Document.Measurements.SizeName;
   end;
   Result := TJSONObject.Create(['rows', Rows, 'file', Document.Pattern.MeasurementFile, 'sizes', Sizes, 'size', Size,
-    'testPercent', Round((Document.MeasurementScale - 1) * 100), 'pendingCount', Pending.Count]);
+    'testPercent', Round((Document.MeasurementScale - 1) * 100), 'hasMeasurements', HasMeasurements, 'pendingCount', Pending.Count]);
 end;
 
 function TEditorApiServer.DoMeasurementAdd: TJSONData;

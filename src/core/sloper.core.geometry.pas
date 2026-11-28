@@ -140,7 +140,7 @@ procedure AddIntersection(var Hits: TIntersectionArray; const P: TVec2; T1, T2: 
 implementation
 
 uses
-  Math;
+  Math, SysUtils, SysConst;
 
 const
   // A line or curve this close to a circle (in mm) touches it once
@@ -421,14 +421,18 @@ end;
 function IntersectLines(const A, B: TLine2; ExtendA, ExtendB: boolean; out Hit: TIntersection): boolean;
 var
   DA, DB, Diff: TVec2;
-  Denom: double;
+  Denom, LengthProduct: double;
 begin
   Hit := Default(TIntersection);
   DA := A.P2 - A.P1;
   DB := B.P2 - B.P1;
   Denom := Cross(DA, DB);
+  LengthProduct := DA.Length * DB.Length;
+  // Match the overflow trap on platforms that return non-finite values.
+  if IsInfinite(Denom) or IsNan(Denom) or IsInfinite(LengthProduct) or IsNan(LengthProduct) then
+    raise EOverflow.Create(SOverflow);
   // Relative test so the result does not depend on the line lengths
-  if Abs(Denom) <= EPSILON * Max(1, DA.Length * DB.Length) then
+  if Abs(Denom) <= EPSILON * Max(1, LengthProduct) then
     Exit(False);
   Diff := B.P1 - A.P1;
   Hit.T1 := Cross(Diff, DB) / Denom;

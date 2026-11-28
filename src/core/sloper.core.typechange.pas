@@ -405,7 +405,7 @@ end;
 // length is rounded as a drag rounds it
 function RatioText(Ratio: double): string;
 begin
-  Result := FormatJSONFloat(RoundTo(EnsureRange(Ratio, 0.0, 1.0), -RATIO_DECIMALS));
+  Result := FormatRoundedJSONFloat(EnsureRange(Ratio, 0.0, 1.0), RATIO_DECIMALS);
 end;
 
 function AddAlongValue(Pattern: TPattern; Span, DistanceAlong: double; Measure: TPointMeasureMode;
@@ -560,7 +560,7 @@ begin
   Foot := Edge.Locate(Source.Position, Position, Offset);
   Plan.Perpendicular := Distance(Foot, Plan.Target) <= CONVERT_SAME_PLACE;
   if not Plan.Perpendicular then
-    AddField(Plan, 'angle', FormatJSONFloat(RoundTo(AngleBetween(Source.Position, Plan.Target), -CONVERT_ANGLE_DECIMALS)));
+    AddField(Plan, 'angle', FormatRoundedJSONFloat(AngleBetween(Source.Position, Plan.Target), CONVERT_ANGLE_DECIMALS));
   Result := True;
 end;
 
@@ -584,7 +584,7 @@ begin
       if Mode = omPolar then
       begin
         AddField(Plan, 'length', LengthText(Pattern, Distance(TPointObject(Nodes[0]).Position, Here)));
-        AddField(Plan, 'angle', FormatJSONFloat(RoundTo(AngleBetween(TPointObject(Nodes[0]).Position, Here), -CONVERT_ANGLE_DECIMALS)));
+        AddField(Plan, 'angle', FormatRoundedJSONFloat(AngleBetween(TPointObject(Nodes[0]).Position, Here), CONVERT_ANGLE_DECIMALS));
       end
       else
       begin

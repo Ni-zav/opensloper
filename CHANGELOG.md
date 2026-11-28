@@ -44,6 +44,8 @@ Changed, Fixed and Removed under each version.
   to scale, in the desktop and web apps (#175).
 - Shortcut hints in web Design show Ctrl or Cmd for the current platform
   (#160).
+- Native builds preserve decimal round trips and report out-of-range draft
+  coordinates on Apple silicon (#193).
 
 ## 0.9.0
 

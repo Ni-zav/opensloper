@@ -38,6 +38,8 @@ type
 
 // Shortest text that reads back as exactly V, with '.' as decimal point
 function FormatJSONFloat(Value: double): string;
+// Round to the given decimal places before writing the number.
+function FormatRoundedJSONFloat(Value: double; Decimals: integer): string;
 // Reads a number written with '.', whatever the locale. False when it does
 // not parse or is past a double's range, such as 1e400; either way no
 // floating point exception is raised or left pending to fail later work.
@@ -90,6 +92,7 @@ uses
 
 const
   TEMP_SUFFIX = '.tmp';
+  DOUBLE_SCIENTIFIC_WIDTH = 24; // 17 significant digits and room for the sign, point and exponent
 
 function JSONFormatSettings: TFormatSettings;
 begin
@@ -103,6 +106,7 @@ var
   Settings: TFormatSettings;
   Precision: integer;
   Back: double;
+  Scientific: string;
 begin
   if Frac(Value) = 0 then
     if Abs(Value) < 1e15 then
@@ -116,11 +120,27 @@ begin
     if Back = Value then
       Exit;
   end;
+  // On targets where Extended is Double, FloatToStrF can cap the precision
+  // below the 17 digits a Double needs. Str can write those digits directly.
+  Str(Value: DOUBLE_SCIENTIFIC_WIDTH, Scientific);
+  Back := StrToFloat(Scientific, Settings);
+  if Back = Value then
+    Result := Trim(Scientific);
 end;
 
 function TOSJSONFloat.GetAsString: TJSONStringType;
 begin
   Result := FormatJSONFloat(AsFloat);
+end;
+
+function FormatRoundedJSONFloat(Value: double; Decimals: integer): string;
+var
+  Scale: double;
+begin
+  // Dividing by an exact power of ten avoids the binary noise of multiplying
+  // by its reciprocal after rounding.
+  Scale := IntPower(10, Decimals);
+  Result := FormatJSONFloat(Round(Value * Scale) / Scale);
 end;
 
 function JSONFloat(Value: double): TJSONData;

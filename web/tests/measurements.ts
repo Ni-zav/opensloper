@@ -204,6 +204,16 @@ try {
     await page.$eval('.pattern-check-summary', (summary) => summary.textContent),
     'bodice-block.sloper needs these, which this file cannot give it:',
   );
+  // A pattern that cannot be read says so, and the check before stays
+  const brokenPattern = join(folder, 'broken.sloper');
+  await writeFile(brokenPattern, '{"format": "pattern"');
+  await patternInput.uploadFile(brokenPattern);
+  await waitForStatus(page, 'Could not read broken.sloper');
+  assert.equal(
+    await page.$eval('.pattern-check-summary', (summary) => summary.textContent),
+    'bodice-block.sloper needs these, which this file cannot give it:',
+  );
+  assert.equal(await page.$$eval('.pattern-check option', (options) => options.length), 8);
   await page.select('.pattern-check select', 'across_back');
   await page.waitForFunction(() =>
     (document.querySelector('.catalogue-info')?.textContent ?? '').startsWith('Across back'),

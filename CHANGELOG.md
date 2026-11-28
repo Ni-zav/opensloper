@@ -30,6 +30,11 @@ Changed, Fixed and Removed under each version.
 - The user guide has a Development page: getting the code, building, testing,
   and links to the Pascal source documentation (#47).
 
+### Changed
+
+- Desktop Design dims outline strokes while the Lines panel shows a subset
+  of the other line roles (#176).
+
 ### Fixed
 
 - The homepage's Open Publish buttons match the Open Design buttons (#178).

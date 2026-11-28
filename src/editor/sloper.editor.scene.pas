@@ -85,6 +85,8 @@ function ObjectsBounds(Pattern: TPattern; const Keys: TStringArray; out Bounds: 
 function EdgePolyline(Edge: TEdgeObject; Tolerance: double): TVec2Array;
 // What shows on the canvas, in drawing order
 function ShownObjects(Pattern: TPattern): TDraftObjectArray;
+// Keep outlines faint when the Lines tab shows a subset of the other roles.
+function DimFilteredOutlines(HiddenRoles: TEdgeRoles): boolean;
 function ShownPoints(Pattern: TPattern): TPointObjectArray;
 // The nearest point within Radius mm of At, or nil
 function PointAt(Pattern: TPattern; const At: TVec2; Radius: double): TPointObject;
@@ -323,6 +325,11 @@ begin
   for Index := 0 to Pattern.ObjectCount - 1 do
     if not Pattern.IsHidden(Pattern.Objects[Index]) then
       Insert(Pattern.Objects[Index], Result, Length(Result));
+end;
+
+function DimFilteredOutlines(HiddenRoles: TEdgeRoles): boolean;
+begin
+  Result := ((HiddenRoles * HIDEABLE_ROLES) <> []) and ((HIDEABLE_ROLES - HiddenRoles) <> []);
 end;
 
 function ShownPoints(Pattern: TPattern): TPointObjectArray;

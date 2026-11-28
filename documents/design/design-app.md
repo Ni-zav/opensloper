@@ -271,7 +271,7 @@ A fold on the piece's own edge is not a line but the piece's `foldEdge`.
 
 ### Role visibility
 
-The Lines tab (`Sloper.UI.RolesPanel`) shows or hides Construction and each marking role, with Solo, Show All, Hide All and presets. It changes the view only: hidden lines are still stored, evaluated, printed and checked, and the status bar says how many kinds are hidden. Saved as `hiddenRoles` in `view`; presets are the user's, in `settings.json`. Which markings reach paper is the publish app's choice.
+The Lines tab (`Sloper.UI.RolesPanel`) shows or hides Construction and each marking role, with Solo, Show All, Hide All and presets. When only some of those roles show, desktop Design dims the outline strokes. Selected outlines keep their selection colour. It changes the view only: hidden lines are still stored, evaluated, printed and checked, and the status bar says how many kinds are hidden. Saved as `hiddenRoles` in `view`; presets are the user's, in `settings.json`. Which markings reach paper is the publish app's choice.
 
 ## Seams
 

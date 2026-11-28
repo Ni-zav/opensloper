@@ -75,12 +75,18 @@ export async function launchBrowser(): Promise<Browser> {
 }
 
 // Mod is Command on macOS and Control elsewhere, as the editor sees it.
-export async function pressWithMod(page: Page, key: KeyInput): Promise<void> {
+export async function pressWithMod(page: Page, key: KeyInput, shift = false): Promise<void> {
   const modifier = (await page.evaluate(isMac)) ? 'Meta' : 'Control';
   await page.keyboard.down(modifier);
   try {
+    if (shift) {
+      await page.keyboard.down('Shift');
+    }
     await page.keyboard.press(key);
   } finally {
+    if (shift) {
+      await page.keyboard.up('Shift');
+    }
     await page.keyboard.up(modifier);
   }
 }

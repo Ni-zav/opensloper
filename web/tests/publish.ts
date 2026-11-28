@@ -22,7 +22,17 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
-import { bodyData, launchBrowser, serveApp, status, waitForData, waitForStatus, watchProblems } from './browser.ts';
+import { isMac } from '../src/ui/shortcuts.ts';
+import {
+  bodyData,
+  launchBrowser,
+  pressWithMod,
+  serveApp,
+  status,
+  waitForData,
+  waitForStatus,
+  watchProblems,
+} from './browser.ts';
 
 const PATTERN = '../docs/examples/skirt-block/skirt-darts.sloper';
 const MEASUREMENTS = '../docs/examples/skirt-block/skirt.slm';
@@ -169,7 +179,7 @@ async function selectionMiddle(page: Page): Promise<{ x: number; y: number }> {
 
 // Waits for the toolbar's Undo to name this step
 async function waitForUndo(page: Page, step: string): Promise<void> {
-  // The hint ends with the keys, as Undo Pack pieces (Ctrl+Z)
+  // The hint ends with the platform's shortcut
   await page.waitForSelector(`#toolbar button[title^="Undo ${step} ("]:enabled`);
 }
 
@@ -365,16 +375,14 @@ try {
   await waitForUndo(page, 'Pack pieces');
 
   // The keys, from the engine's tables: the hints name them
-  assert.match(await page.$eval('#toolbar button[title^="Undo"]', (button) => button.title), /\(Ctrl\+Z\)$/u);
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  const modifier = (await page.evaluate(isMac)) ? 'Cmd' : 'Ctrl';
+  assert.equal(
+    await page.$eval('#toolbar button[title^="Undo"]', (button) => button.title),
+    `Undo Pack pieces (${modifier}+Z)`,
+  );
+  await pressWithMod(page, 'z');
   await waitForUndo(page, 'Place piece');
-  await page.keyboard.down('Control');
-  await page.keyboard.down('Shift');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Shift');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z', true);
   await waitForUndo(page, 'Pack pieces');
   // Escape lets go of the selection; Delete sends a piece back to the tray
   await selectSomePiece(page);
@@ -384,9 +392,7 @@ try {
   await page.keyboard.press('Delete');
   await waitForUndo(page, 'Unplace piece');
   // Undone by its keys, so the pages are as they were
-  await page.keyboard.down('Control');
-  await page.keyboard.press('z');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'z');
   await waitForUndo(page, 'Pack pieces');
   // Z turns Zoom Area on; a box dragged zooms to it, and Escape turns it off
   await page.keyboard.press('z');
@@ -523,9 +529,7 @@ try {
   assert.match((await download(downloads, 'skirt-darts.dxf')).toString(), /SECTION/u);
   // Print…, on its keys: the PDF opens in a tab of its own for the browser's
   // viewer, which chooses the pages, so the dialog says to print the cover first
-  await page.keyboard.down('Control');
-  await page.keyboard.press('p');
-  await page.keyboard.up('Control');
+  await pressWithMod(page, 'p');
   await page.waitForSelector('.print-dialog[open]');
   assert.match(await page.$eval('.print-pages', (pages) => pages.textContent), /^\d+ pages\. Page 1 is the cover/u);
   const viewer = browser.waitForTarget((target) => target.url().startsWith('blob:'));

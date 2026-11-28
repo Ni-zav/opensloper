@@ -2,25 +2,30 @@
 // file until one is open; a set opens with its name, notes and a row a
 // measurement; Show in shows the values in cm and inches. Name and Notes
 // are edited, committed by Enter or leaving the field. A measurement is
-// added from the catalogue, and a value outside its typical range warned of. In the grid a value
+// added from the catalogue, and a value outside its typical range warned of.
+// The set is checked against a pattern, and a measurement it lacks added. In
+// the grid a value
 // is changed, one that is not a number refused, a key renamed and a
 // description typed; Add makes a row whose key is typed, Up moves it, Delete
 // asks and deletes it, and Undo and Redo step through. Opening another file
 // asks before dropping the changes. A size table has a column a size, and a
 // file that is not a measurement file, or cannot be read, is refused with the
 // set open kept. Its sizes are renamed, moved, added and deleted with the size
-// buttons, which act on the column of the chosen cell. SCREENSHOT, as in design.ts, keeps
+// buttons, which act on the column of the chosen cell. The body figure
+// highlights the row under the pointer, and a click on it chooses a row. SCREENSHOT, as in design.ts, keeps
 // the page at the end.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
+import { isRecord, recordsField, stringField } from '../src/engine/replies.ts';
 import { launchBrowser, serveApp, status, waitForData, waitForStatus, watchProblems } from './browser.ts';
 
 const SET = '../docs/examples/skirt-block/skirt.slm';
 const SIZE_TABLE = '../docs/examples/measurements/size-table.slm';
 const PATTERN = '../docs/examples/skirt-block/skirt-darts.sloper';
+const BODICE = '../docs/examples/bodice-block/bodice-block.sloper';
 
 // The table's captions, and its rows' cells
 async function table(page: Page): Promise<{ head: string[]; rows: string[][] }> {
@@ -74,6 +79,23 @@ async function showIn(page: Page, unit: string, waist: string): Promise<void> {
     {},
     waist,
   );
+}
+
+// A catalogue measurement's view (0 front, 1 back, 2 side) and the first
+// point of its line on the figure, from the catalogue's text
+function overlayStart(text: string, key: string): [number, [number, number]] {
+  const catalogue: unknown = JSON.parse(text);
+  const entry = recordsField(isRecord(catalogue) ? catalogue : undefined, 'measurements').find(
+    (each) => stringField(each, 'key') === key,
+  );
+  const overlay: unknown = entry?.overlay;
+  const first: unknown = Array.isArray(overlay) ? (overlay as unknown[])[0] : undefined;
+  const point = Array.isArray(first) ? (first as unknown[]) : [];
+  const [x, y] = point;
+  if (typeof x !== 'number' || typeof y !== 'number') {
+    throw new Error(`the catalogue has no line for ${key}`);
+  }
+  return [['front', 'back', 'side'].indexOf(stringField(entry, 'view') ?? ''), [x, y]];
 }
 
 const folder = await mkdtemp(join(tmpdir(), 'opensloper-measurements-'));
@@ -161,6 +183,39 @@ try {
   await press(page, 'Undo');
   await waitForData(page, 'undo', '');
   await page.waitForFunction(() => document.querySelectorAll('.catalogue select[size] option').length === 1);
+
+  // Check Against Pattern: what a pattern needs that the set lacks, under the
+  // table; Add or go to it adds one; Stop Checking closes the list
+  const patternInput = await page.$('input#pattern-input');
+  assert.ok(patternInput);
+  assert.equal(await page.$('.pattern-check:not([hidden])'), null, 'no check before a pattern is given');
+  await patternInput.uploadFile(SET);
+  await waitForStatus(page, 'skirt.slm is not a pattern file (.sloper)');
+  await patternInput.uploadFile(PATTERN);
+  await waitForStatus(page, 'Checking against skirt-darts.sloper');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.pattern-check-summary')?.textContent ===
+      'skirt-darts.sloper has everything it needs here',
+  );
+  await patternInput.uploadFile(BODICE);
+  await page.waitForFunction(() => document.querySelectorAll('.pattern-check option').length === 8);
+  assert.equal(
+    await page.$eval('.pattern-check-summary', (summary) => summary.textContent),
+    'bodice-block.sloper needs these, which this file cannot give it:',
+  );
+  await page.select('.pattern-check select', 'across_back');
+  await page.waitForFunction(() =>
+    (document.querySelector('.catalogue-info')?.textContent ?? '').startsWith('Across back'),
+  );
+  await press(page, 'Add or go to it');
+  await waitForData(page, 'undo', 'Add measurement');
+  await page.waitForSelector('#table tr.selected[data-key="across_back"]');
+  await page.waitForFunction(() => document.querySelectorAll('.pattern-check option').length === 7);
+  await press(page, 'Stop Checking');
+  await page.waitForSelector('.pattern-check', { hidden: true });
+  await press(page, 'Undo');
+  await waitForData(page, 'undo', '');
 
   // Edits in the grid, each one undo step
   assert.ok(
@@ -298,6 +353,37 @@ try {
   await press(page, 'Undo');
   await waitForData(page, 'undo', 'Add size');
   await head(['Key', '8', '12', 'Ten', '14', '16', '18', 'Description']);
+
+  // The body figure: a row under the pointer is highlighted on it, and a
+  // click on a measurement's line chooses its row, as on the desktop
+  await page.hover(cellAt(2, 1));
+  await page.waitForSelector('.body-figure[data-highlight="waist_circumference"]');
+  const figure = await page.$eval('.body-figure', (element) => ({
+    width: element.clientWidth,
+    height: element.clientHeight,
+  }));
+  const [view, onFigure] = overlayStart(
+    await readFile('../data/measurement-catalogue.json', 'utf8'),
+    'hip_circumference',
+  );
+  // As LayoutFigures in Sloper.Core.Catalogue, with the captions' room under it
+  const room = figure.height - 19;
+  const scale = Math.min(figure.width / 1500, room / 1000);
+  const left = (figure.width - 1500 * scale) / 2 + view * 500 * scale;
+  const top = (room - 1000 * scale) / 2;
+  const box = await page.$eval('.body-figure', (element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x + element.clientLeft, y: bounds.y + element.clientTop };
+  });
+  const x = box.x + left + onFigure[0] * scale;
+  const y = box.y + top + onFigure[1] * scale;
+  await page.mouse.move(x, y);
+  await page.waitForFunction(() =>
+    (document.querySelector('.catalogue-info')?.textContent ?? '').startsWith('Hip circumference'),
+  );
+  await page.waitForSelector('.body-figure[data-highlight="hip_circumference"]');
+  await page.mouse.click(x, y);
+  await page.waitForSelector('#table tr.selected[data-key="hip_circumference"]');
 
   // Refused: another kind of file, and one that cannot be read; the size table stays
   await input.uploadFile(PATTERN);

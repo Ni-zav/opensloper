@@ -93,6 +93,8 @@ type
     procedure TestBrokenPatternIgnored;
     procedure TestStopUsingPattern;
     procedure TestPatternNeedsNoSet;
+    // A pattern given as text, as the web page gives it: checked, and never read again
+    procedure TestPatternText;
   end;
 
 implementation
@@ -698,6 +700,28 @@ begin
     AssertEquals(2, Length(Keys));
     AssertEquals('in order', 'chest', Keys[0]);
     AssertEquals('waist', Keys[1]);
+  finally
+    DeleteFile(FFileName + '.sloper');
+  end;
+end;
+
+procedure TTestMeasurementDocument.TestPatternText;
+var
+  Err, Text: string;
+begin
+  OpenSample;
+  try
+    AssertTrue(Err, ReadTextFile(WritePattern('@waist + @chest'), Text, Err));
+    AssertTrue(Err, FDocument.UsePatternText('skirt.sloper', Text, Err));
+    AssertEquals('named as given', 'skirt.sloper', FDocument.PatternFile);
+    AssertEquals(1, Length(FDocument.Missing));
+    AssertEquals('chest', FDocument.Missing[0].Key);
+    AssertFalse('no file to read again', FDocument.CheckPattern);
+    AssertFalse('not a pattern', FDocument.UsePatternText('notes.sloper', '{"format": "measurements"}', Err));
+    AssertTrue(Err <> '');
+    AssertEquals('the pattern before stays', 'skirt.sloper', FDocument.PatternFile);
+    AssertTrue(Err, FDocument.UsePattern('', Err));
+    AssertEquals('stopped', 0, Length(FDocument.Missing));
   finally
     DeleteFile(FFileName + '.sloper');
   end;

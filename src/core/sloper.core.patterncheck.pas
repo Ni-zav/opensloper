@@ -40,6 +40,8 @@ type
 function PatternMeasurementKeys(Pattern: TPattern): TStringArray;
 // The same, from a pattern file; needs no measurement set
 function ReadPatternMeasurementKeys(const FileName: string; out Keys: TStringArray; out ErrorMessage: string): boolean;
+// The same, from a pattern file's text, as the browser supplies it
+function PatternTextMeasurementKeys(const Text: string; out Keys: TStringArray; out ErrorMessage: string): boolean;
 
 // Value rounded to REPORT_DECIMALS
 function ReportFloat(Value: double): TJSONData;
@@ -118,12 +120,20 @@ end;
 
 function ReadPatternMeasurementKeys(const FileName: string; out Keys: TStringArray; out ErrorMessage: string): boolean;
 var
+  Text: string;
+begin
+  Keys := nil;
+  Result := ReadTextFile(FileName, Text, ErrorMessage) and PatternTextMeasurementKeys(Text, Keys, ErrorMessage);
+end;
+
+function PatternTextMeasurementKeys(const Text: string; out Keys: TStringArray; out ErrorMessage: string): boolean;
+var
   Pattern: TPattern;
 begin
   Keys := nil;
   Pattern := TPattern.Create;
   try
-    Result := LoadPatternFromFile(Pattern, FileName, ErrorMessage);
+    Result := LoadPatternFromText(Pattern, Text, ErrorMessage);
     if not Result then
       Exit;
     // Evaluating is what makes a node for each key

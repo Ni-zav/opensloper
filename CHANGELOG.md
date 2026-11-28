@@ -15,6 +15,8 @@ Changed, Fixed and Removed under each version.
 
 ### Added
 
+- Web Publish can open a packed circle skirt layout from its Examples menu
+  (#179).
 - Publish can create, rename and edit named output and machine profiles from
   the Edit menu (#57).
 - Web Design shows a faint red halo around objects listed in Problems

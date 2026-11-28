@@ -224,6 +224,8 @@ export const STRINGS = {
   layoutFiles: 'OpenSloper layouts and patterns',
   notALayout: (name: string): string => `${name} is not a layout (.slayout) or pattern file (.sloper)`,
   layoutOpened: (name: string): string => `Opened ${name}`,
+  publishExamplesHint: 'Open an example layout',
+  publishExampleCircleSkirt: 'Circle skirt',
   layoutStarted: (name: string): string => `Started a layout for ${name}`,
   layoutNeedsFiles: (files: string[]): string =>
     `The layout needs ${files.join(', ')}: open them with the layout or pattern`,
